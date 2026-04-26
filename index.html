@@ -8,36 +8,36 @@
   <h2>Login with Google</h2>
   <button id="login">Sign in with Google</button>
 
-  <script type="module">
-  import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+   <script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
-  const supabaseUrl = "https://kixxdbkfvigunvxbvmfy.supabase.co";
-  const supabaseKey = "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M";
+const supabaseUrl = "https://kixxdbkfvigunvxbvmfy.supabase.co";
+const supabaseKey = "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M"; // paste your key
 
-  const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-  // 🔹 Check if user already logged in
-  const { data: { session } } = await supabase.auth.getSession();
+// ✅ Check session
+const { data: { session } } = await supabase.auth.getSession();
 
-  if (session) {
-    document.body.innerHTML = `
-      <h2>Welcome ${session.user.email}</h2>
-      <button id="logout">Logout</button>
-    `;
+if (session) {
+  document.body.innerHTML = `
+    <h2>Welcome ${session.user.email}</h2>
+    <button id="logout">Logout</button>
+  `;
 
-    document.getElementById("logout").onclick = async () => {
-      await supabase.auth.signOut();
-      location.reload();
-    };
-  } else {
-    // 🔹 Login button
-    document.getElementById("login").onclick = async () => {
-      await supabase.auth.signInWithOAuth({
-        provider: "google"
-      });
-    };
-  }
+  document.getElementById("logout").onclick = async () => {
+    await supabase.auth.signOut();
+    location.reload();
+  };
+
+} else {
+  // ✅ Login button
+  document.getElementById("login").onclick = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google"
+    });
+  };
+}
 </script>
-
 </body>
 </html>
