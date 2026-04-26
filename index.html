@@ -5,18 +5,18 @@
 </head>
 <body>
 
-  <h2>Login with Google</h2>
-  <button id="login">Sign in with Google</button>
+<h2>Login with Google</h2>
+<button id="login">Sign in with Google</button>
 
-   <script type="module">
+<script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const supabaseUrl = "https://kixxdbkfvigunvxbvmfy.supabase.co";
-const supabaseKey = "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M"; // paste your key
+const supabaseKey = "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M";
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// ✅ Check session
+// Check session
 const { data: { session } } = await supabase.auth.getSession();
 
 if (session) {
@@ -31,7 +31,6 @@ if (session) {
   };
 
 } else {
-  // ✅ Login button
   document.getElementById("login").onclick = async () => {
     await supabase.auth.signInWithOAuth({
       provider: "google"
@@ -39,5 +38,6 @@ if (session) {
   };
 }
 </script>
+
 </body>
 </html>
