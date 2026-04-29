@@ -39,7 +39,7 @@ if (!session || !session.user) {
 } else {
   // ✅ LOGGED IN
   document.getElementById("app").innerHTML = `
-    <h3>Welcome ${session.user.email}</h3>
+    <h3>Welcome ${session.user.user_metadata.full_name}</h3>
 
     <textarea id="postInput" placeholder="Write something..."></textarea><br>
     <button id="postBtn">Post</button>
@@ -60,11 +60,12 @@ if (!session || !session.user) {
     const content = document.getElementById("postInput").value;
 
     await supabase.from("posts").insert([
-      {
-        user_id: session.user.id,
-        content: content
-      }
-    ]);
+  {
+    user_id: session.user.id,
+    content: content,
+    name: session.user.user_metadata.full_name
+  }
+]);
 
     location.reload();
   };
@@ -78,14 +79,17 @@ if (!session || !session.user) {
   const postsDiv = document.getElementById("posts");
 
   posts.forEach(post => {
-    const div = document.createElement("div");
-    div.innerHTML = `
+  const div = document.createElement("div");
+  div.innerHTML = `
+    <div>
+      <strong>${post.user_id}</strong>
       <p>${post.content}</p>
       <small>${new Date(post.created_at).toLocaleString()}</small>
       <hr>
-    `;
-    postsDiv.appendChild(div);
-  });
+    </div>
+  `;
+  postsDiv.appendChild(div);
+});
 }
 </script>
 
