@@ -118,6 +118,13 @@ supabase
       removePost(payload.old.id);
     }
   )
+  .on(
+    "postgres_changes",
+    { event: "UPDATE", schema: "public", table: "posts" },
+    (payload) => {
+      updatePostUI(payload.new);
+    }
+  )
   .subscribe();
 
   const postsDiv = document.getElementById("posts");
@@ -144,11 +151,13 @@ div.id = post.id;
       <p>${post.content}</p>
       <small>${new Date(post.created_at).toLocaleString()}</small>
 
-      ${
-        post.user_id === session.user.id
-          ? `<button onclick="deletePost('${post.id}')">Delete</button>`
-          : ""
-      }
+      ${post.user_id === session.user.id
+  ? `
+    <button onclick="editPost('${post.id}', \`${post.content}\`)">Edit</button>
+    <button onclick="deletePost('${post.id}')">Delete</button>
+  `
+  : ""
+}
     </div>
   </div>
   <hr>
@@ -159,6 +168,25 @@ div.id = post.id;
 function removePost(id) {
   const el = document.getElementById(id);
   if (el) el.remove();
+}
+function updatePostUI(post) {
+  const el = document.getElementById(post.id);
+  if (!el) return;
+
+  el.querySelector("p").textContent = post.content;
+}
+function editPost(id, oldContent) {
+  const newContent = prompt("Edit your post:", oldContent);
+
+  if (newContent === null) return; // user cancelled
+
+  updatePost(id, newContent);
+}
+async function updatePost(id, content) {
+  await supabase
+    .from("posts")
+    .update({ content: content })
+    .eq("id", id);
 }
 
 window.deletePost = async function(id) {
