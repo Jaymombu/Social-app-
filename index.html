@@ -132,7 +132,7 @@ if (!session || !session.user) {
   const postsDiv = document.getElementById("posts");
 
   const div = document.createElement("div");
-  div.id = String(post.id);
+  div.id = post.id;
 
   div.innerHTML = `
   <div style="display:flex; align-items:center; gap:10px;">
@@ -149,18 +149,16 @@ if (!session || !session.user) {
       <p>${post.content}</p>
       <small>${new Date(post.created_at).toLocaleString()}</small>
 
-      ${
-        post.user_id === session.user.id
-          ? `
-            <button onclick="editPost('${post.id}', \`${post.content}\`)">
+    ${
+  post.user_id === session.user.id
+    ? `
+    <button onclick="editPost('${post.id}', '${post.content.replace(/'/g, "\\'")}')">
   Edit
 </button>
-            <button onclick="deletePost('${post.id}')">
-              Delete
-            </button>
-          `
-          : ""
-      }
+    <button onclick="deletePost('${post.id}')">Delete</button>
+    `
+    : ""
+}
 
     </div>
   </div>
@@ -194,11 +192,17 @@ async function updatePost(id, content) {
     .select()
     .single();
 
-  updatePostUI(data); // ✅ THIS is what you're missing
+  // ✅ update UI instantly
+  updatePostUI(data);
+// fallback
+location.reload();
 }
 
 window.deletePost = async function(id) {
   await supabase.from("posts").delete().eq("id", id);
+
+  // ✅ instantly remove from UI
+  removePost(id);
 };
 }
 </script>
