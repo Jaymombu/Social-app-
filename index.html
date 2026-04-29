@@ -85,14 +85,18 @@ content: content
   div.innerHTML = `
 <div style="display:flex; align-items:center; gap:10px;">
   <img src="${post.avatar && post.avatar.startsWith('http') ? post.avatar : 'https://via.placeholder.com/40'}"
-       width="40"
-       height="40"
+       width="40" height="40"
        style="border-radius:50%; object-fit:cover;" />
 
   <div>
     <strong>${post.name || "Unknown user"}</strong>
     <p>${post.content}</p>
     <small>${new Date(post.created_at).toLocaleString()}</small>
+
+    ${post.user_id === session.user.id 
+      ? `<button onclick="deletePost('${post.id}')">Delete</button>` 
+      : ""}
+      
   </div>
 </div>
 <hr>
@@ -100,6 +104,11 @@ content: content
   postsDiv.appendChild(div);
 });
 }
+
+window.deletePost = async function(id) {
+  await supabase.from("posts").delete().eq("id", id);
+  location.reload();
+};
 </script>
 
 </body>
