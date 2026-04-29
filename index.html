@@ -63,8 +63,9 @@ if (!session || !session.user) {
   {
     user_id: session.user.id,
     name: session.user.user_metadata.full_name || session.user.email,
-    avatar: session.user.user_metadata.avatar_url,
-    content: content
+    avatar: session.user.user_metadata?.avatar_url || 
+        session.user.user_metadata?.picture || "",
+content: content
   }
 ]);
 
@@ -82,18 +83,19 @@ if (!session || !session.user) {
   posts.forEach(post => {
   const div = document.createElement("div");
   div.innerHTML = `
-  <div style="display:flex; align-items:center; gap:10px;">
-    <img src="${post.avatar || 'https://via.placeholder.com/40'}" 
-         width="40" height="40" 
-         style="border-radius:50%;" />
+<div style="display:flex; align-items:center; gap:10px;">
+  <img src="${post.avatar && post.avatar.startsWith('http') ? post.avatar : 'https://via.placeholder.com/40'}"
+       width="40"
+       height="40"
+       style="border-radius:50%; object-fit:cover;" />
 
-    <div>
-      <strong>${post.name || "Unknown user"}</strong>
-      <p>${post.content}</p>
-      <small>${new Date(post.created_at).toLocaleString()}</small>
-    </div>
+  <div>
+    <strong>${post.name || "Unknown user"}</strong>
+    <p>${post.content}</p>
+    <small>${new Date(post.created_at).toLocaleString()}</small>
   </div>
-  <hr>
+</div>
+<hr>
 `;
   postsDiv.appendChild(div);
 });
