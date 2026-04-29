@@ -63,6 +63,7 @@ if (!session || !session.user) {
   {
     user_id: session.user.id,
     name: session.user.user_metadata.full_name || session.user.email,
+    avatar: session.user.user_metadata.avatar_url,
     content: content
   }
 ]);
@@ -81,13 +82,19 @@ if (!session || !session.user) {
   posts.forEach(post => {
   const div = document.createElement("div");
   div.innerHTML = `
+  <div style="display:flex; align-items:center; gap:10px;">
+    <img src="${post.avatar || 'https://via.placeholder.com/40'}" 
+         width="40" height="40" 
+         style="border-radius:50%;" />
+
     <div>
       <strong>${post.name || "Unknown user"}</strong>
       <p>${post.content}</p>
       <small>${new Date(post.created_at).toLocaleString()}</small>
-      <hr>
     </div>
-  `;
+  </div>
+  <hr>
+`;
   postsDiv.appendChild(div);
 });
 }
