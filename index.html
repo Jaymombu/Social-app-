@@ -62,7 +62,7 @@ if (!session || !session.user) {
     await supabase.from("posts").insert([
   {
     user_id: session.user.id,
-    name: session.user.user_metadata.full_name,
+    name: session.user.user_metadata.full_name || session.user.email,
     content: content
   }
 ]);
