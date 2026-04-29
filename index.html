@@ -142,8 +142,7 @@ div.id = post.id;
         ? post.avatar
         : "https://via.placeholder.com/40"
     }"
-    width="40"
-    height="40"
+    width="40" height="40"
     style="border-radius:50%; object-fit:cover;" />
 
     <div>
@@ -151,13 +150,19 @@ div.id = post.id;
       <p>${post.content}</p>
       <small>${new Date(post.created_at).toLocaleString()}</small>
 
-      ${post.user_id === session.user.id
-  ? `
-    <button onclick="editPost('${post.id}', \`${post.content}\`)">Edit</button>
-    <button onclick="deletePost('${post.id}')">Delete</button>
-  `
-  : ""
-}
+      ${
+        post.user_id === session.user.id
+          ? `
+            <button onclick="editPost('${post.id}', '${post.content.replace(/'/g, "\\'")}')">
+              Edit
+            </button>
+            <button onclick="deletePost('${post.id}')">
+              Delete
+            </button>
+          `
+          : ""
+      }
+
     </div>
   </div>
   <hr>
@@ -175,22 +180,26 @@ function updatePostUI(post) {
 
   el.querySelector("p").textContent = post.content;
 }
-function editPost(id, oldContent) {
+window.editPost = function(id, oldContent) {
   const newContent = prompt("Edit your post:", oldContent);
-
-  if (newContent === null) return; // user cancelled
+  if (newContent === null) return;
 
   updatePost(id, newContent);
-}
+};
 async function updatePost(id, content) {
-  await supabase
+  const { data } = await supabase
     .from("posts")
-    .update({ content: content })
-    .eq("id", id);
+    .update({ content })
+    .eq("id", id)
+    .select()
+    .single();
+
+  updatePostUI(data);
 }
 
 window.deletePost = async function(id) {
   await supabase.from("posts").delete().eq("id", id);
+  removePost(id);
 };
 }
 </script>
