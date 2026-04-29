@@ -57,64 +57,102 @@ if (!session || !session.user) {
 
   // add post
   document.getElementById("postBtn").onclick = async () => {
-    const content = document.getElementById("postInput").value;
+  const content = document.getElementById("postInput").value;
 
-    await supabase.from("posts").insert([
-  {
+  await supabase.from("posts").insert([
+    {
+      user_id: session.user.id,
+      name:
+        session.user.user_metadata.full_name ||
+        session.user.user_metadata.name ||
+        session.user.email,
+      avatar:
+        session.user.user_metadata?.avatar_url ||
+        session.user.user_metadata?.picture ||
+        "",
+      content: content
+    }
+  ]);
+
+  // ✅ ADD THIS HERE (instead of reload)
+  renderPost({
     user_id: session.user.id,
-    name: 
-  session.user.user_metadata.full_name ||
-  session.user.user_metadata.name ||
-  session.user.email,
+    name:
+      session.user.user_metadata.full_name ||
+      session.user.user_metadata.name ||
+      session.user.email,
     avatar:
-  session.user.user_metadata?.avatar_url ||
-  session.user.user_metadata?.picture ||
-  session.user.user_metadata?.avatar ||
-  "",
-content: content
-  }
-]);
+      session.user.user_metadata?.avatar_url ||
+      session.user.user_metadata?.picture ||
+      "",
+    content: content,
+    created_at: new Date().toISOString(),
+    id: Math.random()
+  });
 
-    location.reload();
-  };
+  // optional: clear input
+  document.getElementById("postInput").value = "";
+};
 
   // load posts
   const { data: posts } = await supabase
     .from("posts")
     .select("*")
     .order("created_at", { ascending: false });
+    posts.forEach(renderPost);
+
+// ✅ ADD REALTIME HERE
+supabase
+  .channel("posts-channel")
+  .on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "posts" },
+    (payload) => {
+      renderPost(payload.new);
+    }
+  )
+  .subscribe();
 
   const postsDiv = document.getElementById("posts");
 
-  posts.forEach(post => {
+  function renderPost(post) {
+  const postsDiv = document.getElementById("posts");
+
   const div = document.createElement("div");
+
   div.innerHTML = `
-<div style="display:flex; align-items:center; gap:10px;">
-  <img src="${post.avatar && post.avatar.startsWith('http') ? post.avatar : 'https://via.placeholder.com/40'}"
-       width="40" height="40"
-       style="border-radius:50%; object-fit:cover;" />
+  <div style="display:flex; align-items:center; gap:10px;">
+    <img src="${
+      post.avatar && post.avatar.startsWith("http")
+        ? post.avatar
+        : "https://via.placeholder.com/40"
+    }"
+    width="40"
+    height="40"
+    style="border-radius:50%; object-fit:cover;" />
 
-  <div>
-    <strong>${post.name || "Unknown user"}</strong>
-    <p>${post.content}</p>
-    <small>${new Date(post.created_at).toLocaleString()}</small>
+    <div>
+      <strong>${post.name || "Unknown user"}</strong>
+      <p>${post.content}</p>
+      <small>${new Date(post.created_at).toLocaleString()}</small>
 
-    ${post.user_id === session.user.id 
-      ? `<button onclick="deletePost('${post.id}')">Delete</button>` 
-      : ""}
-      
+      ${
+        post.user_id === session.user.id
+          ? `<button onclick="deletePost('${post.id}')">Delete</button>`
+          : ""
+      }
+    </div>
   </div>
-</div>
-<hr>
+  <hr>
 `;
-  postsDiv.appendChild(div);
-});
+
+  postsDiv.prepend(div);
 }
 
 window.deletePost = async function(id) {
   await supabase.from("posts").delete().eq("id", id);
-  location.reload();
 };
+}
 </script>
 
 </body>
