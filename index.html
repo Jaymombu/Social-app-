@@ -152,7 +152,7 @@ if (!session || !session.user) {
     ${
   post.user_id === session.user.id
     ? `
-    <button onclick="editPost('${post.id}', '${post.content.replace(/'/g, "\\'")}')">
+    <button onclick="editPost(${post.id}, this.dataset.content)" data-content="${post.content}">
   Edit
 </button>
     <button onclick="deletePost('${post.id}')">Delete</button>
@@ -178,7 +178,7 @@ function updatePostUI(post) {
   const p = el.querySelector("p");
   if (p) p.textContent = post.content;
 }
-window.editPost = function(id, oldContent) {
+window.editPost = async function(id, oldContent) {
   const newContent = prompt("Edit your post:", oldContent);
   if (newContent === null) return;
 
