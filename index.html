@@ -152,9 +152,9 @@ if (!session || !session.user) {
       ${
         post.user_id === session.user.id
           ? `
-            <button onclick="editPost('${post.id}', '${post.content.replace(/'/g, "\\'")}')">
-              Edit
-            </button>
+            <button onclick="editPost('${post.id}', \`${post.content}\`)">
+  Edit
+</button>
             <button onclick="deletePost('${post.id}')">
               Delete
             </button>
@@ -187,10 +187,14 @@ window.editPost = function(id, oldContent) {
   updatePost(id, newContent);
 };
 async function updatePost(id, content) {
-  await supabase
+  const { data } = await supabase
     .from("posts")
     .update({ content })
-    .eq("id", id);
+    .eq("id", id)
+    .select()
+    .single();
+
+  updatePostUI(data); // ✅ THIS is what you're missing
 }
 
 window.deletePost = async function(id) {
