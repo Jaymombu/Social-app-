@@ -303,16 +303,18 @@ if (!session) {
 
   // ✅ LOAD POSTS ONCE
   async function loadPosts() {
-    const { data: posts } = await supabase
-      .from("posts")
-      .select("*")
-      .order("created_at", { ascending: false });
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-    const postsDiv = document.getElementById("posts");
-    postsDiv.innerHTML = "";
+  console.log(posts, error); // 👈 ADD THIS
 
-    posts.forEach(renderPost);
-  }
+  const postsDiv = document.getElementById("posts");
+  postsDiv.innerHTML = "";
+
+  posts.forEach(renderPost);
+}
 
   // ✅ RENDER POST
   async function renderPost(post) {
@@ -426,8 +428,10 @@ supabase
   const el = document.getElementById(post.id);
   if (!el) return;
 
-  const p = el.querySelector("p");
-  if (p) p.textContent = post.content;
+  const contentDiv = el.querySelector(".post-card > div:nth-child(2)");
+  if (contentDiv) {
+    contentDiv.textContent = post.content;
+  }
 }
 
   // ✅ LIKE
