@@ -243,8 +243,9 @@ supabase
     .update({ likes: newLikes })
     .eq("id", id);
 
-  // ✅ correct button
-  const btn = document.getElementById(`like-${id}`);
+  const el = document.getElementById(id);
+  const btn = el.querySelector("button");
+
   btn.innerHTML = `👍 ${newLikes}`;
 };
 
