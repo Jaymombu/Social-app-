@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  
   <title>Social App</title>
   <style>
   body {
@@ -147,10 +149,11 @@ button:hover {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%) scale(0.5);
-  font-size: 60px;
+  font-size: 90px;
   opacity: 0;
-  animation: bigPop 0.8s ease forwards;
+  animation: bigPop 0.6s ease forwards;
   pointer-events: none;
+  filter: drop-shadow(0 0 10px rgba(255, 0, 100, 0.8));
 }
 
 @keyframes bigPop {
@@ -159,7 +162,7 @@ button:hover {
     opacity: 0;
   }
   50% {
-    transform: translate(-50%, -50%) scale(1.3);
+    transform: translate(-50%, -50%) scale(1.4);
     opacity: 1;
   }
   100% {
@@ -167,7 +170,30 @@ button:hover {
     opacity: 0;
   }
 }
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+.floating-heart {
+  position: absolute;
+  font-size: 22px;
+  pointer-events: none;
+  animation: floatUp 1.2s ease-out forwards;
+  filter: drop-shadow(0 0 6px rgba(255, 0, 100, 0.6));
+}
+
+@keyframes floatUp {
+  0% {
+    transform: translateY(0) scale(0.8) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-40px) scale(1.3) rotate(15deg);
+  }
+  100% {
+    transform: translateY(-100px) scale(1.6) rotate(-10deg);
+    opacity: 0;
+  }
+}
+#posts div {
+  position: relative;
+}
 </style>
 </head>
 <body>
@@ -441,10 +467,12 @@ window.handleTap = function(id) {
   const now = Date.now();
 
   if (now - lastTap < 300) {
-    // 💥 DOUBLE TAP DETECTED
-    likePost(id);
-    showBigHeart(id);
-  }
+  likePost(id);
+  showBigHeart(id);
+  createFloatingHearts(id);
+
+  if (navigator.vibrate) navigator.vibrate(30); // ⚡
+}
 
   lastTap = now;
 };
@@ -479,6 +507,30 @@ function showBigHeart(id) {
   comments.forEach(comment => {
     renderComment(comment);
   });
+}
+function createFloatingHearts(id) {
+  const el = document.getElementById(id);
+
+  const hearts = ["❤️", "💖", "💜", "💙", "💚", "💛"];
+
+  for (let i = 0; i < 8; i++) {
+    const heart = document.createElement("div");
+    heart.className = "floating-heart";
+
+    // random emoji
+    heart.innerHTML = hearts[Math.floor(Math.random() * hearts.length)];
+
+    // random position
+    heart.style.left = Math.random() * 90 + "%";
+    heart.style.bottom = "10px";
+
+    // random delay
+    heart.style.animationDelay = (Math.random() * 0.4) + "s";
+
+    el.appendChild(heart);
+
+    setTimeout(() => heart.remove(), 1200);
+  }
 }
 
 // ✅ ADD THIS RIGHT BELOW
