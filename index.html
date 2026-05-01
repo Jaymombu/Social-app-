@@ -114,6 +114,51 @@ button:hover {
   margin-bottom: 5px;
   font-size: 14px;
 }
+.heart-pop {
+  position: absolute;
+  font-size: 18px;
+  pointer-events: none;
+  animation: floatUp 1s ease-out forwards;
+}
+
+@keyframes floatUp {
+  0% {
+    transform: scale(0.6) translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3) translateY(-20px) rotate(10deg);
+  }
+  100% {
+    transform: scale(1) translateY(-60px) rotate(-10deg);
+    opacity: 0;
+  }
+}
+.big-heart {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.5);
+  font-size: 60px;
+  opacity: 0;
+  animation: bigPop 0.8s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes bigPop {
+  0% {
+    transform: translate(-50%, -50%) scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
 </style>
 </head>
 <body>
@@ -204,7 +249,7 @@ if (!session) {
     div.id = post.id;
 
     div.innerHTML = `
-  <div class="post-card">
+  <div class="post-card" style="position: relative;" onclick="handleTap(${post.id})">
 
     <div class="post-header">
       <div class="avatar">
@@ -325,9 +370,33 @@ supabase
     .eq("id", id);
 
   const el = document.getElementById(id);
-  const btn = document.getElementById(`like-${id}`);
-btn.innerHTML = "⏳";
+const btn = el.querySelector(".like-btn");
 
+btn.innerHTML = `👍 ${newLikes}`;
+
+// 💥 MULTIPLE HEARTS
+for (let i = 0; i < 5; i++) {
+  const heart = document.createElement("div");
+  heart.className = "heart-pop";
+  heart.innerHTML = "❤️";
+
+  // random position
+  heart.style.left = Math.random() * 80 + "%";
+  heart.style.top = "50%";
+
+  // random size
+  heart.style.fontSize = (16 + Math.random() * 14) + "px";
+
+  // random animation delay
+  heart.style.animationDelay = (Math.random() * 0.3) + "s";
+
+  el.appendChild(heart);
+
+  // remove after animation
+  setTimeout(() => {
+    heart.remove();
+  }, 1000);
+}
   btn.innerHTML = `👍 ${newLikes}`;
 };
 
@@ -352,6 +421,32 @@ btn.innerHTML = "⏳";
 
   input.value = "";
 };
+let lastTap = 0;
+
+window.handleTap = function(id) {
+  const now = Date.now();
+
+  if (now - lastTap < 300) {
+    // 💥 DOUBLE TAP DETECTED
+    likePost(id);
+    showBigHeart(id);
+  }
+
+  lastTap = now;
+};
+function showBigHeart(id) {
+  const el = document.getElementById(id);
+
+  const heart = document.createElement("div");
+  heart.className = "big-heart";
+  heart.innerHTML = "❤️";
+
+  el.appendChild(heart);
+
+  setTimeout(() => {
+    heart.remove();
+  }, 800);
+}
 
   async function loadComments(postId) {
   const container = document.getElementById(`comments-${postId}`);
