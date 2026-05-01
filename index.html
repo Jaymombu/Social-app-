@@ -146,7 +146,7 @@ if (!session) {
         ${
           post.user_id === session.user.id
             ? `
-            <button onclick="editPost(${post.id}, \`${post.content}\`)">Edit</button>
+            <button onclick="editPost(${post.id})">Edit</button>
             <button onclick="deletePost(${post.id})">Delete</button>
           `
             : ""
@@ -204,12 +204,21 @@ supabase
   }
 
   // ✅ EDIT
-  window.editPost = (id, oldContent) => {
-    const newContent = prompt("Edit post:", oldContent);
-    if (!newContent) return;
+  window.editPost = async (id) => {
+  const { data } = await supabase
+    .from("posts")
+    .select("content")
+    .eq("id", id)
+    .single();
 
-    supabase.from("posts").update({ content: newContent }).eq("id", id);
-  };
+  const newContent = prompt("Edit post:", data.content);
+  if (!newContent) return;
+
+  await supabase
+    .from("posts")
+    .update({ content: newContent })
+    .eq("id", id);
+};
 
   function updatePostUI(post) {
   const el = document.getElementById(post.id);
@@ -260,9 +269,12 @@ supabase
 
     input.value = "";
   };
+  window.likePost = (id) => {
+  alert("clicked " + id);
+};
 
   async function loadComments(postId) {
-  const container = document.getElementById(`comments-${postId}`);
+  const container = document.getElementById(`comments-${comment.post_id}`);
 
   if (!container) return;
 
