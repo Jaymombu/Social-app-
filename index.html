@@ -2,6 +2,46 @@
 <html>
 <head>
   <title>Social App</title>
+  <style>
+  body {
+    font-family: Arial;
+    background: #f0f2f5;
+    padding: 20px;
+  }
+
+  #posts div {
+    background: white;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 12px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  }
+
+  button {
+    margin-top: 5px;
+    margin-right: 5px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+
+  button:hover {
+    opacity: 0.8;
+  }
+  #app {
+  max-width: 500px;
+  margin: auto;
+}
+
+#posts div {
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+button {
+  cursor: pointer;
+}
+</style>
 </head>
 <body>
 
@@ -14,15 +54,13 @@ const supabaseUrl = "https://kixxdbkfvigunvxbvmfy.supabase.co";
 const supabaseKey = "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M";
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// 🔥 FIRST: handle Google redirect
+// auth redirect
 await supabase.auth.exchangeCodeForSession(window.location.href);
 
-// THEN: get session
 const { data } = await supabase.auth.getSession();
-const session = data.session;
+window.session = data.session;
 
-if (!session || !session.user) {
-  // NOT LOGGED IN
+if (!session) {
   document.getElementById("app").innerHTML = `
     <button id="login">Login with Google</button>
   `;
@@ -37,11 +75,11 @@ if (!session || !session.user) {
   };
 
 } else {
-  // ✅ LOGGED IN
+
   document.getElementById("app").innerHTML = `
     <h3>Welcome ${session.user.user_metadata.full_name}</h3>
 
-    <textarea id="postInput" placeholder="Write something..."></textarea><br>
+    <textarea id="postInput"></textarea><br>
     <button id="postBtn">Post</button>
     <button id="logout">Logout</button>
 
@@ -49,163 +87,222 @@ if (!session || !session.user) {
     <div id="posts"></div>
   `;
 
-  // logout
   document.getElementById("logout").onclick = async () => {
     await supabase.auth.signOut();
     location.reload();
   };
 
-  // add post
+  // ✅ CREATE POST (no fake render)
   document.getElementById("postBtn").onclick = async () => {
-  const content = document.getElementById("postInput").value;
+    const content = document.getElementById("postInput").value;
 
-  await supabase.from("posts").insert([
-    {
+    if (!content) return;
+
+    await supabase.from("posts").insert([{
       user_id: session.user.id,
-      name:
-        session.user.user_metadata.full_name ||
-        session.user.user_metadata.name ||
-        session.user.email,
-      avatar:
-        session.user.user_metadata?.avatar_url ||
-        session.user.user_metadata?.picture ||
-        "",
-      content: content
-    }
-  ]);
+      name: session.user.user_metadata.full_name || session.user.email,
+      content
+    }]);
 
-  // ✅ ADD THIS HERE (instead of reload)
-  renderPost({
-    user_id: session.user.id,
-    name:
-      session.user.user_metadata.full_name ||
-      session.user.user_metadata.name ||
-      session.user.email,
-    avatar:
-      session.user.user_metadata?.avatar_url ||
-      session.user.user_metadata?.picture ||
-      "",
-    content: content,
-    created_at: new Date().toISOString(),
-    id: Math.random()
-  });
+    document.getElementById("postInput").value = "";
+  };
 
-  // optional: clear input
-  document.getElementById("postInput").value = "";
-};
+  // ✅ LOAD POSTS ONCE
+  async function loadPosts() {
+    const { data: posts } = await supabase
+      .from("posts")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-  // load posts
-  const { data: posts } = await supabase
-    .from("posts")
-    .select("*")
-    .order("created_at", { ascending: false });
+    const postsDiv = document.getElementById("posts");
+    postsDiv.innerHTML = "";
+
     posts.forEach(renderPost);
+  }
 
+  // ✅ RENDER POST
+  async function renderPost(post) {
+    const postsDiv = document.getElementById("posts");
+
+    // prevent duplicates
+    if (document.getElementById(post.id)) return;
+
+    const div = document.createElement("div");
+    div.id = post.id;
+
+    div.innerHTML = `
+      <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+        
+        <strong>${post.name}</strong>
+        <p>${post.content}</p>
+        <small>${new Date(post.created_at).toLocaleString()}</small>
+
+        <br><br>
+
+        <button onclick="likePost(${post.id})">
+          👍 ${post.likes || 0}
+        </button>
+
+        ${
+          post.user_id === session.user.id
+            ? `
+            <button onclick="editPost(${post.id}, \`${post.content}\`)">Edit</button>
+            <button onclick="deletePost(${post.id})">Delete</button>
+          `
+            : ""
+        }
+
+        <hr>
+
+        <div>
+          <h4>Comments</h4>
+          <div id="comments-${post.id}"></div>
+          <input id="commentInput-${post.id}" />
+          <button onclick="addComment(${post.id})">Post</button>
+        </div>
+
+      </div>
+    `;
+
+    postsDiv.appendChild(div);
+
+    loadComments(post.id);
+  }
+
+  // ✅ REALTIME (THE RIGHT WAY)
   supabase
-  .channel("posts-channel")
+    .channel("posts")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" },
+      payload => renderPost(payload.new))
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "posts" },
+      payload => updatePostUI(payload.new))
+    .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" },
+      payload => removePost(payload.old.id))
+    .subscribe();
+    
+    // 🔥 COMMENTS REALTIME
+supabase
+  .channel("comments-channel")
   .on(
     "postgres_changes",
-    { event: "INSERT", schema: "public", table: "posts" },
+    { event: "INSERT", schema: "public", table: "comments" },
     (payload) => {
-      renderPost(payload.new);
-    }
-  )
-  .on(
-    "postgres_changes",
-    { event: "UPDATE", schema: "public", table: "posts" },
-    (payload) => {
-      updatePostUI(payload.new);
-    }
-  )
-  .on(
-    "postgres_changes",
-    { event: "DELETE", schema: "public", table: "posts" },
-    (payload) => {
-      removePost(payload.old.id);
+      renderComment(payload.new);
     }
   )
   .subscribe();
 
-  const postsDiv = document.getElementById("posts");
+  // ✅ DELETE
+  window.deletePost = async (id) => {
+    if (!confirm("Delete?")) return;
+    await supabase.from("posts").delete().eq("id", id);
+  };
 
-  function renderPost(post) {
-  const postsDiv = document.getElementById("posts");
+  function removePost(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
 
-  const div = document.createElement("div");
-  div.id = post.id;
+  // ✅ EDIT
+  window.editPost = (id, oldContent) => {
+    const newContent = prompt("Edit post:", oldContent);
+    if (!newContent) return;
 
-  div.innerHTML = `
-  <div style="display:flex; align-items:center; gap:10px;">
-    <img src="${
-      post.avatar && post.avatar.startsWith("http")
-        ? post.avatar
-        : "https://via.placeholder.com/40"
-    }"
-    width="40" height="40"
-    style="border-radius:50%; object-fit:cover;" />
+    supabase.from("posts").update({ content: newContent }).eq("id", id);
+  };
 
-    <div>
-      <strong>${post.name || "Unknown user"}</strong>
-      <p>${post.content}</p>
-      <small>${new Date(post.created_at).toLocaleString()}</small>
-
-    ${
-  post.user_id === session.user.id
-    ? `
-    <button onclick="editPost(${post.id}, this.dataset.content)" data-content="${post.content}">
-  Edit
-</button>
-    <button onclick="deletePost('${post.id}')">Delete</button>
-    `
-    : ""
-}
-
-    </div>
-  </div>
-  <hr>
-`;
-
-  postsDiv.prepend(div);
-}
-function removePost(id) {
-  const el = document.getElementById(id);
-  if (el) el.remove();
-}
-function updatePostUI(post) {
+  function updatePostUI(post) {
   const el = document.getElementById(post.id);
   if (!el) return;
 
   const p = el.querySelector("p");
   if (p) p.textContent = post.content;
 }
-window.editPost = async function(id, oldContent) {
-  const newContent = prompt("Edit your post:", oldContent);
-  if (newContent === null) return;
 
-  updatePost(id, newContent);
+  // ✅ LIKE
+  window.likePost = async (id) => {
+  try {
+    console.log("Like clicked:", id);
+
+    const { data, error } = await supabase
+      .from("posts")
+      .select("likes")
+      .eq("id", id)
+      .single();
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    await supabase.from("posts")
+      .update({ likes: (data.likes || 0) + 1 })
+      .eq("id", id);
+
+  } catch (err) {
+    console.error("LIKE ERROR:", err);
+  }
 };
-async function updatePost(id, content) {
-  const { data } = await supabase
-    .from("posts")
-    .update({ content })
-    .eq("id", id)
-    .select()
-    .single();
 
-  // ✅ update UI instantly
-  updatePostUI(data);
-// fallback
-location.reload();
+  // ✅ COMMENTS
+  window.addComment = async (postId) => {
+    const input = document.getElementById(`commentInput-${postId}`);
+    const content = input.value;
+
+    if (!content) return;
+
+    await supabase.from("comments").insert([{
+      post_id: postId,
+      user_id: session.user.id,
+      name: session.user.user_metadata.full_name,
+      content
+    }]);
+
+    input.value = "";
+  };
+
+  async function loadComments(postId) {
+  const container = document.getElementById(`comments-${postId}`);
+
+  if (!container) return;
+
+  const { data: comments } = await supabase
+    .from("comments")
+    .select("*")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+
+  container.innerHTML = "";
+
+  comments.forEach(comment => {
+    renderComment(comment); // 👈 use it here too (optional but clean)
+  });
 }
 
-window.deletePost = async function(id) {
-  await supabase.from("posts").delete().eq("id", id);
+// ✅ ADD THIS RIGHT BELOW
+function renderComment(comment) {
+  const container = document.getElementById(`comments-${comment.post_id}`);
+  if (!container) return;
 
-  // ✅ instantly remove from UI
-  removePost(id);
-};
+  // 🔥 prevent duplicates
+  if (document.getElementById(`comment-${comment.id}`)) return;
+
+  const div = document.createElement("div");
+  div.id = `comment-${comment.id}`;
+
+  div.innerHTML = `
+    <strong>${comment.name || "User"}</strong>
+    <p>${comment.content}</p>
+    <small>${new Date(comment.created_at).toLocaleString()}</small>
+    <hr>
+  `;
+
+  container.appendChild(div);
+}
+
+  // 🔥 START APP
+  loadPosts();
 }
 </script>
-
 </body>
 </html>
