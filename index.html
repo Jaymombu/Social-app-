@@ -41,6 +41,36 @@
 button {
   cursor: pointer;
 }
+.post-header {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.post-time {
+  color: gray;
+  font-size: 12px;
+}
+
+.actions {
+  margin-top: 10px;
+}
+
+.like-btn {
+  background: #ffeaa7;
+}
+
+.edit-btn {
+  background: #dfe6e9;
+}
+
+.delete-btn {
+  background: #ff7675;
+  color: white;
+}
+
+.comment-box {
+  margin-top: 10px;
+}
 </style>
 </head>
 <body>
@@ -131,38 +161,39 @@ if (!session) {
     div.id = post.id;
 
     div.innerHTML = `
-      <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
-        
-        <strong>${post.name}</strong>
-        <p>${post.content}</p>
-        <small>${new Date(post.created_at).toLocaleString()}</small>
+  <div class="post-card">
 
-        <br><br>
+    <div class="post-header">${post.name}</div>
+    <div>${post.content}</div>
+    <div class="post-time">
+      ${new Date(post.created_at).toLocaleString()}
+    </div>
 
-        <button onclick="likePost(${post.id})">
-          👍 ${post.likes || 0}
-        </button>
+    <div class="actions">
+      <button class="like-btn" onclick="likePost(${post.id})">
+        👍 ${post.likes || 0}
+      </button>
 
-        ${
-          post.user_id === session.user.id
-            ? `
-            <button onclick="editPost(${post.id})">Edit</button>
-            <button onclick="deletePost(${post.id})">Delete</button>
-          `
-            : ""
-        }
+      ${
+        post.user_id === session.user.id
+        ? `
+          <button class="edit-btn" onclick="editPost(${post.id})">Edit</button>
+          <button class="delete-btn" onclick="deletePost(${post.id})">Delete</button>
+        `
+        : ""
+      }
+    </div>
 
-        <hr>
+    <div class="comment-box">
+      <h4>Comments</h4>
+      <div id="comments-${post.id}"></div>
 
-        <div>
-          <h4>Comments</h4>
-          <div id="comments-${post.id}"></div>
-          <input id="commentInput-${post.id}" />
-          <button onclick="addComment(${post.id})">Post</button>
-        </div>
+      <input id="commentInput-${post.id}" placeholder="Write a comment..." />
+      <button onclick="addComment(${post.id})">Post</button>
+    </div>
 
-      </div>
-    `;
+  </div>
+`;
 
     postsDiv.appendChild(div);
 
@@ -244,7 +275,8 @@ supabase
     .eq("id", id);
 
   const el = document.getElementById(id);
-  const btn = el.querySelector("button");
+  const btn = document.getElementById(`like-${id}`);
+btn.innerHTML = "⏳";
 
   btn.innerHTML = `👍 ${newLikes}`;
 };
