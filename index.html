@@ -230,49 +230,46 @@ supabase
 
   // ✅ LIKE
   window.likePost = async (id) => {
-  const { data, error } = await supabase
+  const { data } = await supabase
     .from("posts")
     .select("likes")
     .eq("id", id)
     .single();
 
-  if (error) {
-    console.error(error);
-    alert("Error fetching likes");
-    return;
-  }
-
   const newLikes = (data.likes || 0) + 1;
 
-  const { error: updateError } = await supabase
+  await supabase
     .from("posts")
     .update({ likes: newLikes })
     .eq("id", id);
 
-  if (updateError) {
-    console.error(updateError);
-    alert("Error updating likes");
-  }
+  // 🔥 update UI immediately
+  const el = document.getElementById(id);
+  const btn = el.querySelector("button");
+
+  btn.innerHTML = `👍 ${newLikes}`;
 };
 
   // ✅ COMMENTS
   window.addComment = async (postId) => {
-    const input = document.getElementById(`commentInput-${postId}`);
-    const content = input.value;
+  const input = document.getElementById(`commentInput-${postId}`);
+  const content = input.value;
 
-    if (!content) return;
+  if (!content) return;
 
-    await supabase.from("comments").insert([{
+  const { data } = await supabase
+    .from("comments")
+    .insert([{
       post_id: postId,
       user_id: session.user.id,
       name: session.user.user_metadata.full_name,
       content
-    }]);
+    }])
+    .select(); // 🔥 IMPORTANT
 
-    input.value = "";
-  };
-  window.likePost = (id) => {
-  alert("clicked " + id);
+  renderComment(data[0]); // 🔥 show instantly
+
+  input.value = "";
 };
 
   async function loadComments(postId) {
