@@ -243,10 +243,8 @@ supabase
     .update({ likes: newLikes })
     .eq("id", id);
 
-  // 🔥 update UI immediately
-  const el = document.getElementById(id);
-  const btn = el.querySelector("button");
-
+  // ✅ correct button
+  const btn = document.getElementById(`like-${id}`);
   btn.innerHTML = `👍 ${newLikes}`;
 };
 
@@ -273,7 +271,8 @@ supabase
 };
 
   async function loadComments(postId) {
-  const container = document.getElementById(`comments-${comment.post_id}`);
+  const container = document.getElementById(`comments-${postId}`);
+  // ✅ use postId, not comment.post_id
 
   if (!container) return;
 
@@ -286,7 +285,7 @@ supabase
   container.innerHTML = "";
 
   comments.forEach(comment => {
-    renderComment(comment); // 👈 use it here too (optional but clean)
+    renderComment(comment);
   });
 }
 
