@@ -4,55 +4,89 @@
   <title>Social App</title>
   <style>
   body {
-    font-family: Arial;
-    background: #f0f2f5;
-    padding: 20px;
-  }
+  font-family: Arial, sans-serif;
+  background: #eef2f7;
+  margin: 0;
+}
 
-  #posts div {
-    background: white;
-    padding: 15px;
-    margin-bottom: 15px;
-    border-radius: 12px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  }
-
-  button {
-    margin-top: 5px;
-    margin-right: 5px;
-    padding: 5px 10px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-
-  button:hover {
-    opacity: 0.8;
-  }
-  #app {
+#app {
   max-width: 500px;
   margin: auto;
+  padding: 15px;
 }
 
-#posts div {
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-button {
-  cursor: pointer;
-}
-.post-header {
+/* Header */
+.header {
+  font-size: 20px;
   font-weight: bold;
-  margin-bottom: 5px;
+  margin-bottom: 15px;
 }
 
-.post-time {
-  color: gray;
+/* Input */
+textarea, input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  margin-bottom: 10px;
+  outline: none;
+}
+
+/* Buttons */
+button {
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+button:hover {
+  opacity: 0.85;
+}
+
+/* Post Card */
+.post-card {
+  background: white;
+  border-radius: 16px;
+  padding: 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 6px 15px rgba(0,0,0,0.08);
+}
+
+/* Post Header */
+.post-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.avatar {
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  background: #dfe6e9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 10px;
+  font-weight: bold;
+}
+
+.name {
+  font-weight: bold;
+}
+
+.time {
   font-size: 12px;
+  color: gray;
 }
 
+/* Actions */
 .actions {
   margin-top: 10px;
+  display: flex;
+  gap: 8px;
 }
 
 .like-btn {
@@ -68,8 +102,17 @@ button {
   color: white;
 }
 
+/* Comments */
 .comment-box {
-  margin-top: 10px;
+  margin-top: 15px;
+}
+
+.comment {
+  background: #f1f3f6;
+  padding: 8px;
+  border-radius: 8px;
+  margin-bottom: 5px;
+  font-size: 14px;
 }
 </style>
 </head>
@@ -163,11 +206,19 @@ if (!session) {
     div.innerHTML = `
   <div class="post-card">
 
-    <div class="post-header">${post.name}</div>
-    <div>${post.content}</div>
-    <div class="post-time">
-      ${new Date(post.created_at).toLocaleString()}
+    <div class="post-header">
+      <div class="avatar">
+        ${post.name ? post.name[0] : "U"}
+      </div>
+      <div>
+        <div class="name">${post.name}</div>
+        <div class="time">
+          ${new Date(post.created_at).toLocaleString()}
+        </div>
+      </div>
     </div>
+
+    <div>${post.content}</div>
 
     <div class="actions">
       <button class="like-btn" onclick="likePost(${post.id})">
@@ -185,7 +236,6 @@ if (!session) {
     </div>
 
     <div class="comment-box">
-      <h4>Comments</h4>
       <div id="comments-${post.id}"></div>
 
       <input id="commentInput-${post.id}" placeholder="Write a comment..." />
@@ -334,11 +384,11 @@ function renderComment(comment) {
   div.id = `comment-${comment.id}`;
 
   div.innerHTML = `
-    <strong>${comment.name || "User"}</strong>
-    <p>${comment.content}</p>
-    <small>${new Date(comment.created_at).toLocaleString()}</small>
-    <hr>
-  `;
+  <div class="comment">
+    <strong>${comment.name}</strong><br>
+    ${comment.content}
+  </div>
+`;
 
   container.appendChild(div);
 }
