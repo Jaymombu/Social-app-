@@ -230,26 +230,28 @@ supabase
 
   // ✅ LIKE
   window.likePost = async (id) => {
-  try {
-    console.log("Like clicked:", id);
+  const { data, error } = await supabase
+    .from("posts")
+    .select("likes")
+    .eq("id", id)
+    .single();
 
-    const { data, error } = await supabase
-      .from("posts")
-      .select("likes")
-      .eq("id", id)
-      .single();
+  if (error) {
+    console.error(error);
+    alert("Error fetching likes");
+    return;
+  }
 
-    if (error) {
-      console.error(error);
-      return;
-    }
+  const newLikes = (data.likes || 0) + 1;
 
-    await supabase.from("posts")
-      .update({ likes: (data.likes || 0) + 1 })
-      .eq("id", id);
+  const { error: updateError } = await supabase
+    .from("posts")
+    .update({ likes: newLikes })
+    .eq("id", id);
 
-  } catch (err) {
-    console.error("LIKE ERROR:", err);
+  if (updateError) {
+    console.error(updateError);
+    alert("Error updating likes");
   }
 };
 
