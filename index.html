@@ -501,21 +501,7 @@ supabase
   }
 };
 // 🔔 create notification
-const { data: postData } = await supabase
-  .from("posts")
-  .select("user_id")
-  .eq("id", id)
-  .single();
 
-// don't notify yourself
-if (postData.user_id !== session.user.id) {
-  await supabase.from("notifications").insert([{
-    user_id: postData.user_id,
-    sender_id: session.user.id,
-    post_id: id,
-    type: "like"
-  }]);
-}
 
   // ✅ COMMENTS
   window.addComment = async (postId) => {
@@ -588,6 +574,8 @@ function showBigHeart(id) {
   });
 }
 async function loadNotifications() {
+  const { data: { session } } = await supabase.auth.getSession();
+
   const { data } = await supabase
     .from("notifications")
     .select("*")
@@ -597,15 +585,15 @@ async function loadNotifications() {
   const container = document.getElementById("notifications");
   container.innerHTML = "";
 
-  data.forEach(n => {
-    const div = document.createElement("div");
-    div.className = "comment";
+  if (!data || data.length === 0) {
+    container.innerHTML = "No notifications yet";
+    return;
+  }
 
-    div.innerHTML = `❤️ Someone liked your post`;
-
-    container.appendChild(div);
-  });
+  data.forEach(renderNotification);
 }
+
+  
 function createFloatingHearts(id) {
   const el = document.getElementById(id);
 
@@ -655,7 +643,7 @@ function renderNotification(n) {
   const container = document.getElementById("notifications");
 
   const div = document.createElement("div");
-  div.className = "comment";
+  div.className = "notification"; // ✅ correct
 
   if (n.type === "like") {
     div.innerHTML = `❤️ Someone liked your post`;
@@ -677,7 +665,7 @@ function createRipple(id) {
   setTimeout(() => ripple.remove(), 600);
 }
 supabase
-  .channel("posts-changes")
+  .channel("posts")
   .on(
     "postgres_changes",
     {
@@ -700,16 +688,6 @@ supabase
           btn.classList.remove("like-animate");
         }, 300);
       }
-    }
-  )
-  .subscribe();
-  supabase
-  .channel("notifications-channel")
-  .on(
-    "postgres_changes",
-    { event: "INSERT", schema: "public", table: "notifications" },
-    (payload) => {
-      renderNotification(payload.new);
     }
   )
   .subscribe();
