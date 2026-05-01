@@ -313,7 +313,14 @@ if (!session) {
   const postsDiv = document.getElementById("posts");
   postsDiv.innerHTML = "";
 
-  posts.forEach(renderPost);
+  if (error) {
+  console.error(error);
+  return;
+}
+
+if (!posts) return;
+
+posts.forEach(renderPost);
 }
 
   // ✅ RENDER POST
@@ -341,7 +348,7 @@ if (!session) {
       </div>
     </div>
 
-    <div>${post.content}</div>
+    <div class="post-content">${post.content}</div>
 
     <div class="actions">
       <button class="like-btn" onclick="likePost(${post.id})">
@@ -428,7 +435,7 @@ supabase
   const el = document.getElementById(post.id);
   if (!el) return;
 
-  const contentDiv = el.querySelector(".post-card > div:nth-child(2)");
+  const contentDiv = el.querySelector(".post-content");
   if (contentDiv) {
     contentDiv.textContent = post.content;
   }
@@ -474,7 +481,6 @@ supabase
     setTimeout(() => heart.remove(), 1000);
   }
 };
-  btn.innerHTML = `👍 ${newLikes}`;
 
   // ✅ COMMENTS
   window.addComment = async (postId) => {
