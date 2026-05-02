@@ -478,13 +478,17 @@ div.innerHTML = `
     ${post.file_url ? `
   ${/\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
     ? `<video 
+  src="${post.file_url}" 
+  class="post-video"
+  playsinline
+  muted
+  loop
+  style="width:100%; border-radius:12px;">
+</video>`
+    : `<img 
           src="${post.file_url}" 
-          class="post-video"
-          controls
-          playsinline
-          style="width:100%; border-radius:12px;">
-       </video>`
-    : `<img src="${post.file_url}" style="width:100%; border-radius:12px;" />`
+          style="width:100%; border-radius:12px;" 
+       />`
   }
 ` : ""}
 
