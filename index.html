@@ -333,6 +333,18 @@ if (!session) {
     if (document.getElementById(post.id)) return;
 
     const div = document.createElement("div");
+    let lastTap = 0;
+
+div.addEventListener("click", () => {
+  const now = Date.now();
+
+  if (now - lastTap < 300) {
+    likePost(post.id);
+    showHeart(div);
+  }
+
+  lastTap = now;
+});
     div.id = post.id;
 
     div.innerHTML = `
@@ -427,25 +439,53 @@ if (!session) {
 
   // ✅ NOTIFICATIONS
   async function loadNotifications() {
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", session.user.id);
+  const { data } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", session.user.id);
 
-    const container = document.getElementById("notifications");
-    container.innerHTML = "";
+  const container = document.getElementById("notifications");
+  container.innerHTML = "";
 
-    if (!data || !data.length) {
-      container.innerHTML = "No notifications";
-      return;
+  if (!data || data.length === 0) {
+    container.innerHTML = "No notifications";
+    return;
+  }
+
+  data.forEach((n) => {
+    const div = document.createElement("div");
+
+    if (n.type === "like") {
+      div.innerHTML = "❤️ Someone liked your post";
+    } else if (n.type === "comment") {
+      div.innerHTML = "💬 Someone commented on your post";
     }
 
-    data.forEach(() => {
-      const div = document.createElement("div");
-      div.innerHTML = "❤️ Someone liked your post";
-      container.appendChild(div);
-    });
-  }
+    container.appendChild(div);
+  });
+}
+
+function showHeart(parent) {
+  const heart = document.createElement("div");
+  heart.innerHTML = "❤️";
+  heart.style.position = "absolute";
+  heart.style.fontSize = "40px";
+  heart.style.left = "50%";
+  heart.style.top = "50%";
+  heart.style.transform = "translate(-50%, -50%)";
+  heart.style.opacity = "1";
+  heart.style.transition = "all 0.6s ease";
+
+  parent.style.position = "relative";
+  parent.appendChild(heart);
+
+  setTimeout(() => {
+    heart.style.opacity = "0";
+    heart.style.transform = "translate(-50%, -80%) scale(1.5)";
+  }, 50);
+
+  setTimeout(() => heart.remove(), 600);
+}
 
   // ✅ REALTIME
   supabase.channel("posts")
