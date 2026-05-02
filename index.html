@@ -447,6 +447,7 @@ if (!session) {
 
   // ✅ RENDER POST
   function renderPost(post) {
+    console.log("FILE URL:", post.file_url);
     const postsDiv = document.getElementById("posts");
 
     if (document.getElementById(post.id)) return;
@@ -475,18 +476,18 @@ div.innerHTML = `
     ${post.content || ""}<br>
 
     ${post.file_url ? `
-  ${post.file_url.includes("video")
+  ${/\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
     ? `<video 
           src="${post.file_url}" 
           class="post-video"
-          muted 
-          playsinline 
-          loop
+          controls
+          playsinline
           style="width:100%; border-radius:12px;">
        </video>`
     : `<img src="${post.file_url}" style="width:100%; border-radius:12px;" />`
   }
 ` : ""}
+setTimeout(setupAutoPlay, 300);
 
     <button
       class="like-btn ${isLiked ? 'liked' : ''}"
