@@ -362,7 +362,6 @@ if (!session) {
 
   // ✅ CREATE POST
   document.getElementById("postBtn").onclick = async () => {
-
   const content = document.getElementById("postInput").value;
   const fileInput = document.getElementById("fileInput");
   const file = fileInput.files[0];
@@ -371,38 +370,44 @@ if (!session) {
 
   let fileUrl = null;
 
-  // 📤 Upload file
   if (file) {
-  const fileName = Date.now() + "_" + file.name;
+    const fileName = Date.now() + "_" + file.name;
 
-  const { data, error } = await supabase.storage
-    .from("posts_media") // ✅ FIXED
-    .upload(fileName, file);
+    const { error } = await supabase.storage
+      .from("posts_media")
+      .upload(fileName, file);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    const { data } = supabase.storage
+      .from("posts_media")
+      .getPublicUrl(fileName);
+
+    fileUrl = data.publicUrl;
+  }
+
+  const { error } = await supabase.from("posts").insert([{
+    user_id: session.user.id,
+    name: session.user.user_metadata.full_name,
+    content,
+    file_url: fileUrl
+  }]);
 
   if (error) {
-    alert(error.message); // 🔥 show real error
+    alert(error.message);
     return;
   }
 
-  const { data: publicUrl } = supabase.storage
-    .from("posts_media") // ✅ FIXED
-    .getPublicUrl(fileName);
+  // 🔥 refresh UI
+  await loadPosts();
 
-  fileUrl = publicUrl.publicUrl;
-}
-
-  // 💾 Save post WITH media
-  await supabase.from("posts").insert([{
-  user_id: session.user.id,
-  name: session.user.user_metadata.full_name,
-  content,
-  file_url: fileUrl   // 🔥 ADD THIS
-}]);
-
-  // 🧹 Reset inputs
+  // reset
   document.getElementById("postInput").value = "";
   fileInput.value = "";
-
+  document.getElementById("preview").innerHTML = "";
 };
 
   // ✅ LOAD POSTS
