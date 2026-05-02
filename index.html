@@ -275,14 +275,32 @@ button:active {
   50% { transform: scale(1.4); }
   100% { transform: scale(1); }
 }
+.like-btn.liked {
+  background: #ff4d6d;
+  color: white;
+  box-shadow: 0 0 12px rgba(255, 77, 109, 0.6);
+}
+
+@keyframes likePop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
 
 .like-btn.pop {
   animation: likePop 0.25s ease;
+  transform: scale(1.3);
 }
 
-/* 🔥 click animation */
-.like-btn.pop {
-  transform: scale(1.3);
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 </style>
 </head>
@@ -323,7 +341,10 @@ if (!session) {
     <h3>Welcome ${session.user.user_metadata.full_name}</h3>
 
     <textarea id="postInput"></textarea><br>
+    <input type="file" id="fileInput" accept="image/*,video/*">
     <button id="postBtn">Post</button>
+
+<div id="preview" style="margin-top:10px;"></div>
     <button id="logout">Logout</button>
 
     <h3>Notifications</h3>
@@ -341,17 +362,48 @@ if (!session) {
 
   // ✅ CREATE POST
   document.getElementById("postBtn").onclick = async () => {
-    const content = document.getElementById("postInput").value;
-    if (!content) return;
 
-    await supabase.from("posts").insert([{
-      user_id: session.user.id,
-      name: session.user.user_metadata.full_name,
-      content
-    }]);
+  const content = document.getElementById("postInput").value;
+  const fileInput = document.getElementById("fileInput");
+  const file = fileInput.files[0];
 
-    document.getElementById("postInput").value = "";
-  };
+  if (!content && !file) return;
+
+  let fileUrl = null;
+
+  // 📤 Upload file
+  if (file) {
+    const fileName = Date.now() + "_" + file.name;
+
+    const { data, error } = await supabase.storage
+      .from("posts-media")
+      .upload(fileName, file);
+
+    if (error) {
+      alert("Upload failed");
+      return;
+    }
+
+    const { data: publicUrl } = supabase.storage
+      .from("posts-media")
+      .getPublicUrl(fileName);
+
+    fileUrl = publicUrl.publicUrl;
+  }
+
+  // 💾 Save post WITH media
+  await supabase.from("posts").insert([{
+  user_id: session.user.id,
+  name: session.user.user_metadata.full_name,
+  content,
+  file_url: fileUrl   // 🔥 ADD THIS
+}]);
+
+  // 🧹 Reset inputs
+  document.getElementById("postInput").value = "";
+  fileInput.value = "";
+
+};
 
   // ✅ LOAD POSTS
   async function loadPosts() {
@@ -366,6 +418,27 @@ if (!session) {
     if (!posts) return;
     posts.forEach(renderPost);
   }
+  setupAutoPlay();
+  
+  function setupAutoPlay() {
+  const videos = document.querySelectorAll(".post-video");
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const video = entry.target;
+
+      if (entry.isIntersecting) {
+        video.play().catch(() => {});
+      } else {
+        video.pause();
+      }
+    });
+  }, {
+    threshold: 0.6 // play when 60% visible
+  });
+
+  videos.forEach(video => observer.observe(video));
+}
 
   // ✅ RENDER POST
   function renderPost(post) {
@@ -392,32 +465,48 @@ div.addEventListener("click", () => {
 
 div.innerHTML = `
   <div class="post-card" onclick="handleTap(event, ${post.id})">
+
     <b>${post.name}</b><br>
-    ${post.content}<br>
+    ${post.content || ""}<br>
+
+    ${post.file_url ? `
+  ${post.file_url.includes("video")
+    ? `<video 
+          src="${post.file_url}" 
+          class="post-video"
+          muted 
+          playsinline 
+          loop
+          style="width:100%; border-radius:12px;">
+       </video>`
+    : `<img src="${post.file_url}" style="width:100%; border-radius:12px;" />`
+  }
+` : ""}
 
     <button
-  class="like-btn ${isLiked ? 'liked' : ''}"
-  onclick="event.stopPropagation(); likePost(${post.id})"
->
-  ${isLiked ? "❤️" : "🤍"} ${post.likes || 0}
-</button>
+      class="like-btn ${isLiked ? 'liked' : ''}"
+      onclick="event.stopPropagation(); likePost(${post.id})"
+    >
+      ${isLiked ? "❤️" : "🤍"} ${post.likes || 0}
+    </button>
 
     ${
       post.user_id === session.user.id
-      ? `<button onclick="deletePost(${post.id})">Delete</button>`
-      : ""
+        ? `<button onclick="deletePost(${post.id})">Delete</button>`
+        : ""
     }
 
     <div id="comments-${post.id}"></div>
 
     <input id="commentInput-${post.id}" placeholder="Comment..." />
     <button onclick="addComment(${post.id})">Post</button>
+
   </div>
 `;
 
-    postsDiv.appendChild(div);
-    loadComments(post.id);
-  }
+postsDiv.appendChild(div);
+loadComments(post.id);
+}
 
   // ✅ DELETE
   window.deletePost = async (id) => {
@@ -523,6 +612,7 @@ btn.style.borderRadius = "20px";
 
     const div = document.createElement("div");
     div.innerHTML = `<b>${comment.name}</b>: ${comment.content}`;
+    div.style.animation = "fadeIn 0.4s ease forwards";
 
     container.appendChild(div);
   }
@@ -576,21 +666,27 @@ function showHeart(parent) {
     heart.style.pointerEvents = "none";
 
     const x = (Math.random() - 0.5) * 100;
-    const y = -Math.random() * 150;
+    const y = -80 - Math.random() * 120;
+    const rotate = (Math.random() - 0.5) * 40;
 
-    heart.style.transform = `translate(${x}px, ${y}px) scale(1)`;
-    heart.style.opacity = "1";
-    heart.style.transition = "all 0.8s ease";
+    heart.style.transform = `translate(-50%, -50%) scale(0.6)`;
+    heart.style.opacity = "0";
+    heart.style.transition = "all 0.6s ease";
 
     parent.style.position = "relative";
     parent.appendChild(heart);
 
+    requestAnimationFrame(() => {
+      heart.style.opacity = "1";
+      heart.style.transform = `translate(${x}px, ${y}px) scale(1.2) rotate(${rotate}deg)`;
+    });
+
     setTimeout(() => {
       heart.style.opacity = "0";
-      heart.style.transform = `translate(${x}px, ${y - 100}px) scale(1.5)`;
-    }, 50);
+      heart.style.transform = `translate(${x}px, ${y - 120}px) scale(1.6) rotate(${rotate}deg)`;
+    }, 300);
 
-    setTimeout(() => heart.remove(), 800);
+    setTimeout(() => heart.remove(), 700);
   }
 }
 function showBigHeart(id, e) {
@@ -740,6 +836,71 @@ createRipple(id);
   }
 
   lastTap = now;
+};
+document.getElementById("fileInput").addEventListener("change", function () {
+  const file = this.files[0];
+  const preview = document.getElementById("preview");
+
+  preview.innerHTML = "";
+
+  if (!file) return;
+
+  const url = URL.createObjectURL(file);
+
+  if (file.type.startsWith("video")) {
+    preview.innerHTML = `
+      <video src="${url}" controls style="width:100%; border-radius:12px;"></video>
+    `;
+  } else {
+    preview.innerHTML = `
+      <img src="${url}" style="width:100%; border-radius:12px;" />
+    `;
+  }
+
+  // 🔥 ADD IT HERE (not in postBtn)
+  preview.style.animation = "none";
+  preview.offsetHeight; // reset animation
+  preview.style.animation = "fadeIn 0.3s ease";
+});
+
+document.getElementById("postBtn").onclick = async () => {
+  const content = document.getElementById("postInput").value;
+  const fileInput = document.getElementById("fileInput");
+  const file = fileInput.files[0];
+
+  if (!content && !file) return;
+
+  let fileUrl = null;
+
+  if (file) {
+    const fileName = Date.now() + "-" + file.name;
+
+    const { error } = await supabase.storage
+      .from("posts-media")
+      .upload(fileName, file);
+
+    if (error) {
+      alert("Upload failed");
+      return;
+    }
+
+    const { data } = supabase.storage
+      .from("posts-media")
+      .getPublicUrl(fileName);
+
+    fileUrl = data.publicUrl;
+  }
+
+  await supabase.from("posts").insert([{
+    user_id: session.user.id,
+    name: session.user.user_metadata.full_name,
+    content,
+    file_url: fileUrl
+  }]);
+
+  document.getElementById("postInput").value = "";
+  fileInput.value = "";
+  document.getElementById("preview").innerHTML = "";
 };
 
   // ✅ REALTIME
