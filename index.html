@@ -476,20 +476,38 @@ div.innerHTML = `
     ${post.content || ""}<br>
 
     ${post.file_url ? `
-  ${/\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
-    ? `<video 
-        src="${post.file_url}" 
-        class="post-video"
-        playsinline
-        muted
-        loop
-        style="width:100%; border-radius:12px;">
-      </video>`
-    : `<img 
-        src="${post.file_url}" 
-        style="width:100%; border-radius:12px;" 
-      />`
-  }
+  <div style="position:relative;">
+
+    ${/\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
+      ? `
+        <video 
+          src="${post.file_url}" 
+          class="post-video"
+          playsinline
+          muted
+          loop
+          style="width:100%; border-radius:12px;">
+        </video>
+
+        <button onclick="openFullscreen(this)"
+          style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.6); color:white; border:none; padding:6px 10px; border-radius:8px;">
+          ⛶
+        </button>
+      `
+      : `
+        <img 
+          src="${post.file_url}" 
+          style="width:100%; border-radius:12px;" 
+        />
+      `
+    }
+
+    <a href="${post.file_url}" download
+      style="position:absolute; bottom:10px; left:10px; background:rgba(0,0,0,0.6); color:white; text-decoration:none; padding:6px 10px; border-radius:8px;">
+      ⬇
+    </a>
+
+  </div>
 ` : ""}
 
     <button
@@ -866,6 +884,17 @@ document.getElementById("fileInput").addEventListener("change", function () {
       <img src="${url}" style="width:100%; border-radius:12px;" />
     `;
   }
+  function openFullscreen(btn) {
+  const video = btn.parentElement.querySelector("video");
+
+  if (!video) return;
+
+  if (video.requestFullscreen) {
+    video.requestFullscreen();
+  } else if (video.webkitRequestFullscreen) {
+    video.webkitRequestFullscreen();
+  }
+}
 
   // 🔥 ADD IT HERE (not in postBtn)
   preview.style.animation = "none";
