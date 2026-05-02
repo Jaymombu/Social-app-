@@ -4,351 +4,83 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   
   <title>Social App</title>
-  <style>
-  body {
-  font-family: Arial, sans-serif;
-  background: #eef2f7;
-  margin: 0;
-}
+<style>
 
-#app {
-  max-width: 500px;
-  margin: auto;
-  padding: 15px;
-}
-
-/* Header */
-.header {
-  font-size: 20px;
-  font-weight: bold;
-  margin-bottom: 15px;
-}
-
-/* Inputs */
-textarea, input {
-  width: 100%;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid #ddd;
-  margin-bottom: 10px;
-  outline: none;
-}
-
-/* Buttons */
-button {
-  border: none;
-  padding: 8px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: 0.2s;
-}
-
-button:hover {
-  opacity: 0.85;
-}
-
-/* Post Card */
-.post-card {
-  background: white;
-  border-radius: 16px;
-  padding: 15px;
-  margin-bottom: 15px;
-  box-shadow: 0 6px 15px rgba(0,0,0,0.08);
-  position: relative;
-}
-
-/* Post Header */
-.post-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.avatar {
-  width: 35px;
-  height: 35px;
-  border-radius: 50%;
-  background: #dfe6e9;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 10px;
-  font-weight: bold;
-}
-
-.name {
-  font-weight: bold;
-}
-
-.time {
-  font-size: 12px;
-  color: gray;
-}
-
-/* Actions */
-.actions {
-  margin-top: 10px;
-  display: flex;
-  gap: 8px;
-}
-
-/* ❤️ LIKE BUTTON (clean version) */
-.like-btn {
-  background: #eee;
-  border-radius: 20px;
-  padding: 6px 12px;
-  transition: all 0.18s cubic-bezier(.34,1.56,.64,1); /* 🔥 spring feel */
-  transform-origin: center;
-}
-
-.like-btn.liked {
-  background: #ff4d6d;
-  color: white;
-}
-
-/* smoother pop */
-.like-btn.pop {
-  transform: scale(1.25);
-}
-button:active {
-  transform: scale(0.95);
-}
-
-.delete-btn {
-  background: #ff7675;
-  color: white;
-}
-
-/* Comments */
-.comment-box {
-  margin-top: 15px;
-}
-
-.comment {
-  background: #f1f3f6;
-  padding: 8px;
-  border-radius: 8px;
-  margin-bottom: 5px;
-  font-size: 14px;
-}
-
-/* 💥 BIG HEART */
-.big-heart {
-  position: absolute;
-  transform: translate(-50%, -50%) scale(0.6);
-  font-size: 90px;
-  opacity: 0;
-  animation: bigPop 0.7s cubic-bezier(.34,1.56,.64,1);
-  pointer-events: none;
-}
-
-@keyframes bigPop {
-  0% {
-    transform: translate(-50%, -50%) scale(0.3);
-    opacity: 0;
-  }
-  40% {
-    transform: translate(-50%, -50%) scale(1.3);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-    opacity: 0;
-  }
-}
-
-/* ✨ FLOATING HEART */
-.floating-heart {
-  position: absolute;
-  font-size: 22px;
-  pointer-events: none;
-  animation: floatUp 1.2s ease-out forwards;
-  filter: drop-shadow(0 0 6px rgba(255, 0, 100, 0.6));
-}
-
-/* ONE float animation only */
-@keyframes floatUp {
-  0% {
-    transform: translateY(0) scale(0.8);
-    opacity: 1;
-  }
-  50% {
-    transform: translateY(-40px) scale(1.3);
-  }
-  100% {
-    transform: translateY(-100px) scale(1.6);
-    opacity: 0;
-  }
-}
-.burst-heart {
-  position: absolute;
-  transform: translate(-50%, -50%) scale(0.6);
-  font-size: 22px;
-  pointer-events: none;
-  animation: burstAnim 0.8s ease-out forwards;
-}
-
-@keyframes burstAnim {
-  0% {
-    transform: translate(-50%, -50%) scale(0.5);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(
-      calc(-50% + var(--dx)),
-      calc(-50% + var(--dy))
-    ) scale(1.4);
-    opacity: 0;
-  }
-}
-
-/* ripple effect */
-.ripple {
-  position: absolute;
-  width: 20px;
-  height: 20px;
-  background: rgba(255, 0, 100, 0.3);
-  border-radius: 50%;
-  transform: translate(-50%, -50%) scale(0);
-  animation: rippleEffect 0.6s ease-out;
-  pointer-events: none;
-}
-
-@keyframes rippleEffect {
-  to {
-    transform: translate(-50%, -50%) scale(8);
-    opacity: 0;
-  }
-}
-.like-btn {
-  transform-origin: center;
-}
-.like-btn.liked {
-  box-shadow: 0 0 10px rgba(255, 77, 109, 0.5);
-}
-
-.post-card {
-  transition: transform 0.15s ease;
-}
-
-.post-card:active {
-  transform: scale(0.98);
-}
-.post-card {
-  transition: transform 0.12s ease;
-}
-
-.post-card:active {
-  transform: scale(0.97);
-}
-.like-btn {
-  background: #eee;
-  color: black;
-  padding: 6px 12px;
-  border-radius: 20px;
-}
-
-.like-btn.liked {
-  background: #ff4d6d;
-  color: white;
-}
-.like-btn {
-  background: #eee;
-  color: black;
-  border: none;
-  padding: 6px 12px;
-  border-radius: 20px;
-  transition: all 0.2s ease;
-}
-
-.like-btn.liked {
-  background: #ff4d6d;
-  color: white;
-}
-.like-btn.liked {
-  background: #ff4d6d;
-  color: white;
-  box-shadow: 0 0 12px rgba(255, 77, 109, 0.6);
-}
-@keyframes likePop {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.4); }
-  100% { transform: scale(1); }
-}
-.like-btn.liked {
-  background: #ff4d6d;
-  color: white;
-  box-shadow: 0 0 12px rgba(255, 77, 109, 0.6);
-}
-
-@keyframes likePop {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.4); }
-  100% { transform: scale(1); }
-}
-
-.like-btn.pop {
-  animation: likePop 0.25s ease;
-  transform: scale(1.3);
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
+  /* RESET */
 body {
   margin: 0;
   background: black;
+  color: white;
+  font-family: Arial, sans-serif;
 }
 
+/* MAIN APP */
+#app {
+  max-width: 500px;
+  margin: auto;
+}
+
+/* POSTS CONTAINER */
 #posts {
   height: 100vh;
   overflow-y: scroll;
   scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
 }
 
+/* EACH POST (FULL SCREEN) */
 .post-card {
   height: 100vh;
   width: 100%;
-  scroll-snap-align: start;
   position: relative;
+  scroll-snap-align: start;
   display: flex;
-  flex-direction: column;
+  align-items: center;
   justify-content: center;
   background: black;
 }
 
-.post-video {
+/* MEDIA (VIDEO / IMAGE) */
+.post-card video,
+.post-card img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-#commentsPanel {
-  position: fixed;
-  bottom: -100%;
-  left: 0;
-  width: 100%;
-  height: 70%;
-  background: white;
-  border-top-left-radius: 20px;
-  border-top-right-radius: 20px;
-  transition: bottom 0.3s ease;
-  z-index: 999;
+
+/* TEXT OVERLAY (BOTTOM LEFT) */
+.post-text {
+  position: absolute;
+  bottom: 80px;
+  left: 10px;
+  z-index: 2;
 }
 
-#commentsPanel.active {
-  bottom: 0;
+/* RIGHT SIDE ACTIONS */
+.post-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  z-index: 2;
 }
 
-.comments-content {
-  padding: 15px;
+/* BUTTONS */
+button {
+  background: rgba(0,0,0,0.5);
+  color: white;
+  border: none;
+  padding: 8px;
+  border-radius: 50%;
+  cursor: pointer;
 }
+
+/* COMMENTS PANEL (BOTTOM SHEET STYLE) */
 #commentsPanel {
   position: fixed;
   bottom: 0;
@@ -363,6 +95,7 @@ body {
   opacity: 0;
   pointer-events: none;
   transition: 0.3s;
+  z-index: 999;
 }
 
 #commentsPanel.active {
@@ -371,11 +104,12 @@ body {
 }
 
 .comments-content {
-  background: white;
+  background: #111;
   width: 100%;
-  height: 70%;
+  height: 60%;
   border-radius: 20px 20px 0 0;
   padding: 15px;
+  color: white;
 
   transform: translateY(100%);
   transition: 0.3s;
@@ -383,6 +117,33 @@ body {
 
 #commentsPanel.active .comments-content {
   transform: translateY(0);
+}
+
+/* INPUT */
+input, textarea {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+  margin-top: 10px;
+}
+
+/* LIKE BUTTON STYLE */
+.like-btn {
+  background: rgba(255,255,255,0.2);
+  border-radius: 20px;
+  padding: 6px 12px;
+  transition: 0.2s;
+}
+
+.like-btn.liked {
+  background: #ff4d6d;
+}
+
+/* SIMPLE FADE */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>
 </head>
@@ -447,6 +208,9 @@ if (!session) {
     </div>
   </div>
 `;
+function closeComments() {
+  document.getElementById("commentsPanel").classList.remove("active");
+}
 
 
   // ✅ LOGOUT
@@ -507,45 +271,34 @@ if (!session) {
 
   // ✅ LOAD POSTS
   async function loadPosts() {
-    const { data: posts } = await supabase
-      .from("posts")
-      .select("*")
-      .order("created_at", { ascending: false });
+  console.log("Fetching posts...");
 
-    const postsDiv = document.getElementById("posts");
-    postsDiv.innerHTML = "";
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-    if (!posts) return;
-    posts.forEach(renderPost);
+  console.log("Posts:", posts);
+  console.log("Error:", error);
+
+  const postsDiv = document.getElementById("posts");
+  postsDiv.innerHTML = "";
+
+  if (error) {
+    postsDiv.innerHTML = "❌ Error loading posts";
+    return;
   }
-  setupAutoPlay();
-  
-  function setupAutoPlay() {
-  const videos = document.querySelectorAll(".post-video");
 
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      const video = entry.target;
+  if (!posts || posts.length === 0) {
+    postsDiv.innerHTML = "😢 No posts yet";
+    return;
+  }
 
-      if (entry.isIntersecting) {
-        // ⛔ pause ALL other videos first
-        document.querySelectorAll(".post-video").forEach(v => {
-          if (v !== video) v.pause();
-        });
+  posts.forEach(renderPost);
 
-        video.play().catch(() => {});
-      } else {
-        video.pause();
-      }
-    });
-  }, {
-    threshold: 0.7 // slightly stricter = cleaner switching
-  });
-
-  videos.forEach(video => observer.observe(video));
+  // ✅ run AFTER posts exist
+  setTimeout(setupAutoPlay, 300);
 }
-loadPosts();
-console.log("Loading posts...");
 
   // ✅ RENDER POST
   function renderPost(post) {
@@ -572,88 +325,43 @@ div.addEventListener("click", () => {
     const isLiked = (post.liked_by || []).includes(session.user.id);
 
 div.innerHTML = `
-  <div class="post-card" onclick="handleTap(event, ${post.id})" style="position:relative;">
+  <div class="post-card">
 
-    <b>${post.name}</b><br>
-    ${post.content || ""}<br>
-
-    ${post.file_url ? `
-      <div style="position:relative;">
-
-        ${
-          /\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
+    ${
+      post.file_url
+        ? /\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
           ? `<video 
               src="${post.file_url}" 
               class="post-video"
               playsinline
               muted
               loop
-              style="width:100%; border-radius:12px;">
+              autoplay>
             </video>`
-          : `<img 
-              src="${post.file_url}" 
-              style="width:100%; border-radius:12px;" 
-            />`
-        }
+          : `<img src="${post.file_url}" />`
+        : ""
+    }
 
-        <!-- RIGHT SIDE (TikTok style buttons) -->
-        <div style="
-          position:absolute;
-          right:10px;
-          bottom:20px;
-          display:flex;
-          flex-direction:column;
-          align-items:center;
-          gap:12px;
-        ">
+    <!-- ✅ TEXT (clean class) -->
+    <div class="post-text">
+      <b>${post.name}</b><br>
+      ${post.content || ""}
+    </div>
 
-          <button 
-            onclick="event.stopPropagation(); likePost(${post.id})"
-            style="background:none; border:none; color:white; font-size:20px;">
-            ${isLiked ? "❤️" : "🤍"}<br>${post.likes || 0}
-          </button>
+    <!-- ✅ ACTIONS (clean class) -->
+    <div class="post-actions">
+      <button onclick="event.stopPropagation(); likePost(${post.id})">
+        ❤️ ${post.likes || 0}
+      </button>
 
-          <button 
-            onclick="event.stopPropagation(); openFullscreen(this)"
-            style="background:none; border:none; color:white; font-size:20px;">
-            ⛶
-          </button>
+      <button onclick="event.stopPropagation(); openComments(${post.id})">
+        💬
+      </button>
 
-          <a 
-            href="${post.file_url}" 
-            download 
-            onclick="event.stopPropagation();"
-            style="color:white; text-decoration:none; font-size:20px;">
-            ⬇
-          </a>
-
-          ${
-            post.user_id === session.user.id
-              ? `<button 
-                  onclick="event.stopPropagation(); deletePost(${post.id})"
-                  style="background:none; border:none; color:red;">
-                  🗑
-                </button>`
-              : ""
-          }
-
-        </div>
-
-      </div>
-    ` : ""}
-
-    <!-- COMMENTS -->
-    <div id="comments-${post.id}"></div>
-
-    <input 
-      id="commentInput-${post.id}" 
-      placeholder="Comment..." 
-      onclick="event.stopPropagation();"
-    />
-
-    <button onclick="event.stopPropagation(); openComments(${post.id})">
-  💬
-</button>
+      <button onclick="event.stopPropagation(); openFullscreen(this)">
+        ⛶
+      </button>
+    </div>
 
   </div>
 `;
@@ -746,7 +454,9 @@ btn.style.borderRadius = "20px";
     .eq("id", id);
 };
 function openComments(postId) {
+  currentPostId = postId;
   document.getElementById("commentsPanel").classList.add("active");
+  loadComments(postId);
 }
 
   // ✅ COMMENTS
