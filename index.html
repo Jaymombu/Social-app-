@@ -254,13 +254,14 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const supabaseUrl = "https://kixxdbkfvigunvxbvmfy.supabase.co";
 const supabaseKey = "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M";
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    detectSessionInUrl: true,
+    persistSession: true
+  }
+});
 
-// auth redirect
-await supabase.auth.exchangeCodeForSession(window.location.href);
-
-const { data } = await supabase.auth.getSession();
-window.session = data.session;
+const { data: { session } } = await supabase.auth.getSession();
 
 if (!session) {
   document.getElementById("app").innerHTML = `
@@ -277,429 +278,197 @@ if (!session) {
   };
 
 } else {
-
   document.getElementById("app").innerHTML = `
-  <h3>Welcome ${session.user.user_metadata.full_name}</h3>
+    <h3>Welcome ${session.user.user_metadata.full_name}</h3>
 
-  <textarea id="postInput"></textarea><br>
-  <button id="postBtn">Post</button>
-  <button id="logout">Logout</button>
+    <textarea id="postInput"></textarea><br>
+    <button id="postBtn">Post</button>
+    <button id="logout">Logout</button>
 
-  <h3>Notifications</h3>
-  <div id="notifications"></div>
+    <h3>Notifications</h3>
+    <div id="notifications"></div>
 
-  <h3>Posts</h3>
-  <div id="posts"></div>
-`;
+    <h3>Posts</h3>
+    <div id="posts"></div>
+  `;
 
+  // ✅ LOGOUT
   document.getElementById("logout").onclick = async () => {
     await supabase.auth.signOut();
     location.reload();
   };
 
-  // ✅ CREATE POST (no fake render)
+  // ✅ CREATE POST
   document.getElementById("postBtn").onclick = async () => {
     const content = document.getElementById("postInput").value;
-
     if (!content) return;
 
     await supabase.from("posts").insert([{
       user_id: session.user.id,
-      name: session.user.user_metadata.full_name || session.user.email,
+      name: session.user.user_metadata.full_name,
       content
     }]);
 
     document.getElementById("postInput").value = "";
   };
 
-  // ✅ LOAD POSTS ONCE
+  // ✅ LOAD POSTS
   async function loadPosts() {
-  const { data: posts, error } = await supabase
-    .from("posts")
-    .select("*")
-    .order("created_at", { ascending: false });
+    const { data: posts } = await supabase
+      .from("posts")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-  console.log(posts, error); // 👈 ADD THIS
+    const postsDiv = document.getElementById("posts");
+    postsDiv.innerHTML = "";
 
-  const postsDiv = document.getElementById("posts");
-  postsDiv.innerHTML = "";
-
-  if (error) {
-  console.error(error);
-  return;
-}
-
-if (!posts) return;
-
-posts.forEach(renderPost);
-}
+    if (!posts) return;
+    posts.forEach(renderPost);
+  }
 
   // ✅ RENDER POST
-  async function renderPost(post) {
+  function renderPost(post) {
     const postsDiv = document.getElementById("posts");
 
-    // prevent duplicates
     if (document.getElementById(post.id)) return;
 
     const div = document.createElement("div");
     div.id = post.id;
 
     div.innerHTML = `
-  <div class="post-card" style="position: relative;" onclick="handleTap(${post.id})">
+      <div class="post-card">
+        <b>${post.name}</b><br>
+        ${post.content}<br>
 
-    <div class="post-header">
-      <div class="avatar">
-        ${post.name ? post.name[0] : "U"}
+        <button onclick="likePost(${post.id})">
+          👍 ${post.likes || 0}
+        </button>
+
+        ${
+          post.user_id === session.user.id
+          ? `<button onclick="deletePost(${post.id})">Delete</button>`
+          : ""
+        }
+
+        <div id="comments-${post.id}"></div>
+
+        <input id="commentInput-${post.id}" placeholder="Comment..." />
+        <button onclick="addComment(${post.id})">Post</button>
       </div>
-      <div>
-        <div class="name">${post.name}</div>
-        <div class="time">
-          ${new Date(post.created_at).toLocaleString()}
-        </div>
-      </div>
-    </div>
-
-    <div class="post-content">${post.content}</div>
-
-    <div class="actions">
-      <button class="like-btn" onclick="event.stopPropagation(); likePost(${post.id})">
-      </button>
-
-      ${
-        post.user_id === session.user.id
-        ? `
-          <button class="edit-btn" onclick="editPost(${post.id})">Edit</button>
-          <button class="delete-btn" onclick="deletePost(${post.id})">Delete</button>
-        `
-        : ""
-      }
-    </div>
-
-    <div class="comment-box">
-      <div id="comments-${post.id}"></div>
-
-      <input id="commentInput-${post.id}" placeholder="Write a comment..." />
-      <button onclick="addComment(${post.id})">Post</button>
-    </div>
-
-  </div>
-`;
+    `;
 
     postsDiv.appendChild(div);
-
     loadComments(post.id);
   }
 
-  // ✅ REALTIME (THE RIGHT WAY)
-  supabase
-    .channel("posts")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "posts" },
-      payload => renderPost(payload.new))
-    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "posts" },
-      payload => updatePostUI(payload.new))
-    .on("postgres_changes", { event: "DELETE", schema: "public", table: "posts" },
-      payload => removePost(payload.old.id))
-    .subscribe();
-    
-    // 🔥 COMMENTS REALTIME
-supabase
-  .channel("comments-channel")
-  .on(
-    "postgres_changes",
-    { event: "INSERT", schema: "public", table: "comments" },
-    (payload) => {
-      renderComment(payload.new);
-    }
-  )
-  .subscribe();
-
   // ✅ DELETE
   window.deletePost = async (id) => {
-    if (!confirm("Delete?")) return;
     await supabase.from("posts").delete().eq("id", id);
   };
 
-  function removePost(id) {
-    const el = document.getElementById(id);
-    if (el) el.remove();
-  }
-
-  // ✅ EDIT
-  window.editPost = async (id) => {
-  const { data } = await supabase
-    .from("posts")
-    .select("content")
-    .eq("id", id)
-    .single();
-
-  const newContent = prompt("Edit post:", data.content);
-  if (!newContent) return;
-
-  await supabase
-    .from("posts")
-    .update({ content: newContent })
-    .eq("id", id);
-};
-
-  function updatePostUI(post) {
-  const el = document.getElementById(post.id);
-  if (!el) return;
-
-  const contentDiv = el.querySelector(".post-content");
-  if (contentDiv) {
-    contentDiv.textContent = post.content;
-  }
-}
-
   // ✅ LIKE
   window.likePost = async (id) => {
-  const el = document.getElementById(id);
-  const btn = el.querySelector(".like-btn");
+    const { data: post } = await supabase
+      .from("posts")
+      .select("likes, user_id")
+      .eq("id", id)
+      .single();
 
-  // 💥 animation
-  btn.classList.add("pop");
-  setTimeout(() => btn.classList.remove("pop"), 300);
+    const newLikes = (post.likes || 0) + 1;
 
-  // 👉 1. Get post data (including owner)
-  const { data: post } = await supabase
-    .from("posts")
-    .select("likes, user_id")
-    .eq("id", id)
-    .single();
+    await supabase
+      .from("posts")
+      .update({ likes: newLikes })
+      .eq("id", id);
 
-  const newLikes = (post.likes || 0) + 1;
-
-  // 👉 2. Update likes
-  await supabase
-    .from("posts")
-    .update({ likes: newLikes })
-    .eq("id", id);
-
-  btn.innerHTML = `👍 ${newLikes}`;
-
-  // 👉 3. CREATE NOTIFICATION (🔥 NEW)
-  if (post.user_id !== session.user.id) {
-    await supabase.from("notifications").insert([{
-      user_id: post.user_id,        // receiver
-      sender_id: session.user.id,   // who liked
-      post_id: id,
-      type: "like"
-    }]);
-  }
-
-  // 💖 hearts animation (keep yours)
-  for (let i = 0; i < 5; i++) {
-    const heart = document.createElement("div");
-    heart.className = "heart-pop";
-    heart.innerHTML = "❤️";
-
-    heart.style.left = Math.random() * 80 + "%";
-    heart.style.top = "50%";
-
-    el.appendChild(heart);
-    setTimeout(() => heart.remove(), 1000);
-  }
-};
-// 🔔 create notification
-
+    if (post.user_id !== session.user.id) {
+      await supabase.from("notifications").insert([{
+        user_id: post.user_id,
+        sender_id: session.user.id,
+        post_id: id,
+        type: "like"
+      }]);
+    }
+  };
 
   // ✅ COMMENTS
   window.addComment = async (postId) => {
-  const input = document.getElementById(`commentInput-${postId}`);
-  const content = input.value;
+    const input = document.getElementById(`commentInput-${postId}`);
+    if (!input.value) return;
 
-  if (!content) return;
-
-  const { data } = await supabase
-    .from("comments")
-    .insert([{
+    await supabase.from("comments").insert([{
       post_id: postId,
       user_id: session.user.id,
       name: session.user.user_metadata.full_name,
-      content
-    }])
-    .select(); // 🔥 IMPORTANT
+      content: input.value
+    }]);
 
-  renderComment(data[0]); // 🔥 show instantly
+    input.value = "";
+  };
 
-  input.value = "";
-};
-let lastTap = 0;
+  function renderComment(comment) {
+    const container = document.getElementById(`comments-${comment.post_id}`);
+    if (!container) return;
 
-window.handleTap = function(id) {
-  const now = Date.now();
+    const div = document.createElement("div");
+    div.innerHTML = `<b>${comment.name}</b>: ${comment.content}`;
 
-  if (now - lastTap < 300) {
-    likePost(id);
-
-    showBigHeart(id);
-    createFloatingHearts(id);
-    createRipple(id); // 🔥 NEW
-
-    if (navigator.vibrate) navigator.vibrate(40); // stronger feedback
+    container.appendChild(div);
   }
-
-  lastTap = now;
-};
-function showBigHeart(id) {
-  const el = document.getElementById(id);
-
-  const heart = document.createElement("div");
-  heart.className = "big-heart";
-  heart.innerHTML = "❤️";
-
-  el.appendChild(heart);
-
-  setTimeout(() => {
-    heart.remove();
-  }, 800);
-}
 
   async function loadComments(postId) {
-  const container = document.getElementById(`comments-${postId}`);
-  // ✅ use postId, not comment.post_id
+    const { data } = await supabase
+      .from("comments")
+      .select("*")
+      .eq("post_id", postId);
 
-  if (!container) return;
-
-  const { data: comments } = await supabase
-    .from("comments")
-    .select("*")
-    .eq("post_id", postId)
-    .order("created_at", { ascending: true });
-
-  container.innerHTML = "";
-
-  comments.forEach(comment => {
-    renderComment(comment);
-  });
-}
-async function loadNotifications() {
-  const { data: { session } } = await supabase.auth.getSession();
-
-  const { data } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("user_id", session.user.id)
-    .order("created_at", { ascending: false });
-
-  const container = document.getElementById("notifications");
-  container.innerHTML = "";
-
-  if (!data || data.length === 0) {
-    container.innerHTML = "No notifications yet";
-    return;
+    data.forEach(renderComment);
   }
 
-  data.forEach(renderNotification);
-}
+  // ✅ NOTIFICATIONS
+  async function loadNotifications() {
+    const { data } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", session.user.id);
 
-  
-function createFloatingHearts(id) {
-  const el = document.getElementById(id);
+    const container = document.getElementById("notifications");
+    container.innerHTML = "";
 
-  const hearts = ["❤️", "💖", "💜", "💙", "💚", "💛"];
-
-  for (let i = 0; i < 8; i++) {
-    const heart = document.createElement("div");
-    heart.className = "floating-heart";
-
-    // random emoji
-    heart.innerHTML = hearts[Math.floor(Math.random() * hearts.length)];
-
-    // random position
-    heart.style.left = Math.random() * 90 + "%";
-    heart.style.bottom = "10px";
-
-    // random delay
-    heart.style.animationDelay = (Math.random() * 0.4) + "s";
-
-    el.appendChild(heart);
-
-    setTimeout(() => heart.remove(), 1200);
-  }
-}
-
-// ✅ ADD THIS RIGHT BELOW
-function renderComment(comment) {
-  const container = document.getElementById(`comments-${comment.post_id}`);
-  if (!container) return;
-
-  // 🔥 prevent duplicates
-  if (document.getElementById(`comment-${comment.id}`)) return;
-
-  const div = document.createElement("div");
-  div.id = `comment-${comment.id}`;
-
-  div.innerHTML = `
-  <div class="comment">
-    <strong>${comment.name}</strong><br>
-    ${comment.content}
-  </div>
-`;
-
-  container.appendChild(div);
-}
-function renderNotification(n) {
-  const container = document.getElementById("notifications");
-
-  const div = document.createElement("div");
-  div.className = "notification"; // ✅ correct
-
-  if (n.type === "like") {
-    div.innerHTML = `❤️ Someone liked your post`;
-  }
-
-  container.prepend(div);
-}
-function createRipple(id) {
-  const el = document.getElementById(id);
-
-  const ripple = document.createElement("div");
-  ripple.className = "ripple";
-
-  ripple.style.left = "50%";
-  ripple.style.top = "50%";
-
-  el.appendChild(ripple);
-
-  setTimeout(() => ripple.remove(), 600);
-}
-supabase
-  .channel("posts")
-  .on(
-    "postgres_changes",
-    {
-      event: "UPDATE",
-      schema: "public",
-      table: "posts"
-    },
-    (payload) => {
-      const updatedPost = payload.new;
-
-      const el = document.getElementById(updatedPost.id);
-      if (!el) return;
-
-      const btn = el.querySelector(".like-btn");
-      if (btn) {
-        btn.innerHTML = `👍 ${updatedPost.likes || 0}`;
-        btn.classList.add("pop");
-
-        setTimeout(() => {
-          btn.classList.remove("like-animate");
-        }, 300);
-      }
+    if (!data || !data.length) {
+      container.innerHTML = "No notifications";
+      return;
     }
-  )
-  .subscribe();
 
-  // 🔥 START APP
+    data.forEach(() => {
+      const div = document.createElement("div");
+      div.innerHTML = "❤️ Someone liked your post";
+      container.appendChild(div);
+    });
+  }
+
+  // ✅ REALTIME
+  supabase.channel("posts")
+    .on("postgres_changes", { event: "*", schema: "public", table: "posts" },
+      () => loadPosts()
+    )
+    .subscribe();
+
+  supabase.channel("comments")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "comments" },
+      payload => renderComment(payload.new)
+    )
+    .subscribe();
+
+  supabase.channel("notifications")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" },
+      () => loadNotifications()
+    )
+    .subscribe();
+
+  // ✅ START
   loadPosts();
   loadNotifications();
-
-window.likePost = likePost;
-window.deletePost = deletePost;
-window.editPost = editPost;
-window.addComment = addComment;
 }
 </script>
 </body>
