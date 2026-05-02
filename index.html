@@ -863,46 +863,6 @@ document.getElementById("fileInput").addEventListener("change", function () {
   preview.style.animation = "fadeIn 0.3s ease";
 });
 
-document.getElementById("postBtn").onclick = async () => {
-  const content = document.getElementById("postInput").value;
-  const fileInput = document.getElementById("fileInput");
-  const file = fileInput.files[0];
-
-  if (!content && !file) return;
-
-  let fileUrl = null;
-
-  if (file) {
-    const fileName = Date.now() + "-" + file.name;
-
-    const { error } = await supabase.storage
-      .from("posts-media")
-      .upload(fileName, file);
-
-    if (error) {
-      alert("Upload failed");
-      return;
-    }
-
-    const { data } = supabase.storage
-      .from("posts-media")
-      .getPublicUrl(fileName);
-
-    fileUrl = data.publicUrl;
-  }
-
-  await supabase.from("posts").insert([{
-    user_id: session.user.id,
-    name: session.user.user_metadata.full_name,
-    content,
-    file_url: fileUrl
-  }]);
-
-  document.getElementById("postInput").value = "";
-  fileInput.value = "";
-  document.getElementById("preview").innerHTML = "";
-};
-
   // ✅ REALTIME
   supabase.channel("posts")
     .on("postgres_changes", { event: "*", schema: "public", table: "posts" },
