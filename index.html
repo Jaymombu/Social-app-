@@ -426,30 +426,24 @@ if (!session) {
   <input type="file" id="fileInput" accept="image/*,video/*">
   <button id="postBtn">Post</button>
 
-  <div id="preview" style="margin-top:10px;"></div>
+  <div id="preview"></div>
 
   <button id="logout">Logout</button>
-
-  <h3>Notifications</h3>
-  <div id="notifications"></div>
 
   <h3>Posts</h3>
   <div id="posts"></div>
 
-  <!-- 👇 ADD COMMENTS PANEL HERE -->
+  <!-- COMMENTS PANEL -->
   <div id="commentsPanel">
     <div class="comments-content" id="commentsContent">
-
       <h3>
         Comments 
         <span onclick="closeComments()" style="float:right;cursor:pointer;">✖</span>
       </h3>
 
       <div id="panelComments"></div>
-
       <input id="panelInput" placeholder="Write a comment..." />
       <button id="panelPostBtn">Post</button>
-
     </div>
   </div>
 `;
@@ -552,6 +546,8 @@ if (!session) {
 }
 posts.forEach(renderPost);
 setTimeout(setupAutoPlay, 300);
+loadPosts();
+console.log("Loading posts...");
 
   // ✅ RENDER POST
   function renderPost(post) {
