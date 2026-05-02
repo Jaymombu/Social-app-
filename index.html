@@ -302,6 +302,88 @@ button:active {
     transform: translateY(0) scale(1);
   }
 }
+body {
+  margin: 0;
+  background: black;
+}
+
+#posts {
+  height: 100vh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+}
+
+.post-card {
+  height: 100vh;
+  width: 100%;
+  scroll-snap-align: start;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: black;
+}
+
+.post-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+#commentsPanel {
+  position: fixed;
+  bottom: -100%;
+  left: 0;
+  width: 100%;
+  height: 70%;
+  background: white;
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  transition: bottom 0.3s ease;
+  z-index: 999;
+}
+
+#commentsPanel.active {
+  bottom: 0;
+}
+
+.comments-content {
+  padding: 15px;
+}
+#commentsPanel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+
+  display: flex;
+  align-items: flex-end;
+
+  opacity: 0;
+  pointer-events: none;
+  transition: 0.3s;
+}
+
+#commentsPanel.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.comments-content {
+  background: white;
+  width: 100%;
+  height: 70%;
+  border-radius: 20px 20px 0 0;
+  padding: 15px;
+
+  transform: translateY(100%);
+  transition: 0.3s;
+}
+
+#commentsPanel.active .comments-content {
+  transform: translateY(0);
+}
 </style>
 </head>
 <body>
@@ -338,21 +420,40 @@ if (!session) {
 
 } else {
   document.getElementById("app").innerHTML = `
-    <h3>Welcome ${session.user.user_metadata.full_name}</h3>
+  <h3>Welcome ${session.user.user_metadata.full_name}</h3>
 
-    <textarea id="postInput"></textarea><br>
-    <input type="file" id="fileInput" accept="image/*,video/*">
-    <button id="postBtn">Post</button>
+  <textarea id="postInput"></textarea><br>
+  <input type="file" id="fileInput" accept="image/*,video/*">
+  <button id="postBtn">Post</button>
 
-<div id="preview" style="margin-top:10px;"></div>
-    <button id="logout">Logout</button>
+  <div id="preview" style="margin-top:10px;"></div>
 
-    <h3>Notifications</h3>
-    <div id="notifications"></div>
+  <button id="logout">Logout</button>
 
-    <h3>Posts</h3>
-    <div id="posts"></div>
-  `;
+  <h3>Notifications</h3>
+  <div id="notifications"></div>
+
+  <h3>Posts</h3>
+  <div id="posts"></div>
+
+  <!-- 👇 ADD COMMENTS PANEL HERE -->
+  <div id="commentsPanel">
+    <div class="comments-content" id="commentsContent">
+
+      <h3>
+        Comments 
+        <span onclick="closeComments()" style="float:right;cursor:pointer;">✖</span>
+      </h3>
+
+      <div id="panelComments"></div>
+
+      <input id="panelInput" placeholder="Write a comment..." />
+      <button id="panelPostBtn">Post</button>
+
+    </div>
+  </div>
+`;
+
 
   // ✅ LOGOUT
   document.getElementById("logout").onclick = async () => {
@@ -433,17 +534,24 @@ if (!session) {
       const video = entry.target;
 
       if (entry.isIntersecting) {
+        // ⛔ pause ALL other videos first
+        document.querySelectorAll(".post-video").forEach(v => {
+          if (v !== video) v.pause();
+        });
+
         video.play().catch(() => {});
       } else {
         video.pause();
       }
     });
   }, {
-    threshold: 0.6 // play when 60% visible
+    threshold: 0.7 // slightly stricter = cleaner switching
   });
 
   videos.forEach(video => observer.observe(video));
 }
+posts.forEach(renderPost);
+setTimeout(setupAutoPlay, 300);
 
   // ✅ RENDER POST
   function renderPost(post) {
@@ -470,63 +578,88 @@ div.addEventListener("click", () => {
     const isLiked = (post.liked_by || []).includes(session.user.id);
 
 div.innerHTML = `
-  <div class="post-card" onclick="handleTap(event, ${post.id})">
+  <div class="post-card" onclick="handleTap(event, ${post.id})" style="position:relative;">
 
     <b>${post.name}</b><br>
     ${post.content || ""}<br>
 
     ${post.file_url ? `
-  <div style="position:relative;">
+      <div style="position:relative;">
 
-    ${/\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
-      ? `
-        <video 
-          src="${post.file_url}" 
-          class="post-video"
-          playsinline
-          muted
-          loop
-          style="width:100%; border-radius:12px;">
-        </video>
+        ${
+          /\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
+          ? `<video 
+              src="${post.file_url}" 
+              class="post-video"
+              playsinline
+              muted
+              loop
+              style="width:100%; border-radius:12px;">
+            </video>`
+          : `<img 
+              src="${post.file_url}" 
+              style="width:100%; border-radius:12px;" 
+            />`
+        }
 
-        <button onclick="openFullscreen(this)"
-          style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.6); color:white; border:none; padding:6px 10px; border-radius:8px;">
-          ⛶
-        </button>
-      `
-      : `
-        <img 
-          src="${post.file_url}" 
-          style="width:100%; border-radius:12px;" 
-        />
-      `
-    }
+        <!-- RIGHT SIDE (TikTok style buttons) -->
+        <div style="
+          position:absolute;
+          right:10px;
+          bottom:20px;
+          display:flex;
+          flex-direction:column;
+          align-items:center;
+          gap:12px;
+        ">
 
-    <a href="${post.file_url}" download
-      style="position:absolute; bottom:10px; left:10px; background:rgba(0,0,0,0.6); color:white; text-decoration:none; padding:6px 10px; border-radius:8px;">
-      ⬇
-    </a>
+          <button 
+            onclick="event.stopPropagation(); likePost(${post.id})"
+            style="background:none; border:none; color:white; font-size:20px;">
+            ${isLiked ? "❤️" : "🤍"}<br>${post.likes || 0}
+          </button>
 
-  </div>
-` : ""}
+          <button 
+            onclick="event.stopPropagation(); openFullscreen(this)"
+            style="background:none; border:none; color:white; font-size:20px;">
+            ⛶
+          </button>
 
-    <button
-      class="like-btn ${isLiked ? 'liked' : ''}"
-      onclick="event.stopPropagation(); likePost(${post.id})"
-    >
-      ${isLiked ? "❤️" : "🤍"} ${post.likes || 0}
-    </button>
+          <a 
+            href="${post.file_url}" 
+            download 
+            onclick="event.stopPropagation();"
+            style="color:white; text-decoration:none; font-size:20px;">
+            ⬇
+          </a>
 
-    ${
-      post.user_id === session.user.id
-        ? `<button onclick="deletePost(${post.id})">Delete</button>`
-        : ""
-    }
+          ${
+            post.user_id === session.user.id
+              ? `<button 
+                  onclick="event.stopPropagation(); deletePost(${post.id})"
+                  style="background:none; border:none; color:red;">
+                  🗑
+                </button>`
+              : ""
+          }
 
+        </div>
+
+      </div>
+    ` : ""}
+
+    <!-- COMMENTS -->
     <div id="comments-${post.id}"></div>
 
-    <input id="commentInput-${post.id}" placeholder="Comment..." />
-    <button onclick="addComment(${post.id})">Post</button>
+    <input 
+      id="commentInput-${post.id}" 
+      placeholder="Comment..." 
+      onclick="event.stopPropagation();"
+    />
+
+    <button onclick="event.stopPropagation(); openComments(${post.id})">
+  💬
+</button>
 
   </div>
 `;
@@ -618,6 +751,9 @@ btn.style.borderRadius = "20px";
     })
     .eq("id", id);
 };
+function openComments(postId) {
+  document.getElementById("commentsPanel").classList.add("active");
+}
 
   // ✅ COMMENTS
   window.addComment = async (postId) => {
@@ -646,13 +782,24 @@ btn.style.borderRadius = "20px";
   }
 
   async function loadComments(postId) {
-    const { data } = await supabase
-      .from("comments")
-      .select("*")
-      .eq("post_id", postId);
+  const container = document.getElementById("panelComments");
 
-    data.forEach(renderComment);
+  container.innerHTML = "Loading...";
+
+  const { data, error } = await supabase
+    .from("comments")
+    .select("*")
+    .eq("post_id", postId);
+
+  if (error) {
+    container.innerHTML = "Error loading comments";
+    return;
   }
+
+  container.innerHTML = data.map(c => `
+    <div><b>${c.name || "User"}</b>: ${c.content}</div>
+  `).join("");
+}
 
   // ✅ NOTIFICATIONS
   async function loadNotifications() {
@@ -850,16 +997,25 @@ window.handleTap = function(e, id) {
   if (delay < 300 && delay > 0) {
     clearTimeout(tapTimeout);
 
-    showBigHeart(id, e);
-burstHearts(id, e); // 🔥 NEW
-createRipple(id);
+    // ❤️ LIKE THE POST (IMPORTANT)
+    likePost(id);
 
+    // 💥 animations
+    showBigHeart(id, e);
+    burstHearts(id, e);
+    createRipple(id);
+
+    // 📳 vibration
     if (navigator.vibrate) {
-  navigator.vibrate([10, 20, 10]);
-}
+      navigator.vibrate([10, 20, 10]);
+    }
+
+    // 🔔 optional toast
+    showToast("Liked ❤️");
+
   } else {
     tapTimeout = setTimeout(() => {
-      // single tap (do nothing for now)
+      // single tap (you can add pause/play here later)
     }, 300);
   }
 
@@ -895,6 +1051,44 @@ document.getElementById("fileInput").addEventListener("change", function () {
     video.webkitRequestFullscreen();
   }
 }
+async function loadComments(postId) {
+  const container = document.getElementById("panelComments");
+  container.innerHTML = "Loading...";
+
+  const { data, error } = await supabase
+    .from("comments")
+    .select("*")
+    .eq("post_id", postId);
+
+  if (error) {
+    container.innerHTML = "Error loading comments";
+    return;
+  }
+
+  container.innerHTML = data.map(c => `
+    <div><b>${c.name || "User"}</b>: ${c.content}</div>
+  `).join("");
+}
+document.getElementById("commentsPanel").addEventListener("click", (e) => {
+  if (e.target.id === "commentsPanel") {
+    closeComments();
+  }
+});
+document.getElementById("panelPostBtn").onclick = async () => {
+  const input = document.getElementById("panelInput");
+
+  if (!input.value) return;
+
+  await supabase.from("comments").insert({
+    post_id: currentPostId,
+    content: input.value,
+    user_id: session.user.id,
+    name: session.user.user_metadata.full_name
+  });
+
+  input.value = "";
+  loadComments(currentPostId); // refresh
+};
 
   // 🔥 ADD IT HERE (not in postBtn)
   preview.style.animation = "none";
@@ -913,6 +1107,7 @@ document.addEventListener("click", (e) => {
     }
   }
 });
+
 
   // ✅ REALTIME
   supabase.channel("posts")
