@@ -265,6 +265,20 @@ button:active {
   background: #ff4d6d;
   color: white;
 }
+.like-btn.liked {
+  background: #ff4d6d;
+  color: white;
+  box-shadow: 0 0 12px rgba(255, 77, 109, 0.6);
+}
+@keyframes likePop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+
+.like-btn.pop {
+  animation: likePop 0.25s ease;
+}
 
 /* 🔥 click animation */
 .like-btn.pop {
@@ -455,7 +469,17 @@ const nowLiked = !isLiked;
 
 btn.classList.toggle("liked", nowLiked);
 
-btn.innerHTML = `${nowLiked ? "❤️" : "🤍"} ${newLikes}`;
+const start = post.likes || 0;
+const end = newLikes;
+let current = start;
+
+const interval = setInterval(() => {
+  current += (end > start ? 1 : -1);
+
+  btn.innerHTML = `${nowLiked ? "❤️" : "🤍"} ${current}`;
+
+  if (current === end) clearInterval(interval);
+}, 30);
 
 // ✅ KEEP THIS ONE ONLY
 btn.classList.add("pop");
@@ -641,6 +665,30 @@ function burstHearts(id, e) {
 
     setTimeout(() => heart.remove(), 800);
   }
+}
+function showPlusOne(btn) {
+  const span = document.createElement("span");
+  span.innerHTML = "+1 ❤️";
+
+  span.style.position = "absolute";
+  span.style.top = "0";
+  span.style.left = "50%";
+  span.style.transform = "translateX(-50%)";
+  span.style.color = "#ff4d6d";
+  span.style.fontSize = "14px";
+  span.style.fontWeight = "bold";
+  span.style.pointerEvents = "none";
+  span.style.opacity = "1";
+  span.style.transition = "all 0.6s ease";
+
+  btn.appendChild(span);
+
+  setTimeout(() => {
+    span.style.top = "-25px";
+    span.style.opacity = "0";
+  }, 50);
+
+  setTimeout(() => span.remove(), 600);
 }
 function showToast(message) {
   const toast = document.createElement("div");
