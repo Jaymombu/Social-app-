@@ -487,7 +487,6 @@ div.innerHTML = `
     : `<img src="${post.file_url}" style="width:100%; border-radius:12px;" />`
   }
 ` : ""}
-setTimeout(setupAutoPlay, 300);
 
     <button
       class="like-btn ${isLiked ? 'liked' : ''}"
@@ -509,6 +508,7 @@ setTimeout(setupAutoPlay, 300);
 
   </div>
 `;
+setTimeout(setupAutoPlay, 300);
 
 postsDiv.appendChild(div);
 loadComments(post.id);
