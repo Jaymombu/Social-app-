@@ -241,6 +241,17 @@ button:active {
 .post-card:active {
   transform: scale(0.97);
 }
+.like-btn {
+  background: #eee;
+  color: black;
+  padding: 6px 12px;
+  border-radius: 20px;
+}
+
+.like-btn.liked {
+  background: #ff4d6d;
+  color: white;
+}
 </style>
 </head>
 <body>
@@ -428,11 +439,22 @@ div.innerHTML = `
   }
 
   // ⚡ INSTANT UI UPDATE (no waiting)
-  btn.classList.toggle("liked", !isLiked);
-  btn.innerHTML = `${!isLiked ? "❤️" : "🤍"} ${newLikes}`;
 
-  btn.classList.add("pop");
-  setTimeout(() => btn.classList.remove("pop"), 200);
+const nowLiked = !isLiked;
+
+btn.classList.toggle("liked", nowLiked);
+
+btn.innerHTML = `${nowLiked ? "❤️" : "🤍"} ${newLikes}`;
+
+// ✅ 👉 INSERT STYLE HERE
+btn.style.background = nowLiked ? "#ff4d6d" : "#eee";
+btn.style.color = nowLiked ? "white" : "black";
+btn.style.border = "none";
+btn.style.padding = "6px 12px";
+btn.style.borderRadius = "20px";
+
+btn.classList.add("pop");
+setTimeout(() => btn.classList.remove("pop"), 200);
 
   // 🔄 Save to DB (background)
   await supabase
