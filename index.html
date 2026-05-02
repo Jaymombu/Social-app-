@@ -373,23 +373,23 @@ if (!session) {
 
   // 📤 Upload file
   if (file) {
-    const fileName = Date.now() + "_" + file.name;
+  const fileName = Date.now() + "_" + file.name;
 
-    const { data, error } = await supabase.storage
-      .from("posts-media")
-      .upload(fileName, file);
+  const { data, error } = await supabase.storage
+    .from("posts_media") // ✅ FIXED
+    .upload(fileName, file);
 
-    if (error) {
-      alert("Upload failed");
-      return;
-    }
-
-    const { data: publicUrl } = supabase.storage
-      .from("posts-media")
-      .getPublicUrl(fileName);
-
-    fileUrl = publicUrl.publicUrl;
+  if (error) {
+    alert(error.message); // 🔥 show real error
+    return;
   }
+
+  const { data: publicUrl } = supabase.storage
+    .from("posts_media") // ✅ FIXED
+    .getPublicUrl(fileName);
+
+  fileUrl = publicUrl.publicUrl;
+}
 
   // 💾 Save post WITH media
   await supabase.from("posts").insert([{
