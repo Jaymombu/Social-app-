@@ -478,17 +478,17 @@ div.innerHTML = `
     ${post.file_url ? `
   ${/\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
     ? `<video 
-  src="${post.file_url}" 
-  class="post-video"
-  playsinline
-  muted
-  loop
-  style="width:100%; border-radius:12px;">
-</video>`
+        src="${post.file_url}" 
+        class="post-video"
+        playsinline
+        muted
+        loop
+        style="width:100%; border-radius:12px;">
+      </video>`
     : `<img 
-          src="${post.file_url}" 
-          style="width:100%; border-radius:12px;" 
-       />`
+        src="${post.file_url}" 
+        style="width:100%; border-radius:12px;" 
+      />`
   }
 ` : ""}
 
@@ -871,6 +871,18 @@ document.getElementById("fileInput").addEventListener("change", function () {
   preview.style.animation = "none";
   preview.offsetHeight; // reset animation
   preview.style.animation = "fadeIn 0.3s ease";
+});
+document.addEventListener("click", (e) => {
+  if (e.target.classList.contains("post-video")) {
+    const video = e.target;
+
+    if (video.muted) {
+      video.muted = false;
+      video.play();
+    } else {
+      video.muted = true;
+    }
+  }
 });
 
   // ✅ REALTIME
