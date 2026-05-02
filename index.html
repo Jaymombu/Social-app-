@@ -11,16 +11,10 @@ body {
   margin: 0;
   background: black;
   color: white;
-  font-family: Arial, sans-serif;
+  font-family: sans-serif;
 }
 
-/* MAIN APP */
-#app {
-  max-width: 500px;
-  margin: auto;
-}
-
-/* POSTS CONTAINER */
+/* FULL SCREEN SCROLL */
 #posts {
   height: 100vh;
   overflow-y: scroll;
@@ -28,7 +22,7 @@ body {
   scroll-behavior: smooth;
 }
 
-/* EACH POST (FULL SCREEN) */
+/* EACH POST */
 .post-card {
   height: 100vh;
   width: 100%;
@@ -40,18 +34,16 @@ body {
   background: black;
 }
 
-/* MEDIA (VIDEO / IMAGE) */
+/* MEDIA FULLSCREEN */
 .post-card video,
 .post-card img {
   position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-/* TEXT OVERLAY (BOTTOM LEFT) */
+/* TEXT (bottom left) */
 .post-text {
   position: absolute;
   bottom: 80px;
@@ -59,7 +51,7 @@ body {
   z-index: 2;
 }
 
-/* RIGHT SIDE ACTIONS */
+/* ACTION BUTTONS (right side) */
 .post-actions {
   position: absolute;
   right: 10px;
@@ -70,81 +62,33 @@ body {
   z-index: 2;
 }
 
-/* BUTTONS */
-button {
+.post-actions button {
   background: rgba(0,0,0,0.5);
-  color: white;
   border: none;
-  padding: 8px;
+  color: white;
+  padding: 10px;
   border-radius: 50%;
-  cursor: pointer;
 }
-
-/* COMMENTS PANEL (BOTTOM SHEET STYLE) */
-#commentsPanel {
-  position: fixed;
-  bottom: 0;
-  left: 0;
+.video-wrapper {
+  position: relative;
   width: 100%;
   height: 100%;
-  background: rgba(0,0,0,0.5);
-
-  display: flex;
-  align-items: flex-end;
-
-  opacity: 0;
-  pointer-events: none;
-  transition: 0.3s;
-  z-index: 999;
 }
 
-#commentsPanel.active {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.comments-content {
-  background: #111;
-  width: 100%;
-  height: 60%;
-  border-radius: 20px 20px 0 0;
-  padding: 15px;
+.tap-unmute {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.6);
   color: white;
-
-  transform: translateY(100%);
-  transition: 0.3s;
-}
-
-#commentsPanel.active .comments-content {
-  transform: translateY(0);
-}
-
-/* INPUT */
-input, textarea {
-  width: 100%;
-  padding: 10px;
-  border-radius: 10px;
-  border: none;
-  margin-top: 10px;
-}
-
-/* LIKE BUTTON STYLE */
-.like-btn {
-  background: rgba(255,255,255,0.2);
-  border-radius: 20px;
   padding: 6px 12px;
-  transition: 0.2s;
+  border-radius: 20px;
+  font-size: 14px;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
 }
 
-.like-btn.liked {
-  background: #ff4d6d;
-}
-
-/* SIMPLE FADE */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 </style>
 </head>
 <body>
@@ -276,37 +220,67 @@ async function loadPosts() {
 
   posts.forEach(renderPost);
 }
-
+setTimeout(setupAutoPlay, 300);
 /* ================= RENDER POST ================= */
 
 function renderPost(post) {
-  const div = document.createElement("div");
-  div.className = "post-card";
+  const postsDiv = document.getElementById("posts");
 
-  const media = post.file_url
-    ? (/\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
-      ? `<video src="${post.file_url}" class="post-video" autoplay muted loop></video>`
-      : `<img src="${post.file_url}">`)
-    : "";
+  if (document.getElementById(post.id)) return;
+
+  const div = document.createElement("div");
+  div.id = post.id;
 
   div.innerHTML = `
-    ${media}
+    <div class="post-card" onclick="handleTap(event, ${post.id})">
 
-    <div class="post-text">
-      <b>${post.name}</b><br>
-      ${post.content || ""}
-    </div>
+      ${
+        post.file_url
+          ? /\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
+            ? `
+              <div class="video-wrapper">
+                <video 
+                  src="${post.file_url}" 
+                  class="post-video"
+                  playsinline
+                  muted
+                  loop
+                  autoplay>
+                </video>
 
-    <div class="post-actions">
-      <button onclick="likePost(${post.id})">
-        ❤️ ${post.likes || 0}
-      </button>
+                <!-- 🔊 Tap to unmute -->
+                <div class="tap-unmute">🔊 Tap to unmute</div>
+              </div>
+            `
+            : `<img src="${post.file_url}" />`
+          : ""
+      }
 
-      <button onclick="openComments(${post.id})">💬</button>
+      <!-- TEXT -->
+      <div class="post-text">
+        <b>${post.name}</b><br>
+        ${post.content || ""}
+      </div>
+
+      <!-- ACTIONS -->
+      <div class="post-actions">
+        <button onclick="event.stopPropagation(); likePost(${post.id})">
+          ❤️ ${post.likes || 0}
+        </button>
+
+        <button onclick="event.stopPropagation(); openComments(${post.id})">
+          💬
+        </button>
+
+        <button onclick="event.stopPropagation(); openFullscreen(this)">
+          ⛶
+        </button>
+      </div>
+
     </div>
   `;
 
-  document.getElementById("posts").appendChild(div);
+  postsDiv.appendChild(div);
 }
 
 /* ================= LIKE ================= */
@@ -394,6 +368,41 @@ document.getElementById("fileInput").addEventListener("change", function () {
     ? `<video src="${url}" controls style="width:100%"></video>`
     : `<img src="${url}" style="width:100%">`;
 });
+
+document.addEventListener("click", (e) => {
+  if (e.target.classList.contains("post-video")) {
+    const video = e.target;
+    const wrapper = video.parentElement;
+    const label = wrapper.querySelector(".tap-unmute");
+
+    if (video.muted) {
+      video.muted = false;
+      video.play();
+
+      if (label) label.style.opacity = "0"; // hide text
+    } else {
+      video.muted = true;
+
+      if (label) label.style.opacity = "1"; // show again
+    }
+  }
+});
+
+function setupAutoPlay() {
+  const videos = document.querySelectorAll("video");
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.play();
+      } else {
+        entry.target.pause();
+      }
+    });
+  }, { threshold: 0.7 });
+
+  videos.forEach(video => observer.observe(video));
+}
 
 /* ================= START ================= */
 
