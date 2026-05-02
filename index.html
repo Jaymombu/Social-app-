@@ -544,8 +544,6 @@ if (!session) {
 
   videos.forEach(video => observer.observe(video));
 }
-posts.forEach(renderPost);
-setTimeout(setupAutoPlay, 300);
 loadPosts();
 console.log("Loading posts...");
 
@@ -957,6 +955,17 @@ function showPlusOne(btn) {
 
   setTimeout(() => span.remove(), 600);
 }
+function openFullscreen(btn) {
+  const video = btn.parentElement.querySelector("video");
+
+  if (!video) return;
+
+  if (video.requestFullscreen) {
+    video.requestFullscreen();
+  } else if (video.webkitRequestFullscreen) {
+    video.webkitRequestFullscreen();
+  }
+}
 function showToast(message) {
   const toast = document.createElement("div");
 
@@ -1036,17 +1045,7 @@ document.getElementById("fileInput").addEventListener("change", function () {
       <img src="${url}" style="width:100%; border-radius:12px;" />
     `;
   }
-  function openFullscreen(btn) {
-  const video = btn.parentElement.querySelector("video");
-
-  if (!video) return;
-
-  if (video.requestFullscreen) {
-    video.requestFullscreen();
-  } else if (video.webkitRequestFullscreen) {
-    video.webkitRequestFullscreen();
-  }
-}
+  
 async function loadComments(postId) {
   const container = document.getElementById("panelComments");
   container.innerHTML = "Loading...";
