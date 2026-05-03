@@ -177,6 +177,33 @@ body {
 .post-card {
   height: 100vh;
 }
+.post-card {
+  height: 100vh;
+  position: relative;
+}
+
+.post-video,
+.post-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.post-text {
+  position: absolute;
+  bottom: 80px;
+  left: 10px;
+  color: white;
+}
+
+.post-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
 </style>
 </head>
@@ -304,21 +331,32 @@ document.getElementById("postBtn").onclick = async () => {
 /* ================= LOAD POSTS ================= */
 
 async function loadPosts() {
+  console.log("🔥 loadPosts running...");
+
   const { data: posts, error } = await supabase
     .from("posts")
     .select("*")
     .order("created_at", { ascending: false });
 
+  console.log("📦 posts:", posts);
+  console.log("❌ error:", error);
+
   const postsDiv = document.getElementById("posts");
+
+  if (!postsDiv) {
+    console.log("🚨 posts div NOT FOUND");
+    return;
+  }
+
   postsDiv.innerHTML = "";
 
   if (error) {
-    postsDiv.innerHTML = "Error loading posts";
+    postsDiv.innerHTML = "❌ Error loading posts";
     return;
   }
 
   if (!posts || posts.length === 0) {
-    postsDiv.innerHTML = "No posts yet";
+    postsDiv.innerHTML = "😢 No posts yet";
     return;
   }
 
@@ -335,47 +373,53 @@ function renderPost(post) {
   if (document.getElementById(post.id)) return;
 
   const div = document.createElement("div");
+  div.className = "post-card";
   div.id = post.id;
 
-  div.className = "post-card";
-div.id = post.id;
-
-div.innerHTML = `
-  ${
-    post.file_url
-      ? /\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
-        ? `<video 
+  // 🎥 media (video or image)
+  const media = post.file_url
+    ? /\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
+      ? `
+        <div class="video-wrapper">
+          <video 
             src="${post.file_url}" 
             class="post-video"
+            playsinline
             muted
             loop
-            playsinline
             autoplay>
           </video>
-          <div class="tap-unmute">🔊 Tap to unmute</div>`
-        : `<img src="${post.file_url}" />`
-      : ""
-  }
+          <div class="tap-unmute">🔊 Tap to unmute</div>
+        </div>
+      `
+      : `<img src="${post.file_url}" class="post-image" />`
+    : "";
 
-  <div class="post-text">
-    <b>${post.name}</b><br>
-    ${post.content || ""}
-  </div>
+  // 🧱 FULL CONTENT
+  div.innerHTML = `
+    ${media}
 
-  <div class="post-actions">
-    <button class="like-btn" onclick="event.stopPropagation(); likePost(${post.id})">
-  ❤️ ${post.likes || 0}
-</button>
+    <div class="post-text">
+      <b>${post.name}</b><br>
+      ${post.content || ""}
+    </div>
 
-    <button onclick="event.stopPropagation(); openComments(${post.id})">
-      💬
-    </button>
+    <div class="post-actions">
+      <button class="like-btn" onclick="event.stopPropagation(); likePost(${post.id})">
+        ❤️ ${post.likes || 0}
+      </button>
 
-    <button onclick="event.stopPropagation(); openFullscreen(this)">
-      ⛶
-    </button>
-  </div>
-`;
+      <button onclick="event.stopPropagation(); openComments(${post.id})">
+        💬
+      </button>
+
+      <button onclick="event.stopPropagation(); openFullscreen(this)">
+        ⛶
+      </button>
+    </div>
+  `;
+
+  // ✅ ADD TO PAGE (YOU WERE MISSING THIS)
   postsDiv.appendChild(div);
 }
 
@@ -527,7 +571,6 @@ function setupAutoPlay() {
 /* ================= START ================= */
 
 loadPosts();
-
 }
 </script>
 </body>
