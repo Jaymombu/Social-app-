@@ -154,6 +154,21 @@ body {
   padding-top: 60px;
   padding-bottom: 70px;
 }
+#createPanel {
+  position: fixed;
+  bottom: 80px;
+  left: 10px;
+  right: 10px;
+  background: #111;
+  padding: 10px;
+  border-radius: 12px;
+  display: none;
+  z-index: 1000;
+}
+.like-btn.pop {
+  transform: scale(1.2);
+  transition: 0.2s;
+}
 
 </style>
 </head>
@@ -195,6 +210,7 @@ if (!session) {
 
 document.getElementById("app").innerHTML = `
 
+<!-- TOP NAV -->
 <div id="topNav">
   <span>STEM</span>
   <span>Explore</span>
@@ -203,17 +219,33 @@ document.getElementById("app").innerHTML = `
   <span class="search">🔍</span>
 </div>
 
+<!-- HIDDEN CREATE PANEL -->
+<div id="createPanel">
+  <textarea id="postInput" placeholder="Write something..."></textarea>
+  <input type="file" id="fileInput" accept="image/*,video/*">
+  <button id="postBtn">Post</button>
+</div>
+
+<!-- POSTS -->
 <div id="posts"></div>
 
+<!-- BOTTOM NAV -->
 <div id="bottomNav">
-  <div>🏠</div>
-  <div>👥</div>
+  <div>🏠<br><small>Home</small></div>
+  <div>👥<br><small>Friends</small></div>
+
   <div id="plusBtn">＋</div>
-  <div>💬</div>
-  <div>👤</div>
+
+  <div>💬<br><small>Inbox</small></div>
+  <div>👤<br><small>Profile</small></div>
 </div>
 
 `;
+document.getElementById("plusBtn").onclick = () => {
+  const panel = document.getElementById("createPanel");
+  panel.style.display =
+    panel.style.display === "block" ? "none" : "block";
+};
 
 /* ================= LOGOUT ================= */
 
@@ -316,9 +348,9 @@ div.innerHTML = `
   </div>
 
   <div class="post-actions">
-    <button onclick="event.stopPropagation(); likePost(${post.id})">
-      ❤️ ${post.likes || 0}
-    </button>
+    <button class="like-btn" onclick="event.stopPropagation(); likePost(${post.id})">
+  ❤️ ${post.likes || 0}
+</button>
 
     <button onclick="event.stopPropagation(); openComments(${post.id})">
       💬
@@ -335,6 +367,13 @@ div.innerHTML = `
 /* ================= LIKE ================= */
 
 window.likePost = async (id) => {
+  const el = document.getElementById(id);
+  const btn = el.querySelector(".like-btn");
+
+  if (!btn) return; // ✅ prevent crash
+
+  const userId = session.user.id;
+
   const { data: post } = await supabase
     .from("posts")
     .select("likes, liked_by")
@@ -342,24 +381,41 @@ window.likePost = async (id) => {
     .single();
 
   let likedBy = post.liked_by || [];
-  const userId = session.user.id;
-
   const isLiked = likedBy.includes(userId);
 
-  likedBy = isLiked
-    ? likedBy.filter(id => id !== userId)
-    : [...likedBy, userId];
+  let newLikes;
+  let updatedLikedBy;
 
-  const likes = isLiked
-    ? (post.likes || 1) - 1
-    : (post.likes || 0) + 1;
+  if (isLiked) {
+    // ❌ UNLIKE
+    updatedLikedBy = likedBy.filter(uid => uid !== userId);
+    newLikes = (post.likes || 1) - 1;
+  } else {
+    // ❤️ LIKE
+    updatedLikedBy = [...likedBy, userId];
+    newLikes = (post.likes || 0) + 1;
+  }
 
-  await supabase.from("posts").update({
-    likes,
-    liked_by: likedBy
-  }).eq("id", id);
+  // ⚡ INSTANT UI UPDATE
+  btn.innerHTML = `${!isLiked ? "❤️" : "🤍"} ${newLikes}`;
 
-  loadPosts();
+  // 🔥 small animation
+  btn.classList.add("pop");
+  setTimeout(() => btn.classList.remove("pop"), 200);
+
+  // 🎨 style
+  btn.style.background = !isLiked ? "#ff4d6d" : "#eee";
+  btn.style.color = !isLiked ? "white" : "black";
+  btn.style.borderRadius = "20px";
+
+  // 🔄 Save to database
+  await supabase
+    .from("posts")
+    .update({
+      likes: newLikes,
+      liked_by: updatedLikedBy
+    })
+    .eq("id", id);
 };
 
 /* ================= COMMENTS ================= */
