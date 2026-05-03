@@ -19,18 +19,13 @@ body {
   height: 100vh;
   overflow-y: scroll;
   scroll-snap-type: y mandatory;
-  scroll-behavior: smooth;
 }
 
-/* EACH POST */
 .post-card {
   height: 100vh;
   width: 100%;
   position: relative;
   scroll-snap-align: start;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: black;
 }
 
@@ -48,18 +43,12 @@ body {
   position: absolute;
   bottom: 80px;
   left: 10px;
-  z-index: 2;
 }
 
-/* ACTION BUTTONS (right side) */
 .post-actions {
   position: absolute;
   right: 10px;
-  bottom: 80px;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  z-index: 2;
+  bottom: 100px;
 }
 
 .post-actions button {
@@ -87,6 +76,83 @@ body {
   font-size: 14px;
   pointer-events: none;
   transition: opacity 0.3s ease;
+}
+#topNav {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  color: #aaa;
+  font-weight: bold;
+  background: transparent;
+  z-index: 20;
+  padding: 10px 0;
+}
+
+#topNav .active {
+  color: white;
+  border-bottom: 2px solid white;
+  padding-bottom: 3px;
+}
+
+#topNav .search {
+  position: absolute;
+  right: 15px;
+}
+#bottomNav {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  height: 60px;
+  background: transparent;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  color: white;
+  z-index: 20;
+}
+
+#plusBtn {
+  background: white;
+  color: black;
+  font-size: 28px;
+  padding: 5px 15px;
+  border-radius: 12px;
+  position: relative;
+}
+
+/* TikTok gradient edges */
+#plusBtn::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  right: -5px;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, cyan, pink);
+  border-radius: 14px;
+  z-index: -1;
+}
+#topNav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 50px;
+
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+
+  background: rgba(0,0,0,0.6);
+  color: white;
+  z-index: 1000;
+}
+#posts {
+  padding-top: 60px;
+  padding-bottom: 70px;
 }
 
 </style>
@@ -128,32 +194,25 @@ if (!session) {
 /* ================= UI ================= */
 
 document.getElementById("app").innerHTML = `
-  <h3>Welcome ${session.user.user_metadata.full_name}</h3>
 
-  <textarea id="postInput" placeholder="Write something..."></textarea>
-  <input type="file" id="fileInput" accept="image/*,video/*">
-  <button id="postBtn">Post</button>
+<div id="topNav">
+  <span>STEM</span>
+  <span>Explore</span>
+  <span class="active">Following</span>
+  <span>For You</span>
+  <span class="search">🔍</span>
+</div>
 
-  <div id="preview"></div>
+<div id="posts"></div>
 
-  <button id="logout">Logout</button>
+<div id="bottomNav">
+  <div>🏠</div>
+  <div>👥</div>
+  <div id="plusBtn">＋</div>
+  <div>💬</div>
+  <div>👤</div>
+</div>
 
-  <h3>Posts</h3>
-  <div id="posts"></div>
-
-  <!-- COMMENTS PANEL -->
-  <div id="commentsPanel">
-    <div class="comments-content">
-      <h3>
-        Comments 
-        <span id="closeComments" style="float:right;cursor:pointer;">✖</span>
-      </h3>
-
-      <div id="panelComments"></div>
-      <input id="panelInput" placeholder="Write a comment..." />
-      <button id="panelPostBtn">Post</button>
-    </div>
-  </div>
 `;
 
 /* ================= LOGOUT ================= */
@@ -231,55 +290,45 @@ function renderPost(post) {
   const div = document.createElement("div");
   div.id = post.id;
 
-  div.innerHTML = `
-    <div class="post-card" onclick="handleTap(event, ${post.id})">
+  div.className = "post-card";
+div.id = post.id;
 
-      ${
-        post.file_url
-          ? /\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
-            ? `
-              <div class="video-wrapper">
-                <video 
-                  src="${post.file_url}" 
-                  class="post-video"
-                  playsinline
-                  muted
-                  loop
-                  autoplay>
-                </video>
+div.innerHTML = `
+  ${
+    post.file_url
+      ? /\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
+        ? `<video 
+            src="${post.file_url}" 
+            class="post-video"
+            muted
+            loop
+            playsinline
+            autoplay>
+          </video>
+          <div class="tap-unmute">🔊 Tap to unmute</div>`
+        : `<img src="${post.file_url}" />`
+      : ""
+  }
 
-                <!-- 🔊 Tap to unmute -->
-                <div class="tap-unmute">🔊 Tap to unmute</div>
-              </div>
-            `
-            : `<img src="${post.file_url}" />`
-          : ""
-      }
+  <div class="post-text">
+    <b>${post.name}</b><br>
+    ${post.content || ""}
+  </div>
 
-      <!-- TEXT -->
-      <div class="post-text">
-        <b>${post.name}</b><br>
-        ${post.content || ""}
-      </div>
+  <div class="post-actions">
+    <button onclick="event.stopPropagation(); likePost(${post.id})">
+      ❤️ ${post.likes || 0}
+    </button>
 
-      <!-- ACTIONS -->
-      <div class="post-actions">
-        <button onclick="event.stopPropagation(); likePost(${post.id})">
-          ❤️ ${post.likes || 0}
-        </button>
+    <button onclick="event.stopPropagation(); openComments(${post.id})">
+      💬
+    </button>
 
-        <button onclick="event.stopPropagation(); openComments(${post.id})">
-          💬
-        </button>
-
-        <button onclick="event.stopPropagation(); openFullscreen(this)">
-          ⛶
-        </button>
-      </div>
-
-    </div>
-  `;
-
+    <button onclick="event.stopPropagation(); openFullscreen(this)">
+      ⛶
+    </button>
+  </div>
+`;
   postsDiv.appendChild(div);
 }
 
