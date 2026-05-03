@@ -169,6 +169,14 @@ body {
   transform: scale(1.2);
   transition: 0.2s;
 }
+#posts {
+  height: 100vh;
+  overflow-y: scroll;
+}
+
+.post-card {
+  height: 100vh;
+}
 
 </style>
 </head>
@@ -296,22 +304,29 @@ document.getElementById("postBtn").onclick = async () => {
 /* ================= LOAD POSTS ================= */
 
 async function loadPosts() {
-  const { data: posts } = await supabase
+  const { data: posts, error } = await supabase
     .from("posts")
     .select("*")
     .order("created_at", { ascending: false });
 
-  const container = document.getElementById("posts");
-  container.innerHTML = "";
+  const postsDiv = document.getElementById("posts");
+  postsDiv.innerHTML = "";
+
+  if (error) {
+    postsDiv.innerHTML = "Error loading posts";
+    return;
+  }
 
   if (!posts || posts.length === 0) {
-    container.innerHTML = "No posts yet";
+    postsDiv.innerHTML = "No posts yet";
     return;
   }
 
   posts.forEach(renderPost);
 }
 setTimeout(setupAutoPlay, 300);
+
+console.log("Posts:", posts);
 /* ================= RENDER POST ================= */
 
 function renderPost(post) {
