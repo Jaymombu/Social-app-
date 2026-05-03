@@ -5,7 +5,6 @@
   
   <title>Social App</title>
 <style>
-
   /* RESET */
 body {
   margin: 0;
@@ -14,22 +13,25 @@ body {
   font-family: sans-serif;
 }
 
-/* FULL SCREEN SCROLL */
+/* 🔥 FULL SCREEN SCROLL */
 #posts {
   height: 100vh;
   overflow-y: scroll;
   scroll-snap-type: y mandatory;
+  padding-top: 60px;   /* space for top nav */
+  padding-bottom: 70px; /* space for bottom nav */
 }
 
+/* 📱 POST CARD */
 .post-card {
-  height: 100vh;
+  height: auto;
   width: 100%;
   position: relative;
   scroll-snap-align: start;
   background: black;
 }
 
-/* MEDIA FULLSCREEN */
+/* 🎥 MEDIA FULLSCREEN */
 .post-card video,
 .post-card img {
   position: absolute;
@@ -38,17 +40,24 @@ body {
   object-fit: cover;
 }
 
-/* TEXT (bottom left) */
+/* 📝 TEXT (bottom left) */
 .post-text {
   position: absolute;
   bottom: 80px;
   left: 10px;
+  color: white;
+  z-index: 2;
 }
 
+/* ❤️ ACTIONS (right side vertical) */
 .post-actions {
   position: absolute;
   right: 10px;
   bottom: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 2;
 }
 
 .post-actions button {
@@ -58,6 +67,8 @@ body {
   padding: 10px;
   border-radius: 50%;
 }
+
+/* 🔊 TAP TO UNMUTE */
 .video-wrapper {
   position: relative;
   width: 100%;
@@ -70,50 +81,56 @@ body {
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0,0,0,0.6);
-  color: white;
   padding: 6px 12px;
   border-radius: 20px;
   font-size: 14px;
   pointer-events: none;
-  transition: opacity 0.3s ease;
 }
+
+/* 🔝 TOP NAV */
 #topNav {
   position: fixed;
   top: 0;
   width: 100%;
+  height: 50px;
+
   display: flex;
   justify-content: space-around;
   align-items: center;
+
+  background: rgba(0,0,0,0.6);
   color: #aaa;
   font-weight: bold;
-  background: transparent;
-  z-index: 20;
-  padding: 10px 0;
+  z-index: 1000;
 }
 
 #topNav .active {
   color: white;
   border-bottom: 2px solid white;
-  padding-bottom: 3px;
 }
 
 #topNav .search {
   position: absolute;
   right: 15px;
 }
+
+/* 🔽 BOTTOM NAV */
 #bottomNav {
   position: fixed;
   bottom: 0;
   width: 100%;
   height: 60px;
-  background: transparent;
+
   display: flex;
   justify-content: space-around;
   align-items: center;
+
+  background: rgba(0,0,0,0.6);
   color: white;
-  z-index: 20;
+  z-index: 1000;
 }
 
+/* ➕ PLUS BUTTON */
 #plusBtn {
   background: white;
   color: black;
@@ -123,7 +140,6 @@ body {
   position: relative;
 }
 
-/* TikTok gradient edges */
 #plusBtn::before {
   content: "";
   position: absolute;
@@ -135,25 +151,8 @@ body {
   border-radius: 14px;
   z-index: -1;
 }
-#topNav {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 50px;
 
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-
-  background: rgba(0,0,0,0.6);
-  color: white;
-  z-index: 1000;
-}
-#posts {
-  padding-top: 60px;
-  padding-bottom: 70px;
-}
+/* 📝 CREATE PANEL */
 #createPanel {
   position: fixed;
   bottom: 80px;
@@ -165,44 +164,48 @@ body {
   display: none;
   z-index: 1000;
 }
+
+/* ❤️ LIKE ANIMATION */
 .like-btn.pop {
   transform: scale(1.2);
   transition: 0.2s;
 }
 #posts {
-  height: 100vh;
-  overflow-y: scroll;
-}
-
-.post-card {
-  height: 100vh;
-}
-.post-card {
-  height: 100vh;
   position: relative;
+  z-index: 1;
 }
 
-.post-video,
-.post-image {
+#topNav {
+  z-index: 1000;
+}
+
+#bottomNav {
+  z-index: 1000;
+}
+
+#createPanel {
+  z-index: 1001;
+}
+#commentsPanel {
+  position: fixed;
+  bottom: -100%;
+  left: 0;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.post-text {
-  position: absolute;
-  bottom: 80px;
-  left: 10px;
+  height: 60%;
+  background: #111;
   color: white;
+  transition: bottom 0.3s ease;
+  z-index: 2000;
+  border-top-left-radius: 15px;
+  border-top-right-radius: 15px;
 }
 
-.post-actions {
-  position: absolute;
-  right: 10px;
-  bottom: 100px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+#commentsPanel.active {
+  bottom: 0;
+}
+
+.comments-content {
+  padding: 15px;
 }
 
 </style>
@@ -254,7 +257,7 @@ document.getElementById("app").innerHTML = `
   <span class="search">🔍</span>
 </div>
 
-<!-- HIDDEN CREATE PANEL -->
+<!-- CREATE PANEL -->
 <div id="createPanel">
   <textarea id="postInput" placeholder="Write something..."></textarea>
   <input type="file" id="fileInput" accept="image/*,video/*">
@@ -263,6 +266,21 @@ document.getElementById("app").innerHTML = `
 
 <!-- POSTS -->
 <div id="posts"></div>
+
+<!-- ✅ ADD COMMENTS PANEL HERE -->
+<div id="commentsPanel">
+  <div class="comments-content">
+    <h3>
+      Comments
+      <span id="closeComments" style="float:right;cursor:pointer">✖</span>
+    </h3>
+
+    <div id="panelComments"></div>
+
+    <input id="panelInput" placeholder="Write a comment..." />
+    <button id="panelPostBtn">Post</button>
+  </div>
+</div>
 
 <!-- BOTTOM NAV -->
 <div id="bottomNav">
@@ -284,10 +302,6 @@ document.getElementById("plusBtn").onclick = () => {
 
 /* ================= LOGOUT ================= */
 
-document.getElementById("logout").onclick = async () => {
-  await supabase.auth.signOut();
-  location.reload();
-};
 
 /* ================= CREATE POST ================= */
 
@@ -364,7 +378,6 @@ async function loadPosts() {
 }
 setTimeout(setupAutoPlay, 300);
 
-console.log("Posts:", posts);
 /* ================= RENDER POST ================= */
 
 function renderPost(post) {
