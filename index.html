@@ -215,6 +215,7 @@ body {
 <div id="app"></div>
 
 <script type="module">
+
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const supabase = createClient(
@@ -222,10 +223,72 @@ const supabase = createClient(
   "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M"
 );
 
-let currentPostId = null;
+console.log("🚀 Starting app...");
 
-const { data: { session } } = await supabase.auth.getSession();
+// ✅ GET SESSION FIRST
+let session = null;
+if (!session) {
+  document.getElementById("app").innerHTML = `
+    <button id="login">Login</button>
+  `;
+} else {
 
+  // ✅ BUILD UI FIRST
+  document.getElementById("app").innerHTML = `
+    <div id="posts"></div>
+  `;
+
+  // ✅ DEFINE RENDER FUNCTION
+  function renderPost(post) {
+    const div = document.createElement("div");
+    div.innerHTML = `<b>${post.name}</b><br>${post.content}`;
+    document.getElementById("posts").appendChild(div);
+  }
+
+  // ✅ NOW CALL
+  loadPosts();
+}
+
+try {
+  const result = await supabase.auth.getSession();
+  session = result.data.session;
+  console.log("✅ session:", session);
+} catch (err) {
+  console.log("❌ session error:", err);
+}
+
+window.loadPosts = async function () {
+  console.log("🔥 loadPosts running...");
+
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  console.log("📦 posts:", posts);
+  console.log("❌ error:", error);
+
+  const postsDiv = document.getElementById("posts");
+
+  if (!postsDiv) {
+    console.log("🚨 posts div NOT FOUND");
+    return;
+  }
+
+  postsDiv.innerHTML = "";
+
+  if (error) {
+    postsDiv.innerHTML = "❌ Error loading posts";
+    return;
+  }
+
+  if (!posts || posts.length === 0) {
+    postsDiv.innerHTML = "😢 No posts yet";
+    return;
+  }
+
+  posts.forEach(renderPost);
+};
 /* ================= AUTH ================= */
 
 if (!session) {
@@ -257,17 +320,26 @@ document.getElementById("app").innerHTML = `
   <span class="search">🔍</span>
 </div>
 
+<!-- ✅ LOGOUT (ADD HERE) -->
+<button id="logout" style="position:fixed;top:60px;right:10px;z-index:1000;">
+  Logout
+</button>
+
 <!-- CREATE PANEL -->
 <div id="createPanel">
   <textarea id="postInput" placeholder="Write something..."></textarea>
   <input type="file" id="fileInput" accept="image/*,video/*">
+
+  <!-- ✅ PREVIEW (ADD HERE) -->
+  <div id="preview"></div>
+
   <button id="postBtn">Post</button>
 </div>
 
 <!-- POSTS -->
 <div id="posts"></div>
 
-<!-- ✅ ADD COMMENTS PANEL HERE -->
+<!-- COMMENTS PANEL -->
 <div id="commentsPanel">
   <div class="comments-content">
     <h3>
@@ -299,10 +371,6 @@ document.getElementById("plusBtn").onclick = () => {
   panel.style.display =
     panel.style.display === "block" ? "none" : "block";
 };
-
-/* ================= LOGOUT ================= */
-
-
 /* ================= CREATE POST ================= */
 
 document.getElementById("postBtn").onclick = async () => {
@@ -343,8 +411,8 @@ document.getElementById("postBtn").onclick = async () => {
 };
 
 /* ================= LOAD POSTS ================= */
-
-async function loadPosts() {
+console.log("🚀 Starting app...");
+window.loadPosts = async function () {
   console.log("🔥 loadPosts running...");
 
   const { data: posts, error } = await supabase
@@ -352,9 +420,8 @@ async function loadPosts() {
     .select("*")
     .order("created_at", { ascending: false });
 
-  console.log("📦 posts:", posts);
   console.log("❌ error:", error);
-
+  console.log("📦 posts:", posts);
   const postsDiv = document.getElementById("posts");
 
   if (!postsDiv) {
@@ -583,7 +650,7 @@ function setupAutoPlay() {
 
 /* ================= START ================= */
 
-loadPosts();
+window.loadPosts();
 }
 </script>
 </body>
