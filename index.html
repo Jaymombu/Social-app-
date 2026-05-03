@@ -238,15 +238,34 @@ try {
 
 // ✅ 2. DEFINE renderPost FIRST (GLOBAL)
 function renderPost(post) {
+  if (!post.content && !post.file_url) return;
+
   const postsDiv = document.getElementById("posts");
 
   const div = document.createElement("div");
-  div.style.marginBottom = "15px";
+  div.style.padding = "15px";
+  div.style.borderBottom = "1px solid #333";
 
   div.innerHTML = `
-    <b>${post.name}</b><br>
-    ${post.content || ""}
-  `;
+  <div style="
+    background: #111;
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  ">
+    <div style="font-weight: bold; color: #fff;">
+      ${post.name}
+    </div>
+
+    <div style="
+      margin-top: 6px;
+      color: #ccc;
+      font-size: 14px;
+    ">
+      ${post.content || ""}
+    </div>
+  </div>
+`;
 
   postsDiv.appendChild(div);
 }
@@ -261,7 +280,7 @@ window.loadPosts = async function () {
     .order("created_at", { ascending: false });
 
   console.log("📦 posts:", posts);
-  console.log("❌ error:", error);
+  console.log("❌ error FULL:", JSON.stringify(error, null, 2));
 
   const postsDiv = document.getElementById("posts");
 
@@ -285,24 +304,85 @@ window.loadPosts = async function () {
   posts.forEach(renderPost);
 }; // ✅ IMPORTANT (you were missing this)
 
-// ✅ 4. NOW check session + build UI
-if (!session) {
-  document.getElementById("app").innerHTML = `
-    <button id="login">Login</button>
-  `;
-} else {
-  document.getElementById("app").innerHTML = `
-    <div id="posts" style="
-      padding: 10px;
-      color: white;
-      font-family: sans-serif;
-    "></div>
-  `;
+// ✅ ALWAYS show posts UI
+document.getElementById("app").innerHTML = `
+  <div style="padding: 10px;">
 
-  // ✅ NOW CALL
-  loadPosts();
+    ${
+      session
+        ? `
+      <div style="
+        margin-bottom: 15px;
+        background: #111;
+        padding: 10px;
+        border-radius: 10px;
+      ">
+        <textarea 
+          id="postInput"
+          placeholder="What's on your mind?"
+          style="
+            width: 100%;
+            height: 60px;
+            background: #000;
+            color: white;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 8px;
+          "
+        ></textarea>
+
+        <button id="postBtn" style="
+          margin-top: 8px;
+          padding: 8px 12px;
+          background: #1d9bf0;
+          border: none;
+          color: white;
+          border-radius: 6px;
+        ">
+          Post
+        </button>
+      </div>
+      `
+        : `
+      <button id="login" style="margin-bottom:10px;">
+        Login
+      </button>
+      `
+    }
+
+    <div id="posts"></div>
+  </div>
+`;
+
+// ✅ Show login button only if NOT logged in
+if (session) {
+  document.getElementById("postBtn").onclick = async () => {
+    const input = document.getElementById("postInput");
+    const content = input.value.trim();
+
+    if (!content) return;
+
+    console.log("📤 posting:", content);
+
+    const { error } = await supabase.from("posts").insert([
+      {
+        content: content,
+        name: session.user.email || "Anonymous"
+      }
+    ]);
+
+    if (error) {
+      console.log("❌ post error:", error);
+      return;
+    }
+
+    input.value = "";
+
+    // reload posts
+    loadPosts();
+  };
 }
-
+loadPosts();
 </script>
 </body>
 </html>
