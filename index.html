@@ -225,29 +225,8 @@ const supabase = createClient(
 
 console.log("🚀 Starting app...");
 
-// ✅ GET SESSION FIRST
+// ✅ 1. GET SESSION FIRST
 let session = null;
-if (!session) {
-  document.getElementById("app").innerHTML = `
-    <button id="login">Login</button>
-  `;
-} else {
-
-  // ✅ BUILD UI FIRST
-  document.getElementById("app").innerHTML = `
-    <div id="posts"></div>
-  `;
-
-  // ✅ DEFINE RENDER FUNCTION
-  function renderPost(post) {
-    const div = document.createElement("div");
-    div.innerHTML = `<b>${post.name}</b><br>${post.content}`;
-    document.getElementById("posts").appendChild(div);
-  }
-
-  // ✅ NOW CALL
-  loadPosts();
-}
 
 try {
   const result = await supabase.auth.getSession();
@@ -257,401 +236,64 @@ try {
   console.log("❌ session error:", err);
 }
 
-window.loadPosts = async function () {
-  console.log("🔥 loadPosts running...");
-
-  const { data: posts, error } = await supabase
-    .from("posts")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  console.log("📦 posts:", posts);
-  console.log("❌ error:", error);
-
-  const postsDiv = document.getElementById("posts");
-
-  if (!postsDiv) {
-    console.log("🚨 posts div NOT FOUND");
-    return;
-  }
-
-  postsDiv.innerHTML = "";
-
-  if (error) {
-    postsDiv.innerHTML = "❌ Error loading posts";
-    return;
-  }
-
-  if (!posts || posts.length === 0) {
-    postsDiv.innerHTML = "😢 No posts yet";
-    return;
-  }
-
-  posts.forEach(renderPost);
-};
-/* ================= AUTH ================= */
-
-if (!session) {
-  document.getElementById("app").innerHTML = `
-    <button id="login">Login with Google</button>
-  `;
-
-  document.getElementById("login").onclick = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: "https://jaymombu.github.io/Social-app-/"
-      }
-    });
-  };
-
-} else {
-
-/* ================= UI ================= */
-
-document.getElementById("app").innerHTML = `
-
-<!-- TOP NAV -->
-<div id="topNav">
-  <span>STEM</span>
-  <span>Explore</span>
-  <span class="active">Following</span>
-  <span>For You</span>
-  <span class="search">🔍</span>
-</div>
-
-<!-- ✅ LOGOUT (ADD HERE) -->
-<button id="logout" style="position:fixed;top:60px;right:10px;z-index:1000;">
-  Logout
-</button>
-
-<!-- CREATE PANEL -->
-<div id="createPanel">
-  <textarea id="postInput" placeholder="Write something..."></textarea>
-  <input type="file" id="fileInput" accept="image/*,video/*">
-
-  <!-- ✅ PREVIEW (ADD HERE) -->
-  <div id="preview"></div>
-
-  <button id="postBtn">Post</button>
-</div>
-
-<!-- POSTS -->
-<div id="posts"></div>
-
-<!-- COMMENTS PANEL -->
-<div id="commentsPanel">
-  <div class="comments-content">
-    <h3>
-      Comments
-      <span id="closeComments" style="float:right;cursor:pointer">✖</span>
-    </h3>
-
-    <div id="panelComments"></div>
-
-    <input id="panelInput" placeholder="Write a comment..." />
-    <button id="panelPostBtn">Post</button>
-  </div>
-</div>
-
-<!-- BOTTOM NAV -->
-<div id="bottomNav">
-  <div>🏠<br><small>Home</small></div>
-  <div>👥<br><small>Friends</small></div>
-
-  <div id="plusBtn">＋</div>
-
-  <div>💬<br><small>Inbox</small></div>
-  <div>👤<br><small>Profile</small></div>
-</div>
-
-`;
-document.getElementById("plusBtn").onclick = () => {
-  const panel = document.getElementById("createPanel");
-  panel.style.display =
-    panel.style.display === "block" ? "none" : "block";
-};
-/* ================= CREATE POST ================= */
-
-document.getElementById("postBtn").onclick = async () => {
-  const content = document.getElementById("postInput").value;
-  const file = document.getElementById("fileInput").files[0];
-
-  if (!content && !file) return;
-
-  let fileUrl = null;
-
-  if (file) {
-    const fileName = Date.now() + "_" + file.name;
-
-    const { error } = await supabase.storage
-      .from("posts_media")
-      .upload(fileName, file);
-
-    if (error) return alert(error.message);
-
-    const { data } = supabase.storage
-      .from("posts_media")
-      .getPublicUrl(fileName);
-
-    fileUrl = data.publicUrl;
-  }
-
-  await supabase.from("posts").insert([{
-    user_id: session.user.id,
-    name: session.user.user_metadata.full_name,
-    content,
-    file_url: fileUrl
-  }]);
-
-  loadPosts();
-  document.getElementById("postInput").value = "";
-  document.getElementById("fileInput").value = "";
-  document.getElementById("preview").innerHTML = "";
-};
-
-/* ================= LOAD POSTS ================= */
-console.log("🚀 Starting app...");
-window.loadPosts = async function () {
-  console.log("🔥 loadPosts running...");
-
-  const { data: posts, error } = await supabase
-    .from("posts")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  console.log("❌ error:", error);
-  console.log("📦 posts:", posts);
-  const postsDiv = document.getElementById("posts");
-
-  if (!postsDiv) {
-    console.log("🚨 posts div NOT FOUND");
-    return;
-  }
-
-  postsDiv.innerHTML = "";
-
-  if (error) {
-    postsDiv.innerHTML = "❌ Error loading posts";
-    return;
-  }
-
-  if (!posts || posts.length === 0) {
-    postsDiv.innerHTML = "😢 No posts yet";
-    return;
-  }
-
-  posts.forEach(renderPost);
-}
-setTimeout(setupAutoPlay, 300);
-
-/* ================= RENDER POST ================= */
-
+// ✅ 2. DEFINE renderPost FIRST (GLOBAL)
 function renderPost(post) {
   const postsDiv = document.getElementById("posts");
 
-  if (document.getElementById(post.id)) return;
-
   const div = document.createElement("div");
-  div.className = "post-card";
-  div.id = post.id;
+  div.innerHTML = `<b>${post.name}</b><br>${post.content}`;
 
-  // 🎥 media (video or image)
-  const media = post.file_url
-    ? /\.(mp4|webm|ogg|mov)$/i.test(post.file_url)
-      ? `
-        <div class="video-wrapper">
-          <video 
-            src="${post.file_url}" 
-            class="post-video"
-            playsinline
-            muted
-            loop
-            autoplay>
-          </video>
-          <div class="tap-unmute">🔊 Tap to unmute</div>
-        </div>
-      `
-      : `<img src="${post.file_url}" class="post-image" />`
-    : "";
-
-  // 🧱 FULL CONTENT
-  div.innerHTML = `
-    ${media}
-
-    <div class="post-text">
-      <b>${post.name}</b><br>
-      ${post.content || ""}
-    </div>
-
-    <div class="post-actions">
-      <button class="like-btn" onclick="event.stopPropagation(); likePost(${post.id})">
-        ❤️ ${post.likes || 0}
-      </button>
-
-      <button onclick="event.stopPropagation(); openComments(${post.id})">
-        💬
-      </button>
-
-      <button onclick="event.stopPropagation(); openFullscreen(this)">
-        ⛶
-      </button>
-    </div>
-  `;
-
-  // ✅ ADD TO PAGE (YOU WERE MISSING THIS)
   postsDiv.appendChild(div);
 }
 
-/* ================= LIKE ================= */
+// ✅ 3. DEFINE loadPosts
+window.loadPosts = async function () {
+  console.log("🔥 loadPosts running...");
 
-window.likePost = async (id) => {
-  const el = document.getElementById(id);
-  const btn = el.querySelector(".like-btn");
-
-  if (!btn) return; // ✅ prevent crash
-
-  const userId = session.user.id;
-
-  const { data: post } = await supabase
+  const { data: posts, error } = await supabase
     .from("posts")
-    .select("likes, liked_by")
-    .eq("id", id)
-    .single();
-
-  let likedBy = post.liked_by || [];
-  const isLiked = likedBy.includes(userId);
-
-  let newLikes;
-  let updatedLikedBy;
-
-  if (isLiked) {
-    // ❌ UNLIKE
-    updatedLikedBy = likedBy.filter(uid => uid !== userId);
-    newLikes = (post.likes || 1) - 1;
-  } else {
-    // ❤️ LIKE
-    updatedLikedBy = [...likedBy, userId];
-    newLikes = (post.likes || 0) + 1;
-  }
-
-  // ⚡ INSTANT UI UPDATE
-  btn.innerHTML = `${!isLiked ? "❤️" : "🤍"} ${newLikes}`;
-
-  // 🔥 small animation
-  btn.classList.add("pop");
-  setTimeout(() => btn.classList.remove("pop"), 200);
-
-  // 🎨 style
-  btn.style.background = !isLiked ? "#ff4d6d" : "#eee";
-  btn.style.color = !isLiked ? "white" : "black";
-  btn.style.borderRadius = "20px";
-
-  // 🔄 Save to database
-  await supabase
-    .from("posts")
-    .update({
-      likes: newLikes,
-      liked_by: updatedLikedBy
-    })
-    .eq("id", id);
-};
-
-/* ================= COMMENTS ================= */
-
-window.openComments = (postId) => {
-  currentPostId = postId;
-  document.getElementById("commentsPanel").classList.add("active");
-  loadComments(postId);
-};
-
-document.getElementById("closeComments").onclick = () => {
-  document.getElementById("commentsPanel").classList.remove("active");
-};
-
-async function loadComments(postId) {
-  const { data } = await supabase
-    .from("comments")
     .select("*")
-    .eq("post_id", postId);
+    .order("created_at", { ascending: false });
 
-  const container = document.getElementById("panelComments");
+  console.log("📦 posts:", posts);
+  console.log("❌ error:", error);
 
-  container.innerHTML = data.map(c => `
-    <div><b>${c.name}</b>: ${c.content}</div>
-  `).join("");
-}
+  const postsDiv = document.getElementById("posts");
 
-document.getElementById("panelPostBtn").onclick = async () => {
-  const input = document.getElementById("panelInput");
-
-  if (!input.value) return;
-
-  await supabase.from("comments").insert({
-    post_id: currentPostId,
-    content: input.value,
-    user_id: session.user.id,
-    name: session.user.user_metadata.full_name
-  });
-
-  input.value = "";
-  loadComments(currentPostId);
-};
-
-/* ================= PREVIEW ================= */
-
-document.getElementById("fileInput").addEventListener("change", function () {
-  const file = this.files[0];
-  const preview = document.getElementById("preview");
-
-  if (!file) return;
-
-  const url = URL.createObjectURL(file);
-
-  preview.innerHTML = file.type.startsWith("video")
-    ? `<video src="${url}" controls style="width:100%"></video>`
-    : `<img src="${url}" style="width:100%">`;
-});
-
-document.addEventListener("click", (e) => {
-  if (e.target.classList.contains("post-video")) {
-    const video = e.target;
-    const wrapper = video.parentElement;
-    const label = wrapper.querySelector(".tap-unmute");
-
-    if (video.muted) {
-      video.muted = false;
-      video.play();
-
-      if (label) label.style.opacity = "0"; // hide text
-    } else {
-      video.muted = true;
-
-      if (label) label.style.opacity = "1"; // show again
-    }
+  if (!postsDiv) {
+    console.log("🚨 posts div NOT FOUND");
+    return;
   }
-});
 
-function setupAutoPlay() {
-  const videos = document.querySelectorAll("video");
+  postsDiv.innerHTML = "";
 
-  const observer = new IntersectionObserver(entries => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.play();
-      } else {
-        entry.target.pause();
-      }
-    });
-  }, { threshold: 0.7 });
+  if (error) {
+    postsDiv.innerHTML = "❌ Error loading posts";
+    return;
+  }
 
-  videos.forEach(video => observer.observe(video));
+  if (!posts || posts.length === 0) {
+    postsDiv.innerHTML = "😢 No posts yet";
+    return;
+  }
+
+  posts.forEach(renderPost);
+}; // ✅ IMPORTANT (you were missing this)
+
+// ✅ 4. NOW check session + build UI
+if (!session) {
+  document.getElementById("app").innerHTML = `
+    <button id="login">Login</button>
+  `;
+} else {
+  document.getElementById("app").innerHTML = `
+    <div id="posts"></div>
+  `;
+
+  // ✅ 5. NOW CALL
+  loadPosts();
 }
 
-/* ================= START ================= */
-
-window.loadPosts();
-}
 </script>
 </body>
 </html>
