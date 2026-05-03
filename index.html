@@ -241,7 +241,12 @@ function renderPost(post) {
   const postsDiv = document.getElementById("posts");
 
   const div = document.createElement("div");
-  div.innerHTML = `<b>${post.name}</b><br>${post.content}`;
+  div.style.marginBottom = "15px";
+
+  div.innerHTML = `
+    <b>${post.name}</b><br>
+    ${post.content || ""}
+  `;
 
   postsDiv.appendChild(div);
 }
@@ -287,10 +292,14 @@ if (!session) {
   `;
 } else {
   document.getElementById("app").innerHTML = `
-    <div id="posts"></div>
+    <div id="posts" style="
+      padding: 10px;
+      color: white;
+      font-family: sans-serif;
+    "></div>
   `;
 
-  // ✅ 5. NOW CALL
+  // ✅ NOW CALL
   loadPosts();
 }
 
