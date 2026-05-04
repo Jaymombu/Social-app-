@@ -241,30 +241,37 @@ function renderPost(post) {
   if (!post.content && !post.file_url) return;
 
   const postsDiv = document.getElementById("posts");
-
+  const time = new Date(post.created_at).toLocaleString();
+  const isOwner = session && session.user.id === post.user_id;
+  
   const div = document.createElement("div");
+
   div.style.padding = "15px";
   div.style.borderBottom = "1px solid #333";
 
   div.innerHTML = `
-  <div style="
-    background: #111;
-    border-radius: 10px;
-    padding: 12px;
-    margin-bottom: 10px;
-  ">
-    <div style="font-weight: bold; color: #fff;">
-      ${post.name}
-    </div>
+  <div style="font-weight:bold;">
+  ${post.name.split("@")[0]}
+</div>
+  <div style="font-size:12px;color:#aaa;">${time}</div>
+  <div style="margin-top:5px;">${post.content || ""}</div>
 
-    <div style="
-      margin-top: 6px;
-      color: #ccc;
-      font-size: 14px;
+  ${
+    isOwner
+      ? `
+    <button onclick="deletePost('${post.id}')" style="
+      margin-top:8px;
+      background:#ff4d4d;
+      border:none;
+      color:white;
+      padding:5px 8px;
+      border-radius:5px;
     ">
-      ${post.content || ""}
-    </div>
-  </div>
+      Delete
+    </button>
+  `
+      : ""
+  }
 `;
 
   postsDiv.appendChild(div);
@@ -303,6 +310,17 @@ window.loadPosts = async function () {
 
   posts.forEach(renderPost);
 }; // ✅ IMPORTANT (you were missing this)
+
+window.deletePost = async (id) => {
+  const { error } = await supabase.from("posts").delete().eq("id", id);
+
+  if (error) {
+    console.log("❌ delete error:", error);
+    return;
+  }
+
+  loadPosts();
+};
 
 // ✅ ALWAYS show posts UI
 document.getElementById("app").innerHTML = `
@@ -353,7 +371,6 @@ document.getElementById("app").innerHTML = `
     <div id="posts"></div>
   </div>
 `;
-
 // ✅ Show login button only if NOT logged in
 if (session) {
   document.getElementById("postBtn").onclick = async () => {
@@ -365,11 +382,12 @@ if (session) {
     console.log("📤 posting:", content);
 
     const { error } = await supabase.from("posts").insert([
-      {
-        content: content,
-        name: session.user.email || "Anonymous"
-      }
-    ]);
+{
+  content: content,
+  user_id: session.user.id,
+  name: session.user.email
+}
+]);
 
     if (error) {
       console.log("❌ post error:", error);
@@ -383,6 +401,7 @@ if (session) {
   };
 }
 loadPosts();
+setInterval(loadPosts, 5000); // refresh every 5s
 </script>
 </body>
 </html>
