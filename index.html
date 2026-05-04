@@ -241,60 +241,65 @@ function renderPost(post) {
   if (!post.content && !post.file_url) return;
 
   const postsDiv = document.getElementById("posts");
+
+  if (document.getElementById(post.id)) return;
+
   const time = new Date(post.created_at).toLocaleString();
   const isOwner = session && session.user.id === post.user_id;
-  const isLiked = post.liked_by?.includes(session?.user?.id);
-  
+  const isLiked = (post.liked_by || []).includes(session?.user?.id);
+
   const div = document.createElement("div");
+  div.id = post.id;
 
   div.style.padding = "15px";
   div.style.borderBottom = "1px solid #333";
 
   div.innerHTML = `
-  <div style="font-weight:bold;">${post.name}</div>
-  <div style="font-size:12px;color:#aaa;">${time}</div>
-  <div style="margin-top:5px;">${post.content || ""}</div>
+    <div style="font-weight:bold;">${post.name}</div>
+    <div style="font-size:12px;color:#aaa;">${time}</div>
+    <div style="margin-top:5px;">${post.content || ""}</div>
 
-  <div style="margin-top:8px;">
-    ❤️ ${post.likes || 0}
-  </div>
+    <div style="margin-top:8px;">
+      ❤️ ${post.likes || 0}
+    </div>
 
-  <button onclick="likePost('${post.id}')" style="
-  margin-top:5px;
-  background:${isLiked ? '#ff4d6d' : '#222'};
-  color:white;
-  border:none;
-  padding:5px 10px;
-  border-radius:5px;
-">
-  ${isLiked ? "❤️ Liked" : "🤍 Like"} (${post.likes || 0})
-</button>
-
-<button onclick="openComments('${post.id}')" style="
-  margin-top:5px;
-  background:#333;
-  color:white;
-  border:none;
-  padding:5px 10px;
-  border-radius:5px;
-">
-  💬 Comment
-</button>
-
-  ${isOwner ? `
-    <button onclick="deletePost('${post.id}')" style="
-      margin-top:8px;
-      background:#ff4d4d;
-      border:none;
+    <button onclick="likePost('${post.id}')" style="
+      margin-top:5px;
+      background:${isLiked ? '#ff4d6d' : '#222'};
       color:white;
-      padding:5px 8px;
+      border:none;
+      padding:5px 10px;
       border-radius:5px;
     ">
-      Delete
+      ${isLiked ? "❤️ Liked" : "🤍 Like"} (${post.likes || 0})
     </button>
-  ` : ""}
-`;
 
+    <button onclick="openComments('${post.id}')" style="
+      margin-top:5px;
+      background:#333;
+      color:white;
+      border:none;
+      padding:5px 10px;
+      border-radius:5px;
+    ">
+      💬 Comment
+    </button>
+
+    ${isOwner ? `
+      <button onclick="deletePost('${post.id}')" style="
+        margin-top:8px;
+        background:#ff4d4d;
+        border:none;
+        color:white;
+        padding:5px 8px;
+        border-radius:5px;
+      ">
+        Delete
+      </button>
+    ` : ""}
+  `;
+
+  // ✅ IMPORTANT
   postsDiv.appendChild(div);
 }
 
@@ -480,6 +485,8 @@ document.getElementById("app").innerHTML = `
       </button>
       `
     }
+    
+    
 
     <div id="posts"></div>
   </div>
@@ -509,6 +516,10 @@ document.getElementById("app").innerHTML = `
 </div>
 `;
 
+// ==============================
+// COMMENTS PANEL ACTIONS
+// ==============================
+
 document.getElementById("panelPostBtn").onclick = async () => {
   const input = document.getElementById("panelInput");
 
@@ -529,37 +540,69 @@ document.getElementById("closeComments").onclick = () => {
   document.getElementById("commentsPanel").style.display = "none";
 };
 
-// ✅ Show login button only if NOT logged in
+
+// ==============================
+// LOGIN BUTTON (ONLY IF NOT LOGGED IN)
+// ==============================
+
+if (!session) {
+  const loginBtn = document.getElementById("login");
+
+  if (loginBtn) {
+    loginBtn.onclick = async () => {
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: location.href
+        }
+      });
+    };
+  }
+}
+
+
+// ==============================
+// POST BUTTON (ONLY IF LOGGED IN)
+// ==============================
+
 if (session) {
-  document.getElementById("postBtn").onclick = async () => {
-    const input = document.getElementById("postInput");
-    const content = input.value.trim();
+  const postBtn = document.getElementById("postBtn");
 
-    if (!content) return;
+  if (postBtn) {
+    postBtn.onclick = async () => {
+      const input = document.getElementById("postInput");
+      const content = input.value.trim();
 
-    console.log("📤 posting:", content);
+      if (!content) return;
 
-    const { error } = await supabase.from("posts").insert([
-{
-  content: content,
-  user_id: session.user.id,
-  name: session.user.email
+      console.log("📤 posting:", content);
+
+      const { error } = await supabase.from("posts").insert([
+        {
+          content: content,
+          user_id: session.user.id,
+          name: session.user.email
+        }
+      ]);
+
+      if (error) {
+        console.log("❌ post error:", error);
+        return;
+      }
+
+      input.value = "";
+      loadPosts();
+    };
+  }
 }
-]);
 
-    if (error) {
-      console.log("❌ post error:", error);
-      return;
-    }
 
-    input.value = "";
+// ==============================
+// LOAD POSTS
+// ==============================
 
-    // reload posts
-    loadPosts();
-  };
-}
 loadPosts();
-setInterval(loadPosts, 5000); // refresh every 5s
+setInterval(loadPosts, 5000);
 </script>
 </body>
 </html>
