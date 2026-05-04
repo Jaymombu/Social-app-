@@ -215,7 +215,7 @@ body {
 <div id="app"></div>
 
 <script type="module">
-
+window.session = null;
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const supabase = createClient(
@@ -229,21 +229,15 @@ console.log("🚀 Starting app...");
 let session = null;
 
 async function init() {
-  try {
-    const { data, error } = await supabase.auth.getSession();
+  const { data } = await supabase.auth.getSession();
+  session = data.session;
 
-    if (error) {
-      console.log("❌ session error:", error);
-      return;
-    }
+  supabase.auth.onAuthStateChange((event, newSession) => {
+    session = newSession;
+    console.log("🔄 session updated:", session);
+  });
 
-    session = data.session;
-    console.log("✅ session:", session);
-
-    startApp(); // ✅ ONLY start UI after session is ready
-  } catch (err) {
-    console.log("❌ session crash:", err);
-  }
+  startApp();
 }
 
 init();
@@ -481,7 +475,7 @@ console.log("MATCH:", String(session?.user?.id) == String(userId));
 
     ${
   String(session?.user?.id) === String(userId)
-    ? `<button onclick="openEditProfile()">Edit Profile</button>`
+    ? `<button id="editProfileBtn">Edit Profile</button>`
     : ""
 }
 
@@ -489,6 +483,14 @@ console.log("MATCH:", String(session?.user?.id) == String(userId));
   </div>
   `;
   
+  const btn = document.getElementById("editProfileBtn");
+
+if (btn) {
+  btn.onclick = () => {
+    console.log("EDIT CLICKED");
+    openEditProfile();
+  };
+}
 
   const { data, error } = await supabase
     .from("posts")
@@ -522,6 +524,10 @@ window.goHome = () => {
 };
 
   window.openEditProfile = async () => {
+    if (!session?.user) {
+  alert("You are not logged in");
+  return;
+}
   const user = session?.user;
   if (!user) return;
 
@@ -535,6 +541,8 @@ window.goHome = () => {
     console.log("❌ profile fetch error:", error);
     return;
   }
+  console.log("EDIT CLICKED");
+console.log("SESSION:", session);
 
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
@@ -607,7 +615,7 @@ function startApp() {
     </div>
 
     <div id="commentsPanel" style="
-  position:flex;
+  position:fixed;
   bottom:0;
   left:0;
   right:0;
