@@ -464,24 +464,41 @@ window.openProfile = async (userId, name) => {
   console.log("👤 open profile:", userId);
 
   document.getElementById("app").innerHTML = `
-    <div style="padding:15px; color:white;">
-      
-      <button onclick="goHome()" style="
-        margin-bottom:10px;
-        background:#333;
-        color:white;
-        border:none;
-        padding:6px 10px;
-        border-radius:6px;
-      ">
-        ← Back
-      </button>
+  <div style="padding:15px; color:white;">
+    
+    <button onclick="goHome()" style="
+      margin-bottom:10px;
+      background:#333;
+      color:white;
+      border:none;
+      padding:6px 10px;
+      border-radius:6px;
+    ">
+      ← Back
+    </button>
 
-      <h2>${name}</h2>
+    <h2>${name}</h2>
 
-      <div id="profilePosts"></div>
-    </div>
-  `;
+    ${
+      session && session.user.id === userId
+        ? `
+        <button onclick="openEditProfile()" style="
+          margin-bottom:10px;
+          background:#444;
+          color:white;
+          border:none;
+          padding:6px 10px;
+          border-radius:6px;
+        ">
+          Edit Profile
+        </button>
+        `
+        : ""
+    }
+
+    <div id="profilePosts"></div>
+  </div>
+`;
 
   const { data, error } = await supabase
     .from("posts")
@@ -529,6 +546,78 @@ supabase
     }
   )
   .subscribe();
+  
+  window.openEditProfile = async () => {
+  const user = session?.user;
+  if (!user) return;
+
+  // get current profile
+  const { data } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  document.getElementById("app").innerHTML = `
+    <div style="padding:15px; color:white;">
+      
+      <button onclick="goHome()" style="
+        margin-bottom:10px;
+        background:#333;
+        color:white;
+        border:none;
+        padding:6px 10px;
+        border-radius:6px;
+      ">
+        ← Back
+      </button>
+
+      <h2>Edit Profile</h2>
+
+      <input id="editName" placeholder="Name" value="${data?.name || ""}" style="width:100%;margin:5px 0;" />
+      
+      <input id="editAvatar" placeholder="Avatar URL" value="${data?.avatar_url || ""}" style="width:100%;margin:5px 0;" />
+
+      <textarea id="editBio" placeholder="Bio" style="width:100%;margin:5px 0;">
+${data?.bio || ""}
+      </textarea>
+
+      <button id="saveProfile" style="
+        margin-top:10px;
+        background:#1d9bf0;
+        color:white;
+        border:none;
+        padding:8px 12px;
+        border-radius:6px;
+      ">
+        Save
+      </button>
+    </div>
+  `;
+
+  document.getElementById("saveProfile").onclick = async () => {
+    const name = document.getElementById("editName").value;
+    const avatar = document.getElementById("editAvatar").value;
+    const bio = document.getElementById("editBio").value;
+
+    const { error } = await supabase
+      .from("profiles")
+      .upsert({
+        id: user.id,
+        name: name,
+        avatar_url: avatar,
+        bio: bio
+      });
+
+    if (error) {
+      alert("Error saving profile");
+      return;
+    }
+
+    alert("✅ Profile updated!");
+    goHome();
+  };
+};
 
 // ✅ ALWAYS show posts UI
 document.getElementById("app").innerHTML = `
@@ -665,15 +754,22 @@ if (session) {
 
       if (!content) return;
 
-      console.log("📤 posting:", content);
+      // 🔥 get profile
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .single();
 
-      const { error } = await supabase.from("posts").insert([
-        {
+      // 🔥 insert post
+      const { error } = await supabase
+        .from("posts")
+        .insert([{
           content: content,
           user_id: session.user.id,
-          name: session.user.email
-        }
-      ]);
+          name: profile?.name || session.user.email,
+          avatar_url: profile?.avatar_url || null
+        }]);
 
       if (error) {
         console.log("❌ post error:", error);
@@ -685,7 +781,6 @@ if (session) {
     };
   }
 }
-
 
 // ==============================
 // LOAD POSTS
