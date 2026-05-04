@@ -243,6 +243,7 @@ function renderPost(post) {
   const postsDiv = document.getElementById("posts");
   const time = new Date(post.created_at).toLocaleString();
   const isOwner = session && session.user.id === post.user_id;
+  const isLiked = post.liked_by?.includes(session?.user?.id);
   
   const div = document.createElement("div");
 
@@ -250,15 +251,37 @@ function renderPost(post) {
   div.style.borderBottom = "1px solid #333";
 
   div.innerHTML = `
-  <div style="font-weight:bold;">
-  ${post.name.split("@")[0]}
-</div>
+  <div style="font-weight:bold;">${post.name}</div>
   <div style="font-size:12px;color:#aaa;">${time}</div>
   <div style="margin-top:5px;">${post.content || ""}</div>
 
-  ${
-    isOwner
-      ? `
+  <div style="margin-top:8px;">
+    ❤️ ${post.likes || 0}
+  </div>
+
+  <button onclick="likePost('${post.id}')" style="
+  margin-top:5px;
+  background:${isLiked ? '#ff4d6d' : '#222'};
+  color:white;
+  border:none;
+  padding:5px 10px;
+  border-radius:5px;
+">
+  ${isLiked ? "❤️ Liked" : "🤍 Like"} (${post.likes || 0})
+</button>
+
+<button onclick="openComments('${post.id}')" style="
+  margin-top:5px;
+  background:#333;
+  color:white;
+  border:none;
+  padding:5px 10px;
+  border-radius:5px;
+">
+  💬 Comment
+</button>
+
+  ${isOwner ? `
     <button onclick="deletePost('${post.id}')" style="
       margin-top:8px;
       background:#ff4d4d;
@@ -269,9 +292,7 @@ function renderPost(post) {
     ">
       Delete
     </button>
-  `
-      : ""
-  }
+  ` : ""}
 `;
 
   postsDiv.appendChild(div);
@@ -311,6 +332,55 @@ window.loadPosts = async function () {
   posts.forEach(renderPost);
 }; // ✅ IMPORTANT (you were missing this)
 
+window.likePost = async (id) => {
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    alert("Login to like posts");
+    return;
+  }
+  
+
+  // get current post
+  const { data: post, error } = await supabase
+    .from("posts")
+    .select("likes, liked_by")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.log("❌ fetch error:", error);
+    return;
+  }
+
+  let likedBy = post.liked_by || [];
+
+  const isLiked = likedBy.includes(userId);
+
+  let newLikes;
+  let updatedLikedBy;
+
+  if (isLiked) {
+    // ❌ UNLIKE
+    updatedLikedBy = likedBy.filter(uid => uid !== userId);
+    newLikes = (post.likes || 1) - 1;
+  } else {
+    // ❤️ LIKE
+    updatedLikedBy = [...likedBy, userId];
+    newLikes = (post.likes || 0) + 1;
+  }
+
+  await supabase
+    .from("posts")
+    .update({
+      likes: newLikes,
+      liked_by: updatedLikedBy
+    })
+    .eq("id", id);
+
+  loadPosts();
+};
+
 window.deletePost = async (id) => {
   const { error } = await supabase.from("posts").delete().eq("id", id);
 
@@ -321,6 +391,49 @@ window.deletePost = async (id) => {
 
   loadPosts();
 };
+
+window.openComments = (postId) => {
+  currentPostId = postId;
+  document.getElementById("commentsPanel").style.display = "flex";
+  loadComments(postId);
+};
+
+async function loadComments(postId) {
+  const { data, error } = await supabase
+    .from("comments")
+    .select("*")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+
+  const container = document.getElementById("panelComments");
+
+  if (error) {
+    container.innerHTML = "Error loading comments";
+    return;
+  }
+
+  container.innerHTML = data.map(c => `
+    <div style="margin-bottom:5px;">
+      <b>${c.name}</b>: ${c.content}
+    </div>
+  `).join("");
+}
+
+supabase
+  .channel("posts-channel")
+  .on(
+    "postgres_changes",
+    {
+      event: "*", // INSERT, DELETE, UPDATE
+      schema: "public",
+      table: "posts"
+    },
+    (payload) => {
+      console.log("🔄 change detected:", payload);
+      loadPosts(); // reload automatically
+    }
+  )
+  .subscribe();
 
 // ✅ ALWAYS show posts UI
 document.getElementById("app").innerHTML = `
@@ -370,7 +483,52 @@ document.getElementById("app").innerHTML = `
 
     <div id="posts"></div>
   </div>
+  
+  <div id="commentsPanel" style="
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  height:60%;
+  background:#111;
+  color:white;
+  display:none;
+  flex-direction:column;
+  padding:10px;
+  z-index:1000;
+">
+  <h3>
+    Comments
+    <span id="closeComments" style="float:right;cursor:pointer">✖</span>
+  </h3>
+
+  <div id="panelComments" style="flex:1;overflow-y:auto;"></div>
+
+  <input id="panelInput" placeholder="Write comment..." />
+  <button id="panelPostBtn">Post</button>
+</div>
 `;
+
+document.getElementById("panelPostBtn").onclick = async () => {
+  const input = document.getElementById("panelInput");
+
+  if (!input.value) return;
+
+  await supabase.from("comments").insert({
+    post_id: currentPostId,
+    content: input.value,
+    user_id: session?.user?.id || null,
+    name: session?.user?.email || "Guest"
+  });
+
+  input.value = "";
+  loadComments(currentPostId);
+};
+
+document.getElementById("closeComments").onclick = () => {
+  document.getElementById("commentsPanel").style.display = "none";
+};
+
 // ✅ Show login button only if NOT logged in
 if (session) {
   document.getElementById("postBtn").onclick = async () => {
