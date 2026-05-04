@@ -241,23 +241,34 @@ function renderPost(post) {
   if (!post.content && !post.file_url) return;
 
   const postsDiv = document.getElementById("posts");
-
-  if (document.getElementById(post.id)) return;
-
   const time = new Date(post.created_at).toLocaleString();
   const isOwner = session && session.user.id === post.user_id;
   const isLiked = (post.liked_by || []).includes(session?.user?.id);
 
   const div = document.createElement("div");
-  div.id = post.id;
-
-  div.style.padding = "15px";
-  div.style.borderBottom = "1px solid #333";
 
   div.innerHTML = `
-    <div style="font-weight:bold;">${post.name}</div>
-    <div style="font-size:12px;color:#aaa;">${time}</div>
-    <div style="margin-top:5px;">${post.content || ""}</div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <img 
+        src="${post.avatar_url || 'https://via.placeholder.com/40'}"
+        style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#222;"
+      />
+
+      <div>
+        <div onclick="openProfile('${post.user_id}', '${post.name}')" 
+             style="font-weight:bold;cursor:pointer;">
+          ${post.name}
+        </div>
+
+        <div style="font-size:12px;color:#aaa;">
+          ${time}
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:10px;">
+      ${post.content || ""}
+    </div>
 
     <div style="margin-top:8px;">
       ❤️ ${post.likes || 0}
@@ -285,21 +296,24 @@ function renderPost(post) {
       💬 Comment
     </button>
 
-    ${isOwner ? `
-      <button onclick="deletePost('${post.id}')" style="
-        margin-top:8px;
-        background:#ff4d4d;
-        border:none;
-        color:white;
-        padding:5px 8px;
-        border-radius:5px;
-      ">
-        Delete
-      </button>
-    ` : ""}
+    ${
+      isOwner
+        ? `
+        <button onclick="deletePost('${post.id}')" style="
+          margin-top:8px;
+          background:#ff4d4d;
+          border:none;
+          color:white;
+          padding:5px 8px;
+          border-radius:5px;
+        ">
+          Delete
+        </button>
+      `
+        : ""
+    }
   `;
 
-  // ✅ IMPORTANT
   postsDiv.appendChild(div);
 }
 
@@ -344,7 +358,9 @@ window.likePost = async (id) => {
     alert("Login to like posts");
     return;
   }
-  
+
+  const postDiv = document.getElementById(id);
+  const btn = postDiv?.querySelector("button");
 
   // get current post
   const { data: post, error } = await supabase
@@ -359,22 +375,26 @@ window.likePost = async (id) => {
   }
 
   let likedBy = post.liked_by || [];
-
   const isLiked = likedBy.includes(userId);
 
   let newLikes;
   let updatedLikedBy;
 
   if (isLiked) {
-    // ❌ UNLIKE
     updatedLikedBy = likedBy.filter(uid => uid !== userId);
     newLikes = (post.likes || 1) - 1;
   } else {
-    // ❤️ LIKE
     updatedLikedBy = [...likedBy, userId];
     newLikes = (post.likes || 0) + 1;
   }
 
+  // ✅ INSTANT UI UPDATE (no waiting)
+  if (btn) {
+    btn.innerHTML = `${!isLiked ? "❤️ Liked" : "🤍 Like"} (${newLikes})`;
+    btn.style.background = !isLiked ? "#ff4d6d" : "#222";
+  }
+
+  // 🔥 save to database
   await supabase
     .from("posts")
     .update({
@@ -383,7 +403,8 @@ window.likePost = async (id) => {
     })
     .eq("id", id);
 
-  loadPosts();
+  // ❌ REMOVE THIS (realtime will handle updates)
+  // loadPosts();
 };
 
 window.deletePost = async (id) => {
@@ -397,13 +418,22 @@ window.deletePost = async (id) => {
   loadPosts();
 };
 
+let currentPostId = null;
+
 window.openComments = (postId) => {
+  console.log("💬 opening comments for:", postId);
+
   currentPostId = postId;
-  document.getElementById("commentsPanel").style.display = "flex";
+
+  const panel = document.getElementById("commentsPanel");
+  panel.style.display = "flex";
+
   loadComments(postId);
 };
 
 async function loadComments(postId) {
+  console.log("📥 loading comments for:", postId);
+
   const { data, error } = await supabase
     .from("comments")
     .select("*")
@@ -413,7 +443,13 @@ async function loadComments(postId) {
   const container = document.getElementById("panelComments");
 
   if (error) {
+    console.log("❌ comment error:", error);
     container.innerHTML = "Error loading comments";
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    container.innerHTML = "No comments yet";
     return;
   }
 
@@ -423,6 +459,60 @@ async function loadComments(postId) {
     </div>
   `).join("");
 }
+
+window.openProfile = async (userId, name) => {
+  console.log("👤 open profile:", userId);
+
+  document.getElementById("app").innerHTML = `
+    <div style="padding:15px; color:white;">
+      
+      <button onclick="goHome()" style="
+        margin-bottom:10px;
+        background:#333;
+        color:white;
+        border:none;
+        padding:6px 10px;
+        border-radius:6px;
+      ">
+        ← Back
+      </button>
+
+      <h2>${name}</h2>
+
+      <div id="profilePosts"></div>
+    </div>
+  `;
+
+  const { data, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  const container = document.getElementById("profilePosts");
+
+  if (error) {
+    container.innerHTML = "Error loading posts";
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    container.innerHTML = "No posts yet";
+    return;
+  }
+
+  container.innerHTML = data.map(post => `
+    <div style="border-bottom:1px solid #333; padding:10px 0;">
+      <div>${post.content || ""}</div>
+      <div style="font-size:12px;color:#aaa;">
+        ${new Date(post.created_at).toLocaleString()}
+      </div>
+    </div>
+  `).join("");
+};
+window.goHome = () => {
+  location.reload();
+};
 
 supabase
   .channel("posts-channel")
@@ -601,8 +691,36 @@ if (session) {
 // LOAD POSTS
 // ==============================
 
+// Load posts once
 loadPosts();
-setInterval(loadPosts, 5000);
+
+
+// 🔥 POSTS REALTIME
+supabase
+  .channel("posts-realtime")
+  .on(
+    "postgres_changes",
+    { event: "*", schema: "public", table: "posts" },
+    () => {
+      loadPosts();
+    }
+  )
+  .subscribe();
+
+
+// 💬 COMMENTS REALTIME (ADD THIS RIGHT HERE)
+supabase
+  .channel("comments-realtime")
+  .on(
+    "postgres_changes",
+    { event: "*", schema: "public", table: "comments" },
+    () => {
+      if (currentPostId) {
+        loadComments(currentPostId);
+      }
+    }
+  )
+  .subscribe();
 </script>
 </body>
 </html>
