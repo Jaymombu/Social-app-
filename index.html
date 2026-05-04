@@ -228,21 +228,36 @@ console.log("🚀 Starting app...");
 // ✅ 1. GET SESSION FIRST
 let session = null;
 
-try {
-  const result = await supabase.auth.getSession();
-  session = result.data.session;
-  console.log("✅ session:", session);
-} catch (err) {
-  console.log("❌ session error:", err);
+async function init() {
+  try {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error) {
+      console.log("❌ session error:", error);
+      return;
+    }
+
+    session = data.session;
+    console.log("✅ session:", session);
+
+    startApp(); // ✅ ONLY start UI after session is ready
+  } catch (err) {
+    console.log("❌ session crash:", err);
+  }
 }
 
-// ✅ 2. DEFINE renderPost FIRST (GLOBAL)
-function renderPost(post) {
+init();
+
+  function renderPost(post) {
   if (!post.content && !post.file_url) return;
 
   const postsDiv = document.getElementById("posts");
   const time = new Date(post.created_at).toLocaleString();
-  const isOwner = session && session.user.id === post.user_id;
+
+  const isOwner =
+    session?.user?.id &&
+    String(session.user.id) === String(post.user_id);
+
   const isLiked = (post.liked_by || []).includes(session?.user?.id);
 
   const div = document.createElement("div");
@@ -274,42 +289,22 @@ function renderPost(post) {
       ❤️ ${post.likes || 0}
     </div>
 
-    <button onclick="likePost('${post.id}')" style="
-      margin-top:5px;
-      background:${isLiked ? '#ff4d6d' : '#222'};
-      color:white;
-      border:none;
-      padding:5px 10px;
-      border-radius:5px;
-    ">
+    <button onclick="likePost('${post.id}')"
+      style="margin-top:5px;background:${isLiked ? '#ff4d6d' : '#222'};color:white;border:none;padding:5px 10px;border-radius:5px;">
       ${isLiked ? "❤️ Liked" : "🤍 Like"} (${post.likes || 0})
     </button>
 
-    <button onclick="openComments('${post.id}')" style="
-      margin-top:5px;
-      background:#333;
-      color:white;
-      border:none;
-      padding:5px 10px;
-      border-radius:5px;
-    ">
+    <button onclick="openComments('${post.id}')"
+      style="margin-top:5px;background:#333;color:white;border:none;padding:5px 10px;border-radius:5px;">
       💬 Comment
     </button>
 
     ${
       isOwner
-        ? `
-        <button onclick="deletePost('${post.id}')" style="
-          margin-top:8px;
-          background:#ff4d4d;
-          border:none;
-          color:white;
-          padding:5px 8px;
-          border-radius:5px;
-        ">
-          Delete
-        </button>
-      `
+        ? `<button onclick="deletePost('${post.id}')"
+            style="margin-top:8px;background:#ff4d4d;border:none;color:white;padding:5px 8px;border-radius:5px;">
+            Delete
+          </button>`
         : ""
     }
   `;
@@ -460,8 +455,13 @@ async function loadComments(postId) {
   `).join("");
 }
 
+
+
 window.openProfile = async (userId, name) => {
   console.log("👤 open profile:", userId);
+  console.log("SESSION ID:", session?.user?.id);
+console.log("PROFILE ID:", userId);
+console.log("MATCH:", String(session?.user?.id) == String(userId));
 
   document.getElementById("app").innerHTML = `
   <div style="padding:15px; color:white;">
@@ -480,25 +480,15 @@ window.openProfile = async (userId, name) => {
     <h2>${name}</h2>
 
     ${
-      session && session.user.id === userId
-        ? `
-        <button onclick="openEditProfile()" style="
-          margin-bottom:10px;
-          background:#444;
-          color:white;
-          border:none;
-          padding:6px 10px;
-          border-radius:6px;
-        ">
-          Edit Profile
-        </button>
-        `
-        : ""
-    }
+  String(session?.user?.id) === String(userId)
+    ? `<button onclick="openEditProfile()">Edit Profile</button>`
+    : ""
+}
 
     <div id="profilePosts"></div>
   </div>
-`;
+  `;
+  
 
   const { data, error } = await supabase
     .from("posts")
@@ -531,67 +521,32 @@ window.goHome = () => {
   location.reload();
 };
 
-supabase
-  .channel("posts-channel")
-  .on(
-    "postgres_changes",
-    {
-      event: "*", // INSERT, DELETE, UPDATE
-      schema: "public",
-      table: "posts"
-    },
-    (payload) => {
-      console.log("🔄 change detected:", payload);
-      loadPosts(); // reload automatically
-    }
-  )
-  .subscribe();
-  
   window.openEditProfile = async () => {
   const user = session?.user;
   if (!user) return;
 
-  // get current profile
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
     .single();
 
+  if (error) {
+    console.log("❌ profile fetch error:", error);
+    return;
+  }
+
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
-      
-      <button onclick="goHome()" style="
-        margin-bottom:10px;
-        background:#333;
-        color:white;
-        border:none;
-        padding:6px 10px;
-        border-radius:6px;
-      ">
-        ← Back
-      </button>
+      <button onclick="goHome()">← Back</button>
 
       <h2>Edit Profile</h2>
 
-      <input id="editName" placeholder="Name" value="${data?.name || ""}" style="width:100%;margin:5px 0;" />
-      
-      <input id="editAvatar" placeholder="Avatar URL" value="${data?.avatar_url || ""}" style="width:100%;margin:5px 0;" />
+      <input id="editName" value="${data?.name || ""}" />
+      <input id="editAvatar" value="${data?.avatar_url || ""}" />
+      <textarea id="editBio">${data?.bio || ""}</textarea>
 
-      <textarea id="editBio" placeholder="Bio" style="width:100%;margin:5px 0;">
-${data?.bio || ""}
-      </textarea>
-
-      <button id="saveProfile" style="
-        margin-top:10px;
-        background:#1d9bf0;
-        color:white;
-        border:none;
-        padding:8px 12px;
-        border-radius:6px;
-      ">
-        Save
-      </button>
+      <button id="saveProfile">Save</button>
     </div>
   `;
 
@@ -600,78 +555,59 @@ ${data?.bio || ""}
     const avatar = document.getElementById("editAvatar").value;
     const bio = document.getElementById("editBio").value;
 
-    const { error } = await supabase
-      .from("profiles")
-      .upsert({
-        id: user.id,
-        name: name,
-        avatar_url: avatar,
-        bio: bio
-      });
+    await supabase.from("profiles").upsert({
+      id: user.id,
+      name,
+      avatar_url: avatar,
+      bio
+    });
 
-    if (error) {
-      alert("Error saving profile");
-      return;
-    }
-
-    alert("✅ Profile updated!");
-    goHome();
+    openProfile(user.id, name);
   };
 };
 
-// ✅ ALWAYS show posts UI
-document.getElementById("app").innerHTML = `
-  <div style="padding: 10px;">
+// 🔥 PROFILE SAVE FUNCTION (GLOBAL)
+window.saveProfile = async () => {
+  const user = session?.user;
+  if (!user) return;
 
-    ${
-      session
-        ? `
-      <div style="
-        margin-bottom: 15px;
-        background: #111;
-        padding: 10px;
-        border-radius: 10px;
-      ">
-        <textarea 
-          id="postInput"
-          placeholder="What's on your mind?"
-          style="
-            width: 100%;
-            height: 60px;
-            background: #000;
-            color: white;
-            border: 1px solid #333;
-            border-radius: 8px;
-            padding: 8px;
-          "
-        ></textarea>
+  const name = document.getElementById("editName").value;
+  const avatar = document.getElementById("editAvatar").value;
 
-        <button id="postBtn" style="
-          margin-top: 8px;
-          padding: 8px 12px;
-          background: #1d9bf0;
-          border: none;
-          color: white;
-          border-radius: 6px;
-        ">
-          Post
-        </button>
-      </div>
-      `
-        : `
-      <button id="login" style="margin-bottom:10px;">
-        Login
-      </button>
-      `
-    }
-    
-    
+  const { error } = await supabase
+    .from("profiles")
+    .upsert({
+      id: user.id,
+      name: name,
+      avatar_url: avatar
+    });
 
-    <div id="posts"></div>
-  </div>
-  
-  <div id="commentsPanel" style="
-  position:fixed;
+  if (error) {
+    console.log("❌ save error:", error);
+    return;
+  }
+
+  closeEditProfile();
+  loadPosts();
+};
+
+function startApp() {
+  document.getElementById("app").innerHTML = `
+    <div style="padding:10px;">
+      ${
+        session
+          ? `
+          <textarea id="postInput"></textarea>
+          <button id="postBtn">Post</button>
+          `
+          : `<button id="login">Login</button>`
+      }
+
+      <div id="posts"></div>
+    </div>
+
+    <div id="commentsPanel" style="
+  position:flex;
   bottom:0;
   left:0;
   right:0;
@@ -683,139 +619,83 @@ document.getElementById("app").innerHTML = `
   padding:10px;
   z-index:1000;
 ">
-  <h3>
-    Comments
-    <span id="closeComments" style="float:right;cursor:pointer">✖</span>
-  </h3>
+      <span id="closeComments">✖</span>
+      <div id="panelComments"></div>
+      <input id="panelInput" />
+      <button id="panelPostBtn">Post</button>
+    </div>
+  `;
 
-  <div id="panelComments" style="flex:1;overflow-y:auto;"></div>
-
-  <input id="panelInput" placeholder="Write comment..." />
-  <button id="panelPostBtn">Post</button>
-</div>
-`;
-
-// ==============================
-// COMMENTS PANEL ACTIONS
-// ==============================
-
-document.getElementById("panelPostBtn").onclick = async () => {
-  const input = document.getElementById("panelInput");
-
-  if (!input.value) return;
-
-  await supabase.from("comments").insert({
-    post_id: currentPostId,
-    content: input.value,
-    user_id: session?.user?.id || null,
-    name: session?.user?.email || "Guest"
-  });
-
-  input.value = "";
-  loadComments(currentPostId);
-};
-
-document.getElementById("closeComments").onclick = () => {
-  document.getElementById("commentsPanel").style.display = "none";
-};
-
-
-// ==============================
-// LOGIN BUTTON (ONLY IF NOT LOGGED IN)
-// ==============================
-
-if (!session) {
-  const loginBtn = document.getElementById("login");
-
-  if (loginBtn) {
-    loginBtn.onclick = async () => {
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: location.href
-        }
-      });
-    };
-  }
+  attachEvents();   // ✅ VERY IMPORTANT
+  loadPosts();
 }
 
-
-// ==============================
-// POST BUTTON (ONLY IF LOGGED IN)
-// ==============================
-
-if (session) {
+function attachEvents() {
+  // POST BUTTON
   const postBtn = document.getElementById("postBtn");
-
   if (postBtn) {
     postBtn.onclick = async () => {
       const input = document.getElementById("postInput");
       const content = input.value.trim();
-
       if (!content) return;
 
-      // 🔥 get profile
       const { data: profile } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", session.user.id)
         .single();
 
-      // 🔥 insert post
-      const { error } = await supabase
-        .from("posts")
-        .insert([{
-          content: content,
-          user_id: session.user.id,
-          name: profile?.name || session.user.email,
-          avatar_url: profile?.avatar_url || null
-        }]);
-
-      if (error) {
-        console.log("❌ post error:", error);
-        return;
-      }
+      await supabase.from("posts").insert([{
+        content,
+        user_id: session.user.id,
+        name: profile?.name || session.user.email,
+        avatar_url: profile?.avatar_url || null
+      }]);
 
       input.value = "";
       loadPosts();
     };
   }
+
+  // COMMENTS POST
+  const panelBtn = document.getElementById("panelPostBtn");
+  if (panelBtn) {
+    panelBtn.onclick = async () => {
+      const input = document.getElementById("panelInput");
+      if (!input.value) return;
+
+      await supabase.from("comments").insert({
+        post_id: currentPostId,
+        content: input.value,
+        user_id: session?.user?.id || null,
+        name: session?.user?.email || "Guest"
+      });
+
+      input.value = "";
+      loadComments(currentPostId);
+    };
+  }
+
+  // CLOSE COMMENTS
+  const closeBtn = document.getElementById("closeComments");
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      document.getElementById("commentsPanel").style.display = "none";
+    };
+  }
+
+  // LOGIN
+  const loginBtn = document.getElementById("login");
+  if (loginBtn) {
+    loginBtn.onclick = async () => {
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: location.href }
+      });
+    };
+  }
 }
 
-// ==============================
-// LOAD POSTS
-// ==============================
-
-// Load posts once
-loadPosts();
-
-
-// 🔥 POSTS REALTIME
-supabase
-  .channel("posts-realtime")
-  .on(
-    "postgres_changes",
-    { event: "*", schema: "public", table: "posts" },
-    () => {
-      loadPosts();
-    }
-  )
-  .subscribe();
-
-
-// 💬 COMMENTS REALTIME (ADD THIS RIGHT HERE)
-supabase
-  .channel("comments-realtime")
-  .on(
-    "postgres_changes",
-    { event: "*", schema: "public", table: "comments" },
-    () => {
-      if (currentPostId) {
-        loadComments(currentPostId);
-      }
-    }
-  )
-  .subscribe();
 </script>
 </body>
 </html>
