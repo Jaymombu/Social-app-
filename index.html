@@ -266,7 +266,7 @@ div.id = post.id;
   div.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px;">
       <img 
-        src="${post.avatar_url || 'https://via.placeholder.com/40'}"
+        src="${profile?.avatar_url || 'https://via.placeholder.com/60'}"
         style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#222;"
       />
 
@@ -522,6 +522,42 @@ window.openProfile = async (userId, name) => {
   `).join("");
 };
 
+async function resizeImage(file, size = 300) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      img.src = e.target.result;
+    };
+
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      canvas.width = size;
+      canvas.height = size;
+
+      // crop center square
+      const min = Math.min(img.width, img.height);
+      const sx = (img.width - min) / 2;
+      const sy = (img.height - min) / 2;
+
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+
+      canvas.toBlob(
+        (blob) => {
+          resolve(blob);
+        },
+        "image/jpeg",
+        0.8 // compression
+      );
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
   window.openEditProfile = async () => {
   alert("EDIT FUNCTION RUNNING");
 
@@ -554,7 +590,7 @@ window.openProfile = async (userId, name) => {
       <h2>Edit Profile</h2>
 
       <input id="editName" placeholder="Name" value="${data?.name || ""}" />
-      <input id="editAvatar" placeholder="Avatar URL" value="${data?.avatar_url || ""}" />
+      <input type="file" id="avatarFile" accept="image/*" />
       <textarea id="editBio" placeholder="Bio">${data?.bio || ""}</textarea>
 
       <button id="saveProfile">Save</button>
@@ -562,25 +598,60 @@ window.openProfile = async (userId, name) => {
   `;
 
   document.getElementById("saveProfile").onclick = async () => {
-    const name = document.getElementById("editName").value;
-    const avatar = document.getElementById("editAvatar").value;
-    const bio = document.getElementById("editBio").value;
+  const name = document.getElementById("editName").value;
+  const bio = document.getElementById("editBio").value;
 
-    const { error } = await supabase.from("profiles").upsert({
-      id: user.id,
-      name,
-      avatar_url: avatar || null,
-      bio
-    });
+  const fileInput = document.getElementById("avatarFile");
+  const file = fileInput.files[0];
 
-    if (error) {
-      console.log("❌ save error:", error);
-      alert("Save failed");
+  let avatarUrl = null;
+
+  if (file) {
+    const resizedFile = await resizeImage(file, 300);
+
+    const fileName = `${session.user.id}.jpg`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(fileName, resizedFile, {
+        cacheControl: "3600",
+        upsert: true
+      });
+
+    if (uploadError) {
+      alert("Upload failed");
+      console.log(uploadError);
       return;
     }
 
-    openProfile(user.id, name);
-  };
+    const { data: publicUrlData } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(fileName);
+
+    avatarUrl = publicUrlData.publicUrl;
+  }
+
+  const { data: oldProfile } = await supabase
+    .from("profiles")
+    .select("avatar_url")
+    .eq("id", user.id)
+    .single();
+
+  const { error } = await supabase.from("profiles").upsert({
+    id: user.id,
+    name,
+    avatar_url: avatarUrl || oldProfile?.avatar_url,
+    bio
+  });
+
+  if (error) {
+    alert("Save failed");
+    console.log(error);
+    return;
+  }
+
+  openProfile(user.id, name);
+};
 };
 
 function attachEvents() {
