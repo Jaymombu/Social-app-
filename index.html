@@ -452,6 +452,10 @@ async function loadComments(postId) {
   `).join("");
 }
 
+window.goHome = () => {
+  startApp(); // ✅ NOT reload
+};
+
 window.openProfile = async (userId, name) => {
   const { data } = await supabase.auth.getSession();
   session = data.session;
@@ -503,8 +507,6 @@ window.openProfile = async (userId, name) => {
   const { data: sessionData } = await supabase.auth.getSession();
   session = sessionData.session;
 
-  console.log("EDIT CLICKED");
-
   if (!session?.user) {
     alert("You are not logged in");
     return;
@@ -519,42 +521,34 @@ window.openProfile = async (userId, name) => {
     .single();
 
   if (error) {
-    console.log("❌ profile fetch error:", error);
+    console.log(error);
     return;
   }
 
-  // ✅ THIS is the correct UI
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
       <button onclick="goHome()">← Back</button>
-
       <h2>Edit Profile</h2>
 
-      <input id="editName" value="${data?.name || ""}" placeholder="Name" />
-      <input id="editAvatar" value="${data?.avatar_url || ""}" placeholder="Avatar URL" />
-      <textarea id="editBio" placeholder="Bio">${data?.bio || ""}</textarea>
+      <input id="editName" value="${data?.name || ""}" />
+      <input id="editAvatar" value="${data?.avatar_url || ""}" />
+      <textarea id="editBio">${data?.bio || ""}</textarea>
 
       <button id="saveProfile">Save</button>
     </div>
   `;
 
-  // ✅ SAVE BUTTON WORKS HERE
   document.getElementById("saveProfile").onclick = async () => {
     const name = document.getElementById("editName").value;
     const avatar = document.getElementById("editAvatar").value;
     const bio = document.getElementById("editBio").value;
 
-    const { error } = await supabase.from("profiles").upsert({
+    await supabase.from("profiles").upsert({
       id: user.id,
       name,
       avatar_url: avatar,
       bio
     });
-
-    if (error) {
-      console.log("❌ save error:", error);
-      return;
-    }
 
     openProfile(user.id, name);
   };
