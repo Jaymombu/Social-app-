@@ -452,33 +452,25 @@ async function loadComments(postId) {
   `).join("");
 }
 
-
-
 window.openProfile = async (userId, name) => {
-
-  // 🔥 ALWAYS refresh session here
   const { data } = await supabase.auth.getSession();
   session = data.session;
 
-  console.log("SESSION NOW:", session?.user?.id);
-  console.log("PROFILE ID:", userId);
-
   document.getElementById("app").innerHTML = `
-  <div style="padding:15px; color:white;">
-    <button onclick="goHome()">← Back</button>
-    <h2>${name}</h2>
+    <div style="padding:15px; color:white;">
+      <button onclick="goHome()">← Back</button>
+      <h2>${name}</h2>
 
-    ${
-      session?.user?.id == userId
-      ? `<button onclick="openEditProfile()" type="button">Edit</button>`
-        : ""
-    }
+      ${
+        String(session?.user?.id) === String(userId)
+          ? `<button onclick="openEditProfile()" type="button">Edit</button>`
+          : ""
+      }
 
-    <div id="profilePosts"></div>
-  </div>
-`;
+      <div id="profilePosts"></div>
+    </div>
+  `;
 
-  // ✅ MOVE THIS INSIDE FUNCTION
   const { data: posts, error } = await supabase
     .from("posts")
     .select("*")
@@ -506,17 +498,10 @@ window.openProfile = async (userId, name) => {
     </div>
   `).join("");
 };
-window.goHome = () => {
-  location.reload();
-};
 
   window.openEditProfile = async () => {
   const { data: sessionData } = await supabase.auth.getSession();
   session = sessionData.session;
-  
-  console.log("SESSION ID:", session?.user?.id);
-console.log("PROFILE ID:", userId);
-console.log("MATCH:", String(session?.user?.id) === String(userId));
 
   console.log("EDIT CLICKED");
 
@@ -538,20 +523,22 @@ console.log("MATCH:", String(session?.user?.id) === String(userId));
     return;
   }
 
+  // ✅ THIS is the correct UI
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
       <button onclick="goHome()">← Back</button>
 
       <h2>Edit Profile</h2>
 
-      <input id="editName" value="${data?.name || ""}" />
-      <input id="editAvatar" value="${data?.avatar_url || ""}" />
-      <textarea id="editBio">${data?.bio || ""}</textarea>
+      <input id="editName" value="${data?.name || ""}" placeholder="Name" />
+      <input id="editAvatar" value="${data?.avatar_url || ""}" placeholder="Avatar URL" />
+      <textarea id="editBio" placeholder="Bio">${data?.bio || ""}</textarea>
 
       <button id="saveProfile">Save</button>
     </div>
   `;
 
+  // ✅ SAVE BUTTON WORKS HERE
   document.getElementById("saveProfile").onclick = async () => {
     const name = document.getElementById("editName").value;
     const avatar = document.getElementById("editAvatar").value;
@@ -684,6 +671,7 @@ function startApp() {
   attachEvents();   // ✅ VERY IMPORTANT
   loadPosts();
 }
+
 
 </script>
 </body>
