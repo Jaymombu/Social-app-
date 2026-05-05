@@ -524,6 +524,7 @@ window.goHome = () => {
 };
 
   window.openEditProfile = async () => {
+    console.log("EDIT CLICKED");
     if (!session?.user) {
   alert("You are not logged in");
   return;
@@ -541,7 +542,6 @@ window.goHome = () => {
     console.log("❌ profile fetch error:", error);
     return;
   }
-  console.log("EDIT CLICKED");
 console.log("SESSION:", session);
 
   document.getElementById("app").innerHTML = `
