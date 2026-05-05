@@ -215,7 +215,7 @@ body {
 <div id="app"></div>
 
 <script type="module">
-window.session = null;
+  
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const supabase = createClient(
@@ -225,19 +225,22 @@ const supabase = createClient(
 
 console.log("🚀 Starting app...");
 
-// ✅ 1. GET SESSION FIRST
+// ✅ GLOBAL SESSION
 let session = null;
+
+// 🔁 keep session always updated
+supabase.auth.onAuthStateChange((event, newSession) => {
+  console.log("🔄 session updated:", newSession);
+  session = newSession;
+});
 
 async function init() {
   const { data } = await supabase.auth.getSession();
   session = data.session;
 
-  supabase.auth.onAuthStateChange((event, newSession) => {
-    session = newSession;
-    console.log("🔄 session updated:", session);
-  });
+  console.log("INIT SESSION:", session);
 
-  startApp();
+  startApp(); // ✅ ONLY here
 }
 
 init();
@@ -452,47 +455,40 @@ async function loadComments(postId) {
 
 
 window.openProfile = async (userId, name) => {
-  console.log("👤 open profile:", userId);
-  console.log("SESSION ID:", session?.user?.id);
-console.log("PROFILE ID:", userId);
-console.log("MATCH:", String(session?.user?.id) == String(userId));
+
+  // ✅ refresh session safely
+
+  console.log("SESSION NOW:", session?.user?.id);
 
   document.getElementById("app").innerHTML = `
-  <div style="padding:15px; color:white;">
-    
-    <button onclick="goHome()" style="
-      margin-bottom:10px;
-      background:#333;
-      color:white;
-      border:none;
-      padding:6px 10px;
-      border-radius:6px;
-    ">
-      ← Back
-    </button>
+    <div style="padding:15px; color:white;">
+      
+      <button onclick="goHome()">← Back</button>
 
-    <h2>${name}</h2>
+      <h2>${name}</h2>
 
-    ${
-  String(session?.user?.id) === String(userId)
-    ? `<button id="editProfileBtn">Edit Profile</button>`
-    : ""
-}
+      ${
+        String(session?.user?.id) === String(userId)
+          ? `<button id="editProfileBtn">Edit Profile</button>`
+          : ""
+      }
 
-    <div id="profilePosts"></div>
-  </div>
+      <div id="profilePosts"></div>
+    </div>
   `;
-  
+
+  // ✅ attach click AFTER render
   const btn = document.getElementById("editProfileBtn");
 
-if (btn) {
-  btn.onclick = () => {
-    console.log("EDIT CLICKED");
-    openEditProfile();
-  };
-}
+  if (btn) {
+    btn.onclick = () => {
+      console.log("🔥 EDIT CLICKED");
+      openEditProfile();
+    };
+  }
 
-  const { data, error } = await supabase
+  // ✅ FIXED: renamed posts data
+  const { data: posts, error } = await supabase
     .from("posts")
     .select("*")
     .eq("user_id", userId)
@@ -505,12 +501,12 @@ if (btn) {
     return;
   }
 
-  if (!data || data.length === 0) {
+  if (!posts || posts.length === 0) {
     container.innerHTML = "No posts yet";
     return;
   }
 
-  container.innerHTML = data.map(post => `
+  container.innerHTML = posts.map(post => `
     <div style="border-bottom:1px solid #333; padding:10px 0;">
       <div>${post.content || ""}</div>
       <div style="font-size:12px;color:#aaa;">
@@ -524,6 +520,8 @@ window.goHome = () => {
 };
 
   window.openEditProfile = async () => {
+    const { data: sessionData } = await supabase.auth.getSession();
+session = sessionData.session;
     console.log("EDIT CLICKED");
     if (!session?.user) {
   alert("You are not logged in");
@@ -599,44 +597,7 @@ window.saveProfile = async () => {
   loadPosts();
 };
 
-function startApp() {
-  document.getElementById("app").innerHTML = `
-    <div style="padding:10px;">
-      ${
-        session
-          ? `
-          <textarea id="postInput"></textarea>
-          <button id="postBtn">Post</button>
-          `
-          : `<button id="login">Login</button>`
-      }
 
-      <div id="posts"></div>
-    </div>
-
-    <div id="commentsPanel" style="
-  position:fixed;
-  bottom:0;
-  left:0;
-  right:0;
-  height:60%;
-  background:#111;
-  color:white;
-  display:none;
-  flex-direction:column;
-  padding:10px;
-  z-index:1000;
-">
-      <span id="closeComments">✖</span>
-      <div id="panelComments"></div>
-      <input id="panelInput" />
-      <button id="panelPostBtn">Post</button>
-    </div>
-  `;
-
-  attachEvents();   // ✅ VERY IMPORTANT
-  loadPosts();
-}
 
 function attachEvents() {
   // POST BUTTON
@@ -694,14 +655,60 @@ function attachEvents() {
 
   // LOGIN
   const loginBtn = document.getElementById("login");
-  if (loginBtn) {
-    loginBtn.onclick = async () => {
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: location.href }
-      });
-    };
-  }
+
+if (loginBtn) {
+  loginBtn.onclick = async () => {
+    console.log("🔐 Login clicked");
+
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: location.href
+      }
+    });
+  };
+}
+
+} // ✅ CLOSE attachEvents FUNCTION
+
+// ✅ START APP FUNCTION (you were missing this too)
+function startApp() {
+  document.getElementById("app").innerHTML = `
+    <div style="padding:10px;">
+      ${
+        session
+          ? `
+          <textarea id="postInput"></textarea>
+          <button id="postBtn">Post</button>
+          `
+          : `<button id="login">Login</button>`
+      }
+
+      <div id="posts"></div>
+    </div>
+
+    <div id="commentsPanel" style="
+      position:fixed;
+      bottom:0;
+      left:0;
+      right:0;
+      height:60%;
+      background:#111;
+      color:white;
+      display:none;
+      flex-direction:column;
+      padding:10px;
+      z-index:1000;
+    ">
+      <span id="closeComments">✖</span>
+      <div id="panelComments"></div>
+      <input id="panelInput" />
+      <button id="panelPostBtn">Post</button>
+    </div>
+  `;
+
+  attachEvents();   // ✅ VERY IMPORTANT
+  loadPosts();
 }
 
 </script>
