@@ -464,33 +464,19 @@ window.openProfile = async (userId, name) => {
   console.log("PROFILE ID:", userId);
 
   document.getElementById("app").innerHTML = `
-    <div style="padding:15px; color:white;">
-      <button onclick="goHome()">← Back</button>
-      <h2>${name}</h2>
+  <div style="padding:15px; color:white;">
+    <button onclick="goHome()">← Back</button>
+    <h2>${name}</h2>
 
-      ${
-        session?.user?.id == userId
-          ? `<button type="button" id="edit-profile-btn">Edit</button>`
-          : ""
-      }
+    ${
+      session?.user?.id == userId
+      ? `<button onclick="openEditProfile()" type="button">Edit</button>`
+        : ""
+    }
 
-      <div id="profilePosts"></div>
-    </div>
-  `;
-
-  // ✅ attach click AFTER render
-  const btn = document.getElementById("edit-profile-btn");
-
-  if (btn) {
-    console.log("✅ BUTTON FOUND");
-
-    btn.onclick = () => {
-      console.log("🔥 EDIT CLICKED");
-      openEditProfile();
-    };
-  } else {
-    console.log("❌ BUTTON NOT FOUND");
-  }
+    <div id="profilePosts"></div>
+  </div>
+`;
 
   // ✅ MOVE THIS INSIDE FUNCTION
   const { data: posts, error } = await supabase
@@ -525,15 +511,21 @@ window.goHome = () => {
 };
 
   window.openEditProfile = async () => {
-    const { data: sessionData } = await supabase.auth.getSession();
-session = sessionData.session;
-    console.log("EDIT CLICKED");
-    if (!session?.user) {
-  alert("You are not logged in");
-  return;
-}
-  const user = session?.user;
-  if (!user) return;
+  const { data: sessionData } = await supabase.auth.getSession();
+  session = sessionData.session;
+  
+  console.log("SESSION ID:", session?.user?.id);
+console.log("PROFILE ID:", userId);
+console.log("MATCH:", String(session?.user?.id) === String(userId));
+
+  console.log("EDIT CLICKED");
+
+  if (!session?.user) {
+    alert("You are not logged in");
+    return;
+  }
+
+  const user = session.user;
 
   const { data, error } = await supabase
     .from("profiles")
@@ -545,7 +537,6 @@ session = sessionData.session;
     console.log("❌ profile fetch error:", error);
     return;
   }
-console.log("SESSION:", session);
 
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
@@ -562,25 +553,25 @@ console.log("SESSION:", session);
   `;
 
   document.getElementById("saveProfile").onclick = async () => {
-  const name = document.getElementById("editName").value;
-  const avatar = document.getElementById("editAvatar").value;
-  const bio = document.getElementById("editBio").value;
+    const name = document.getElementById("editName").value;
+    const avatar = document.getElementById("editAvatar").value;
+    const bio = document.getElementById("editBio").value;
 
-  const { error } = await supabase.from("profiles").upsert({
-    id: user.id,
-    name,
-    avatar_url: avatar,
-    bio
-  });
+    const { error } = await supabase.from("profiles").upsert({
+      id: user.id,
+      name,
+      avatar_url: avatar,
+      bio
+    });
 
-  if (error) {
-    console.log("❌ save error:", error);
-    return;
-  }
+    if (error) {
+      console.log("❌ save error:", error);
+      return;
+    }
 
-  openProfile(user.id, name);
+    openProfile(user.id, name);
+  };
 };
-}
 
 function attachEvents() {
   // POST BUTTON
@@ -646,7 +637,7 @@ if (loginBtn) {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: location.href
+        redirectTo: window.location.origin
       }
     });
   };
