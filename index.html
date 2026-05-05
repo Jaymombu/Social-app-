@@ -461,8 +461,6 @@ window.goHome = () => {
 };
 
 window.openProfile = async (userId, name) => {
-  currentProfileId = userId;
-currentProfileName = name;
   const { data } = await supabase.auth.getSession();
   session = data.session;
 
@@ -471,9 +469,7 @@ currentProfileName = name;
     .from("profiles")
     .select("*")
     .eq("id", userId)
-    .single();
-
-  const avatar = profile?.avatar_url || "https://via.placeholder.com/60";
+    .maybeSingle();
 
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
@@ -481,23 +477,23 @@ currentProfileName = name;
 
       <div style="display:flex;align-items:center;gap:10px;">
         <img 
-          src="${avatar}"
+          src="${profile?.avatar_url || 'https://via.placeholder.com/60'}"
           style="width:60px;height:60px;border-radius:50%;object-fit:cover;background:#222;"
         />
-        <h2>${name}</h2>
+        <h2>${profile?.name || name}</h2>
       </div>
 
       ${
-  String(session?.user?.id) === String(userId)
-    ? `<button onclick="alert('CLICK WORKING'); openEditProfile()" type="button">Edit</button>`
-    : ""
-}
+        String(session?.user?.id) === String(userId)
+          ? `<button onclick="openEditProfile()">Edit</button>`
+          : ""
+      }
 
       <div id="profilePosts"></div>
     </div>
   `;
 
-  // ✅ NOW load posts
+  // ✅ THEN load posts
   const { data: posts, error } = await supabase
     .from("posts")
     .select("*")
@@ -589,11 +585,11 @@ function attachEvents() {
       const content = input.value.trim();
       if (!content) return;
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", session.user.id)
-        .single();
+      const { data, error } = await supabase
+  .from("profiles")
+  .select("*")
+  .eq("id", user.id)
+  .maybeSingle();
 
       await supabase.from("posts").insert([{
         content,
