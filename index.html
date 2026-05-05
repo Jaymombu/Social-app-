@@ -470,7 +470,7 @@ window.openProfile = async (userId, name) => {
 
       ${
         session?.user?.id == userId
-          ? `<button id="editProfileBtn">Edit Profile</button>`
+          ? `<button type="button" id="edit-profile-btn">Edit</button>`
           : ""
       }
 
@@ -479,7 +479,7 @@ window.openProfile = async (userId, name) => {
   `;
 
   // ✅ attach click AFTER render
-  const btn = document.getElementById("editProfileBtn");
+  const btn = document.getElementById("edit-profile-btn");
 
   if (btn) {
     console.log("✅ BUTTON FOUND");
@@ -562,47 +562,25 @@ console.log("SESSION:", session);
   `;
 
   document.getElementById("saveProfile").onclick = async () => {
-    const name = document.getElementById("editName").value;
-    const avatar = document.getElementById("editAvatar").value;
-    const bio = document.getElementById("editBio").value;
-
-    await supabase.from("profiles").upsert({
-      id: user.id,
-      name,
-      avatar_url: avatar,
-      bio
-    });
-
-    openProfile(user.id, name);
-  };
-};
-
-// 🔥 PROFILE SAVE FUNCTION (GLOBAL)
-window.saveProfile = async () => {
-  const user = session?.user;
-  if (!user) return;
-
   const name = document.getElementById("editName").value;
   const avatar = document.getElementById("editAvatar").value;
+  const bio = document.getElementById("editBio").value;
 
-  const { error } = await supabase
-    .from("profiles")
-    .upsert({
-      id: user.id,
-      name: name,
-      avatar_url: avatar
-    });
+  const { error } = await supabase.from("profiles").upsert({
+    id: user.id,
+    name,
+    avatar_url: avatar,
+    bio
+  });
 
   if (error) {
     console.log("❌ save error:", error);
     return;
   }
 
-  closeEditProfile();
-  loadPosts();
+  openProfile(user.id, name);
 };
-
-
+}
 
 function attachEvents() {
   // POST BUTTON
