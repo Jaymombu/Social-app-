@@ -439,10 +439,10 @@ async function loadComments(postId) {
   const container = document.getElementById("panelComments");
 
   if (error) {
-    console.log("❌ comment error:", error);
-    container.innerHTML = "Error loading comments";
-    return;
-  }
+  console.log("❌ profile fetch error:", error);
+}
+
+// ✅ DO NOT RETURN — continue anyway
 
   if (!data || data.length === 0) {
     container.innerHTML = "No comments yet";
@@ -522,8 +522,8 @@ window.openProfile = async (userId, name) => {
   `).join("");
 };
 
-  async function openEditProfile() {
-  alert("EDIT FUNCTION RUNNING"); // add this test
+  window.openEditProfile = async () => {
+  alert("EDIT FUNCTION RUNNING");
 
   const { data: sessionData } = await supabase.auth.getSession();
   session = sessionData.session;
@@ -535,16 +535,17 @@ window.openProfile = async (userId, name) => {
 
   const user = session.user;
 
+  // ✅ SAFE FETCH (no crashing)
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
 
-  if (error) {
-    alert("Error loading profile");
-    return;
-  }
+  console.log("PROFILE DATA:", data);
+  console.log("PROFILE ERROR:", error);
+
+  // ❌ DO NOT STOP if error
 
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
@@ -552,9 +553,9 @@ window.openProfile = async (userId, name) => {
 
       <h2>Edit Profile</h2>
 
-      <input id="editName" value="${data?.name || ""}" />
-      <input id="editAvatar" value="${data?.avatar_url || ""}" />
-      <textarea id="editBio">${data?.bio || ""}</textarea>
+      <input id="editName" placeholder="Name" value="${data?.name || ""}" />
+      <input id="editAvatar" placeholder="Avatar URL" value="${data?.avatar_url || ""}" />
+      <textarea id="editBio" placeholder="Bio">${data?.bio || ""}</textarea>
 
       <button id="saveProfile">Save</button>
     </div>
@@ -565,16 +566,22 @@ window.openProfile = async (userId, name) => {
     const avatar = document.getElementById("editAvatar").value;
     const bio = document.getElementById("editBio").value;
 
-    await supabase.from("profiles").upsert({
+    const { error } = await supabase.from("profiles").upsert({
       id: user.id,
       name,
       avatar_url: avatar || null,
       bio
     });
 
+    if (error) {
+      console.log("❌ save error:", error);
+      alert("Save failed");
+      return;
+    }
+
     openProfile(user.id, name);
   };
-}
+};
 
 function attachEvents() {
   // POST BUTTON
