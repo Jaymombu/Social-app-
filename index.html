@@ -456,19 +456,20 @@ async function loadComments(postId) {
 
 window.openProfile = async (userId, name) => {
 
-  // ✅ refresh session safely
+  // 🔥 ALWAYS refresh session here
+  const { data } = await supabase.auth.getSession();
+  session = data.session;
 
   console.log("SESSION NOW:", session?.user?.id);
+  console.log("PROFILE ID:", userId);
 
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
-      
       <button onclick="goHome()">← Back</button>
-
       <h2>${name}</h2>
 
       ${
-        String(session?.user?.id) === String(userId)
+        session?.user?.id == userId
           ? `<button id="editProfileBtn">Edit Profile</button>`
           : ""
       }
@@ -481,13 +482,17 @@ window.openProfile = async (userId, name) => {
   const btn = document.getElementById("editProfileBtn");
 
   if (btn) {
+    console.log("✅ BUTTON FOUND");
+
     btn.onclick = () => {
       console.log("🔥 EDIT CLICKED");
       openEditProfile();
     };
+  } else {
+    console.log("❌ BUTTON NOT FOUND");
   }
 
-  // ✅ FIXED: renamed posts data
+  // ✅ MOVE THIS INSIDE FUNCTION
   const { data: posts, error } = await supabase
     .from("posts")
     .select("*")
