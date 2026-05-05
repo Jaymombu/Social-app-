@@ -527,7 +527,7 @@ currentProfileName = name;
 };
 
   async function openEditProfile() {
-  console.log("🔥 EDIT CLICKED"); // keep this
+  alert("EDIT FUNCTION RUNNING"); // add this test
 
   const { data: sessionData } = await supabase.auth.getSession();
   session = sessionData.session;
@@ -546,7 +546,7 @@ currentProfileName = name;
     .single();
 
   if (error) {
-    console.log("❌ profile fetch error:", error);
+    alert("Error loading profile");
     return;
   }
 
@@ -569,17 +569,12 @@ currentProfileName = name;
     const avatar = document.getElementById("editAvatar").value;
     const bio = document.getElementById("editBio").value;
 
-    const { error } = await supabase.from("profiles").upsert({
+    await supabase.from("profiles").upsert({
       id: user.id,
       name,
       avatar_url: avatar || null,
       bio
     });
-
-    if (error) {
-      console.log("❌ save error:", error);
-      return;
-    }
 
     openProfile(user.id, name);
   };
