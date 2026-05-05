@@ -228,6 +228,9 @@ console.log("🚀 Starting app...");
 // ✅ GLOBAL SESSION
 let session = null;
 
+let currentProfileId = null;
+let currentProfileName = null;
+
 // 🔁 keep session always updated
 supabase.auth.onAuthStateChange((event, newSession) => {
   console.log("🔄 session updated:", newSession);
@@ -458,15 +461,19 @@ window.goHome = () => {
 };
 
 window.openProfile = async (userId, name) => {
+  currentProfileId = userId;
+currentProfileName = name;
   const { data } = await supabase.auth.getSession();
   session = data.session;
 
-  // ✅ fetch profile FIRST
+  // ✅ GET PROFILE FIRST
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", userId)
     .single();
+
+  const avatar = profile?.avatar_url || "https://via.placeholder.com/60";
 
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
@@ -474,22 +481,23 @@ window.openProfile = async (userId, name) => {
 
       <div style="display:flex;align-items:center;gap:10px;">
         <img 
-          src="${profile?.avatar_url || 'https://via.placeholder.com/60'}"
+          src="${avatar}"
           style="width:60px;height:60px;border-radius:50%;object-fit:cover;background:#222;"
         />
-        <h2>${profile?.name || name}</h2>
+        <h2>${name}</h2>
       </div>
 
       ${
-        String(session?.user?.id) === String(userId)
-          ? `<button onclick="openEditProfile()" type="button">Edit</button>`
-          : ""
-      }
+  String(session?.user?.id) === String(userId)
+    ? `<button onclick="alert('CLICK WORKING'); openEditProfile()" type="button">Edit</button>`
+    : ""
+}
 
       <div id="profilePosts"></div>
     </div>
   `;
 
+  // ✅ NOW load posts
   const { data: posts, error } = await supabase
     .from("posts")
     .select("*")
@@ -518,7 +526,9 @@ window.openProfile = async (userId, name) => {
   `).join("");
 };
 
-  window.openEditProfile = async () => {
+  async function openEditProfile() {
+  console.log("🔥 EDIT CLICKED"); // keep this
+
   const { data: sessionData } = await supabase.auth.getSession();
   session = sessionData.session;
 
@@ -573,7 +583,7 @@ window.openProfile = async (userId, name) => {
 
     openProfile(user.id, name);
   };
-};
+}
 
 function attachEvents() {
   // POST BUTTON
