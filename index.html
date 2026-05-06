@@ -215,7 +215,7 @@ body {
 <div id="app"></div>
 
 <script type="module">
-  
+  console.log("SCRIPT START");
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
 const supabase = createClient(
@@ -249,7 +249,7 @@ async function init() {
 init();
 
   function renderPost(post) {
-  if (!post.content && !post.file_url) return;
+  if (!post.content) return;
 
   const postsDiv = document.getElementById("posts");
   const time = new Date(post.created_at).toLocaleString();
@@ -323,7 +323,7 @@ window.loadPosts = async function () {
     .order("created_at", { ascending: false });
 
   console.log("📦 posts:", posts);
-  console.log("❌ error FULL:", JSON.stringify(error, null, 2));
+  console.log("❌ error:", error);
 
   const postsDiv = document.getElementById("posts");
 
@@ -345,7 +345,7 @@ window.loadPosts = async function () {
   }
 
   posts.forEach(renderPost);
-}; // ✅ IMPORTANT (you were missing this)
+};
 
 window.likePost = async (id) => {
   const userId = session?.user?.id;
@@ -468,7 +468,7 @@ window.openProfile = async (userId, name) => {
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", userId)
+    .eq("id", session.user.id)
     .maybeSingle();
 
   document.getElementById("app").innerHTML = `
@@ -477,7 +477,7 @@ window.openProfile = async (userId, name) => {
 
       <div style="display:flex;align-items:center;gap:10px;">
         <img 
-          src="${profile?.avatar_url || 'https://via.placeholder.com/60'}"
+          src="${post.avatar_url || 'https://via.placeholder.com/60'}"
           style="width:60px;height:60px;border-radius:50%;object-fit:cover;background:#222;"
         />
         <h2>${profile?.name || name}</h2>
@@ -497,7 +497,7 @@ window.openProfile = async (userId, name) => {
   const { data: posts, error } = await supabase
     .from("posts")
     .select("*")
-    .eq("user_id", userId)
+    .eq("id", session.user.id)
     .order("created_at", { ascending: false });
 
   const container = document.getElementById("profilePosts");
@@ -575,7 +575,7 @@ async function resizeImage(file, size = 300) {
   const { data, error } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", user.id)
+    .eq("id", session.user.id)
     .maybeSingle();
 
   console.log("PROFILE DATA:", data);
@@ -608,7 +608,6 @@ async function resizeImage(file, size = 300) {
 
   if (file) {
     const resizedFile = await resizeImage(file, 300);
-
     const fileName = `${session.user.id}.jpg`;
 
     const { error: uploadError } = await supabase.storage
@@ -634,11 +633,11 @@ async function resizeImage(file, size = 300) {
   const { data: oldProfile } = await supabase
     .from("profiles")
     .select("avatar_url")
-    .eq("id", user.id)
+    .eq("id", session.user.id)
     .single();
 
   const { error } = await supabase.from("profiles").upsert({
-    id: user.id,
+    id: session.user.id,
     name,
     avatar_url: avatarUrl || oldProfile?.avatar_url,
     bio
@@ -650,10 +649,9 @@ async function resizeImage(file, size = 300) {
     return;
   }
 
-  openProfile(user.id, name);
+  openProfile(session.user.id, name);
 };
 };
-
 function attachEvents() {
   // POST BUTTON
   const postBtn = document.getElementById("postBtn");
@@ -666,7 +664,7 @@ function attachEvents() {
       const { data, error } = await supabase
   .from("profiles")
   .select("*")
-  .eq("id", user.id)
+  .eq("id", session.user.id)
   .maybeSingle();
 
       await supabase.from("posts").insert([{
@@ -731,13 +729,15 @@ function startApp() {
   document.getElementById("app").innerHTML = `
     <div style="padding:10px;">
       ${
-        session
-          ? `
-          <textarea id="postInput"></textarea>
-          <button id="postBtn">Post</button>
-          `
-          : `<button id="login">Login</button>`
-      }
+  session
+    ? `
+      <textarea id="postInput"></textarea>
+      <button id="postBtn">Post</button>
+    `
+    : `
+      <button id="login">Login</button>
+    `
+}
 
       <div id="posts"></div>
     </div>
@@ -764,6 +764,7 @@ function startApp() {
 
   attachEvents();   // ✅ VERY IMPORTANT
   loadPosts();
+  console.log("SCRIPT END");
 }
 window.openProfile = openProfile;
 window.openEditProfile = openEditProfile;
