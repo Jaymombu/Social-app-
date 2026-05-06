@@ -461,6 +461,8 @@ window.goHome = () => {
 };
 
 window.openProfile = async (userId, name) => {
+  console.log("Logged in:", session?.user?.id);
+console.log("Profile opened:", userId);
   const { data } = await supabase.auth.getSession();
   session = data.session;
 
@@ -468,7 +470,7 @@ window.openProfile = async (userId, name) => {
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", session.user.id)
+    .eq("id", userId)
     .maybeSingle();
 
   document.getElementById("app").innerHTML = `
@@ -477,7 +479,7 @@ window.openProfile = async (userId, name) => {
 
       <div style="display:flex;align-items:center;gap:10px;">
         <img 
-          src="${post.avatar_url || 'https://via.placeholder.com/60'}"
+          src="${profile?.avatar_url || 'https://via.placeholder.com/60'}"
           style="width:60px;height:60px;border-radius:50%;object-fit:cover;background:#222;"
         />
         <h2>${profile?.name || name}</h2>
