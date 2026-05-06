@@ -261,12 +261,12 @@ init();
   const isLiked = (post.liked_by || []).includes(session?.user?.id);
 
   const div = document.createElement("div");
-div.id = post.id;
+  div.id = post.id;
 
   div.innerHTML = `
     <div style="display:flex; align-items:center; gap:10px;">
       <img 
-        src="${profile?.avatar_url || 'https://via.placeholder.com/60'}"
+        src="${post.avatar_url || 'https://via.placeholder.com/60'}"
         style="width:40px;height:40px;border-radius:50%;object-fit:cover;background:#222;"
       />
 
@@ -497,7 +497,7 @@ window.openProfile = async (userId, name) => {
   const { data: posts, error } = await supabase
     .from("posts")
     .select("*")
-    .eq("id", session.user.id)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   const container = document.getElementById("profilePosts");
@@ -596,7 +596,7 @@ async function resizeImage(file, size = 300) {
       <button id="saveProfile">Save</button>
     </div>
   `;
-
+  
   document.getElementById("saveProfile").onclick = async () => {
   const name = document.getElementById("editName").value;
   const bio = document.getElementById("editBio").value;
@@ -655,17 +655,18 @@ async function resizeImage(file, size = 300) {
 function attachEvents() {
   // POST BUTTON
   const postBtn = document.getElementById("postBtn");
+
   if (postBtn) {
     postBtn.onclick = async () => {
       const input = document.getElementById("postInput");
       const content = input.value.trim();
       if (!content) return;
 
-      const { data, error } = await supabase
-  .from("profiles")
-  .select("*")
-  .eq("id", session.user.id)
-  .maybeSingle();
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .maybeSingle();
 
       await supabase.from("posts").insert([{
         content,
@@ -679,7 +680,7 @@ function attachEvents() {
     };
   }
 
-  // COMMENTS POST
+  // ✅ COMMENTS POST (MOVED INSIDE)
   const panelBtn = document.getElementById("panelPostBtn");
   if (panelBtn) {
     panelBtn.onclick = async () => {
@@ -698,7 +699,7 @@ function attachEvents() {
     };
   }
 
-  // CLOSE COMMENTS
+  // ✅ CLOSE COMMENTS
   const closeBtn = document.getElementById("closeComments");
   if (closeBtn) {
     closeBtn.onclick = () => {
@@ -706,23 +707,21 @@ function attachEvents() {
     };
   }
 
-  // LOGIN
+  // ✅ LOGIN
   const loginBtn = document.getElementById("login");
+  if (loginBtn) {
+    loginBtn.onclick = async () => {
+      console.log("🔐 Login clicked");
 
-if (loginBtn) {
-  loginBtn.onclick = async () => {
-    console.log("🔐 Login clicked");
-
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin
-      }
-    });
-  };
-}
-
-} // ✅ CLOSE attachEvents FUNCTION
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+    };
+  }
+} // ✅ ONLY ONE closing bracket
 
 // ✅ START APP FUNCTION (you were missing this too)
 function startApp() {
