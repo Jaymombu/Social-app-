@@ -612,12 +612,15 @@ async function resizeImage(file, size = 300) {
     const resizedFile = await resizeImage(file, 300);
     const fileName = `${session.user.id}.jpg`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(fileName, resizedFile, {
-        cacheControl: "3600",
-        upsert: true
-      });
+    const { data, error: uploadError } = await supabase.storage
+  .from("avatars")
+  .upload(fileName, resizedFile, {
+    cacheControl: "3600",
+    upsert: true
+  });
+
+console.log("UPLOAD RESULT:", data);
+console.log("UPLOAD ERROR:", uploadError);
 
     if (uploadError) {
       alert("Upload failed");
