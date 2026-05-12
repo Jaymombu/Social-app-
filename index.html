@@ -308,6 +308,8 @@ setTheme(savedTheme);
 init();
 
   function renderPost(post) {
+    
+    console.log(post);
 
   const postsDiv =
     document.getElementById("posts");
@@ -337,49 +339,50 @@ init();
 
   let mediaHTML = "";
 
+  
   // IMAGE
-  if (
-    post.media_type === "image" &&
-    post.media_url
-  ) {
+if (
+  post.media_type === "image" &&
+  post.file_url
+) {
 
-    mediaHTML = `
-      <img
-        src="${post.media_url}"
-        style="
-          width:100%;
-          margin-top:10px;
-          border-radius:12px;
-          max-height:600px;
-          object-fit:cover;
-        "
-      />
-    `;
-  }
+  mediaHTML = `
+    <img
+      src="${post.file_url}"
+      style="
+        width:100%;
+        margin-top:10px;
+        border-radius:12px;
+        max-height:600px;
+        object-fit:cover;
+      "
+    />
+  `;
+}
 
-  // VIDEO
-  if (
-    post.media_type === "video" &&
-    post.media_url
-  ) {
+// VIDEO
+if (
+  post.media_type === "video" &&
+  post.file_url
+) {
 
-    mediaHTML = `
-      <video
-        src="${post.media_url}"
-        controls
-        playsinline
-        muted
-        loop
-        style="
-          width:100%;
-          margin-top:10px;
-          border-radius:12px;
-          max-height:700px;
-          object-fit:cover;
-        "
-      ></video>
-    `;
-  }
+  mediaHTML = `
+    <video
+      src="${post.file_url}"
+      controls
+      playsinline
+      muted
+      loop
+      style="
+        width:100%;
+        margin-top:10px;
+        border-radius:12px;
+        max-height:700px;
+        object-fit:cover;
+      "
+    ></video>
+  `;
+}
 
   // ======================
   // POST HTML
@@ -432,44 +435,9 @@ init();
 
     </div>
 
-    <div style="margin-top:10px;">
+   <div style="margin-top:10px;">
   ${post.content || ""}
 </div>
-
-${
-  post.media_type === "image"
-    ? `
-      <img
-        src="${post.media_url}"
-        style="
-          width:100%;
-          border-radius:10px;
-          margin-top:10px;
-          max-height:500px;
-          object-fit:cover;
-        "
-      />
-    `
-    : ""
-}
-
-${
-  post.media_type === "video"
-    ? `
-      <video
-        src="${post.media_url}"
-        controls
-        playsinline
-        style="
-          width:100%;
-          border-radius:10px;
-          margin-top:10px;
-          max-height:500px;
-        "
-      ></video>
-    `
-    : ""
-}
 
     ${mediaHTML}
 
@@ -1229,18 +1197,19 @@ async function createPost() {
       .maybeSingle();
 
   await supabase
-    .from("posts")
-    .insert([{
-      content,
-      media_url: mediaUrl,
-      media_type: mediaType,
-      user_id: session.user.id,
-      name:
-        profile?.name ||
-        session.user.email,
-      avatar_url:
-        profile?.avatar_url || null
-    }]);
+    await supabase
+  .from("posts")
+  .insert([{
+    content,
+    file_url: mediaUrl,
+    media_type: mediaType,
+    user_id: session.user.id,
+    name:
+      profile?.name ||
+      session.user.email,
+    avatar_url:
+      profile?.avatar_url || null
+  }]);
 
   input.value = "";
   mediaInput.value = "";
