@@ -433,8 +433,43 @@ init();
     </div>
 
     <div style="margin-top:10px;">
-      ${post.content || ""}
-    </div>
+  ${post.content || ""}
+</div>
+
+${
+  post.media_type === "image"
+    ? `
+      <img
+        src="${post.media_url}"
+        style="
+          width:100%;
+          border-radius:10px;
+          margin-top:10px;
+          max-height:500px;
+          object-fit:cover;
+        "
+      />
+    `
+    : ""
+}
+
+${
+  post.media_type === "video"
+    ? `
+      <video
+        src="${post.media_url}"
+        controls
+        playsinline
+        style="
+          width:100%;
+          border-radius:10px;
+          margin-top:10px;
+          max-height:500px;
+        "
+      ></video>
+    `
+    : ""
+}
 
     ${mediaHTML}
 
