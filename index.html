@@ -693,18 +693,36 @@ const { count: followingCount } = await supabase
     <button id="themeToggle">🌙 Theme</button>
       <button onclick="goHome()">← Back</button>
 
-      <div style="display:flex;align-items:center;gap:10px;">
-        <img 
-          src="${profile?.avatar_url || 'https://via.placeholder.com/60'}"
-          style="width:60px;height:60px;border-radius:50%;object-fit:cover;background:#222;"
-        />
-        <h2>${profile?.name || name}</h2>
-        <div style="margin-top:5px;color:#aaa;">
-  ${followersCount || 0} followers ·
-  ${followingCount || 0} following
+     <div style="display:flex;align-items:center;gap:10px;">
+
+  <img 
+    src="${profile?.avatar_url || 'https://via.placeholder.com/60'}"
+    style="
+      width:60px;
+      height:60px;
+      border-radius:50%;
+      object-fit:cover;
+      background:#222;
+    "
+  />
+
+  <div>
+
+    <h2>
+      ${profile?.name || name}
+    </h2>
+
+    <div style="margin-top:5px;color:#aaa;">
+      ${followersCount || 0} followers ·
+      ${followingCount || 0} following
+    </div>
+
+    <!-- FOLLOW BUTTON GOES HERE -->
+    <div id="followContainer"></div>
+
+  </div>
+
 </div>
-        <div id="followContainer"></div>
-      </div>
 
       ${
         String(session?.user?.id) === String(userId)
@@ -1131,8 +1149,8 @@ async function createPost() {
 
     const { error: uploadError } =
       await supabase.storage
-        .from("posts")
-        .upload(fileName, file);
+  .from("posts_media")
+  .upload(fileName, file);
 
     if (uploadError) {
       console.log(uploadError);
@@ -1142,8 +1160,8 @@ async function createPost() {
 
     const { data } =
       supabase.storage
-        .from("posts")
-        .getPublicUrl(fileName);
+  .from("posts_media")
+  .getPublicUrl(fileName);
 
     mediaUrl = data.publicUrl;
 
