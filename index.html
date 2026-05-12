@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  
+  <title>Social App</title>
+<style>
+  /* RESET */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: sans-serif;
+  transition: background 0.3s, color 0.3s;
+}
+
+/* 🔥 FULL SCREEN SCROLL */
+#posts {
+  height: 100vh;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-top: 60px;   /* space for top nav */
+  padding-bottom: 70px; /* space for bottom nav */
+}
+
+/* 📱 POST CARD */
+.post-card {
+  height: 100vh;
+  width: 100%;
+  position: relative;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  background: var(--bg);
+  transition: transform 0.3s ease;
+}
+
+/* 🎥 MEDIA FULLSCREEN */
+.post-card video,
+.post-card img {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 📝 TEXT (bottom left) */
+.post-text {
+  position: absolute;
+  bottom: 80px;
+  left: 10px;
+  color: white;
+  z-index: 2;
+}
+
+/* ❤️ ACTIONS (right side vertical) */
+.post-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 2;
+}
+
+.post-actions button {
+  background: rgba(0,0,0,0.5);
+  border: none;
+  color: white;
+  padding: 10px;
+  border-radius: 50%;
+}
+
+/* 🔊 TAP TO UNMUTE */
+.video-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.tap-unmute {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.6);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* 🔝 TOP NAV */
+#topNav {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  height: 50px;
+
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+
+  background: rgba(0,0,0,0.6);
+  color: #aaa;
+  font-weight: bold;
+  z-index: 1000;
+}
+
+#topNav .active {
+  color: white;
+  border-bottom: 2px solid white;
+}
+
+#topNav .search {
+  position: absolute;
+  right: 15px;
+}
+
+/* 🔽 BOTTOM NAV */
+#bottomNav {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  height: 60px;
+
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+
+  background: rgba(0,0,0,0.6);
+  color: white;
+  z-index: 1000;
+}
+
+/* ➕ PLUS BUTTON */
+#plusBtn {
+  background: white;
+  color: black;
+  font-size: 28px;
+  padding: 5px 15px;
+  border-radius: 12px;
+  position: relative;
+}
+
+#plusBtn::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  right: -5px;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, cyan, pink);
+  border-radius: 14px;
+  z-index: -1;
+}
+
+/* 📝 CREATE PANEL */
+#createPanel {
+  position: fixed;
+  bottom: 80px;
+  left: 10px;
+  right: 10px;
+  background: #111;
+  padding: 10px;
+  border-radius: 12px;
+  display: none;
+  z-index: 1000;
+}
+
+/* ❤️ LIKE ANIMATION */
+.like-btn.pop {
+  transform: scale(1.2);
+  transition: 0.2s;
+}
+#posts {
+  position: relative;
+  z-index: 1;
+}
+
+#topNav {
+  z-index: 1000;
+}
+
+#bottomNav {
+  z-index: 1000;
+}
+
+#createPanel {
+  z-index: 1001;
+}
+#commentsPanel {
+  position: fixed;
+  bottom: -100%;
+  left: 0;
+  width: 100%;
+  height: 60%;
+  background: var(--card);
+color: var(--text);
+  transition: bottom 0.3s ease;
+  z-index: 2000;
+  border-top-left-radius: 15px;
+  border-top-right-radius: 15px;
+}
+
+#commentsPanel.active {
+  bottom: 0;
+}
+
+.comments-content {
+  padding: 15px;
+}
+:root {
+  --bg: #ffffff;
+  --text: #111111;
+  --card: #f2f2f2;
+  --button: #222222;
+  --border: #dddddd;
+}
+
+.dark {
+  --bg: #0f0f0f;
+  --text: #ffffff;
+  --card: #1c1c1c;
+  --button: #333333;
+  --border: #444444;
+}
+.action-btn {
+  background: var(--button);
+  color: var(--text);
+}
+.panel {
+  background: var(--card);
+}
+.muted {
+  color: #aaa;
+}
+.active-tab {
+  color: white;
+  border-bottom: 2px solid white;
+  padding-bottom: 5px;
+}
+
+</style>
+</head>
+<body class="dark">
+
+<div id="app"></div>
+
+<script type="module">
+  console.log("SCRIPT START");
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+const supabase = createClient(
+  "https://kixxdbkfvigunvxbvmfy.supabase.co",
+  "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M"
+);
+
+console.log("🚀 Starting app...");
+
+// ✅ GLOBAL SESSION
+let session = null;
+
+let currentProfileId = null;
+let currentProfileName = null;
+let activeTab = "explore";
+
+// 🔁 keep session always updated
+supabase.auth.onAuthStateChange((event, newSession) => {
+  console.log("🔄 session updated:", newSession);
+  session = newSession;
+});
+
+async function init() {
+  const { data } = await supabase.auth.getSession();
+  session = data.session;
+
+  console.log("INIT SESSION:", session);
+
+  startApp(); // ✅ ONLY here
+}
+
+function setTheme(theme) {
+  if (theme === "dark") {
+    document.body.classList.add("dark");
+  } else {
+    document.body.classList.remove("dark");
+  }
+
+  localStorage.setItem("theme", theme);
+}
+
+function toggleTheme() {
+  const isDark = document.body.classList.contains("dark");
+
+  setTheme(isDark ? "light" : "dark");
+}
+
+// LOAD SAVED THEME
+const savedTheme =
+  localStorage.getItem("theme") || "dark";
+
+setTheme(savedTheme);
+
+init();
+
+  function renderPost(post) {
+
+  const postsDiv =
+    document.getElementById("posts");
+
+  const time =
+    new Date(post.created_at)
+      .toLocaleString();
+
+  const isOwner =
+    session?.user?.id &&
+    String(session.user.id) ===
+    String(post.user_id);
+
+  const isLiked =
+    (post.liked_by || [])
+      .includes(session?.user?.id);
+
+  const div =
+    document.createElement("div");
+
+  div.id = post.id;
+  div.className = "post-card";
+
+  // ======================
+  // MEDIA HTML
+  // ======================
+
+  let mediaHTML = "";
+
+  // IMAGE
+  if (
+    post.media_type === "image" &&
+    post.media_url
+  ) {
+
+    mediaHTML = `
+      <img
+        src="${post.media_url}"
+        style="
+          width:100%;
+          margin-top:10px;
+          border-radius:12px;
+          max-height:600px;
+          object-fit:cover;
+        "
+      />
+    `;
+  }
+
+  // VIDEO
+  if (
+    post.media_type === "video" &&
+    post.media_url
+  ) {
+
+    mediaHTML = `
+      <video
+        src="${post.media_url}"
+        controls
+        playsinline
+        muted
+        loop
+        style="
+          width:100%;
+          margin-top:10px;
+          border-radius:12px;
+          max-height:700px;
+          object-fit:cover;
+        "
+      ></video>
+    `;
+  }
+
+  // ======================
+  // POST HTML
+  // ======================
+
+  div.innerHTML = `
+    <div style="
+      display:flex;
+      align-items:center;
+      gap:10px;
+    ">
+
+      <img 
+        src="${
+          post.avatar_url ||
+          'https://via.placeholder.com/60'
+        }"
+        style="
+          width:40px;
+          height:40px;
+          border-radius:50%;
+          object-fit:cover;
+          background:#222;
+        "
+      />
+
+      <div>
+
+        <div
+          onclick="openProfile(
+            '${post.user_id}',
+            '${post.name}'
+          )"
+          style="
+            font-weight:bold;
+            cursor:pointer;
+          "
+        >
+          ${post.name}
+        </div>
+
+        <div style="
+          font-size:12px;
+          color:#aaa;
+        ">
+          ${time}
+        </div>
+
+      </div>
+
+    </div>
+
+    <div style="margin-top:10px;">
+      ${post.content || ""}
+    </div>
+
+    ${mediaHTML}
+
+    <div style="margin-top:8px;">
+      ❤️ ${post.likes || 0}
+    </div>
+
+    <button
+      onclick="likePost('${post.id}')"
+      style="
+        margin-top:5px;
+        background:${
+          isLiked
+            ? '#ff4d6d'
+            : '#222'
+        };
+        color:white;
+        border:none;
+        padding:5px 10px;
+        border-radius:5px;
+      "
+    >
+      ${
+        isLiked
+          ? "❤️ Liked"
+          : "🤍 Like"
+      }
+      (${post.likes || 0})
+    </button>
+
+    <button
+      onclick="openComments('${post.id}')"
+      style="
+        margin-top:5px;
+        background:#333;
+        color:white;
+        border:none;
+        padding:5px 10px;
+        border-radius:5px;
+      "
+    >
+      💬 Comment
+    </button>
+
+    ${
+      isOwner
+        ? `
+          <button
+            onclick="deletePost('${post.id}')"
+            style="
+              margin-top:8px;
+              background:#ff4d4d;
+              border:none;
+              color:white;
+              padding:5px 8px;
+              border-radius:5px;
+            "
+          >
+            Delete
+          </button>
+        `
+        : ""
+    }
+  `;
+
+  postsDiv.appendChild(div);
+}
+
+// ✅ 3. DEFINE loadPosts
+window.loadPosts = async function () {
+  console.log("🔥 loadPosts running...");
+
+  let posts = [];
+  let error = null;
+
+  // 🌍 EXPLORE TAB (ALL POSTS)
+  if (activeTab === "explore") {
+    const response = await supabase
+      .from("posts")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    posts = response.data;
+    error = response.error;
+  }
+
+  // 👥 FOLLOWING TAB (for now same as explore)
+  if (activeTab === "following") {
+    const response = await supabase
+      .from("posts")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    posts = response.data;
+    error = response.error;
+  }
+
+  const postsDiv = document.getElementById("posts");
+
+  postsDiv.innerHTML = "";
+
+  if (error) {
+    postsDiv.innerHTML = "❌ Error loading posts";
+    return;
+  }
+
+  if (!posts || posts.length === 0) {
+    postsDiv.innerHTML = "😢 No posts yet";
+    return;
+  }
+
+  posts.forEach(renderPost);
+  
+  observeVideos();
+};
+
+
+window.likePost = async (id) => {
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    alert("Login to like posts");
+    return;
+  }
+
+  const postDiv = document.getElementById(id);
+  const btn = postDiv?.querySelector("button");
+
+  // get current post
+  const { data: post, error } = await supabase
+    .from("posts")
+    .select("likes, liked_by")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.log("❌ fetch error:", error);
+    return;
+  }
+
+  let likedBy = post.liked_by || [];
+  const isLiked = likedBy.includes(userId);
+
+  let newLikes;
+  let updatedLikedBy;
+
+  if (isLiked) {
+    updatedLikedBy = likedBy.filter(uid => uid !== userId);
+    newLikes = (post.likes || 1) - 1;
+  } else {
+    updatedLikedBy = [...likedBy, userId];
+    newLikes = (post.likes || 0) + 1;
+  }
+
+  // ✅ INSTANT UI UPDATE (no waiting)
+  if (btn) {
+    btn.innerHTML = `${!isLiked ? "❤️ Liked" : "🤍 Like"} (${newLikes})`;
+    btn.style.background = !isLiked ? "#ff4d6d" : "#222";
+  }
+
+  // 🔥 save to database
+  await supabase
+    .from("posts")
+    .update({
+      likes: newLikes,
+      liked_by: updatedLikedBy
+    })
+    .eq("id", id);
+
+  // ❌ REMOVE THIS (realtime will handle updates)
+  // loadPosts();
+};
+
+window.deletePost = async (id) => {
+  const { error } = await supabase.from("posts").delete().eq("id", id);
+
+  if (error) {
+    console.log("❌ delete error:", error);
+    return;
+  }
+
+  loadPosts();
+};
+
+let currentPostId = null;
+
+window.openComments = (postId) => {
+  console.log("💬 opening comments for:", postId);
+
+  currentPostId = postId;
+
+  const panel = document.getElementById("commentsPanel");
+  panel.style.display = "flex";
+
+  loadComments(postId);
+};
+
+async function loadComments(postId) {
+  console.log("📥 loading comments for:", postId);
+
+  const { data, error } = await supabase
+    .from("comments")
+    .select("*")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+
+  const container = document.getElementById("panelComments");
+
+  if (error) {
+  console.log("❌ profile fetch error:", error);
+}
+
+// ✅ DO NOT RETURN — continue anyway
+
+  if (!data || data.length === 0) {
+    container.innerHTML = "No comments yet";
+    return;
+  }
+
+  container.innerHTML = data.map(c => `
+    <div style="margin-bottom:5px;">
+      <b>${c.name}</b>: ${c.content}
+    </div>
+  `).join("");
+}
+
+window.goHome = () => {
+  startApp(); // ✅ NOT reload
+};
+
+window.openProfile = async (userId, name) => {
+  console.log("Logged in:", session?.user?.id);
+console.log("Profile opened:", userId);
+  const { data } = await supabase.auth.getSession();
+  session = data.session;
+
+  // ✅ GET PROFILE FIRST
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .maybeSingle();
+    
+    const { count: followersCount } = await supabase
+  .from("follows")
+  .select("*", { count: "exact", head: true })
+  .eq("following_id", userId);
+
+const { count: followingCount } = await supabase
+  .from("follows")
+  .select("*", { count: "exact", head: true })
+  .eq("follower_id", userId);
+
+  document.getElementById("app").innerHTML = `
+    <div style="padding:15px; color:white;">
+    <button id="themeToggle">🌙 Theme</button>
+      <button onclick="goHome()">← Back</button>
+
+      <div style="display:flex;align-items:center;gap:10px;">
+        <img 
+          src="${profile?.avatar_url || 'https://via.placeholder.com/60'}"
+          style="width:60px;height:60px;border-radius:50%;object-fit:cover;background:#222;"
+        />
+        <h2>${profile?.name || name}</h2>
+        <div style="margin-top:5px;color:#aaa;">
+  ${followersCount || 0} followers ·
+  ${followingCount || 0} following
+</div>
+        <div id="followContainer"></div>
+      </div>
+
+      ${
+        String(session?.user?.id) === String(userId)
+          ? `<button onclick="openEditProfile()">Edit</button>`
+          : ""
+      }
+
+      <div id="profilePosts"></div>
+    </div>
+  `;
+
+  // ✅ THEN load posts
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  const container = document.getElementById("profilePosts");
+
+  if (error) {
+    container.innerHTML = "Error loading posts";
+    return;
+  }
+
+  if (!posts || posts.length === 0) {
+    container.innerHTML = "No posts yet";
+    return;
+  }
+
+  container.innerHTML = posts.map(post => `
+    <div style="border-bottom:1px solid #333; padding:10px 0;">
+      <div>${post.content || ""}</div>
+      <div style="font-size:12px;color:#aaa;">
+        ${new Date(post.created_at).toLocaleString()}
+      </div>
+    </div>
+  `).join("");
+};
+
+const followContainer =
+  document.getElementById("followContainer");
+
+if (
+  session?.user?.id &&
+  session.user.id !== userId
+) {
+
+  const { data: existingFollow } = await supabase
+    .from("follows")
+    .select("*")
+    .eq("follower_id", session.user.id)
+    .eq("following_id", userId)
+    .maybeSingle();
+
+  const isFollowing = !!existingFollow;
+
+  followContainer.innerHTML = `
+    <button id="followBtn">
+      ${isFollowing ? "Following" : "Follow"}
+    </button>
+  `;
+
+  document.getElementById("followBtn").onclick =
+    async () => {
+
+      if (isFollowing) {
+
+        await supabase
+          .from("follows")
+          .delete()
+          .eq("follower_id", session.user.id)
+          .eq("following_id", userId);
+
+      } else {
+
+        await supabase
+          .from("follows")
+          .insert({
+            follower_id: session.user.id,
+            following_id: userId
+          });
+      }
+
+      openProfile(userId, name);
+    };
+}
+
+async function resizeImage(file, size = 300) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      img.src = e.target.result;
+    };
+
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      canvas.width = size;
+      canvas.height = size;
+
+      // crop center square
+      const min = Math.min(img.width, img.height);
+      const sx = (img.width - min) / 2;
+      const sy = (img.height - min) / 2;
+
+      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
+
+      canvas.toBlob(
+        (blob) => {
+          resolve(blob);
+        },
+        "image/jpeg",
+        0.8 // compression
+      );
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
+  window.openEditProfile = async () => {
+  alert("EDIT FUNCTION RUNNING");
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  session = sessionData.session;
+
+  if (!session?.user) {
+    alert("You are not logged in");
+    return;
+  }
+
+  const user = session.user;
+
+  // ✅ SAFE FETCH (no crashing)
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  console.log("PROFILE DATA:", data);
+  console.log("PROFILE ERROR:", error);
+
+  // ❌ DO NOT STOP if error
+
+  document.getElementById("app").innerHTML = `
+    <div style="padding:15px; color:white;">
+      <button onclick="goHome()">← Back</button>
+
+      <h2>Edit Profile</h2>
+
+      <input id="editName" placeholder="Name" value="${data?.name || ""}" />
+      <input type="file" id="avatarFile" accept="image/*" />
+      <textarea id="editBio" placeholder="Bio">${data?.bio || ""}</textarea>
+
+      <button id="saveProfile">Save</button>
+    </div>
+  `;
+  
+  document.getElementById("saveProfile").onclick = async () => {
+  const name = document.getElementById("editName").value;
+  const bio = document.getElementById("editBio").value;
+
+  const fileInput = document.getElementById("avatarFile");
+  const file = fileInput.files[0];
+
+  let avatarUrl = null;
+
+  if (file) {
+    const resizedFile = await resizeImage(file, 300);
+    const fileName = `${session.user.id}.jpg`;
+
+    const { data, error: uploadError } = await supabase.storage
+  .from("avatars")
+  .upload(fileName, resizedFile, {
+    cacheControl: "3600",
+    upsert: true
+  });
+
+console.log("UPLOAD RESULT:", data);
+console.log("UPLOAD ERROR:", uploadError);
+
+    if (uploadError) {
+      alert("Upload failed");
+      console.log(uploadError);
+      return;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(fileName);
+
+    avatarUrl = publicUrlData.publicUrl;
+  }
+
+  const { data: oldProfile } = await supabase
+    .from("profiles")
+    .select("avatar_url")
+    .eq("id", session.user.id)
+    .single();
+
+  const { error } = await supabase.from("profiles").upsert({
+    id: session.user.id,
+    name,
+    avatar_url: avatarUrl || oldProfile?.avatar_url,
+    bio
+  });
+
+  if (error) {
+    alert("Save failed");
+    console.log(error);
+    return;
+  }
+
+  openProfile(session.user.id, name);
+};
+};
+function attachEvents() {
+  
+  const exploreTab = document.getElementById("tab-explore");
+const followingTab = document.getElementById("tab-following");
+
+if (exploreTab) {
+  exploreTab.onclick = () => {
+    activeTab = "explore";
+
+    exploreTab.classList.add("active-tab");
+    followingTab.classList.remove("active-tab");
+
+    loadPosts();
+  };
+}
+
+if (followingTab) {
+  followingTab.onclick = () => {
+    activeTab = "following";
+
+    followingTab.classList.add("active-tab");
+    exploreTab.classList.remove("active-tab");
+
+    loadPosts();
+  };
+}
+  
+  const themeBtn = document.getElementById("themeToggle");
+
+if (themeBtn) {
+  themeBtn.onclick = toggleTheme;
+}
+
+  
+  // POST BUTTON
+const postBtn = document.getElementById("postBtn");
+
+if (postBtn) {
+  postBtn.onclick = createPost;
+}
+      
+
+  // ✅ COMMENTS POST (MOVED INSIDE)
+  const panelBtn = document.getElementById("panelPostBtn");
+  if (panelBtn) {
+    panelBtn.onclick = async () => {
+      const input = document.getElementById("panelInput");
+      if (!input.value) return;
+
+      await supabase.from("comments").insert({
+        post_id: currentPostId,
+        content: input.value,
+        user_id: session?.user?.id || null,
+        name: session?.user?.email || "Guest"
+      });
+
+      input.value = "";
+      loadComments(currentPostId);
+    };
+  }
+
+  // ✅ CLOSE COMMENTS
+  const closeBtn = document.getElementById("closeComments");
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      document.getElementById("commentsPanel").style.display = "none";
+    };
+  }
+
+  // ✅ LOGIN
+  const loginBtn = document.getElementById("login");
+  if (loginBtn) {
+    loginBtn.onclick = async () => {
+      console.log("🔐 Login clicked");
+
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+    };
+  }
+} // ✅ ONLY ONE closing bracket
+
+// ✅ START APP FUNCTION (you were missing this too)
+let postsEl = null;
+let scrollTimeout;
+
+function startApp() {
+
+  document.getElementById("app").innerHTML = `
+    <div style="padding:10px;">
+
+      <div id="tabs" style="
+        display:flex;
+        justify-content:space-around;
+        margin-bottom:10px;
+        color:#aaa;
+        font-weight:bold;
+      ">
+        <div id="tab-explore" class="active-tab">
+          🌍 Explore
+        </div>
+
+        <div id="tab-following">
+          👥 Following
+        </div>
+      </div>
+
+      ${
+        session
+          ? `
+           <textarea 
+  id="postInput"
+  placeholder="Write something..."
+  style="
+    width:100%;
+    height:80px;
+    margin-bottom:10px;
+  "
+></textarea>
+
+<input
+  type="file"
+  id="mediaInput"
+  accept="image/*,video/*"
+  style="margin-bottom:10px;"
+/>
+
+<button id="postBtn">
+  Post
+</button>
+          `
+          : `
+            <button id="login">Login</button>
+          `
+      }
+
+      <div id="posts"></div>
+
+    </div>
+
+    <div id="commentsPanel" style="
+      position:fixed;
+      bottom:0;
+      left:0;
+      right:0;
+      height:60%;
+      background:#111;
+      color:white;
+      display:none;
+      flex-direction:column;
+      padding:10px;
+      z-index:1000;
+    ">
+      <span id="closeComments">✖</span>
+
+      <div id="panelComments"></div>
+
+      <input id="panelInput" />
+
+      <button id="panelPostBtn">
+        Post
+      </button>
+    </div>
+  `;
+
+  // ✅ NOW posts exists
+  postsEl = document.getElementById("posts");
+
+  attachEvents();
+
+  loadPosts();
+
+  console.log("SCRIPT END");
+
+  // ✅ SCROLL SNAP
+  setupScrollSnap();
+}
+
+async function createPost() {
+
+  const input =
+    document.getElementById("postInput");
+
+  const mediaInput =
+    document.getElementById("mediaInput");
+
+  const content =
+    input.value.trim();
+
+  const file =
+    mediaInput.files[0];
+
+  let mediaUrl = null;
+  let mediaType = null;
+
+  if (file) {
+
+    const fileName =
+      `${Date.now()}_${file.name}`;
+
+    const { error: uploadError } =
+      await supabase.storage
+        .from("posts")
+        .upload(fileName, file);
+
+    if (uploadError) {
+      console.log(uploadError);
+      alert("Upload failed");
+      return;
+    }
+
+    const { data } =
+      supabase.storage
+        .from("posts")
+        .getPublicUrl(fileName);
+
+    mediaUrl = data.publicUrl;
+
+    if (file.type.startsWith("image")) {
+      mediaType = "image";
+    }
+
+    if (file.type.startsWith("video")) {
+      mediaType = "video";
+    }
+  }
+
+  const { data: profile } =
+    await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+  await supabase
+    .from("posts")
+    .insert([{
+      content,
+      media_url: mediaUrl,
+      media_type: mediaType,
+      user_id: session.user.id,
+      name:
+        profile?.name ||
+        session.user.email,
+      avatar_url:
+        profile?.avatar_url || null
+    }]);
+
+  input.value = "";
+  mediaInput.value = "";
+
+  loadPosts();
+}
+
+// ========================
+// AUTO SNAP
+// ========================
+
+function setupScrollSnap() {
+
+  if (!postsEl) return;
+
+  postsEl.addEventListener("scroll", () => {
+
+    clearTimeout(scrollTimeout);
+
+    scrollTimeout = setTimeout(() => {
+      snapToNearestPost();
+    }, 120);
+
+  });
+
+}
+
+function snapToNearestPost() {
+
+  const posts =
+    document.querySelectorAll(".post-card");
+
+  if (!posts.length) return;
+
+  const scrollTop = postsEl.scrollTop;
+
+  let closest = null;
+  let minDistance = Infinity;
+
+  posts.forEach((post) => {
+
+    const offset = post.offsetTop;
+
+    const distance =
+      Math.abs(offset - scrollTop);
+
+    if (distance < minDistance) {
+      minDistance = distance;
+      closest = post;
+    }
+
+  });
+
+  if (closest) {
+
+    postsEl.scrollTo({
+      top: closest.offsetTop,
+      behavior: "smooth"
+    });
+
+  }
+}
+
+// ========================
+// GLOBAL FUNCTIONS
+// ========================
+
+window.openProfile = openProfile;
+window.openEditProfile = openEditProfile;
+window.goHome = goHome;
+window.likePost = likePost;
+window.deletePost = deletePost;
+window.openComments = openComments;
+
+// ========================
+// VIDEO AUTOPLAY
+// ========================
+
+const videoObserver = new IntersectionObserver(
+  (entries) => {
+
+    entries.forEach((entry) => {
+
+      const video =
+        entry.target.querySelector("video");
+
+      if (!video) return;
+
+      if (
+        entry.isIntersecting &&
+        entry.intersectionRatio > 0.75
+      ) {
+
+        video.play().catch(() => {});
+
+      } else {
+
+        video.pause();
+
+      }
+
+    });
+
+  },
+  {
+    threshold: [0.6, 0.75, 0.9]
+  }
+);
+
+function observeVideos() {
+
+  document
+    .querySelectorAll(".post-card")
+    .forEach((post) => {
+
+      videoObserver.observe(post);
+
+    });
+
+}
+
+</script>
+</body>
+</html>
