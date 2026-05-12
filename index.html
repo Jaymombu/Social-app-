@@ -35,6 +35,7 @@ body {
   scroll-snap-stop: always;
   background: var(--bg);
   transition: transform 0.3s ease;
+  overflow: hidden;
 }
 
 /* 🎥 MEDIA FULLSCREEN */
@@ -244,6 +245,7 @@ color: var(--text);
   padding-bottom: 5px;
 }
 
+
 </style>
 </head>
 <body class="dark">
@@ -390,10 +392,11 @@ if (
 
   div.innerHTML = `
     <div style="
-      display:flex;
-      align-items:center;
-      gap:10px;
-    ">
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+">
 
       <img 
         src="${
@@ -401,26 +404,29 @@ if (
           'https://via.placeholder.com/60'
         }"
         style="
-          width:40px;
-          height:40px;
-          border-radius:50%;
-          object-fit:cover;
-          background:#222;
-        "
+  width:45px;
+  height:45px;
+  border-radius:50%;
+  object-fit:cover;
+  flex-shrink:0;
+"
       />
 
-      <div>
+     <div style="flex:1; overflow:hidden;">
 
         <div
-          onclick="openProfile(
-            '${post.user_id}',
-            '${post.name}'
-          )"
-          style="
-            font-weight:bold;
-            cursor:pointer;
-          "
-        >
+  onclick="openProfile(
+    '${post.user_id}',
+    '${post.name}'
+  )"
+  style="
+    font-weight:bold;
+    cursor:pointer;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  "
+>
           ${post.name}
         </div>
 
