@@ -761,7 +761,7 @@ const { count: followingCount } = await supabase
       </div>
     </div>
   `).join("");
-};
+
 
 const followContainer =
   document.getElementById("followContainer");
@@ -781,7 +781,15 @@ if (
   const isFollowing = !!existingFollow;
 
   followContainer.innerHTML = `
-    <button id="followBtn">
+    <button id="followBtn"
+      style="
+        margin-top:10px;
+        padding:8px 14px;
+        border:none;
+        border-radius:8px;
+        background:${isFollowing ? "#444" : "#1d9bf0"};
+        color:white;
+      ">
       ${isFollowing ? "Following" : "Follow"}
     </button>
   `;
@@ -799,18 +807,22 @@ if (
 
       } else {
 
-        await supabase
-          .from("follows")
-          .insert({
-            follower_id: session.user.id,
-            following_id: userId
-          });
+        const { error } = await supabase
+  .from("follows")
+  .insert({
+    follower_id: session.user.id,
+    following_id: userId
+  });
+
+console.log(error);
+
       }
 
       openProfile(userId, name);
+
     };
 }
-
+};
 async function resizeImage(file, size = 300) {
   return new Promise((resolve) => {
     const img = new Image();
