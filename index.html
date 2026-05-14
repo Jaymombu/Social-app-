@@ -1431,7 +1431,7 @@ function snapToNearestPost() {
 
 let currentChatUser = null;
 
-async function openChat(userId, name) {
+window.openChat = async function(userId, name) {
 
   if (!session?.user) {
     alert("Please login first");
@@ -1453,7 +1453,7 @@ async function openChat(userId, name) {
 ).innerText = name;
 
   loadMessages();
-}
+};
 
 async function loadMessages() {
 
