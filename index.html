@@ -354,6 +354,10 @@ color: var(--text);
         outline:none;
       "
     />
+    
+    <button onclick="openInbox()">
+  💬 Chats
+</button>
 
     <button
       onclick="sendMessage()"
@@ -370,6 +374,34 @@ color: var(--text);
     </button>
 
   </div>
+
+</div>
+
+<div id="inboxScreen" style="
+  position:fixed;
+  inset:0;
+  background:#0f0f0f;
+  z-index:4000;
+  display:none;
+  flex-direction:column;
+">
+
+  <div style="
+    padding:15px;
+    font-size:22px;
+    font-weight:bold;
+    border-bottom:1px solid #222;
+  ">
+    Chats
+  </div>
+
+  <div
+    id="inboxList"
+    style="
+      flex:1;
+      overflow-y:auto;
+    "
+  ></div>
 
 </div>
 
@@ -621,22 +653,7 @@ if (
       💬 Comment
     </button>
     
-    <button
-  onclick="event.stopPropagation(); openChat(
-    '${post.user_id}',
-    '${post.name}'
-  )"
-  style="
-    margin-top:5px;
-    background:#0066ff;
-    color:white;
-    border:none;
-    padding:5px 10px;
-    border-radius:5px;
-  "
->
-  📩 Chat
-</button>
+    
 
     ${
       isOwner
@@ -1450,6 +1467,70 @@ window.openChat = async function(userId, name) {
 
 };
 
+window.openInbox = async function() {
+
+  document.getElementById("app").style.display = "none";
+
+  document.getElementById("inboxScreen").style.display =
+    "flex";
+
+  const inbox =
+    document.getElementById("inboxList");
+
+  inbox.innerHTML = "Loading...";
+
+  const { data: messages } = await supabase
+    .from("messages")
+    .select("*")
+    .or(`
+      sender_id.eq.${session.user.id},
+      receiver_id.eq.${session.user.id}
+    `)
+    .order("created_at", {
+      ascending:false
+    });
+
+  const usersMap = {};
+
+  messages.forEach(msg => {
+
+    const otherUser =
+      msg.sender_id === session.user.id
+        ? msg.receiver_id
+        : msg.sender_id;
+
+    usersMap[otherUser] = msg;
+
+  });
+
+  inbox.innerHTML = "";
+
+  Object.values(usersMap).forEach(msg => {
+
+    const otherUser =
+      msg.sender_id === session.user.id
+        ? msg.receiver_id
+        : msg.sender_id;
+
+    inbox.innerHTML += `
+      <div
+        onclick="openChat(
+          '${otherUser}',
+          'User'
+        )"
+        style="
+          padding:15px;
+          border-bottom:1px solid #222;
+          cursor:pointer;
+        "
+      >
+        💬 ${msg.message}
+      </div>
+    `;
+  });
+
+};
+
 async function loadMessages() {
 
   // ✅ GET CURRENT USER
@@ -1536,18 +1617,33 @@ async function loadMessages() {
         margin-bottom:10px;
       ">
 
-        <div style="
-          background:${
-            mine
-              ? "#0084ff"
-              : "#222"
-          };
-          color:white;
-          padding:10px 14px;
-          border-radius:18px;
-          max-width:70%;
-          word-wrap:break-word;
-        ">
+       <div
+
+  oncontextmenu="
+    event.preventDefault();
+    messageOptions('${msg.id}')
+  "
+
+  ontouchstart="
+    pressTimer = setTimeout(() => {
+      messageOptions('${msg.id}')
+    }, 600)
+  "
+
+  ontouchend="
+    clearTimeout(pressTimer)
+  "
+
+  style="
+    background:${
+      mine ? "#0084ff" : "#222"
+    };
+    color:white;
+    padding:10px;
+    border-radius:15px;
+    max-width:70%;
+  "
+>
           ${msg.content}
         </div>
 
@@ -1592,6 +1688,42 @@ async function sendMessage() {
 
   loadMessages();
 }
+
+window.messageOptions = async function(messageId) {
+
+  const action = prompt(
+    "Type:\nlike\ncopy\ndelete"
+  );
+
+  if (action === "copy") {
+
+    const el =
+      document.getElementById(messageId);
+
+    navigator.clipboard.writeText(
+      el.innerText
+    );
+
+  }
+
+  if (action === "delete") {
+
+    await supabase
+      .from("messages")
+      .delete()
+      .eq("id", messageId);
+
+    loadMessages();
+
+  }
+
+  if (action === "like") {
+
+    alert("❤️ Reaction added");
+
+  }
+
+};
 
 window.closeChat = function() {
 
