@@ -331,33 +331,42 @@ color: var(--text);
     "
   ></div>
 
-  <!-- INPUT -->
-  <div style="
-    display:flex;
-    align-items:center;
-    gap:10px;
-    padding:10px;
-    background:#111;
-    border-top:1px solid #222;
-  ">
+<!-- INPUT -->
+<div style="
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px;
+  background:#111;
+  border-top:1px solid #222;
+">
 
-    <input
-      id="chatInput"
-      placeholder="Message..."
-      style="
-        flex:1;
-        background:#222;
-        border:none;
-        color:white;
-        padding:12px;
-        border-radius:25px;
-        outline:none;
-      "
-    />
-   
+  <input
+    id="chatInput"
+    placeholder="Message..."
+    style="
+      flex:1;
+      background:#222;
+      border:none;
+      color:white;
+      padding:12px;
+      border-radius:25px;
+      outline:none;
+    "
+  />
 
-    <button
-      onclick="sendMessage()"
+  <input
+    type="file"
+    id="chatMedia"
+    accept="image/*,video/*"
+    style="
+      color:white;
+      width:90px;
+    "
+  />
+
+  <button
+    onclick="sendMessage()"
       style="
         background:#0084ff;
         border:none;
@@ -1840,8 +1849,53 @@ async function sendMessage() {
       "chatInput"
     );
 
-  if (!input.value.trim())
-    return;
+  const mediaInput =
+    document.getElementById(
+      "chatMedia"
+    );
+
+  const file =
+    mediaInput.files[0];
+
+  let mediaUrl = null;
+  let mediaType = null;
+
+  // UPLOAD FILE
+  if (file) {
+
+    const fileName =
+      `${Date.now()}-${file.name}`;
+
+    const { error: uploadError } =
+      await supabase.storage
+        .from("chat-media")
+        .upload(fileName, file);
+
+    if (uploadError) {
+      alert(uploadError.message);
+      return;
+    }
+
+    const {
+      data: publicUrlData
+    } = supabase.storage
+      .from("chat-media")
+      .getPublicUrl(fileName);
+
+    mediaUrl =
+      publicUrlData.publicUrl;
+
+    mediaType =
+      file.type.startsWith("video")
+        ? "video"
+        : "image";
+  }
+
+  // REQUIRE TEXT OR MEDIA
+  if (
+    !input.value.trim() &&
+    !mediaUrl
+  ) return;
 
   const { error } =
     await supabase
@@ -1854,7 +1908,13 @@ async function sendMessage() {
           currentChatUser,
 
         content:
-          input.value.trim()
+          input.value.trim(),
+
+        media_url:
+          mediaUrl,
+
+        media_type:
+          mediaType
       });
 
   if (error) {
@@ -1863,6 +1923,7 @@ async function sendMessage() {
   }
 
   input.value = "";
+  mediaInput.value = "";
 
   loadMessages();
 }
