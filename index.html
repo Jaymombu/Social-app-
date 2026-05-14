@@ -1867,16 +1867,28 @@ chat.innerHTML += `
       "
 
       style="
-        background:${
-          mine ? "#0084ff" : "#222"
-        };
-        color:white;
-        padding:10px 12px;
-        border-radius:18px;
-        max-width:75%;
-        overflow:hidden;
-      "
-    >
+  background:${
+    msg.media_url
+      ? "transparent"
+      : mine
+        ? "#0084ff"
+        : "#222"
+  };
+
+  color:white;
+
+  padding:${
+    msg.media_url
+      ? "0"
+      : "10px 12px"
+  };
+
+  border-radius:18px;
+
+  max-width:75%;
+
+  overflow:hidden;
+"
 
       <div>
 
@@ -2067,28 +2079,48 @@ window.messageOptions = async function(messageId) {
     "Type:\nlike\ncopy\ndelete"
   );
 
+  // COPY
   if (action === "copy") {
 
     const el =
       document.getElementById(messageId);
 
+    if (!el) return;
+
     navigator.clipboard.writeText(
       el.innerText
     );
 
+    alert("Copied");
+
   }
 
+  // DELETE
   if (action === "delete") {
 
-    await supabase
-      .from("messages")
-      .delete()
-      .eq("id", messageId);
+    const confirmDelete =
+      confirm("Delete message?");
+
+    if (!confirmDelete) return;
+
+    const { error } =
+      await supabase
+        .from("messages")
+        .delete()
+        .eq("id", messageId);
+
+    if (error) {
+
+      alert(error.message);
+      return;
+
+    }
 
     loadMessages();
 
   }
 
+  // LIKE
   if (action === "like") {
 
     alert("❤️ Reaction added");
