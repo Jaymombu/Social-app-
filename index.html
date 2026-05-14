@@ -245,6 +245,125 @@ color: var(--text);
 </style>
 </head>
 <body class="dark">
+  
+  <div id="chatScreen" style="
+  position:fixed;
+  inset:0;
+  background:#0f0f0f;
+  z-index:5000;
+  display:none;
+  flex-direction:column;
+">
+
+  <!-- HEADER -->
+  <div style="
+    height:60px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:0 15px;
+    border-bottom:1px solid #222;
+    background:#111;
+  ">
+
+    <button
+      onclick="closeChat()"
+      style="
+        background:none;
+        border:none;
+        color:white;
+        font-size:22px;
+      "
+    >
+      ←
+    </button>
+
+    <img
+      id="chatAvatar"
+      src="https://via.placeholder.com/40"
+      style="
+        width:40px;
+        height:40px;
+        border-radius:50%;
+        object-fit:cover;
+      "
+    />
+
+    <div>
+      <div
+        id="chatName"
+        style="
+          color:white;
+          font-weight:bold;
+        "
+      >
+        User
+      </div>
+
+      <div style="
+        color:#aaa;
+        font-size:12px;
+      ">
+        Active now
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MESSAGES -->
+  <div
+    id="chatMessages"
+    style="
+      flex:1;
+      overflow-y:auto;
+      padding:15px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    "
+  ></div>
+
+  <!-- INPUT -->
+  <div style="
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px;
+    background:#111;
+    border-top:1px solid #222;
+  ">
+
+    <input
+      id="chatInput"
+      placeholder="Message..."
+      style="
+        flex:1;
+        background:#222;
+        border:none;
+        color:white;
+        padding:12px;
+        border-radius:25px;
+        outline:none;
+      "
+    />
+
+    <button
+      onclick="sendMessage()"
+      style="
+        background:#0084ff;
+        border:none;
+        color:white;
+        padding:10px 18px;
+        border-radius:20px;
+        font-weight:bold;
+      "
+    >
+      Send
+    </button>
+
+  </div>
+
+</div>
 
 <div id="app"></div>
 
@@ -483,6 +602,23 @@ if (
     >
       💬 Comment
     </button>
+    
+    <button
+  onclick="openChat(
+    '${post.user_id}',
+    '${post.name}'
+  )"
+  style="
+    margin-top:5px;
+    background:#0066ff;
+    color:white;
+    border:none;
+    padding:5px 10px;
+    border-radius:5px;
+  "
+>
+  📩 Chat
+</button>
 
     ${
       isOwner
@@ -1275,6 +1411,142 @@ function snapToNearestPost() {
   }
 }
 
+let currentChatUser = null;
+
+async function openChat(userId, name) {
+
+  if (!session?.user) {
+    alert("Please login first");
+    return;
+  }
+
+  currentChatUser = userId;
+
+  document.getElementById(
+    "chatScreen"
+  ).style.display = "flex";
+
+  document.getElementById(
+  "chatName"
+).innerText = name;
+
+  loadMessages();
+}
+
+async function loadMessages() {
+
+  if (!session?.user) return;
+
+  const {
+    data,
+    error
+  } = await supabase
+    .from("messages")
+    .select("*")
+    .or(`
+      and(sender_id.eq.${session.user.id},receiver_id.eq.${currentChatUser}),
+      and(sender_id.eq.${currentChatUser},receiver_id.eq.${session.user.id})
+    `)
+    .order("created_at");
+
+  if (error) {
+    console.log(error);
+    return;
+  }
+
+  const chat =
+    document.getElementById(
+      "chatMessages"
+    );
+
+  chat.innerHTML = "";
+
+  data.forEach(msg => {
+
+    const mine =
+      msg.sender_id ===
+      session.user.id;
+
+    chat.innerHTML += `
+  <div style="
+    display:flex;
+    justify-content:${
+      mine
+        ? "flex-end"
+        : "flex-start"
+    };
+  ">
+
+    <div style="
+      background:${
+        mine
+          ? "#0084ff"
+          : "#222"
+      };
+      color:white;
+      padding:12px 14px;
+      border-radius:20px;
+      max-width:75%;
+      font-size:15px;
+      line-height:1.4;
+      word-wrap:break-word;
+    ">
+      ${msg.message}
+    </div>
+
+  </div>
+`;
+  });
+
+  chat.scrollTop =
+    chat.scrollHeight;
+}
+
+async function sendMessage() {
+
+  if (!session?.user) {
+    alert("Please login first");
+    return;
+  }
+
+  const input =
+    document.getElementById(
+      "chatInput"
+    );
+
+  if (!input.value.trim())
+    return;
+
+  const { error } = await supabase
+    .from("messages")
+    .insert({
+      sender_id:
+        session.user.id,
+
+      receiver_id:
+        currentChatUser,
+
+      message:
+        input.value
+    });
+
+  if (error) {
+    console.log(error);
+    return;
+  }
+
+  input.value = "";
+
+  loadMessages();
+}
+
+function closeChat() {
+
+  document.getElementById(
+    "chatScreen"
+  ).style.display = "none";
+}
+
 // ========================
 // GLOBAL FUNCTIONS
 // ========================
@@ -1285,6 +1557,8 @@ window.goHome = goHome;
 window.likePost = likePost;
 window.deletePost = deletePost;
 window.openComments = openComments;
+window.openChat = openChat;
+window.sendMessage = sendMessage;
 
 // ========================
 // VIDEO AUTOPLAY
@@ -1332,6 +1606,27 @@ function observeVideos() {
     });
 
 }
+
+supabase
+  .channel("messages")
+  .on(
+    "postgres_changes",
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "messages"
+    },
+    payload => {
+
+      if (
+        payload.new.sender_id === currentChatUser ||
+        payload.new.receiver_id === currentChatUser
+      ) {
+        loadMessages();
+      }
+    }
+  )
+  .subscribe();
 
 </script>
 </body>
