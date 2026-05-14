@@ -1820,8 +1820,41 @@ chat.innerHTML += `
     >
 
       <div>
-        ${msg.content}
-      </div>
+
+  ${
+    msg.media_type === "image"
+      ? `
+        <img
+          src="${msg.media_url}"
+          style="
+            width:220px;
+            border-radius:12px;
+            margin-bottom:8px;
+          "
+        />
+      `
+      : ""
+  }
+
+  ${
+    msg.media_type === "video"
+      ? `
+        <video
+          src="${msg.media_url}"
+          controls
+          style="
+            width:220px;
+            border-radius:12px;
+            margin-bottom:8px;
+          "
+        ></video>
+      `
+      : ""
+  }
+
+  ${msg.content || ""}
+
+</div>
 
       <div style="
         margin-top:5px;
@@ -1845,26 +1878,37 @@ chat.innerHTML += `
 async function sendMessage() {
 
   const input =
-    document.getElementById(
-      "chatInput"
-    );
+    document.getElementById("chatInput");
 
-  const mediaInput =
-    document.getElementById(
-      "chatMedia"
-    );
+  const fileInput =
+    document.getElementById("chatMedia");
 
   const file =
-    mediaInput.files[0];
+    fileInput.files[0];
+
+  // allow text OR media
+  if (
+    !input.value.trim() &&
+    !file
+  ) return;
 
   let mediaUrl = null;
   let mediaType = null;
+  let fileName = null;
 
+  // =====================
   // UPLOAD FILE
+  // =====================
+
   if (file) {
 
-    const fileName =
-      `${Date.now()}-${file.name}`;
+    fileName =
+      Date.now() + "_" + file.name;
+
+    mediaType =
+      file.type.startsWith("video")
+        ? "video"
+        : "image";
 
     const { error: uploadError } =
       await supabase.storage
@@ -1876,26 +1920,17 @@ async function sendMessage() {
       return;
     }
 
-    const {
-      data: publicUrlData
-    } = supabase.storage
-      .from("chat-media")
-      .getPublicUrl(fileName);
+    const { data } =
+      supabase.storage
+        .from("chat-media")
+        .getPublicUrl(fileName);
 
-    mediaUrl =
-      publicUrlData.publicUrl;
-
-    mediaType =
-      file.type.startsWith("video")
-        ? "video"
-        : "image";
+    mediaUrl = data.publicUrl;
   }
 
-  // REQUIRE TEXT OR MEDIA
-  if (
-    !input.value.trim() &&
-    !mediaUrl
-  ) return;
+  // =====================
+  // SAVE MESSAGE
+  // =====================
 
   const { error } =
     await supabase
@@ -1914,7 +1949,10 @@ async function sendMessage() {
           mediaUrl,
 
         media_type:
-          mediaType
+          mediaType,
+
+        file_name:
+          fileName
       });
 
   if (error) {
@@ -1923,7 +1961,7 @@ async function sendMessage() {
   }
 
   input.value = "";
-  mediaInput.value = "";
+  fileInput.value = "";
 
   loadMessages();
 }
