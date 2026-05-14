@@ -2075,48 +2075,162 @@ async function sendMessage() {
 
 window.messageOptions = async function(messageId) {
 
-  const action = confirm(
-    "OK = Delete message\nCancel = Copy message"
-  );
-
-  // DELETE
-  if (action) {
-
-    const confirmDelete =
-      confirm("Delete this message?");
-
-    if (!confirmDelete) return;
-
-    const { error } =
-      await supabase
-        .from("messages")
-        .delete()
-        .eq("id", messageId);
-
-    if (error) {
-      alert(error.message);
-      return;
-    }
-
-    loadMessages();
-
-  }
-
-  // COPY
-  else {
-
-    const el =
-      document.getElementById(messageId);
-
-    if (!el) return;
-
-    navigator.clipboard.writeText(
-      el.innerText
+  const old =
+    document.getElementById(
+      "messageMenu"
     );
 
-    alert("Copied");
+  if (old) old.remove();
 
+  const menu =
+    document.createElement("div");
+
+  menu.id = "messageMenu";
+
+  menu.style = `
+    position:fixed;
+    left:50%;
+    bottom:25px;
+    transform:translateX(-50%);
+    background:#1c1c1c;
+    border:1px solid #333;
+    border-radius:18px;
+    padding:8px;
+    z-index:999999;
+    width:220px;
+    box-shadow:0 5px 25px rgba(0,0,0,0.4);
+  `;
+
+  menu.innerHTML = `
+
+    <div onclick="copyMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:white;
+        border-bottom:1px solid #333;
+      ">
+      📋 Copy
+    </div>
+
+    <div onclick="likeMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:white;
+        border-bottom:1px solid #333;
+      ">
+      ❤️ Like
+    </div>
+
+    <div onclick="shareMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:white;
+        border-bottom:1px solid #333;
+      ">
+      📤 Share
+    </div>
+
+    <div onclick="deleteMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:#ff4d4d;
+        font-weight:bold;
+      ">
+      🗑 Delete
+    </div>
+
+  `;
+
+  document.body.appendChild(menu);
+
+  setTimeout(() => {
+
+    document.onclick = () => {
+
+      const menu =
+        document.getElementById(
+          "messageMenu"
+        );
+
+      if (menu) menu.remove();
+
+      document.onclick = null;
+
+    };
+
+  }, 100);
+
+};
+
+window.copyMessage = function(messageId) {
+
+  const el =
+    document.getElementById(messageId);
+
+  if (!el) return;
+
+  navigator.clipboard.writeText(
+    el.innerText
+  );
+
+  alert("Copied");
+
+  document.getElementById(
+    "messageMenu"
+  )?.remove();
+
+};
+
+window.likeMessage = function(messageId) {
+
+  alert("❤️ Liked");
+
+  document.getElementById(
+    "messageMenu"
+  )?.remove();
+
+};
+
+window.shareMessage = async function(messageId) {
+
+  const el =
+    document.getElementById(messageId);
+
+  if (!el) return;
+
+  await navigator.share({
+    text: el.innerText
+  });
+
+  document.getElementById(
+    "messageMenu"
+  )?.remove();
+
+};
+
+window.deleteMessage = async function(messageId) {
+
+  const confirmDelete =
+    confirm("Delete message?");
+
+  if (!confirmDelete) return;
+
+  const { error } =
+    await supabase
+      .from("messages")
+      .delete()
+      .eq("id", messageId);
+
+  if (error) {
+    alert(error.message);
+    return;
   }
+
+  document.getElementById(
+    "messageMenu"
+  )?.remove();
+
+  loadMessages();
 
 };
 
