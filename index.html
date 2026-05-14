@@ -276,17 +276,15 @@ color: var(--text);
     background:#111;
   ">
 
-    <button
-      onclick="closeChat()"
-      style="
-        background:none;
-        border:none;
-        color:white;
-        font-size:22px;
-      "
-    >
-      ←
-    </button>
+    <button onclick="closeChat()" style="
+  background:none;
+  border:none;
+  color:white;
+  font-size:22px;
+  cursor:pointer;
+">
+  ←
+</button>
 
     <img
       id="chatAvatar"
@@ -1441,6 +1439,10 @@ async function openChat(userId, name) {
   }
 
   currentChatUser = userId;
+  
+  document.getElementById(
+  "feed"
+).style.display = "none";
 
   document.getElementById(
     "chatScreen"
@@ -1601,6 +1603,13 @@ function closeChat() {
   document.getElementById(
     "chatScreen"
   ).style.display = "none";
+
+  document.getElementById(
+    "feed"
+  ).style.display = "block";
+
+  currentChatUser = null;
+
 }
 
 // ========================
