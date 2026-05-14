@@ -1494,10 +1494,22 @@ async function loadMessages() {
   chat.innerHTML = "";
 
   if (error) {
-    chat.innerHTML =
-      "❌ Failed to load messages";
-    return;
-  }
+
+  chat.innerHTML = `
+    <div style="
+      color:red;
+      padding:20px;
+      font-size:14px;
+      word-break:break-word;
+    ">
+      ❌ ${error.message}
+    </div>
+  `;
+
+  console.log(error);
+
+  return;
+}
 
   if (!data || data.length === 0) {
     chat.innerHTML = `
