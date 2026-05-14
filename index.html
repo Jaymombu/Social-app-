@@ -1760,52 +1760,69 @@ async function loadMessages() {
 
   data.forEach(msg => {
 
-    const mine =
-      msg.sender_id === myId;
+    const time =
+  new Date(msg.created_at)
+    .toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
 
-    chat.innerHTML += `
-      <div style="
-        display:flex;
-        justify-content:${
-          mine
-            ? "flex-end"
-            : "flex-start"
-        };
-        margin-bottom:10px;
-      ">
-
-       <div
-
-  oncontextmenu="
-    event.preventDefault();
-    messageOptions('${msg.id}')
-  "
-
-  ontouchstart="
-    pressTimer = setTimeout(() => {
-      messageOptions('${msg.id}')
-    }, 600)
-  "
-
-  ontouchend="
-    clearTimeout(pressTimer)
-  "
-
-  style="
-    background:${
-      mine ? "#0084ff" : "#222"
+chat.innerHTML += `
+  <div style="
+    display:flex;
+    justify-content:${
+      mine
+        ? "flex-end"
+        : "flex-start"
     };
-    color:white;
-    padding:10px;
-    border-radius:15px;
-    max-width:70%;
-  "
->
-          ${msg.content}
-        </div>
+    margin-bottom:10px;
+  ">
 
+    <div
+
+      oncontextmenu="
+        event.preventDefault();
+        messageOptions('${msg.id}')
+      "
+
+      ontouchstart="
+        pressTimer = setTimeout(() => {
+          messageOptions('${msg.id}')
+        }, 600)
+      "
+
+      ontouchend="
+        clearTimeout(pressTimer)
+      "
+
+      style="
+        background:${
+          mine ? "#0084ff" : "#222"
+        };
+        color:white;
+        padding:10px 14px;
+        border-radius:18px;
+        max-width:75%;
+      "
+    >
+
+      <div>
+        ${msg.content}
       </div>
-    `;
+
+      <div style="
+        margin-top:5px;
+        font-size:11px;
+        opacity:0.7;
+        text-align:right;
+      ">
+        ${time}
+      </div>
+
+    </div>
+
+  </div>
+`;
   });
 
   chat.scrollTop =
@@ -1882,11 +1899,17 @@ window.messageOptions = async function(messageId) {
 
 };
 
-window.closeChat = function() {
+window.closeChat = function () {
 
-  document.getElementById("chatScreen").style.display = "none";
+  // hide chat screen
+  document.getElementById(
+    "chatScreen"
+  ).style.display = "none";
 
-  document.getElementById("app").style.display = "block";
+  // show inbox again
+  document.getElementById(
+    "inboxScreen"
+  ).style.display = "flex";
 
 };
 
