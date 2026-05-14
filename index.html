@@ -16,12 +16,11 @@ body {
 
 /* 🔥 FULL SCREEN SCROLL */
 #posts {
-  height: 100vh;
-  overflow-y: scroll;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  padding-top: 60px;   /* space for top nav */
-  padding-bottom: 70px; /* space for bottom nav */
+  min-height: 100vh;
+  overflow-y: auto;
+  padding-top: 60px;
+  padding-bottom: 120px;
+  box-sizing: border-box;
 }
 
 /* 📱 POST CARD */
