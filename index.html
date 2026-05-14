@@ -27,19 +27,22 @@ body {
 .post-card {
   background: #111;
   border: 1px solid #222;
-  border-radius: 16px;
-  padding: 12px;
-  margin-bottom: 16px;
+  border-radius: 18px;
+  padding: 14px;
+  margin: 12px;
   color: white;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
 }
 
 /* 🎥 MEDIA FULLSCREEN */
-.post-card video,
-.post-card img {
+.post-card img:not(.avatar),
+.post-card video {
   width: 100%;
+  border-radius: 16px;
+  margin-top: 12px;
   max-height: 500px;
   object-fit: cover;
-  border-radius: 12px;
   display: block;
 }
 
@@ -239,6 +242,13 @@ color: var(--text);
   color: white;
   border-bottom: 2px solid white;
   padding-bottom: 5px;
+}
+.post-card button {
+  border:none;
+  border-radius:10px;
+  padding:10px 14px;
+  font-weight:600;
+  color:white;
 }
 
 
@@ -514,18 +524,28 @@ if (
 ">
 
       <img 
-        src="${
-          post.avatar_url ||
-          'https://via.placeholder.com/60'
-        }"
-        style="
-  width:45px;
-  height:45px;
-  border-radius:50%;
-  object-fit:cover;
-  flex-shrink:0;
-"
-      />
+  class="avatar"
+
+  src="${
+    post.avatar_url &&
+    post.avatar_url !== "null"
+      ? post.avatar_url
+      : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(post.name)
+  }"
+
+  onerror="
+    this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(post.name)}'
+  "
+
+  style="
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    object-fit:cover;
+    background:#222;
+    flex-shrink:0;
+  "
+/>
 
      <div style="flex:1; overflow:hidden;">
 
@@ -1534,6 +1554,11 @@ async function sendMessage() {
     console.log(error);
     return;
   }
+  
+  console.log("MESSAGES:", data);
+console.log("ERROR:", error);
+console.log("SESSION:", session);
+console.log("CURRENT CHAT USER:", currentChatUser);
 
   input.value = "";
 
