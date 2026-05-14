@@ -2075,12 +2075,35 @@ async function sendMessage() {
 
 window.messageOptions = async function(messageId) {
 
-  const action = prompt(
-    "Type:\nlike\ncopy\ndelete"
+  const action = confirm(
+    "OK = Delete message\nCancel = Copy message"
   );
 
+  // DELETE
+  if (action) {
+
+    const confirmDelete =
+      confirm("Delete this message?");
+
+    if (!confirmDelete) return;
+
+    const { error } =
+      await supabase
+        .from("messages")
+        .delete()
+        .eq("id", messageId);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    loadMessages();
+
+  }
+
   // COPY
-  if (action === "copy") {
+  else {
 
     const el =
       document.getElementById(messageId);
@@ -2092,38 +2115,6 @@ window.messageOptions = async function(messageId) {
     );
 
     alert("Copied");
-
-  }
-
-  // DELETE
-  if (action === "delete") {
-
-    const confirmDelete =
-      confirm("Delete message?");
-
-    if (!confirmDelete) return;
-
-    const { error } =
-      await supabase
-        .from("messages")
-        .delete()
-        .eq("id", messageId);
-
-    if (error) {
-
-      alert(error.message);
-      return;
-
-    }
-
-    loadMessages();
-
-  }
-
-  // LIKE
-  if (action === "like") {
-
-    alert("❤️ Reaction added");
 
   }
 
