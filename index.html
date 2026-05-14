@@ -458,6 +458,63 @@ color: var(--text);
 
 <div id="app"></div>
 
+<!-- MEDIA VIEWER -->
+<div
+  id="mediaViewer"
+
+  style="
+    position:fixed;
+    inset:0;
+    background:black;
+    z-index:99999;
+    display:none;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+  "
+>
+
+  <button
+    onclick="closeMedia()"
+
+    style="
+      position:absolute;
+      top:20px;
+      left:20px;
+      background:none;
+      border:none;
+      color:white;
+      font-size:35px;
+      z-index:2;
+    "
+  >
+    ✕
+  </button>
+
+  <a
+    id="downloadMedia"
+    download
+
+    style="
+      position:absolute;
+      top:20px;
+      right:20px;
+      background:#0084ff;
+      color:white;
+      padding:10px 16px;
+      border-radius:10px;
+      text-decoration:none;
+      font-weight:bold;
+      z-index:2;
+    "
+  >
+    Download
+  </a>
+
+  <div id="mediaContainer"></div>
+
+</div>
+
 <script type="module">
   console.log("SCRIPT START");
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -1791,6 +1848,7 @@ chat.innerHTML += `
   ">
 
     <div
+
       id="${msg.id}"
 
       oncontextmenu="
@@ -1813,48 +1871,85 @@ chat.innerHTML += `
           mine ? "#0084ff" : "#222"
         };
         color:white;
-        padding:10px 14px;
+        padding:10px 12px;
         border-radius:18px;
         max-width:75%;
+        overflow:hidden;
       "
     >
 
       <div>
 
-  ${
-    msg.media_type === "image"
-      ? `
-        <img
-          src="${msg.media_url}"
-          style="
-            width:220px;
-            border-radius:12px;
-            margin-bottom:8px;
-          "
-        />
-      `
-      : ""
-  }
+        ${
+          msg.media_type === "image"
+            ? `
+              <img
+                src="${msg.media_url}"
 
-  ${
-    msg.media_type === "video"
-      ? `
-        <video
-          src="${msg.media_url}"
-          controls
-          style="
-            width:220px;
-            border-radius:12px;
-            margin-bottom:8px;
-          "
-        ></video>
-      `
-      : ""
-  }
+                onclick="
+                  openMedia(
+                    '${msg.media_url}',
+                    'image'
+                  )
+                "
 
-  ${msg.content || ""}
+                style="
+                  width:100%;
+                  max-width:260px;
+                  max-height:320px;
+                  object-fit:cover;
+                  border-radius:16px;
+                  margin-bottom:6px;
+                  cursor:pointer;
+                  display:block;
+                "
+              />
+            `
+            : ""
+        }
 
-</div>
+        ${
+          msg.media_type === "video"
+            ? `
+              <video
+                src="${msg.media_url}"
+                controls
+
+                onclick="
+                  openMedia(
+                    '${msg.media_url}',
+                    'video'
+                  )
+                "
+
+                style="
+                  width:100%;
+                  max-width:260px;
+                  max-height:320px;
+                  object-fit:cover;
+                  border-radius:16px;
+                  margin-bottom:6px;
+                  background:black;
+                "
+              ></video>
+            `
+            : ""
+        }
+
+        ${
+          msg.content
+            ? `
+              <div style="
+                margin-top:4px;
+                word-break:break-word;
+              ">
+                ${msg.content}
+              </div>
+            `
+            : ""
+        }
+
+      </div>
 
       <div style="
         margin-top:5px;
@@ -2013,6 +2108,66 @@ window.closeChat = function () {
   document.getElementById(
     "inboxScreen"
   ).style.display = "flex";
+
+};
+
+window.openMedia = function(url, type) {
+
+  const viewer =
+    document.getElementById(
+      "mediaViewer"
+    );
+
+  const container =
+    document.getElementById(
+      "mediaContainer"
+    );
+
+  const download =
+    document.getElementById(
+      "downloadMedia"
+    );
+
+  download.href = url;
+
+  if (type === "image") {
+
+    container.innerHTML = `
+      <img
+        src="${url}"
+        style="
+          max-width:100vw;
+          max-height:100vh;
+          object-fit:contain;
+        "
+      />
+    `;
+
+  } else {
+
+    container.innerHTML = `
+      <video
+        src="${url}"
+        controls
+        autoplay
+        style="
+          max-width:100vw;
+          max-height:100vh;
+        "
+      ></video>
+    `;
+
+  }
+
+  viewer.style.display = "flex";
+
+};
+
+window.closeMedia = function() {
+
+  document.getElementById(
+    "mediaViewer"
+  ).style.display = "none";
 
 };
 
