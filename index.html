@@ -1551,7 +1551,7 @@ async function loadMessages() {
           max-width:70%;
           word-wrap:break-word;
         ">
-          ${msg.message}
+          ${msg.content}
         </div>
 
       </div>
@@ -1564,44 +1564,27 @@ async function loadMessages() {
 
 async function sendMessage() {
 
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    alert("Login first");
-    return;
-  }
-
   const input =
     document.getElementById(
       "chatInput"
     );
 
-  const text =
-    input.value.trim();
+  if (!input.value.trim())
+    return;
 
-  if (!text) return;
-
-  // ✅ INSERT MESSAGE
-  const { data, error } =
+  const { error } =
     await supabase
       .from("messages")
-      .insert([
-        {
-          sender_id:
-            session.user.id,
+      .insert({
+        sender_id:
+          session.user.id,
 
-          receiver_id:
-            currentChatUser,
+        receiver_id:
+          currentChatUser,
 
-          message: text
-        }
-      ])
-      .select();
-
-  console.log(data);
-  console.log(error);
+        content:
+          input.value.trim()
+      });
 
   if (error) {
     alert(error.message);
@@ -1610,7 +1593,6 @@ async function sendMessage() {
 
   input.value = "";
 
-  // ✅ RELOAD CHAT
   loadMessages();
 }
 
