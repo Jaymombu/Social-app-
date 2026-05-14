@@ -1439,20 +1439,15 @@ window.openChat = async function(userId, name) {
   }
 
   currentChatUser = userId;
-  
-  document.getElementById(
-  "feed"
-).style.display = "none";
 
-  document.getElementById(
-    "chatScreen"
-  ).style.display = "flex";
+  document.getElementById("app").style.display = "none";
 
-  document.getElementById(
-  "chatName"
-).innerText = name;
+  document.getElementById("chatScreen").style.display = "flex";
+
+  document.getElementById("chatName").innerText = name;
 
   loadMessages();
+
 };
 
 async function loadMessages() {
@@ -1598,19 +1593,13 @@ async function sendMessage() {
   loadMessages();
 }
 
-function closeChat() {
+window.closeChat = function() {
 
-  document.getElementById(
-    "chatScreen"
-  ).style.display = "none";
+  document.getElementById("chatScreen").style.display = "none";
 
-  document.getElementById(
-    "feed"
-  ).style.display = "block";
+  document.getElementById("app").style.display = "block";
 
-  currentChatUser = null;
-
-}
+};
 
 // ========================
 // GLOBAL FUNCTIONS
