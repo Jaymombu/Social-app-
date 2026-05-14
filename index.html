@@ -1455,8 +1455,20 @@ async function openChat(userId, name) {
 
 async function loadMessages() {
 
-  if (!session?.user) return;
+  // ✅ GET CURRENT USER
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
 
+  // ❌ not logged in
+  if (!session) {
+    alert("Login first");
+    return;
+  }
+
+  const myId = session.user.id;
+
+  // ✅ LOAD CHAT
   const {
     data,
     error
@@ -1464,15 +1476,15 @@ async function loadMessages() {
     .from("messages")
     .select("*")
     .or(`
-      and(sender_id.eq.${session.user.id},receiver_id.eq.${currentChatUser}),
-      and(sender_id.eq.${currentChatUser},receiver_id.eq.${session.user.id})
+      and(sender_id.eq.${myId},receiver_id.eq.${currentChatUser}),
+      and(sender_id.eq.${currentChatUser},receiver_id.eq.${myId})
     `)
-    .order("created_at");
+    .order("created_at", {
+      ascending: true
+    });
 
-  if (error) {
-    console.log(error);
-    return;
-  }
+  console.log("MESSAGES:", data);
+  console.log("ERROR:", error);
 
   const chat =
     document.getElementById(
@@ -1481,41 +1493,58 @@ async function loadMessages() {
 
   chat.innerHTML = "";
 
+  if (error) {
+    chat.innerHTML =
+      "❌ Failed to load messages";
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    chat.innerHTML = `
+      <div style="
+        color:#888;
+        text-align:center;
+        margin-top:20px;
+      ">
+        No messages yet
+      </div>
+    `;
+    return;
+  }
+
   data.forEach(msg => {
 
     const mine =
-      msg.sender_id ===
-      session.user.id;
+      msg.sender_id === myId;
 
     chat.innerHTML += `
-  <div style="
-    display:flex;
-    justify-content:${
-      mine
-        ? "flex-end"
-        : "flex-start"
-    };
-  ">
+      <div style="
+        display:flex;
+        justify-content:${
+          mine
+            ? "flex-end"
+            : "flex-start"
+        };
+        margin-bottom:10px;
+      ">
 
-    <div style="
-      background:${
-        mine
-          ? "#0084ff"
-          : "#222"
-      };
-      color:white;
-      padding:12px 14px;
-      border-radius:20px;
-      max-width:75%;
-      font-size:15px;
-      line-height:1.4;
-      word-wrap:break-word;
-    ">
-      ${msg.message}
-    </div>
+        <div style="
+          background:${
+            mine
+              ? "#0084ff"
+              : "#222"
+          };
+          color:white;
+          padding:10px 14px;
+          border-radius:18px;
+          max-width:70%;
+          word-wrap:break-word;
+        ">
+          ${msg.message}
+        </div>
 
-  </div>
-`;
+      </div>
+    `;
   });
 
   chat.scrollTop =
@@ -1524,8 +1553,12 @@ async function loadMessages() {
 
 async function sendMessage() {
 
-  if (!session?.user) {
-    alert("Please login first");
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    alert("Login first");
     return;
   }
 
@@ -1537,30 +1570,24 @@ async function sendMessage() {
   if (!input.value.trim())
     return;
 
-  const { error } = await supabase
-    .from("messages")
-    .insert({
-      sender_id:
-        session.user.id,
-
-      receiver_id:
-        currentChatUser,
-
-      message:
-        input.value
-    });
-
-  if (error) {
-    console.log(error);
-    return;
-  }
-  
-  console.log("MESSAGES:", data);
-console.log("ERROR:", error);
-console.log("SESSION:", session);
-console.log("CURRENT CHAT USER:", currentChatUser);
+  const text = input.value;
 
   input.value = "";
+
+  const { error } =
+    await supabase
+      .from("messages")
+      .insert({
+        sender_id:
+          session.user.id,
+
+        receiver_id:
+          currentChatUser,
+
+        message: text
+      });
+
+  console.log(error);
 
   loadMessages();
 }
