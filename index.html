@@ -622,10 +622,10 @@ if (
     </button>
     
     <button
-  onclick="openChat(
-    '${post.user_id}',
-    '${post.name}'
-  )"
+  onclick="event.stopPropagation(); openChat(
+  '${post.id}',
+  '${post.name}'
+)"
   style="
     margin-top:5px;
     background:#0066ff;
