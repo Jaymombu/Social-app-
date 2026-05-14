@@ -1528,54 +1528,164 @@ window.openInbox = async function () {
 
   if (!userId) return;
 
-  const { data, error } = await supabase
-    .from("messages")
-    .select("*")
-    .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-    .order("created_at", { ascending:false });
+  // GET MESSAGES
+  const { data: messages, error } =
+    await supabase
+      .from("messages")
+      .select("*")
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .order("created_at", {
+        ascending:false
+      });
 
   if (error) {
     inbox.innerHTML = "Error loading chats";
     return;
   }
 
-  if (!data || data.length === 0) {
+  if (!messages || messages.length === 0) {
     inbox.innerHTML = "No chats yet";
     return;
   }
 
-  inbox.innerHTML = data.map(msg => {
+  // REMOVE DUPLICATES
+  const uniqueUsers = {};
+
+  messages.forEach(msg => {
 
     const otherUser =
       msg.sender_id === userId
         ? msg.receiver_id
         : msg.sender_id;
 
-    return `
-      <div
-        onclick="openChat(
-          '${otherUser}',
-          'User'
-        )"
+    if (!uniqueUsers[otherUser]) {
+      uniqueUsers[otherUser] = msg;
+    }
+
+  });
+
+  const chats =
+    Object.values(uniqueUsers);
+
+  inbox.innerHTML = "";
+
+  for (const msg of chats) {
+
+    const otherUser =
+      msg.sender_id === userId
+        ? msg.receiver_id
+        : msg.sender_id;
+
+    // GET PROFILE
+    const { data: profile } =
+      await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", otherUser)
+        .maybeSingle();
+
+    const div =
+      document.createElement("div");
+
+    // LONG PRESS
+    let pressTimer;
+
+    div.ontouchstart = () => {
+
+      pressTimer = setTimeout(async () => {
+
+        const confirmDelete =
+          confirm("Delete this chat?");
+
+        if (!confirmDelete) return;
+
+        await supabase
+          .from("messages")
+          .delete()
+          .or(`
+            and(sender_id.eq.${userId},receiver_id.eq.${otherUser}),
+            and(sender_id.eq.${otherUser},receiver_id.eq.${userId})
+          `);
+
+        openInbox();
+
+      }, 700);
+
+    };
+
+    div.ontouchend = () => {
+      clearTimeout(pressTimer);
+    };
+
+    div.onclick = () => {
+
+      openChat(
+        otherUser,
+        profile?.name || "User"
+      );
+
+      document.getElementById(
+        "inboxScreen"
+      ).style.display = "none";
+
+    };
+
+    div.style = `
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:15px;
+      border-bottom:1px solid #222;
+      cursor:pointer;
+    `;
+
+    div.innerHTML = `
+
+      <img
+        src="${
+          profile?.avatar_url ||
+          'https://ui-avatars.com/api/?name=' +
+          encodeURIComponent(profile?.name || 'U')
+        }"
 
         style="
-          padding:15px;
-          border-bottom:1px solid #222;
-          cursor:pointer;
+          width:55px;
+          height:55px;
+          border-radius:50%;
+          object-fit:cover;
+          background:#222;
         "
-      >
-        💬 Chat
+      />
+
+      <div style="flex:1;">
+
+        <div style="
+          color:white;
+          font-weight:bold;
+          font-size:16px;
+        ">
+          ${profile?.name || "User"}
+        </div>
 
         <div style="
           color:#aaa;
-          font-size:13px;
-          margin-top:5px;
+          margin-top:4px;
+          font-size:14px;
+          white-space:nowrap;
+          overflow:hidden;
+          text-overflow:ellipsis;
         ">
           ${msg.content || ""}
         </div>
+
       </div>
+
     `;
-  }).join("");
+
+    inbox.appendChild(div);
+
+  }
+
 };
 
 async function loadMessages() {
