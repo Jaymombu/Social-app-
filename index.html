@@ -1590,11 +1590,30 @@ window.openChat = async function(userId, name) {
 
   currentChatUser = userId;
 
-  document.getElementById("app").style.display = "none";
+  document.getElementById("app")
+    .style.display = "none";
 
-  document.getElementById("chatScreen").style.display = "flex";
+  document.getElementById("chatScreen")
+    .style.display = "flex";
 
-  document.getElementById("chatName").innerText = name;
+  document.getElementById("chatName")
+    .innerText = name;
+
+  // GET PROFILE
+  const { data: profile } =
+    await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
+
+  // SET CHAT IMAGE
+  document.getElementById(
+    "chatAvatar"
+  ).src =
+    profile?.avatar_url ||
+    "https://ui-avatars.com/api/?name=" +
+    encodeURIComponent(name);
 
   loadMessages();
 
