@@ -789,50 +789,75 @@ if (
 
 // ✅ 3. DEFINE loadPosts
 window.loadPosts = async function () {
+
   console.log("🔥 loadPosts running...");
+
+  const postsDiv =
+    document.getElementById("posts");
+
+  // IMPORTANT
+  if (!postsDiv) {
+
+    console.log("❌ posts div not found");
+    return;
+
+  }
 
   let posts = [];
   let error = null;
 
-  // 🌍 EXPLORE TAB (ALL POSTS)
   if (activeTab === "explore") {
+
     const response = await supabase
       .from("posts")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", {
+        ascending: false
+      });
 
     posts = response.data;
     error = response.error;
+
   }
 
-  // 👥 FOLLOWING TAB (for now same as explore)
   if (activeTab === "following") {
+
     const response = await supabase
       .from("posts")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", {
+        ascending: false
+      });
 
     posts = response.data;
     error = response.error;
-  }
 
-  const postsDiv = document.getElementById("posts");
+  }
 
   postsDiv.innerHTML = "";
 
   if (error) {
-    postsDiv.innerHTML = "❌ Error loading posts";
+
+    postsDiv.innerHTML =
+      "❌ Error loading posts";
+
     return;
+
   }
 
   if (!posts || posts.length === 0) {
-    postsDiv.innerHTML = "😢 No posts yet";
+
+    postsDiv.innerHTML =
+      "😢 No posts yet";
+
     return;
+
   }
 
   posts.forEach(renderPost);
-  
+
   observeVideos();
+
 };
 
 
@@ -2238,9 +2263,8 @@ window.deleteMessage = async function(messageId) {
 
 };
 
-window.closeChat = async function () {
+window.closeChat = function () {
 
-  // hide chat screens
   document.getElementById(
     "chatScreen"
   ).style.display = "none";
@@ -2249,18 +2273,16 @@ window.closeChat = async function () {
     "inboxScreen"
   ).style.display = "none";
 
-  // show home
   document.getElementById(
     "homePage"
   ).style.display = "block";
 
-  // show posts container
-  document.getElementById(
-    "postsContainer"
-  ).style.display = "block";
+  // wait for DOM redraw
+  requestAnimationFrame(() => {
 
-  // reload posts
-  await loadPosts();
+    loadPosts();
+
+  });
 
 };
 
