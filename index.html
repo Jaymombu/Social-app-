@@ -2215,27 +2215,34 @@ window.shareMessage = async function(messageId) {
 
 window.deleteMessage = async function(messageId) {
 
-  const confirmDelete =
-    confirm("Delete message?");
+  const confirmDelete = confirm("Delete message?");
 
   if (!confirmDelete) return;
 
-  const { error } =
-    await supabase
+  try {
+
+    const { error } = await supabase
       .from("messages")
       .delete()
       .eq("id", messageId);
 
-  if (error) {
-    alert(error.message);
-    return;
+    if (error) throw error;
+
+    // remove menu
+    document.getElementById("messageMenu")?.remove();
+
+    // remove message instantly from UI
+    document.getElementById(messageId)?.remove();
+
+    // optional reload
+    await loadMessages();
+
+  } catch (err) {
+
+    console.error(err);
+    alert(err.message);
+
   }
-
-  document.getElementById(
-    "messageMenu"
-  )?.remove();
-
-  loadMessages();
 
 };
 
@@ -2325,6 +2332,7 @@ window.deletePost = deletePost;
 window.openComments = openComments;
 window.openChat = openChat;
 window.sendMessage = sendMessage;
+window.deleteMessage = deleteMessage;
 
 // ========================
 // VIDEO AUTOPLAY
