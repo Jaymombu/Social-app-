@@ -1847,48 +1847,53 @@ chat.innerHTML += `
     margin-bottom:10px;
   ">
 
-    <div
+<div
 
-      id="${msg.id}"
+  id="${msg.id}"
 
-      oncontextmenu="
-        event.preventDefault();
-        messageOptions('${msg.id}')
-      "
+  oncontextmenu="
+    event.preventDefault();
+    messageOptions('${msg.id}')
+  "
 
-      ontouchstart="
-        pressTimer = setTimeout(() => {
-          messageOptions('${msg.id}')
-        }, 600)
-      "
+  ontouchstart="
+    window.pressTimer = setTimeout(function(){
+      messageOptions('${msg.id}')
+    }, 700)
+  "
 
-      ontouchend="
-        clearTimeout(pressTimer)
-      "
+  ontouchend="
+    clearTimeout(window.pressTimer)
+  "
 
-      style="
-  background:${
-    msg.media_url
-      ? "transparent"
-      : mine
-        ? "#0084ff"
-        : "#222"
-  };
+  ontouchmove="
+    clearTimeout(window.pressTimer)
+  "
 
-  color:white;
+  style="
+    background:${
+      msg.media_url
+        ? 'transparent'
+        : mine
+          ? '#0084ff'
+          : '#222'
+    };
 
-  padding:${
-    msg.media_url
-      ? "0"
-      : "10px 12px"
-  };
+    color:white;
 
-  border-radius:18px;
+    padding:${
+      msg.media_url
+        ? '0'
+        : '10px 12px'
+    };
 
-  max-width:75%;
+    border-radius:18px;
 
-  overflow:hidden;
-"
+    max-width:75%;
+
+    overflow:hidden;
+  "
+>
 
       <div>
 
