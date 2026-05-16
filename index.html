@@ -1251,12 +1251,13 @@ async function resizeImage(file, size = 300) {
   let avatarUrl = null;
 
   if (file) {
-    const resizedFile = await resizeImage(file, 300);
-    const fileName = `${session.user.id}.jpg`;
+    const originalFile = file;
+    const fileName =
+  `${session.user.id}-${Date.now()}.jpg`;
 
     const { data, error: uploadError } = await supabase.storage
   .from("avatars")
-  .upload(fileName, resizedFile, {
+  .upload(fileName, originalFile, {
     cacheControl: "3600",
     upsert: true
   });
@@ -1274,7 +1275,9 @@ console.log("UPLOAD ERROR:", uploadError);
       .from("avatars")
       .getPublicUrl(fileName);
 
-    avatarUrl = publicUrlData.publicUrl;
+    avatarUrl =
+  publicUrlData.publicUrl +
+  "?t=" + Date.now();
   }
 
   const { data: oldProfile } = await supabase
