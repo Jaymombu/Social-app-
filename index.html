@@ -2240,12 +2240,11 @@ window.deleteMessage = async function(messageId) {
 
 window.closeChat = async function () {
 
-  // hide chat
+  // hide chat screens
   document.getElementById(
     "chatScreen"
   ).style.display = "none";
 
-  // hide inbox
   document.getElementById(
     "inboxScreen"
   ).style.display = "none";
@@ -2255,7 +2254,12 @@ window.closeChat = async function () {
     "homePage"
   ).style.display = "block";
 
-  // reload posts/feed
+  // show posts container
+  document.getElementById(
+    "postsContainer"
+  ).style.display = "block";
+
+  // reload posts
   await loadPosts();
 
 };
