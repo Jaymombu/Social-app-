@@ -2215,34 +2215,26 @@ window.shareMessage = async function(messageId) {
 
 window.deleteMessage = async function(messageId) {
 
-  const confirmDelete = confirm("Delete message?");
+  const confirmDelete =
+    confirm("Delete message?");
 
   if (!confirmDelete) return;
 
-  try {
-
-    const { error } = await supabase
+  const { error } =
+    await supabase
       .from("messages")
       .delete()
       .eq("id", messageId);
 
-    if (error) throw error;
+  if (error) {
 
-    // remove menu
-    document.getElementById("messageMenu")?.remove();
-
-    // remove message instantly from UI
-    document.getElementById(messageId)?.remove();
-
-    // optional reload
-    await loadMessages();
-
-  } catch (err) {
-
-    console.error(err);
-    alert(err.message);
+    console.error(error);
+    alert(error.message);
+    return;
 
   }
+
+  document.getElementById(messageId)?.remove();
 
 };
 
