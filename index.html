@@ -2238,22 +2238,25 @@ window.deleteMessage = async function(messageId) {
 
 };
 
-window.closeChat = function () {
+window.closeChat = async function () {
 
-  // hide current chat
+  // hide chat
   document.getElementById(
     "chatScreen"
   ).style.display = "none";
 
-  // show inbox
+  // hide inbox
   document.getElementById(
     "inboxScreen"
-  ).style.display = "flex";
+  ).style.display = "none";
 
-  // show home/feed again
+  // show home
   document.getElementById(
     "homePage"
   ).style.display = "block";
+
+  // reload posts/feed
+  await loadPosts();
 
 };
 
