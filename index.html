@@ -2240,15 +2240,20 @@ window.deleteMessage = async function(messageId) {
 
 window.closeChat = function () {
 
-  // hide chat screen
+  // hide current chat
   document.getElementById(
     "chatScreen"
   ).style.display = "none";
 
-  // show inbox again
+  // show inbox
   document.getElementById(
     "inboxScreen"
   ).style.display = "flex";
+
+  // show home/feed again
+  document.getElementById(
+    "homePage"
+  ).style.display = "block";
 
 };
 
