@@ -38,11 +38,17 @@ body {
 /* 🎥 MEDIA FULLSCREEN */
 .post-card img:not(.avatar),
 .post-card video {
-  width: 100%;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+
+  max-height: 500px;
+
   border-radius: 16px;
   margin-top: 12px;
-  max-height: 500px;
-  object-fit: cover;
+
+  object-fit: contain;
+
   display: block;
 }
 
@@ -298,12 +304,11 @@ color: var(--text);
   "
 
   style="
-    max-width:120px;
-    max-height:120px;
-    width:auto;
-    height:auto;
-    object-fit:contain;
-    display:block;
+    width:40px;
+    height:40px;
+    border-radius:50%;
+    object-fit:cover;
+    background:#222;
     cursor:pointer;
   "
 />
@@ -1166,41 +1171,6 @@ console.log(error);
     };
 }
 };
-async function resizeImage(file, size = 300) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const reader = new FileReader();
-
-    reader.onload = (e) => {
-      img.src = e.target.result;
-    };
-
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-
-      canvas.width = size;
-      canvas.height = size;
-
-      // crop center square
-      const min = Math.min(img.width, img.height);
-      const sx = (img.width - min) / 2;
-      const sy = (img.height - min) / 2;
-
-      ctx.drawImage(img, sx, sy, min, min, 0, 0, size, size);
-
-      canvas.toBlob(
-        (blob) => {
-          resolve(blob);
-        },
-        "image/jpeg",
-        0.8 // compression
-      );
-    };
-
-    reader.readAsDataURL(file);
-  });
-}
 
   window.openEditProfile = async () => {
   alert("EDIT FUNCTION RUNNING");
@@ -1253,7 +1223,7 @@ async function resizeImage(file, size = 300) {
   if (file) {
     const originalFile = file;
     const fileName =
-  `${session.user.id}-${Date.now()}.jpg`;
+  `${session.user.id}-${Date.now()}-${file.name}`;
 
     const { data, error: uploadError } = await supabase.storage
   .from("avatars")
@@ -1276,8 +1246,7 @@ console.log("UPLOAD ERROR:", uploadError);
       .getPublicUrl(fileName);
 
     avatarUrl =
-  publicUrlData.publicUrl +
-  "?t=" + Date.now();
+  publicUrlData.publicUrl + "?t=" + Date.now();
   }
 
   const { data: oldProfile } = await supabase
