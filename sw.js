@@ -1,4 +1,4 @@
-const CACHE_NAME = "social-app-v2";
+const CACHE_NAME = "social-app-v3";
 
 const urlsToCache = [
   "./",
@@ -14,32 +14,39 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
-    })
+
+    caches.open(CACHE_NAME)
+      .then((cache) => {
+        console.log("Caching app shell");
+        return cache.addAll(urlsToCache);
+      })
+
   );
+
 });
 
 // ACTIVATE
 self.addEventListener("activate", (event) => {
 
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
+
+    caches.keys().then((keys) => {
 
       return Promise.all(
-        cacheNames.map((cache) => {
+        keys.map((key) => {
 
-          if (cache !== CACHE_NAME) {
-            return caches.delete(cache);
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
           }
 
         })
       );
 
     })
+
   );
 
-  self.clients.claim();
+  return self.clients.claim();
 
 });
 
@@ -48,38 +55,45 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
 
-    caches.match(event.request).then((cachedResponse) => {
+    caches.match(event.request)
+      .then((response) => {
 
-      // RETURN CACHE
-      if (cachedResponse) {
-        return cachedResponse;
-      }
+        // CACHE FIRST
+        if (response) {
+          return response;
+        }
 
-      // FETCH NETWORK
-      return fetch(event.request)
-        .then((networkResponse) => {
+        // NETWORK
+        return fetch(event.request)
+          .then((networkResponse) => {
 
-          // CLONE RESPONSE
-          const clonedResponse = networkResponse.clone();
+            // ONLY CACHE VALID REQUESTS
+            if (
+              !networkResponse ||
+              networkResponse.status !== 200 ||
+              networkResponse.type !== "basic"
+            ) {
+              return networkResponse;
+            }
 
-          // SAVE NEW FILES
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, clonedResponse);
+            const responseClone = networkResponse.clone();
+
+            caches.open(CACHE_NAME)
+              .then((cache) => {
+                cache.put(event.request, responseClone);
+              });
+
+            return networkResponse;
+
           });
 
-          return networkResponse;
+      })
+      .catch(() => {
 
-        })
-        .catch(() => {
+        // OFFLINE PAGE
+        return caches.match("./index.html");
 
-          // OFFLINE FALLBACK
-          if (event.request.mode === "navigate") {
-            return caches.match("./index.html");
-          }
-
-        });
-
-    })
+      })
 
   );
 
