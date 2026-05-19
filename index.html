@@ -2694,23 +2694,29 @@ if (type === "video") {
   video.removeAttribute("height");
 
   video.style.cssText = `
-    width:auto;
-    height:auto;
+  width:auto;
+  height:auto;
 
-    max-width:95vw;
-    max-height:95vh;
+  max-width:95vw;
+  max-height:95vh;
 
-    object-fit:contain;
+  object-fit:contain;
 
-    display:block;
-    background:black;
-    border-radius:12px;
-  `;
+  display:block;
+  background:black;
+  border-radius:12px;
+
+  touch-action:none;
+`;
 
   container.appendChild(video);
   
   // TAP TOGGLE PLAY
-container.addEventListener("click", () => {
+video.addEventListener("click", e => {
+
+  if (moved) return;
+
+  e.stopPropagation();
 
   if (video.paused) {
 
@@ -2770,41 +2776,58 @@ gestureOverlay.style.cssText = `
 
 container.appendChild(gestureOverlay);
 
+// =======================
+// VIDEO GESTURES FIXED
+// =======================
+
+let startY = 0;
+let startX = 0;
+
+let moved = false;
+
+let startBrightness = brightness;
+let startVol = video.volume;
+
+
 // TOUCH START
-container.addEventListener("touchstart", e => {
+video.addEventListener("touchstart", e => {
 
   if (e.touches.length !== 1) return;
 
-  gestureStartY =
-    e.touches[0].clientY;
+  moved = false;
 
-  startVolume = video.volume;
+  startY = e.touches[0].clientY;
+  startX = e.touches[0].clientX;
+
+  startVol = video.volume;
+  startBrightness = brightness;
 
 }, { passive:false });
 
 
 // TOUCH MOVE
-container.addEventListener("touchmove", e => {
+video.addEventListener("touchmove", e => {
 
   e.preventDefault();
 
   if (e.touches.length !== 1) return;
 
-  const touch =
-    e.touches[0];
+  moved = true;
+
+  const touch = e.touches[0];
 
   const deltaY =
-    gestureStartY - touch.clientY;
+    startY - touch.clientY;
 
   const percent =
     deltaY / window.innerHeight;
 
-  // RIGHT SIDE = VOLUME
-  if (touch.clientX >
-      window.innerWidth / 2) {
+
+  // RIGHT = VOLUME
+  if (startX > window.innerWidth / 2) {
 
     let newVolume =
-      startVolume + percent;
+      startVol + percent;
 
     newVolume = Math.max(
       0,
@@ -2819,15 +2842,15 @@ container.addEventListener("touchmove", e => {
       "%";
   }
 
-  // LEFT SIDE = BRIGHTNESS
+  // LEFT = BRIGHTNESS
   else {
 
-    let newBrightness =
-      brightness + percent;
+    brightness =
+      startBrightness + percent;
 
     brightness = Math.max(
       0.3,
-      Math.min(2, newBrightness)
+      Math.min(2, brightness)
     );
 
     video.style.filter =
@@ -2845,7 +2868,7 @@ container.addEventListener("touchmove", e => {
 
 
 // TOUCH END
-container.addEventListener("touchend", () => {
+video.addEventListener("touchend", () => {
 
   setTimeout(() => {
 
