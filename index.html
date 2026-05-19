@@ -2686,7 +2686,7 @@ if (type === "video") {
 
   video.src = url;
 
-  video.controls = true;
+  video.controls = false;
   video.autoplay = true;
   video.playsInline = true;
 
@@ -2708,6 +2708,35 @@ if (type === "video") {
   `;
 
   container.appendChild(video);
+  
+  // TAP TOGGLE PLAY
+container.addEventListener("click", () => {
+
+  if (video.paused) {
+
+    video.play();
+
+    playBtn.innerHTML = "⏸";
+
+  } else {
+
+    video.pause();
+
+    playBtn.innerHTML = "▶";
+
+  }
+
+  playBtn.style.opacity = "1";
+
+  clearTimeout(window.playBtnTimer);
+
+  window.playBtnTimer = setTimeout(() => {
+
+    playBtn.style.opacity = "0";
+
+  }, 700);
+
+});
   
   // =======================
 // GESTURE VOLUME/BRIGHTNESS
@@ -2757,6 +2786,8 @@ video.addEventListener("touchstart", e => {
 
 // TOUCH MOVE
 video.addEventListener("touchmove", e => {
+  
+  e.preventDefault();
 
   if (e.touches.length !== 1) return;
 
@@ -2811,7 +2842,7 @@ video.addEventListener("touchmove", e => {
 
   gestureOverlay.style.opacity = "1";
 
-});
+}, { passive:false });
 
 
 // TOUCH END
@@ -2850,36 +2881,6 @@ playBtn.style.cssText = `
 `;
 
 container.appendChild(playBtn);
-
-
-// TOGGLE PLAY/PAUSE
-video.addEventListener("click", () => {
-
-  if (video.paused) {
-
-    video.play();
-
-    playBtn.innerHTML = "⏸";
-
-  } else {
-
-    video.pause();
-
-    playBtn.innerHTML = "▶";
-
-  }
-
-  playBtn.style.opacity = "1";
-
-  clearTimeout(window.playBtnTimer);
-
-  window.playBtnTimer = setTimeout(() => {
-
-    playBtn.style.opacity = "0";
-
-  }, 700);
-
-});
 }
 
 
