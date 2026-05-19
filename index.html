@@ -257,6 +257,22 @@ color: var(--text);
   color:white;
 }
 
+#mediaContainer{
+  width:100%;
+  height:100%;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  overflow:hidden;
+  padding:20px;
+  box-sizing:border-box;
+}
+
+#mediaContainer img,
+#mediaContainer video{
+  max-width:100%;
+  max-height:100%;
+}
 
 </style>
 </head>
@@ -527,7 +543,17 @@ color: var(--text);
     Download
   </a>
 
-  <div id="mediaContainer"></div>
+ <div
+  id="mediaContainer"
+  style="
+    width:100vw;
+    height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    overflow:auto;
+  "
+></div>
 
 </div>
 
@@ -2323,110 +2349,137 @@ window.closeChat = function () {
 
 };
 
-window.openMedia = function(url, type) {
+window.openMedia = function (url, type) {
 
-  const viewer =
-    document.getElementById("mediaViewer");
+  const viewer = document.getElementById("mediaViewer");
 
+  // RESET VIEWER
+  viewer.innerHTML = "";
+
+  // CLOSE BUTTON
+  const closeBtn = document.createElement("div");
+
+  closeBtn.innerHTML = "✕";
+
+  closeBtn.onclick = closeMedia;
+
+  closeBtn.style.cssText = `
+    position:absolute;
+    top:20px;
+    left:20px;
+    color:white;
+    font-size:38px;
+    z-index:999999;
+    cursor:pointer;
+    user-select:none;
+  `;
+
+  viewer.appendChild(closeBtn);
+
+  // DOWNLOAD BUTTON (IMAGE ONLY)
   if (type === "image") {
 
-    viewer.innerHTML = `
+    const downloadBtn = document.createElement("a");
 
-      <!-- CLOSE -->
-      <div
-        onclick="closeMedia()"
-        style="
-          position:absolute;
-          top:20px;
-          left:20px;
-          color:white;
-          font-size:38px;
-          z-index:999999;
-          cursor:pointer;
-        "
-      >
-        ✕
-      </div>
+    downloadBtn.href = url;
+    downloadBtn.download = "";
+    downloadBtn.target = "_blank";
 
-      <!-- DOWNLOAD -->
-      <a
-        href="${url}"
-        download
-        target="_blank"
+    downloadBtn.innerHTML = "⬇";
 
-        style="
-          position:absolute;
-          top:20px;
-          right:20px;
-          color:white;
-          font-size:28px;
-          text-decoration:none;
-          z-index:999999;
-          background:#111;
-          padding:10px 14px;
-          border-radius:12px;
-        "
-      >
-        ⬇
-      </a>
-
-      <!-- IMAGE -->
-      <img
-        src="${url}"
-
-        style="
-          max-width:100vw;
-          max-height:100vh;
-          width:auto;
-          height:auto;
-          object-fit:contain;
-          display:block;
-        "
-      />
+    downloadBtn.style.cssText = `
+      position:absolute;
+      top:20px;
+      right:20px;
+      color:white;
+      font-size:28px;
+      text-decoration:none;
+      z-index:999999;
+      background:#111;
+      padding:10px 14px;
+      border-radius:12px;
     `;
+
+    viewer.appendChild(downloadBtn);
   }
 
+  // CONTAINER
+  const container = document.createElement("div");
+
+  container.style.cssText = `
+    width:100%;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  `;
+
+  // IMAGE
+  if (type === "image") {
+
+    const img = document.createElement("img");
+
+    img.src = url;
+
+    img.style.cssText = `
+      max-width:100%;
+      max-height:100%;
+      object-fit:contain;
+      display:block;
+    `;
+
+    container.appendChild(img);
+  }
+
+  // VIDEO
   if (type === "video") {
 
-    viewer.innerHTML = `
+    const video = document.createElement("video");
 
-      <div
-        onclick="closeMedia()"
-        style="
-          position:absolute;
-          top:20px;
-          left:20px;
-          color:white;
-          font-size:38px;
-          z-index:999999;
-          cursor:pointer;
-        "
-      >
-        ✕
-      </div>
+    video.src = url;
+    video.controls = true;
+    video.autoplay = true;
+    video.playsInline = true;
 
-      <video
-        src="${url}"
-        controls
-        autoplay
-
-        style="
-          max-width:100vw;
-          max-height:100vh;
-        "
-      ></video>
+    video.style.cssText = `
+      max-width:100%;
+      max-height:100%;
+      object-fit:contain;
     `;
+
+    container.appendChild(video);
   }
 
+  viewer.appendChild(container);
+
+  // SHOW VIEWER
   viewer.style.display = "flex";
+  viewer.style.justifyContent = "center";
+  viewer.style.alignItems = "center";
+  viewer.style.background = "rgba(0,0,0,0.95)";
 };
 
-window.closeMedia = function() {
 
-  document.getElementById(
-    "mediaViewer"
-  ).style.display = "none";
+// CLOSE MEDIA
+window.closeMedia = function () {
 
+  const viewer = document.getElementById("mediaViewer");
+
+  // STOP VIDEOS
+  const videos = viewer.querySelectorAll("video");
+
+  videos.forEach(video => {
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  });
+
+  // CLEAR CONTENT
+  viewer.innerHTML = "";
+
+  // HIDE
+  viewer.style.display = "none";
 };
 
 // ========================
