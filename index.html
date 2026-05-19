@@ -2418,18 +2418,196 @@ window.openMedia = function (url, type) {
 
     const img = document.createElement("img");
 
-    img.src = url;
+img.src = url;
 
-    img.style.cssText = `
-      max-width:100%;
-      max-height:100%;
-      object-fit:contain;
-      display:block;
-    `;
+img.style.cssText = `
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+  display:block;
+  transition:transform 0.2s ease;
+  touch-action:none;
+`;
 
-    container.appendChild(img);
+container.appendChild(img);
+
+
+// ZOOM VARIABLES
+let scale = 1;
+let startDistance = 0;
+
+let currentX = 0;
+let currentY = 0;
+
+let isDragging = false;
+
+let startX = 0;
+let startY = 0;
+
+
+// DOUBLE TAP ZOOM
+img.addEventListener("dblclick", () => {
+
+  scale = scale === 1 ? 2 : 1;
+
+  updateTransform();
+});
+
+
+// TOUCH START
+img.addEventListener("touchstart", e => {
+
+  // PINCH START
+  if (e.touches.length === 2) {
+
+    startDistance = getDistance(
+      e.touches[0],
+      e.touches[1]
+    );
   }
 
+  // DRAG START
+  if (e.touches.length === 1 && scale > 1) {
+
+    isDragging = true;
+
+    startX =
+      e.touches[0].clientX - currentX;
+
+    startY =
+      e.touches[0].clientY - currentY;
+  }
+
+});
+
+
+// TOUCH MOVE
+img.addEventListener("touchmove", e => {
+
+  e.preventDefault();
+
+  // PINCH ZOOM
+  if (e.touches.length === 2) {
+
+    const newDistance = getDistance(
+      e.touches[0],
+      e.touches[1]
+    );
+
+    scale *= newDistance / startDistance;
+
+    scale = Math.max(
+      1,
+      Math.min(scale, 5)
+    );
+
+    startDistance = newDistance;
+
+    updateTransform();
+  }
+
+  // DRAG IMAGE
+  if (e.touches.length === 1 && isDragging) {
+
+    currentX =
+      e.touches[0].clientX - startX;
+
+    currentY =
+      e.touches[0].clientY - startY;
+
+    updateTransform();
+  }
+
+}, { passive:false });
+
+
+// TOUCH END
+img.addEventListener("touchend", () => {
+
+  isDragging = false;
+});
+
+
+// APPLY TRANSFORM
+function updateTransform() {
+
+  img.style.transform =
+    `translate(${currentX}px, ${currentY}px) scale(${scale})`;
+}
+
+
+// DISTANCE BETWEEN 2 FINGERS
+function getDistance(t1, t2) {
+
+  return Math.hypot(
+    t2.clientX - t1.clientX,
+    t2.clientY - t1.clientY
+  );
+}
+
+// SWIPE DOWN TO CLOSE
+let swipeStartY = 0;
+let swipeCurrentY = 0;
+
+container.addEventListener("touchstart", e => {
+
+  if (scale === 1 && e.touches.length === 1) {
+
+    swipeStartY = e.touches[0].clientY;
+  }
+
+});
+
+container.addEventListener("touchmove", e => {
+
+  if (scale === 1 && e.touches.length === 1) {
+
+    swipeCurrentY =
+      e.touches[0].clientY - swipeStartY;
+
+    // MOVE VIEWER
+    container.style.transform =
+      `translateY(${swipeCurrentY}px)`;
+
+    // FADE BACKGROUND
+    viewer.style.background =
+      `rgba(0,0,0,${
+        0.95 - Math.abs(swipeCurrentY) / 700
+      })`;
+  }
+
+}, { passive:false });
+
+
+container.addEventListener("touchend", () => {
+
+  // CLOSE IF SWIPED FAR
+  if (Math.abs(swipeCurrentY) > 120) {
+
+    closeMedia();
+
+    return;
+  }
+
+  // RESET POSITION
+  container.style.transition =
+    "transform 0.2s ease";
+
+  container.style.transform =
+    "translateY(0px)";
+
+  viewer.style.background =
+    "rgba(0,0,0,0.95)";
+
+  setTimeout(() => {
+
+    container.style.transition = "";
+
+  }, 200);
+
+  swipeCurrentY = 0;
+});
+}
   // VIDEO
   if (type === "video") {
 
