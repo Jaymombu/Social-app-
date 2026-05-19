@@ -2770,9 +2770,8 @@ gestureOverlay.style.cssText = `
 
 container.appendChild(gestureOverlay);
 
-
 // TOUCH START
-video.addEventListener("touchstart", e => {
+container.addEventListener("touchstart", e => {
 
   if (e.touches.length !== 1) return;
 
@@ -2781,12 +2780,12 @@ video.addEventListener("touchstart", e => {
 
   startVolume = video.volume;
 
-});
+}, { passive:false });
 
 
 // TOUCH MOVE
-video.addEventListener("touchmove", e => {
-  
+container.addEventListener("touchmove", e => {
+
   e.preventDefault();
 
   if (e.touches.length !== 1) return;
@@ -2799,7 +2798,6 @@ video.addEventListener("touchmove", e => {
 
   const percent =
     deltaY / window.innerHeight;
-
 
   // RIGHT SIDE = VOLUME
   if (touch.clientX >
@@ -2824,11 +2822,12 @@ video.addEventListener("touchmove", e => {
   // LEFT SIDE = BRIGHTNESS
   else {
 
-    brightness += percent;
+    let newBrightness =
+      brightness + percent;
 
     brightness = Math.max(
       0.3,
-      Math.min(2, brightness)
+      Math.min(2, newBrightness)
     );
 
     video.style.filter =
@@ -2846,7 +2845,7 @@ video.addEventListener("touchmove", e => {
 
 
 // TOUCH END
-video.addEventListener("touchend", () => {
+container.addEventListener("touchend", () => {
 
   setTimeout(() => {
 
@@ -2855,6 +2854,7 @@ video.addEventListener("touchend", () => {
   }, 500);
 
 });
+
   
   // PLAY/PAUSE OVERLAY
 const playBtn = document.createElement("div");
