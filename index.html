@@ -2410,6 +2410,38 @@ window.openMedia = function (url, type) {
   `;
 
   viewer.appendChild(closeBtn);
+  
+  // FADE IN
+viewer.style.opacity = "0";
+
+setTimeout(() => {
+  viewer.style.opacity = "1";
+}, 10);
+
+viewer.style.transition =
+  "opacity 0.2s ease";
+
+
+// TAP BACKGROUND TO CLOSE
+viewer.onclick = e => {
+
+  if (e.target === viewer) {
+
+    closeMedia();
+  }
+
+};
+
+
+// ESC KEY CLOSE
+document.onkeydown = e => {
+
+  if (e.key === "Escape") {
+
+    closeMedia();
+  }
+
+};
 
   // DOWNLOAD BUTTON (IMAGE ONLY)
   if (type === "image") {
@@ -2691,22 +2723,21 @@ if (type === "video") {
 // CLOSE MEDIA
 window.closeMedia = function () {
 
-  const viewer = document.getElementById("mediaViewer");
+  const viewer =
+    document.getElementById("mediaViewer");
 
-  // STOP VIDEOS
-  const videos = viewer.querySelectorAll("video");
+  viewer.style.opacity = "0";
 
-  videos.forEach(video => {
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
-  });
+  setTimeout(() => {
 
-  // CLEAR CONTENT
-  viewer.innerHTML = "";
+    viewer.style.display = "none";
 
-  // HIDE
-  viewer.style.display = "none";
+    document.getElementById(
+      "mediaContainer"
+    ).innerHTML = "";
+
+  }, 200);
+
 };
 
 // ========================
