@@ -1069,11 +1069,10 @@ const { count: followingCount } = await supabase
   "
 
   style="
-    max-width:120px;
-    max-height:120px;
-    width:auto;
-    height:auto;
+    width:120px;
+    height:120px;
     object-fit:contain;
+    border-radius:50%;
     background:#222;
     cursor:pointer;
     display:block;
@@ -1783,7 +1782,7 @@ window.openInbox = async function () {
 
     div.innerHTML = `
 
-      <img
+     <img
   src="${
     profile?.avatar_url ||
     'https://ui-avatars.com/api/?name=' +
@@ -1798,11 +1797,10 @@ window.openInbox = async function () {
   "
 
   style="
-    max-width:55px;
-    max-height:55px;
-    width:auto;
-    height:auto;
-    object-fit:contain;
+    width:55px;
+    height:55px;
+    border-radius:50%;
+    object-fit:cover;
     background:#222;
     display:block;
     cursor:pointer;
