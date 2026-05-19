@@ -257,21 +257,58 @@ color: var(--text);
   color:white;
 }
 
+#mediaViewer{
+  position:fixed;
+  inset:0;
+  background:black;
+  z-index:99999;
+
+  display:none;
+
+  justify-content:center;
+  align-items:center;
+
+  overflow:hidden;
+}
+
 #mediaContainer{
   width:100%;
   height:100%;
+
   display:flex;
   justify-content:center;
   align-items:center;
+
   overflow:hidden;
+
   padding:20px;
   box-sizing:border-box;
 }
 
-#mediaContainer img,
-#mediaContainer video{
+#mediaContainer img{
   max-width:100%;
   max-height:100%;
+
+  width:auto;
+  height:auto;
+
+  object-fit:contain;
+  display:block;
+}
+
+#mediaContainer video{
+  width:auto !important;
+  height:auto !important;
+
+  max-width:95vw;
+  max-height:95vh;
+
+  object-fit:contain;
+
+  display:block;
+
+  background:black;
+  border-radius:12px;
 }
 
 </style>
@@ -2609,7 +2646,8 @@ container.addEventListener("touchend", () => {
   swipeCurrentY = 0;
 });
 }
-// VIDEO
+
+  // VIDEO
 if (type === "video") {
 
   const video = document.createElement("video");
