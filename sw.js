@@ -1,4 +1,4 @@
-const CACHE_NAME = "social-app-v3";
+const CACHE_NAME = "social-app-v4";
 
 const urlsToCache = [
   "./",
@@ -52,32 +52,31 @@ self.addEventListener("activate", (event) => {
 
 // FETCH
 self.addEventListener("fetch", (event) => {
+  
+  if (
+  event.request.url.includes("supabase")
+) {
+  return;
+}
 
   event.respondWith(
 
     caches.match(event.request)
-      .then((response) => {
+      .then((cachedResponse) => {
 
-        // CACHE FIRST
-        if (response) {
-          return response;
+        // RETURN CACHE
+        if (cachedResponse) {
+          return cachedResponse;
         }
 
-        // NETWORK
+        // FETCH NETWORK
         return fetch(event.request)
           .then((networkResponse) => {
 
-            // ONLY CACHE VALID REQUESTS
-            if (
-              !networkResponse ||
-              networkResponse.status !== 200 ||
-              networkResponse.type !== "basic"
-            ) {
-              return networkResponse;
-            }
-
+            // CLONE
             const responseClone = networkResponse.clone();
 
+            // SAVE TO CACHE
             caches.open(CACHE_NAME)
               .then((cache) => {
                 cache.put(event.request, responseClone);
@@ -85,13 +84,13 @@ self.addEventListener("fetch", (event) => {
 
             return networkResponse;
 
+          })
+          .catch(() => {
+
+            // OFFLINE FALLBACK
+            return caches.match("./index.html");
+
           });
-
-      })
-      .catch(() => {
-
-        // OFFLINE PAGE
-        return caches.match("./index.html");
 
       })
 
