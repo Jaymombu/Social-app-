@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  
+
   <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#8a2be2">
   
@@ -318,9 +318,78 @@ color: var(--text);
   border-radius:12px;
 }
 
+#storiesBar{
+  display:flex;
+  gap:12px;
+  overflow-x:auto;
+  padding:12px;
+  background:#111;
+  position:sticky;
+  top:60px;
+  z-index:100;
+}
+
+.story{
+  flex-shrink:0;
+  text-align:center;
+  cursor:pointer;
+}
+
+.story img{
+  width:70px;
+  height:70px;
+  border-radius:50%;
+  object-fit:cover;
+  border:3px solid #8a2be2;
+}
+
 </style>
 </head>
 <body class="dark">
+  
+  <div id="storiesBar"></div>
+  
+  <label
+  for="storyInput"
+  style="
+    position:fixed;
+    top:70px;
+    right:15px;
+    z-index:9999;
+    background:#8a2be2;
+    color:white;
+    padding:10px;
+    border-radius:50%;
+    cursor:pointer;
+  "
+>
+  +
+</label>
+
+<input
+  type="file"
+  id="storyInput"
+  accept="image/*,video/*"
+  style="display:none"
+>
+  
+  <button
+  id="installBtn"
+  style="
+    display:none;
+    position:fixed;
+    top:15px;
+    right:15px;
+    z-index:9999;
+    padding:10px 16px;
+    border:none;
+    border-radius:12px;
+    background:#8a2be2;
+    color:white;
+  "
+>
+  Install App
+</button>
   
   <div id="chatScreen" style="
   position:fixed;
@@ -659,9 +728,8 @@ setTheme(savedTheme);
 init();
 
   function renderPost(post) {
-    
-    console.log(post);
 
+    
   const postsDiv =
     document.getElementById("posts");
 
@@ -690,16 +758,22 @@ init();
 
   let mediaHTML = "";
 
-  
+  if (!post.file_url) {
+  mediaHTML = "";
+}
   // IMAGE
 if (
   post.media_type === "image" &&
-  post.file_url
-) {
+  post.file_url &&
+  post.file_url !== "null"
+)
+ {
 
   mediaHTML = `
-  <img
-    src="${post.file_url}"
+ <img
+  src="${post.file_url}"
+  loading="lazy"
+  decoding="async"
 
     onclick="
       openMedia(
@@ -726,25 +800,28 @@ if (
 // VIDEO
 if (
   post.media_type === "video" &&
-  post.file_url
-) {
+  post.file_url &&
+  post.file_url !== "null"
+)
+ {
 
   mediaHTML = `
-    <video
-      src="${post.file_url}"
-      controls
-      playsinline
-      muted
-      loop
-      style="
-        width:100%;
-        margin-top:10px;
-        border-radius:12px;
-        max-height:700px;
-        object-fit:cover;
-      "
-    ></video>
-  `;
+  <video
+    src="${post.file_url}"
+    preload="metadata"
+    controls
+    playsinline
+    muted
+    loop
+    style="
+      width:100%;
+      margin-top:10px;
+      border-radius:12px;
+      max-height:700px;
+      object-fit:cover;
+    "
+  ></video>
+`;
 }
 
   // ======================
@@ -882,8 +959,59 @@ if (
     }
   `;
 
-  postsDiv.appendChild(div);
+  postsDiv.prepend(div);
 }
+
+// SAVE POSTS OFFLINE
+function savePostsOffline(posts) {
+  localStorage.setItem(
+    "offline_posts",
+    JSON.stringify(posts)
+  );
+}
+
+// LOAD POSTS OFFLINE
+function loadOfflinePosts() {
+  return JSON.parse(
+    localStorage.getItem("offline_posts") || "[]"
+  );
+}
+
+let deferredPrompt;
+
+window.addEventListener(
+  "beforeinstallprompt",
+  (e) => {
+
+    e.preventDefault();
+
+    deferredPrompt = e;
+
+    // SHOW INSTALL BUTTON
+    installBtn.style.display = "block";
+
+  }
+);
+
+function postHTML(post) {
+
+  return `
+    <div class="post-card">
+
+      <img
+        src="${post.media_url}"
+        loading="lazy"
+        decoding="async"
+      >
+
+    </div>
+  `;
+
+}
+
+let postPage = 0;
+const POSTS_PER_PAGE = 10;
+let loadingPosts = false;
 
 // ✅ 3. DEFINE loadPosts
 window.loadPosts = async function () {
@@ -907,12 +1035,16 @@ window.loadPosts = async function () {
   if (activeTab === "explore") {
 
     const response = await supabase
-      .from("posts")
-      .select("*")
-      .order("created_at", {
-        ascending: false
-      });
-
+  .from("posts")
+  .select("*")
+  .order("created_at", {
+    ascending: false
+  })
+  .range(
+    postPage * POSTS_PER_PAGE,
+    (postPage + 1) * POSTS_PER_PAGE - 1
+  );
+      
     posts = response.data;
     error = response.error;
 
@@ -932,7 +1064,6 @@ window.loadPosts = async function () {
 
   }
 
-  postsDiv.innerHTML = "";
 
   if (error) {
 
@@ -952,12 +1083,119 @@ window.loadPosts = async function () {
 
   }
 
-  posts.forEach(renderPost);
+ posts.forEach(renderPost);
 
-  observeVideos();
+observeVideos();
 
 };
 
+supabase
+  .channel("posts-feed")
+
+  .on(
+    "postgres_changes",
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "posts"
+    },
+
+    (payload) => {
+
+      const existing =
+        document.getElementById(
+          payload.new.id
+        );
+
+      if (existing) return;
+
+      if (postPage === 0) {
+
+        renderPost(payload.new);
+
+        observeVideos();
+
+      }
+
+    }
+
+  )
+
+  .subscribe();
+  
+  document
+  .getElementById("storyInput")
+  .addEventListener(
+    "change",
+    uploadStory
+  );
+
+async function uploadStory(event) {
+
+  const file =
+    event.target.files[0];
+
+  if (!file) return;
+
+  // FILE NAME
+  const fileName =
+    `${session.user.id}-${Date.now()}`;
+
+  // UPLOAD TO SUPABASE
+  const { error: uploadError } =
+    await supabase.storage
+      .from("stories")
+      .upload(fileName, file);
+
+  if (uploadError) {
+
+    console.log(uploadError);
+
+    return;
+
+  }
+
+  // GET PUBLIC URL
+  const { data } =
+    supabase.storage
+      .from("stories")
+      .getPublicUrl(fileName);
+
+  const mediaUrl =
+    data.publicUrl;
+
+  // DETECT TYPE
+  const mediaType =
+    file.type.startsWith("video")
+      ? "video"
+      : "image";
+
+  // SAVE STORY
+  await supabase
+    .from("stories")
+    .insert({
+
+      user_id:
+        session.user.id,
+
+      name:
+        profile?.name || "User",
+
+      avatar_url:
+        profile?.avatar_url || "",
+
+      media_url:
+        mediaUrl,
+
+      media_type:
+        mediaType
+
+    });
+
+  // REFRESH STORIES
+  loadStories();
+
+}
 
 window.likePost = async (id) => {
   const userId = session?.user?.id;
@@ -1511,14 +1749,16 @@ function startApp() {
   // ✅ NOW posts exists
   postsEl = document.getElementById("posts");
 
-  attachEvents();
+attachEvents();
 
-  loadPosts();
+loadPosts();
 
-  console.log("SCRIPT END");
+loadStories();
 
-  // ✅ SCROLL SNAP
-  setupScrollSnap();
+console.log("SCRIPT END");
+
+// ✅ SCROLL SNAP
+setupScrollSnap();
 }
 
 async function createPost() {
@@ -1601,7 +1841,6 @@ async function createPost() {
 // ========================
 // AUTO SNAP
 // ========================
-
 function setupScrollSnap() {
 
   if (!postsEl) return;
@@ -1610,8 +1849,27 @@ function setupScrollSnap() {
 
     clearTimeout(scrollTimeout);
 
+    // LOAD MORE POSTS
+    if (
+
+      postsEl.scrollTop +
+      postsEl.clientHeight >=
+
+      postsEl.scrollHeight - 1000
+
+    ) {
+
+      postPage++;
+
+      loadPosts();
+
+    }
+
+    // SNAP TO POST
     scrollTimeout = setTimeout(() => {
+
       snapToNearestPost();
+
     }, 120);
 
   });
@@ -2387,6 +2645,7 @@ window.closeChat = function () {
   
   requestAnimationFrame(() => {
   loadPosts();
+  loadStories();
 });
 
 };
@@ -2951,6 +3210,59 @@ window.closeMedia = function () {
 
 };
 
+window.loadStories = async function () {
+
+  const storiesBar =
+    document.getElementById("storiesBar");
+
+  const { data: stories } =
+    await supabase
+      .from("stories")
+      .select("*")
+      .order("created_at", {
+        ascending: false
+      });
+
+  storiesBar.innerHTML = "";
+
+  stories.forEach(story => {
+
+    storiesBar.innerHTML += `
+
+      <div
+        class="story"
+        onclick="
+          openStory(
+            '${story.media_url}',
+            '${story.media_type}'
+          )
+        "
+      >
+
+        <img src="${story.avatar_url}">
+
+        <div style="
+          color:white;
+          font-size:12px;
+          margin-top:5px;
+        ">
+          ${story.name}
+        </div>
+
+      </div>
+
+    `;
+
+  });
+
+};
+
+window.openStory = function(url, type) {
+
+  openMedia(url, type);
+
+}
+
 // ========================
 // GLOBAL FUNCTIONS
 // ========================
@@ -3036,11 +3348,49 @@ supabase
 </script>
 
 <script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js')
-    .then(() => console.log('Service Worker Registered'))
-    .catch(err => console.log('SW failed:', err));
+if ("serviceWorker" in navigator) {
+
+  window.addEventListener("load", () => {
+
+    navigator.serviceWorker
+      .register("/sw.js")
+      .then(() => console.log("SW registered"));
+
+  });
+
 }
+</script>
+
+<script>
+
+let deferredPrompt;
+
+window.addEventListener(
+  "beforeinstallprompt",
+  (e) => {
+
+    e.preventDefault();
+
+    deferredPrompt = e;
+
+    document.getElementById("installBtn")
+      .style.display = "block";
+
+  }
+);
+
+document
+  .getElementById("installBtn")
+  .addEventListener("click", async () => {
+
+    if (!deferredPrompt) return;
+
+    deferredPrompt.prompt();
+
+    deferredPrompt = null;
+
+  });
+
 </script>
 
 </body>
