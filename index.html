@@ -610,6 +610,14 @@ const supabase = createClient(
   "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M"
 );
 
+// STORY VARIABLES
+window.storyList = [];
+window.storyIndex = 0;
+window.storyTimer = null;
+
+let touchStartX = 0;
+let touchEndX = 0;
+
 console.log("🚀 Starting app...");
 
 // ✅ GLOBAL SESSION
@@ -1449,6 +1457,18 @@ function startApp() {
           👥 Following
         </div>
       </div>
+      
+      <div id="storiesBar" style="
+  display:flex;
+  gap:12px;
+  overflow-x:auto;
+  padding:10px;
+  background:#111;
+  border-bottom:1px solid #222;
+  min-height:90px;
+  align-items:center;
+">
+</div>
 
       ${
         session
@@ -1505,8 +1525,68 @@ function startApp() {
       <button id="panelPostBtn">
         Post
       </button>
+    
     </div>
-  `;
+
+<div id="storyViewer" style="
+  display:none;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:black;
+  z-index:99999;
+">
+
+  <div id="storyProgress" style="
+    display:flex;
+    gap:4px;
+    padding:10px;
+    position:absolute;
+    top:0;
+    left:0;
+    width:100%;
+    z-index:2;
+  ">
+  </div>
+
+  <div
+    id="storyContent"
+
+    ontouchstart="handleTouchStart(event)"
+    ontouchend="handleTouchEnd(event)"
+
+    style="
+      width:100%;
+      height:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    "
+  >
+  </div>
+
+  <button
+    onclick="closeStoryViewer()"
+
+    style="
+      position:absolute;
+      top:20px;
+      right:20px;
+      z-index:5;
+      background:none;
+      border:none;
+      color:white;
+      font-size:30px;
+    "
+  >
+    ✕
+  </button>
+
+</div>
+
+`;
 
   // ✅ NOW posts exists
   postsEl = document.getElementById("posts");
@@ -1514,11 +1594,12 @@ function startApp() {
   attachEvents();
 
   loadPosts();
+loadStories();
 
-  console.log("SCRIPT END");
+console.log("SCRIPT END");
 
-  // ✅ SCROLL SNAP
-  setupScrollSnap();
+// ✅ SCROLL SNAP
+setupScrollSnap();
 }
 
 async function createPost() {
@@ -2948,6 +3029,270 @@ window.closeMedia = function () {
     ).innerHTML = "";
 
   }, 200);
+
+};
+
+window.loadStories = async function () {
+
+  const storiesBar =
+    document.getElementById("storiesBar");
+
+  if (!storiesBar) return;
+
+  const yesterday =
+    new Date(
+      Date.now() - 24 * 60 * 60 * 1000
+    ).toISOString();
+
+  const { data: stories, error } =
+    await supabase
+      .from("stories")
+      .select("*")
+      .gt("created_at", yesterday)
+      .order("created_at", {
+        ascending: false
+      });
+
+  console.log("Stories:", stories);
+
+  if (error) {
+
+    console.log(error);
+    return;
+
+  }
+
+  window.storyList = stories || [];
+
+  let html = "";
+
+  stories.forEach((story, index) => {
+
+    html += `
+
+      <div
+        onclick="openStory(${index})"
+        style="
+          width:70px;
+          text-align:center;
+          color:white;
+          cursor:pointer;
+        "
+      >
+
+        <img
+          src="${
+            story.avatar_url ||
+            'https://via.placeholder.com/60'
+          }"
+
+          style="
+            width:60px;
+            height:60px;
+            border-radius:50%;
+            object-fit:cover;
+            border:3px solid #8a2be2;
+          "
+        >
+
+        <div style="
+          font-size:12px;
+          margin-top:5px;
+          white-space:nowrap;
+          overflow:hidden;
+          text-overflow:ellipsis;
+        ">
+          ${story.name}
+        </div>
+
+      </div>
+
+    `;
+
+  });
+
+  storiesBar.innerHTML = html;
+
+};
+
+window.openStory = function(index) {
+
+  storyIndex = index;
+
+  document.getElementById(
+    "storyViewer"
+  ).style.display = "block";
+
+  showStory();
+
+};
+
+function showStory() {
+
+  clearTimeout(window.storyTimer);
+
+  const story =
+    window.storyList[window.storyIndex];
+
+  if (!story) return;
+
+  const container =
+    document.getElementById(
+      "storyContent"
+    );
+
+  const progress =
+    document.getElementById(
+      "storyProgress"
+    );
+
+  progress.innerHTML = "";
+
+  window.storyList.forEach((_, i) => {
+
+    progress.innerHTML += `
+
+      <div style="
+        flex:1;
+        height:3px;
+        background:rgba(255,255,255,0.3);
+        border-radius:10px;
+        overflow:hidden;
+      ">
+
+        <div
+          id="storyBar${i}"
+
+          style="
+            width:${
+              i < window.storyIndex
+                ? "100%"
+                : "0%"
+            };
+
+            height:100%;
+            background:white;
+
+            transition:${
+              i === window.storyIndex
+                ? "5s linear"
+                : "none"
+            };
+          "
+        ></div>
+
+      </div>
+
+    `;
+
+  });
+
+  setTimeout(() => {
+
+    const activeBar =
+      document.getElementById(
+        `storyBar${window.storyIndex}`
+      );
+
+    if (activeBar) {
+
+      activeBar.style.width = "100%";
+
+    }
+
+  }, 50);
+
+  // IMAGE
+  if (story.media_type === "image") {
+
+    container.innerHTML = `
+      <img
+        src="${story.media_url}"
+
+        style="
+          width:100%;
+          height:100%;
+          object-fit:contain;
+        "
+      >
+    `;
+
+  }
+
+  // VIDEO
+  else {
+
+    container.innerHTML = `
+
+      <video
+        autoplay
+        playsinline
+
+        style="
+          width:100%;
+          height:100%;
+          object-fit:contain;
+        "
+      >
+        <source src="${story.media_url}">
+      </video>
+
+    `;
+
+  }
+
+  window.storyTimer = setTimeout(() => {
+
+    nextStory();
+
+  }, 5000);
+
+}
+
+function nextStory() {
+
+  if (
+    window.storyIndex <
+    window.storyList.length - 1
+  ) {
+
+    window.storyIndex++;
+
+    showStory();
+
+  }
+
+  else {
+
+    closeStoryViewer();
+
+  }
+
+}
+
+function prevStory() {
+
+  if (window.storyIndex > 0) {
+
+    window.storyIndex--;
+
+    showStory();
+
+  }
+
+}
+
+window.closeStoryViewer = function () {
+
+  clearTimeout(window.storyTimer);
+
+  document.getElementById(
+    "storyViewer"
+  ).style.display = "none";
+
+  document.getElementById(
+    "storyContent"
+  ).innerHTML = "";
 
 };
 
