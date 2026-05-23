@@ -1388,6 +1388,13 @@ const postBtn = document.getElementById("postBtn");
 if (postBtn) {
   postBtn.onclick = createPost;
 }
+
+const storyBtn =
+  document.getElementById("storyBtn");
+
+if (storyBtn) {
+  storyBtn.onclick = addStory;
+}
       
 
   // ✅ COMMENTS POST (MOVED INSIDE)
@@ -1492,6 +1499,10 @@ function startApp() {
 
 <button id="postBtn">
   Post
+</button>
+
+<button id="storyBtn">
+  Add Story
 </button>
           `
           : `
@@ -1658,20 +1669,28 @@ async function createPost() {
       .eq("id", session.user.id)
       .maybeSingle();
 
+  const { error } =
   await supabase
-    await supabase
-  .from("posts")
-  .insert([{
-    content,
-    file_url: mediaUrl,
-    media_type: mediaType,
-    user_id: session.user.id,
-    name:
-      profile?.name ||
-      session.user.email,
-    avatar_url:
-      profile?.avatar_url || null
-  }]);
+    .from("posts")
+    .insert([{
+      content,
+      file_url: mediaUrl,
+      media_type: mediaType,
+      user_id: session.user.id,
+      name:
+        profile?.name ||
+        session.user.email,
+      avatar_url:
+        profile?.avatar_url || null
+    }]);
+
+if (error) {
+
+  console.log(error);
+  alert("Post failed");
+  return;
+
+}
 
   input.value = "";
   mediaInput.value = "";
@@ -3054,6 +3073,9 @@ window.loadStories = async function () {
       });
 
   console.log("Stories:", stories);
+  
+  console.log("storiesBar:", storiesBar);
+console.log("story count:", stories?.length);
 
   if (error) {
 
@@ -3114,6 +3136,94 @@ window.loadStories = async function () {
   storiesBar.innerHTML = html;
 
 };
+
+async function addStory() {
+
+  try {
+
+    const file =
+      document.getElementById("mediaInput")
+      ?.files?.[0];
+
+    if (!file) {
+      alert("Choose image first");
+      return;
+    }
+
+    const fileName =
+      Date.now() + "-" + file.name;
+
+    // UPLOAD TO STORAGE
+    const { error: uploadError } =
+      await supabase.storage
+        .from("stories")
+        .upload(fileName, file);
+
+    if (uploadError) {
+
+      console.log(uploadError);
+      alert("Upload failed");
+      return;
+
+    }
+
+    // GET PUBLIC URL
+    const { data } =
+      supabase.storage
+        .from("stories")
+        .getPublicUrl(fileName);
+
+    const publicUrl =
+      data.publicUrl;
+
+    // FILE TYPE
+    const mediaType =
+      file.type.startsWith("video")
+        ? "video"
+        : "image";
+
+    // INSERT INTO TABLE
+    const { error: dbError } =
+      await supabase
+        .from("stories")
+        .insert([{
+
+          user_id:
+            session?.user?.id,
+
+          name:
+            profile?.name || "User",
+
+          avatar_url:
+            profile?.avatar_url || "",
+
+          media_url:
+            publicUrl,
+
+          media_type:
+            mediaType
+
+        }]);
+
+    if (dbError) {
+
+      console.log(dbError);
+      alert("DB insert failed");
+      return;
+
+    }
+
+    alert("Story added");
+
+    loadStories();
+
+  } catch (err) {
+
+    console.log(err);
+
+  }
+
+}
 
 window.openStory = function(index) {
 
