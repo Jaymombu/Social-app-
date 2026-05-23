@@ -376,37 +376,44 @@ body{
   <!-- MAIN FEED -->
   <div id="feed">
 
-    <!-- CREATE POST -->
-    <div id="createPost">
+<!-- CREATE POST -->
+<div id="createPost">
 
-      <textarea
-        placeholder="Write something..."
-      ></textarea>
+  <textarea
+    id="postInput"
+    placeholder="Write something..."
+  ></textarea>
 
-      <div style="
-        margin-top:10px;
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-      ">
+  <div style="
+    margin-top:10px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+  ">
 
-        <input
-          type="file"
-        >
+    <input
+      id="mediaInput"
+      type="file"
+    >
 
-        <button style="
-          background:#8a2be2;
-          border:none;
-          color:white;
-          padding:10px 20px;
-          border-radius:10px;
-        ">
-          Post
-        </button>
+    <button
+      onclick="createPost()"
+      style="
+        background:#8a2be2;
+        border:none;
+        color:white;
+        padding:10px 20px;
+        border-radius:10px;
+        cursor:pointer;
+      "
+    >
+      Post
+    </button>
 
-      </div>
+  </div>
 
-    </div>
+</div>
 
     <!-- STORIES -->
     <div id="storiesBar"></div>
@@ -618,9 +625,6 @@ body{
   </script>
   
   </div>
-
-</body>
-</html>
 
 <script type="module">
   console.log("SCRIPT START");
@@ -1638,7 +1642,7 @@ console.log("SCRIPT END");
 setupScrollSnap();
 }
 
-async function createPost() {
+window.createPost = async function () {
 
   const input =
     document.getElementById("postInput");
@@ -1662,19 +1666,21 @@ async function createPost() {
 
     const { error: uploadError } =
       await supabase.storage
-  .from("posts_media")
-  .upload(fileName, file);
+        .from("posts_media")
+        .upload(fileName, file);
 
     if (uploadError) {
+
       console.log(uploadError);
       alert("Upload failed");
+
       return;
     }
 
     const { data } =
       supabase.storage
-  .from("posts_media")
-  .getPublicUrl(fileName);
+        .from("posts_media")
+        .getPublicUrl(fileName);
 
     mediaUrl = data.publicUrl;
 
@@ -1685,6 +1691,7 @@ async function createPost() {
     if (file.type.startsWith("video")) {
       mediaType = "video";
     }
+
   }
 
   const { data: profile } =
@@ -1695,26 +1702,26 @@ async function createPost() {
       .maybeSingle();
 
   await supabase
-    await supabase
-  .from("posts")
-  .insert([{
-    content,
-    file_url: mediaUrl,
-    media_type: mediaType,
-    user_id: session.user.id,
-    name:
-      profile?.name ||
-      session.user.email,
-    avatar_url:
-      profile?.avatar_url || null
-  }]);
+    .from("posts")
+    .insert([{
+      content,
+      file_url: mediaUrl,
+      media_type: mediaType,
+      user_id: session.user.id,
+      name:
+        profile?.name ||
+        session.user.email,
+      avatar_url:
+        profile?.avatar_url || null
+    }]);
 
   input.value = "";
   mediaInput.value = "";
 
-  loadPosts();
-}
+  await loadPosts();
+  await loadStories();
 
+};
 // ========================
 // AUTO SNAP
 // ========================
@@ -2520,9 +2527,14 @@ window.closeChat = function () {
     "homePage"
   ).style.display = "block";
   
-  requestAnimationFrame(() => {
-  loadPosts();
-  loadStories();
+  requestAnimationFrame(async () => {
+
+  await loadPosts();
+
+  setTimeout(() => {
+    loadStories();
+  }, 100);
+
 });
 
 };
