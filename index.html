@@ -3,628 +3,757 @@
 <head>
 
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#8a2be2">
-
-  <meta
-    name="viewport"
-    content="
-      width=device-width,
-      initial-scale=1,
-      maximum-scale=1,
-      user-scalable=no
-    "
-  >
-
+<meta name="theme-color" content="#8a2be2">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  
   <link rel="icon" href="icon-192.png">
-  <link rel="apple-touch-icon" href="icon-192.png">
-
+<link rel="apple-touch-icon" href="icon-192.png">
+  
   <title>Social App</title>
+<style>
+  /* RESET */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: sans-serif;
+  transition: background 0.3s, color 0.3s;
+}
 
-  <style>
+/* 🔥 FULL SCREEN SCROLL */
+#posts {
+  min-height: 100vh;
+  overflow-y: auto;
+  padding-top: 60px;
+  padding-bottom: 120px;
+  box-sizing: border-box;
+}
 
-    body{
-      margin:0;
-      background:#0f0f0f;
-      color:white;
-      font-family:sans-serif;
-    }
+/* 📱 POST CARD */
+.post-card {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 18px;
+  padding: 14px;
+  margin: 12px;
+  color: white;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
 
-    /* TOP NAV */
-   #topNav{
+/* 🎥 MEDIA FULLSCREEN */
+.post-card img:not(.avatar),
+.post-card video {
+  max-width: 100%;
+  width: auto;
+  height: auto;
+
+  max-height: 500px;
+
+  border-radius: 16px;
+  margin-top: 12px;
+
+  object-fit: contain;
+
+  display: block;
+}
+
+/* 📝 TEXT (bottom left) */
+.post-text {
+  position: absolute;
+  bottom: 80px;
+  left: 10px;
+  color: white;
+  z-index: 2;
+}
+
+/* ❤️ ACTIONS (right side vertical) */
+.post-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 2;
+}
+
+.post-actions button {
+  background: rgba(0,0,0,0.5);
+  border: none;
+  color: white;
+  padding: 10px;
+  border-radius: 50%;
+}
+
+/* 🔊 TAP TO UNMUTE */
+.video-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.tap-unmute {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.6);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* 🔝 TOP NAV */
+#topNav {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  height: 50px;
+
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+
+  background: rgba(0,0,0,0.6);
+  color: #aaa;
+  font-weight: bold;
+  z-index: 1000;
+}
+
+#topNav .active {
+  color: white;
+  border-bottom: 2px solid white;
+}
+
+#topNav .search {
+  position: absolute;
+  right: 15px;
+}
+
+/* 🔽 BOTTOM NAV */
+#bottomNav {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  height: 60px;
+
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+
+  background: rgba(0,0,0,0.6);
+  color: white;
+  z-index: 1000;
+}
+
+/* ➕ PLUS BUTTON */
+#plusBtn {
+  background: white;
+  color: black;
+  font-size: 28px;
+  padding: 5px 15px;
+  border-radius: 12px;
+  position: relative;
+}
+
+#plusBtn::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  right: -5px;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, cyan, pink);
+  border-radius: 14px;
+  z-index: -1;
+}
+
+/* 📝 CREATE PANEL */
+#createPanel {
+  position: fixed;
+  bottom: 80px;
+  left: 10px;
+  right: 10px;
+  background: #111;
+  padding: 10px;
+  border-radius: 12px;
+  display: none;
+  z-index: 1000;
+}
+
+/* ❤️ LIKE ANIMATION */
+.like-btn.pop {
+  transform: scale(1.2);
+  transition: 0.2s;
+}
+#posts {
+  position: relative;
+  z-index: 1;
+}
+
+#topNav {
+  z-index: 1000;
+}
+
+#bottomNav {
+  z-index: 1000;
+}
+
+#createPanel {
+  z-index: 1001;
+}
+#commentsPanel {
+  position: fixed;
+  bottom: -100%;
+  left: 0;
+  width: 100%;
+  height: 60%;
+  background: var(--card);
+color: var(--text);
+  transition: bottom 0.3s ease;
+  z-index: 2000;
+  border-top-left-radius: 15px;
+  border-top-right-radius: 15px;
+}
+
+#commentsPanel.active {
+  bottom: 0;
+}
+
+.comments-content {
+  padding: 15px;
+}
+:root {
+  --bg: #ffffff;
+  --text: #111111;
+  --card: #f2f2f2;
+  --button: #222222;
+  --border: #dddddd;
+}
+
+.dark {
+  --bg: #0f0f0f;
+  --text: #ffffff;
+  --card: #1c1c1c;
+  --button: #333333;
+  --border: #444444;
+}
+.action-btn {
+  background: var(--button);
+  color: var(--text);
+}
+.panel {
+  background: var(--card);
+}
+.muted {
+  color: #aaa;
+}
+.active-tab {
+  color: white;
+  border-bottom: 2px solid white;
+  padding-bottom: 5px;
+}
+.post-card button {
+  border:none;
+  border-radius:10px;
+  padding:10px 14px;
+  font-weight:600;
+  color:white;
+}
+
+#mediaViewer{
   position:fixed;
-  top:0;
-  left:0;
-  right:0;
+  inset:0;
+  background:black;
+  z-index:99999;
 
-  height:60px;
+  display:none;
 
-  display:flex;
-  justify-content:space-around;
+  justify-content:center;
   align-items:center;
 
-  background:rgba(15,15,15,0.85);
-
-  backdrop-filter:blur(12px);
-
-  border-bottom:1px solid rgba(255,255,255,0.06);
-
-  z-index:3000;
-}
-
-    /* MAIN CONTENT */
-    #feed{
-      padding-top:65px;
-      padding-bottom:100px;
-    }
-
-    /* CREATE POST */
-    #createPost{
-      padding:15px;
-      border-bottom:1px solid #222;
-      background:#111;
-    }
-
-    #createPost textarea{
-  width:100%;
-  min-height:90px;
-
-  background:#1a1a1a;
-  color:white;
-
-  border:1px solid #333;
-  border-radius:18px;
-
-  padding:16px;
-
-  font-size:16px;
-  line-height:1.5;
-
-  resize:none;
-  outline:none;
-
-  transition:0.2s;
-}
-
-#createPost textarea:focus{
-  border-color:#8a2be2;
-  box-shadow:0 0 0 3px rgba(138,43,226,0.2);
-}
-
-    /* STORIES */
-    #storiesBar{
-      display:flex;
-      gap:12px;
-
-      overflow-x:auto;
-
-      padding:12px;
-
-      background:#111;
-
-      border-bottom:1px solid #222;
-
-      scrollbar-width:none;
-    }
-    
-    #storiesBar::-webkit-scrollbar{
-  display:none;
-}
-
-#storiesBar{
-  scroll-snap-type:x mandatory;
-}
-
-.story-card{
-  scroll-snap-align:start;
-}
-
-    /* STORY CARD */
-    .story-card{
-      min-width:110px;
-      height:180px;
-
-      border-radius:18px;
-
-      overflow:hidden;
-
-      position:relative;
-
-      flex-shrink:0;
-
-      background:#222;
-
-      cursor:pointer;
-    }
-
-    .story-card img.story-bg{
-      width:100%;
-      height:100%;
-      object-fit:cover;
-    }
-
-    .story-avatar{
-      position:absolute;
-      top:10px;
-      left:10px;
-
-      width:45px;
-      height:45px;
-
-      border-radius:50%;
-      border:3px solid #8a2be2;
-
-      object-fit:cover;
-    }
-
-    .story-name{
-      position:absolute;
-      bottom:10px;
-      left:10px;
-      right:10px;
-
-      font-size:14px;
-      font-weight:bold;
-
-      color:white;
-
-      text-shadow:0 2px 5px rgba(0,0,0,0.8);
-    }
-
-    /* POSTS */
-    #posts{
-      padding:10px;
-    }
-
-    .post-card{
-  background:#161616;
-
-  border:1px solid rgba(255,255,255,0.05);
-
-  border-radius:24px;
-
-  padding:16px;
-
-  margin-bottom:18px;
-
   overflow:hidden;
-
-  box-shadow:
-    0 4px 20px rgba(0,0,0,0.25);
 }
 
-    /* FLOATING STORY BUTTON */
-  #storyAddBtn{
-  position:fixed;
-
-  bottom:160px;
-  right:15px;
-
-  width:55px;
-  height:55px;
-
-  border-radius:50%;
-
-  background:#8a2be2;
-  color:white;
+#mediaContainer{
+  width:100%;
+  height:100%;
 
   display:flex;
   justify-content:center;
   align-items:center;
 
-  font-size:34px;
+  overflow:hidden;
 
-  z-index:5000;
-
-  cursor:pointer;
-
-  box-shadow:0 4px 12px rgba(0,0,0,0.4);
+  padding:20px;
+  box-sizing:border-box;
 }
 
-    /* STORY VIEWER */
-    #storyViewer{
-      position:fixed;
-      inset:0;
-
-      background:black;
-
-      display:none;
-
-      z-index:999999;
-    }
-
-    #storyProgress{
-      position:absolute;
-
-      top:10px;
-      left:10px;
-      right:10px;
-
-      display:flex;
-      gap:5px;
-
-      z-index:5;
-    }
-
-    #storyContent{
-      width:100%;
-      height:100%;
-
-      display:flex;
-      justify-content:center;
-      align-items:center;
-    }
-
-    /* MEDIA VIEWER */
-    #mediaViewer{
-      position:fixed;
-      inset:0;
-
-      background:black;
-
-      display:none;
-
-      justify-content:center;
-      align-items:center;
-
-      z-index:99999;
-    }
-    
-    #mediaViewer{
-  background:rgba(0,0,0,0.96);
-  backdrop-filter:blur(10px);
-}
-
-    #mediaContainer{
-      width:100%;
-      height:100%;
-
-      display:flex;
-      justify-content:center;
-      align-items:center;
-
-      overflow:auto;
-    }
-
-    #mediaContainer img,
-    #mediaContainer video{
-      max-width:95%;
-      max-height:95%;
-
-      object-fit:contain;
-    }
-    
-    html{
-  scroll-behavior:smooth;
-}
-
-.active-tab{
-  color:#8a2be2;
-  font-weight:bold;
-}
-
-.tab{
-  cursor:pointer;
-  transition:0.2s;
-}
-
-.tab:hover{
-  opacity:0.8;
-}
-
-img,
-video{
+#mediaContainer img{
   max-width:100%;
+  max-height:100%;
+
+  width:auto;
+  height:auto;
+
+  object-fit:contain;
   display:block;
 }
 
-.primary-btn{
-  background:linear-gradient(
-    135deg,
-    #8a2be2,
-    #a855f7
-  );
+#mediaContainer video{
+  width:auto !important;
+  height:auto !important;
 
-  border:none;
+  max-width:95vw;
+  max-height:95vh;
 
-  color:white;
+  object-fit:contain;
 
-  padding:12px 20px;
+  display:block;
 
-  border-radius:14px;
+  background:black;
+  border-radius:12px;
+}
 
-  font-weight:bold;
+#storiesBar{
+  display:flex;
+  gap:12px;
+  overflow-x:auto;
+  padding:10px;
+  margin-top:70px;
+}
 
+.story{
+  min-width:70px;
+  text-align:center;
   cursor:pointer;
-
-  transition:0.2s;
 }
 
-.primary-btn:active{
-  transform:scale(0.97);
+.story img{
+  width:60px;
+  height:60px;
+  border-radius:50%;
+  object-fit:cover;
+  border:3px solid #8a2be2;
 }
 
-body{
-  overscroll-behavior:none;
-}
-  </style>
-
+</style>
 </head>
-
 <body class="dark">
+  
+  <div id="storiesBar" style="
+  display:flex;
+  gap:12px;
+  overflow-x:auto;
+  padding:10px;
+  margin-top:60px;
+  background:#111;
+  border-bottom:1px solid #222;
+  min-height:90px;
+  align-items:center;
+"></div>
+  
+<label
+  for="storyInput"
+  style="
+    position:fixed;
+    top:110px;
+    right:15px;
+    z-index:9999;
+    width:50px;
+    height:50px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:#8a2be2;
+    color:white;
+    border-radius:50%;
+    cursor:pointer;
+    font-size:30px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.4);
+  "
+>
+  +
+</label>
 
-<div id="app">
+<input
+  type="file"
+  id="storyInput"
+  accept="image/*,video/*"
+  style="display:none"
+>
+  
+  <button
+  id="installBtn"
+  style="
+    display:none;
+    position:fixed;
+    top:15px;
+    right:15px;
+    z-index:9999;
+    padding:10px 16px;
+    border:none;
+    border-radius:12px;
+    background:#8a2be2;
+    color:white;
+  "
+>
+  Install App
+</button>
 
-<!-- TOP NAV -->
-<div id="topNav">
+<div
+  id="storyViewer"
+
+  ontouchstart="handleTouchStart(event)"
+  ontouchend="handleTouchEnd(event)"
+
+  style="
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:black;
+    display:none;
+    z-index:999999;
+  ">
+  
+  <div id="storyProgress" style="
+  position:absolute;
+  top:10px;
+  left:10px;
+  right:10px;
+  display:flex;
+  gap:5px;
+  z-index:5;
+"></div>
+  
+  <div id="storyContent"></div>
 
   <div
-    id="tab-explore"
-    class="active-tab tab"
+    onclick="closeStoryViewer()"
+    style="
+      position:absolute;
+      top:20px;
+      right:20px;
+      color:white;
+      font-size:30px;
+      cursor:pointer;
+      z-index:2;
+    "
   >
-    🌍 Explore
-  </div>
-
-  <div
-    id="tab-following"
-    class="tab"
-  >
-    👥 Following
+    ×
   </div>
 
 </div>
 
-  <!-- MAIN FEED -->
-  <div id="feed">
+<!-- LEFT SIDE -->
+<div
+  onclick="prevStory()"
+  style="
+    position:absolute;
+    left:0;
+    top:0;
+    width:50%;
+    height:100%;
+    z-index:4;
+  "
+></div>
 
-<!-- CREATE POST -->
-<div id="createPost">
+<!-- RIGHT SIDE -->
+<div
+  onclick="nextStory()"
+  style="
+    position:absolute;
+    right:0;
+    top:0;
+    width:50%;
+    height:100%;
+    z-index:4;
+  "
+></div>
+  
+  <div id="chatScreen" style="
+  position:fixed;
+  inset:0;
+  background:#0f0f0f;
+  z-index:5000;
+  display:none;
+  flex-direction:column;
+">
 
-  <textarea
-    id="postInput"
-    placeholder="Write something..."
-  ></textarea>
-
+  <!-- HEADER -->
   <div style="
-    margin-top:10px;
+    height:60px;
     display:flex;
-    justify-content:space-between;
     align-items:center;
-    gap:10px;
+    gap:12px;
+    padding:0 15px;
+    border-bottom:1px solid #222;
+    background:#111;
   ">
 
-    <input
-      id="mediaInput"
-      type="file"
-    >
+    <button onclick="closeChat()" style="
+  background:none;
+  border:none;
+  color:white;
+  font-size:22px;
+  cursor:pointer;
+">
+  ←
+</button>
 
-    <button
-      onclick="createPost()"
-      style="
-        background:#8a2be2;
-        border:none;
-        color:white;
-        padding:10px 20px;
-        border-radius:10px;
-        cursor:pointer;
-      "
-    >
-      Post
-    </button>
+   <img
+  id="chatAvatar"
+  src="https://via.placeholder.com/40"
 
-  </div>
+  onclick="
+    openMedia(
+      this.src,
+      'image'
+    )
+  "
 
-</div>
+  style="
+    width:40px;
+    height:40px;
+    border-radius:50%;
+    object-fit:cover;
+    background:#222;
+    cursor:pointer;
+  "
+/>
 
-    <!-- STORIES -->
-    <div id="storiesBar"></div>
+    <div>
+      <div
+        id="chatName"
+        style="
+          color:white;
+          font-weight:bold;
+        "
+      >
+        User
+      </div>
 
-    <!-- POSTS -->
-    <div id="posts"></div>
-
-  </div>
-
-  <!-- ADD STORY -->
-  <label
-    id="storyAddBtn"
-    for="storyInput"
-  >
-    +
-  </label>
-
-  <input
-    type="file"
-    id="storyInput"
-    accept="image/*,video/*"
-    style="display:none"
-  >
-
-  <!-- INSTALL BUTTON -->
-  <button
-    id="installBtn"
-
-    style="
-      display:none;
-
-      position:fixed;
-      top:12px;
-      right:15px;
-
-      z-index:6000;
-
-      padding:12px 18px;
-
-      border:none;
-      border-radius:14px;
-
-      background:#8a2be2;
-      color:white;
-    "
-  >
-    Install App
-  </button>
-
-  <!-- STORY VIEWER -->
-  <div
-    id="storyViewer"
-
-    ontouchstart="
-      handleTouchStart(event)
-    "
-
-    ontouchend="
-      handleTouchEnd(event)
-    "
-  >
-
-    <!-- PROGRESS -->
-    <div id="storyProgress"></div>
-
-    <!-- CONTENT -->
-    <div id="storyContent"></div>
-
-    <!-- LEFT TAP -->
-    <div
-      onclick="prevStory()"
-
-      style="
-        position:absolute;
-        left:0;
-        top:0;
-
-        width:50%;
-        height:100%;
-
-        z-index:4;
-      "
-    ></div>
-
-    <!-- RIGHT TAP -->
-    <div
-      onclick="nextStory()"
-
-      style="
-        position:absolute;
-        right:0;
-        top:0;
-
-        width:50%;
-        height:100%;
-
-        z-index:4;
-      "
-    ></div>
-
-    <!-- CLOSE -->
-    <div
-      onclick="closeStoryViewer()"
-
-      style="
-        position:absolute;
-        top:20px;
-        right:20px;
-
-        color:white;
-
-        font-size:35px;
-
-        z-index:6;
-
-        cursor:pointer;
-      "
-    >
-      ×
+      <div style="
+        color:#aaa;
+        font-size:12px;
+      ">
+        Active now
+      </div>
     </div>
 
   </div>
 
-  <!-- CHAT BUTTON -->
-  <button
-    id="floatingChatsBtn"
-
+  <!-- MESSAGES -->
+  <div
+    id="chatMessages"
     style="
-      position:fixed;
-
-      bottom:80px;
-      right:20px;
-
-      width:60px;
-      height:60px;
-
-      border-radius:50%;
-
-      border:none;
-
-      background:#0084ff;
-      color:white;
-
-      font-size:24px;
-
-      z-index:3000;
+      flex:1;
+      overflow-y:auto;
+      padding:15px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
     "
-  >
-    💬
-  </button>
+  ></div>
 
-  <!-- MEDIA VIEWER -->
-  <div id="mediaViewer">
+<!-- INPUT -->
+<div style="
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px;
+  background:#111;
+  border-top:1px solid #222;
+">
 
-    <button
-      onclick="closeMedia()"
+  <input
+    id="chatInput"
+    placeholder="Message..."
+    style="
+      flex:1;
+      background:#222;
+      border:none;
+      color:white;
+      padding:12px;
+      border-radius:25px;
+      outline:none;
+    "
+  />
 
+  <input
+    type="file"
+    id="chatMedia"
+    accept="image/*,video/*"
+    style="
+      color:white;
+      width:90px;
+    "
+  />
+
+  <button
+    onclick="sendMessage()"
       style="
-        position:absolute;
-        top:20px;
-        left:20px;
-
-        background:none;
+        background:#0084ff;
         border:none;
-
         color:white;
-
-        font-size:35px;
-
-        z-index:2;
+        padding:10px 18px;
+        border-radius:20px;
+        font-weight:bold;
       "
     >
-      ✕
+      Send
     </button>
 
-    <a
-      id="downloadMedia"
-      download
-
-      style="
-        position:absolute;
-        top:20px;
-        right:20px;
-
-        background:#0084ff;
-
-        color:white;
-
-        padding:10px 16px;
-
-        border-radius:10px;
-
-        text-decoration:none;
-
-        z-index:2;
-      "
-    >
-      Download
-    </a>
-
-    <div id="mediaContainer"></div>
-
   </div>
 
-  <script type="module">
+</div>
 
-    // YOUR JAVASCRIPT HERE
+<div id="inboxScreen" style="
+  position:fixed;
+  inset:0;
+  background:#0f0f0f;
+  z-index:4000;
+  display:none;
+  flex-direction:column;
+">
 
-  </script>
-  
+  <div style="
+  padding:15px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-bottom:1px solid #222;
+">
+
+  <div style="
+    font-size:22px;
+    font-weight:bold;
+    color:white;
+  ">
+    Chats
   </div>
+
+  <button
+    onclick="
+      document.getElementById('inboxScreen').style.display='none'
+    "
+    style="
+      background:none;
+      border:none;
+      color:white;
+      font-size:24px;
+      cursor:pointer;
+    "
+  >
+    ✕
+  </button>
+
+</div>
+
+  <div
+    id="inboxList"
+    style="
+      flex:1;
+      overflow-y:auto;
+    "
+  ></div>
+
+</div>
+
+<button
+  id="floatingChatsBtn"
+  onclick="openInbox()"
+  style="
+    position:fixed;
+    bottom:80px;
+    right:20px;
+    width:60px;
+    height:60px;
+    border-radius:50%;
+    border:none;
+    background:#0084ff;
+    color:white;
+    font-size:24px;
+    z-index:3000;
+    box-shadow:0 4px 12px rgba(0,0,0,0.4);
+  "
+>
+  💬
+</button>
+
+<div id="app"></div>
+
+<!-- MEDIA VIEWER -->
+<div
+  id="mediaViewer"
+
+  style="
+    position:fixed;
+    inset:0;
+    background:black;
+    z-index:99999;
+    display:none;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+  "
+>
+
+  <button
+    onclick="closeMedia()"
+
+    style="
+      position:absolute;
+      top:20px;
+      left:20px;
+      background:none;
+      border:none;
+      color:white;
+      font-size:35px;
+      z-index:2;
+    "
+  >
+    ✕
+  </button>
+
+  <a
+    id="downloadMedia"
+    download
+
+    style="
+      position:absolute;
+      top:20px;
+      right:20px;
+      background:#0084ff;
+      color:white;
+      padding:10px 16px;
+      border-radius:10px;
+      text-decoration:none;
+      font-weight:bold;
+      z-index:2;
+    "
+  >
+    Download
+  </a>
+
+ <div
+  id="mediaContainer"
+  style="
+    width:100vw;
+    height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    overflow:auto;
+  "
+></div>
+
+</div>
 
 <script type="module">
   console.log("SCRIPT START");
@@ -1031,14 +1160,15 @@ window.loadPosts = async function () {
   }
 
   if (!posts || posts.length === 0) {
-  postsDiv.innerHTML = "😢 No posts yet";
-  return;
-}
 
-// ✅ CLEAR OLD POSTS
-postsDiv.innerHTML = "";
+    postsDiv.innerHTML =
+      "😢 No posts yet";
 
-posts.forEach(renderPost);
+    return;
+
+  }
+
+ posts.forEach(renderPost);
 
 observeVideos();
 
@@ -1642,7 +1772,7 @@ console.log("SCRIPT END");
 setupScrollSnap();
 }
 
-window.createPost = async function () {
+async function createPost() {
 
   const input =
     document.getElementById("postInput");
@@ -1666,21 +1796,19 @@ window.createPost = async function () {
 
     const { error: uploadError } =
       await supabase.storage
-        .from("posts_media")
-        .upload(fileName, file);
+  .from("posts_media")
+  .upload(fileName, file);
 
     if (uploadError) {
-
       console.log(uploadError);
       alert("Upload failed");
-
       return;
     }
 
     const { data } =
       supabase.storage
-        .from("posts_media")
-        .getPublicUrl(fileName);
+  .from("posts_media")
+  .getPublicUrl(fileName);
 
     mediaUrl = data.publicUrl;
 
@@ -1691,7 +1819,6 @@ window.createPost = async function () {
     if (file.type.startsWith("video")) {
       mediaType = "video";
     }
-
   }
 
   const { data: profile } =
@@ -1702,26 +1829,26 @@ window.createPost = async function () {
       .maybeSingle();
 
   await supabase
-    .from("posts")
-    .insert([{
-      content,
-      file_url: mediaUrl,
-      media_type: mediaType,
-      user_id: session.user.id,
-      name:
-        profile?.name ||
-        session.user.email,
-      avatar_url:
-        profile?.avatar_url || null
-    }]);
+    await supabase
+  .from("posts")
+  .insert([{
+    content,
+    file_url: mediaUrl,
+    media_type: mediaType,
+    user_id: session.user.id,
+    name:
+      profile?.name ||
+      session.user.email,
+    avatar_url:
+      profile?.avatar_url || null
+  }]);
 
   input.value = "";
   mediaInput.value = "";
 
-  await loadPosts();
-  await loadStories();
+  loadPosts();
+}
 
-};
 // ========================
 // AUTO SNAP
 // ========================
@@ -2527,14 +2654,9 @@ window.closeChat = function () {
     "homePage"
   ).style.display = "block";
   
-  requestAnimationFrame(async () => {
-
-  await loadPosts();
-
-  setTimeout(() => {
-    loadStories();
-  }, 100);
-
+  requestAnimationFrame(() => {
+  loadPosts();
+  loadStories();
 });
 
 };
