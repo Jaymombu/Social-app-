@@ -3299,27 +3299,35 @@ document
         ? "video"
         : "image";
 
-    // SAVE STORY
-    const { error: dbError } =
-      await supabase
-        .from("stories")
-        .insert([{
-          user_id: session.user.id,
-          name: profile?.name || "User",
-          avatar_url:
-            profile?.avatar_url || "",
-          media_url: publicUrl,
-          media_type: mediaType
-        }]);
+// SAVE STORY
+console.log("SESSION:", session);
+console.log("PROFILE:", profile);
+console.log("PUBLIC URL:", publicUrl);
 
-    if (dbError) {
+const { data: inserted, error: dbError } =
+  await supabase
+    .from("stories")
+    .insert([{
+      user_id: session?.user?.id,
+      name: profile?.name || "User",
+      avatar_url:
+        profile?.avatar_url || "",
+      media_url: publicUrl,
+      media_type: mediaType
+    }])
+    .select();
 
-      console.log(dbError);
+console.log("INSERTED:", inserted);
+console.log("DB ERROR:", dbError);
 
-      alert("Database error");
+if (dbError) {
 
-      return;
-    }
+  console.log(dbError);
+
+  alert("Database error");
+
+  return;
+}
 
     alert("Story uploaded!");
 
