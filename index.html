@@ -160,35 +160,37 @@
       padding:14px;
 
       margin-bottom:15px;
+      
+      overflow:hidden;
     }
 
     /* FLOATING STORY BUTTON */
-    #storyAddBtn{
-      position:fixed;
+  #storyAddBtn{
+  position:fixed;
 
-      top:140px;
-      right:15px;
+  bottom:160px;
+  right:15px;
 
-      width:55px;
-      height:55px;
+  width:55px;
+  height:55px;
 
-      border-radius:50%;
+  border-radius:50%;
 
-      background:#8a2be2;
-      color:white;
+  background:#8a2be2;
+  color:white;
 
-      display:flex;
-      justify-content:center;
-      align-items:center;
+  display:flex;
+  justify-content:center;
+  align-items:center;
 
-      font-size:34px;
+  font-size:34px;
 
-      z-index:5000;
+  z-index:5000;
 
-      cursor:pointer;
+  cursor:pointer;
 
-      box-shadow:0 4px 12px rgba(0,0,0,0.4);
-    }
+  box-shadow:0 4px 12px rgba(0,0,0,0.4);
+}
 
     /* STORY VIEWER */
     #storyViewer{
@@ -257,6 +259,30 @@
 
       object-fit:contain;
     }
+    
+    html{
+  scroll-behavior:smooth;
+}
+
+.active-tab{
+  color:#8a2be2;
+  font-weight:bold;
+}
+
+.tab{
+  cursor:pointer;
+  transition:0.2s;
+}
+
+.tab:hover{
+  opacity:0.8;
+}
+
+img,
+video{
+  max-width:100%;
+  display:block;
+}
 
   </style>
 
@@ -264,18 +290,26 @@
 
 <body class="dark">
 
-  <!-- TOP NAV -->
-  <div id="topNav">
+<div id="app">
 
-    <div class="active-tab">
-      🌍 Explore
-    </div>
+<!-- TOP NAV -->
+<div id="topNav">
 
-    <div>
-      👥 Following
-    </div>
-
+  <div
+    id="tab-explore"
+    class="active-tab tab"
+  >
+    🌍 Explore
   </div>
+
+  <div
+    id="tab-following"
+    class="tab"
+  >
+    👥 Following
+  </div>
+
+</div>
 
   <!-- MAIN FEED -->
   <div id="feed">
@@ -515,14 +549,13 @@
 
   </div>
 
-  <!-- APP -->
-  <div id="app"></div>
-
   <script type="module">
 
     // YOUR JAVASCRIPT HERE
 
   </script>
+  
+  </div>
 
 </body>
 </html>
@@ -932,15 +965,14 @@ window.loadPosts = async function () {
   }
 
   if (!posts || posts.length === 0) {
+  postsDiv.innerHTML = "😢 No posts yet";
+  return;
+}
 
-    postsDiv.innerHTML =
-      "😢 No posts yet";
+// ✅ CLEAR OLD POSTS
+postsDiv.innerHTML = "";
 
-    return;
-
-  }
-
- posts.forEach(renderPost);
+posts.forEach(renderPost);
 
 observeVideos();
 
