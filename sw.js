@@ -1,4 +1,4 @@
-const CACHE_NAME = "social-app-v6";
+const CACHE_NAME = "social-app-v7";
 
 const urlsToCache = [
   "./",
@@ -14,13 +14,10 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 
   event.waitUntil(
-
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log("Caching app shell");
         return cache.addAll(urlsToCache);
       })
-
   );
 
 });
@@ -33,6 +30,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) => {
 
       return Promise.all(
+
         keys.map((key) => {
 
           if (key !== CACHE_NAME) {
@@ -40,28 +38,32 @@ self.addEventListener("activate", (event) => {
           }
 
         })
+
       );
 
     })
 
   );
 
-  return self.clients.claim();
+  self.clients.claim();
 
 });
 
 // FETCH
 self.addEventListener("fetch", (event) => {
-  
-  if (
-  event.request.url.includes("supabase")
-) {
-  return;
-}
+
+  // NEVER CACHE SUPABASE
+  if (event.request.url.includes("supabase")) {
+
+    event.respondWith(fetch(event.request));
+    return;
+
+  }
 
   event.respondWith(
 
     caches.match(event.request)
+
       .then((cachedResponse) => {
 
         // RETURN CACHE
@@ -71,23 +73,28 @@ self.addEventListener("fetch", (event) => {
 
         // FETCH NETWORK
         return fetch(event.request)
+
           .then((networkResponse) => {
 
-            // CLONE
-            const responseClone = networkResponse.clone();
+            const responseClone =
+              networkResponse.clone();
 
-            // SAVE TO CACHE
             caches.open(CACHE_NAME)
               .then((cache) => {
-                cache.put(event.request, responseClone);
+
+                cache.put(
+                  event.request,
+                  responseClone
+                );
+
               });
 
             return networkResponse;
 
           })
+
           .catch(() => {
 
-            // OFFLINE FALLBACK
             return caches.match("./index.html");
 
           });
