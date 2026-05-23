@@ -30,23 +30,26 @@
     }
 
     /* TOP NAV */
-    #topNav{
-      position:fixed;
-      top:0;
-      left:0;
-      right:0;
-      height:55px;
+   #topNav{
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
 
-      display:flex;
-      justify-content:space-around;
-      align-items:center;
+  height:60px;
 
-      background:#111;
+  display:flex;
+  justify-content:space-around;
+  align-items:center;
 
-      z-index:3000;
+  background:rgba(15,15,15,0.85);
 
-      border-bottom:1px solid #222;
-    }
+  backdrop-filter:blur(12px);
+
+  border-bottom:1px solid rgba(255,255,255,0.06);
+
+  z-index:3000;
+}
 
     /* MAIN CONTENT */
     #feed{
@@ -62,21 +65,30 @@
     }
 
     #createPost textarea{
-      width:100%;
-      min-height:70px;
+  width:100%;
+  min-height:90px;
 
-      background:#222;
-      color:white;
+  background:#1a1a1a;
+  color:white;
 
-      border:none;
-      border-radius:15px;
+  border:1px solid #333;
+  border-radius:18px;
 
-      padding:15px;
-      box-sizing:border-box;
+  padding:16px;
 
-      resize:none;
-      outline:none;
-    }
+  font-size:16px;
+  line-height:1.5;
+
+  resize:none;
+  outline:none;
+
+  transition:0.2s;
+}
+
+#createPost textarea:focus{
+  border-color:#8a2be2;
+  box-shadow:0 0 0 3px rgba(138,43,226,0.2);
+}
 
     /* STORIES */
     #storiesBar{
@@ -93,6 +105,18 @@
 
       scrollbar-width:none;
     }
+    
+    #storiesBar::-webkit-scrollbar{
+  display:none;
+}
+
+#storiesBar{
+  scroll-snap-type:x mandatory;
+}
+
+.story-card{
+  scroll-snap-align:start;
+}
 
     /* STORY CARD */
     .story-card{
@@ -152,17 +176,21 @@
     }
 
     .post-card{
-      background:#111;
-      border:1px solid #222;
+  background:#161616;
 
-      border-radius:20px;
+  border:1px solid rgba(255,255,255,0.05);
 
-      padding:14px;
+  border-radius:24px;
 
-      margin-bottom:15px;
-      
-      overflow:hidden;
-    }
+  padding:16px;
+
+  margin-bottom:18px;
+
+  overflow:hidden;
+
+  box-shadow:
+    0 4px 20px rgba(0,0,0,0.25);
+}
 
     /* FLOATING STORY BUTTON */
   #storyAddBtn{
@@ -240,6 +268,11 @@
 
       z-index:99999;
     }
+    
+    #mediaViewer{
+  background:rgba(0,0,0,0.96);
+  backdrop-filter:blur(10px);
+}
 
     #mediaContainer{
       width:100%;
@@ -284,6 +317,35 @@ video{
   display:block;
 }
 
+.primary-btn{
+  background:linear-gradient(
+    135deg,
+    #8a2be2,
+    #a855f7
+  );
+
+  border:none;
+
+  color:white;
+
+  padding:12px 20px;
+
+  border-radius:14px;
+
+  font-weight:bold;
+
+  cursor:pointer;
+
+  transition:0.2s;
+}
+
+.primary-btn:active{
+  transform:scale(0.97);
+}
+
+body{
+  overscroll-behavior:none;
+}
   </style>
 
 </head>
