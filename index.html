@@ -344,36 +344,20 @@ color: var(--text);
 </head>
 <body class="dark">
   
-  <div id="storiesBar" style="
-  display:flex;
-  gap:12px;
-  overflow-x:auto;
-  padding:10px;
-  margin-top:60px;
-  background:#111;
-  border-bottom:1px solid #222;
-  min-height:90px;
-  align-items:center;
-"></div>
+  <div id="storiesBar"></div>
   
-<label
+  <label
   for="storyInput"
   style="
     position:fixed;
-    top:110px;
+    top:70px;
     right:15px;
     z-index:9999;
-    width:50px;
-    height:50px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
     background:#8a2be2;
     color:white;
+    padding:10px;
     border-radius:50%;
     cursor:pointer;
-    font-size:30px;
-    box-shadow:0 4px 12px rgba(0,0,0,0.4);
   "
 >
   +
@@ -404,46 +388,49 @@ color: var(--text);
   Install App
 </button>
 
-<div id="storyViewer"
-style="
-display:none;
-position:fixed;
-inset:0;
-background:black;
-z-index:999999;
-">
+<div
+  id="storyViewer"
 
-  <div id="storyProgress"
-  style="
-    position:absolute;
-    top:10px;
-    left:10px;
-    right:10px;
-    display:flex;
-    gap:5px;
-    z-index:2;
-  "></div>
+  ontouchstart="handleTouchStart(event)"
+  ontouchend="handleTouchEnd(event)"
 
-  <div id="storyContent"
   style="
+    position:fixed;
+    top:0;
+    left:0;
     width:100%;
     height:100%;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-  "></div>
+    background:black;
+    display:none;
+    z-index:999999;
+  ">
+  
+  <div id="storyProgress" style="
+  position:absolute;
+  top:10px;
+  left:10px;
+  right:10px;
+  display:flex;
+  gap:5px;
+  z-index:5;
+"></div>
+  
+  <div id="storyContent"></div>
 
-  <button
+  <div
     onclick="closeStoryViewer()"
     style="
       position:absolute;
       top:20px;
       right:20px;
-      z-index:10;
+      color:white;
+      font-size:30px;
+      cursor:pointer;
+      z-index:2;
     "
   >
-    ✕
-  </button>
+    ×
+  </div>
 
 </div>
 
@@ -1656,35 +1643,21 @@ if (postBtn) {
   }
 
   // ✅ LOGIN
-  const loginBtn =
-  document.getElementById("login");
+  const loginBtn = document.getElementById("login");
+  if (loginBtn) {
+    loginBtn.onclick = async () => {
+      console.log("🔐 Login clicked");
 
-console.log("LOGIN BTN:", loginBtn);
-
-if (loginBtn) {
-
-  loginBtn.onclick = async () => {
-
-    console.log("🔐 LOGIN CLICKED");
-
-    const { data, error } =
       await supabase.auth.signInWithOAuth({
-
         provider: "google",
-
         options: {
-          redirectTo:
-            "https://jaymombu.github.io/Social-app-/"
+          redirectTo: window.location.origin
         }
-
       });
+    };
+  }
+} // ✅ ONLY ONE closing bracket
 
-    console.log("LOGIN RESULT:", data, error);
-
-  };
-
-}
-}
 // ✅ START APP FUNCTION (you were missing this too)
 let postsEl = null;
 let scrollTimeout;
@@ -1692,99 +1665,84 @@ let scrollTimeout;
 function startApp() {
 
   document.getElementById("app").innerHTML = `
-  <div style="padding:10px;">
+    <div style="padding:10px;">
 
-    <div id="tabs" style="
-      display:flex;
-      justify-content:space-around;
-      margin-bottom:10px;
-      color:#aaa;
-      font-weight:bold;
-    ">
-      <div id="tab-explore" class="active-tab">
-        🌍 Explore
+      <div id="tabs" style="
+        display:flex;
+        justify-content:space-around;
+        margin-bottom:10px;
+        color:#aaa;
+        font-weight:bold;
+      ">
+        <div id="tab-explore" class="active-tab">
+          🌍 Explore
+        </div>
+
+        <div id="tab-following">
+          👥 Following
+        </div>
       </div>
 
-      <div id="tab-following">
-        👥 Following
-      </div>
+      ${
+        session
+          ? `
+           <textarea 
+  id="postInput"
+  placeholder="Write something..."
+  style="
+    width:100%;
+    height:80px;
+    margin-bottom:10px;
+  "
+></textarea>
+
+<input
+  type="file"
+  id="mediaInput"
+  accept="image/*,video/*"
+  style="margin-bottom:10px;"
+/>
+
+<button id="postBtn">
+  Post
+</button>
+          `
+          : `
+            <button id="login">Login</button>
+          `
+      }
+
+      <div id="posts"></div>
+
     </div>
 
-    ${
-      session
-        ? `
-          <textarea 
-            id="postInput"
-            placeholder="Write something..."
-            style="
-              width:100%;
-              height:80px;
-              margin-bottom:10px;
-            "
-          ></textarea>
+    <div id="commentsPanel" style="
+      position:fixed;
+      bottom:0;
+      left:0;
+      right:0;
+      height:60%;
+      background:#111;
+      color:white;
+      display:none;
+      flex-direction:column;
+      padding:10px;
+      z-index:1000;
+    ">
+      <span id="closeComments">✖</span>
 
-          <input
-            type="file"
-            id="mediaInput"
-            accept="image/*,video/*"
-            style="margin-bottom:10px;"
-          />
+      <div id="panelComments"></div>
 
-          <button id="postBtn">
-            Post
-          </button>
-        `
-        : `
-          <button
-            id="login"
-            style="
-              position:fixed;
-              top:70px;
-              left:15px;
-              z-index:9999;
-              padding:10px 16px;
-              border:none;
-              border-radius:12px;
-              background:#8a2be2;
-              color:white;
-              font-weight:bold;
-            "
-          >
-            Login
-          </button>
-        `
-    }
+      <input id="panelInput" />
 
-    <div id="posts"></div>
+      <button id="panelPostBtn">
+        Post
+      </button>
+    </div>
+  `;
 
-  </div>
-
-  <div id="commentsPanel" style="
-    position:fixed;
-    bottom:0;
-    left:0;
-    right:0;
-    height:60%;
-    background:#111;
-    color:white;
-    display:none;
-    flex-direction:column;
-    padding:10px;
-    z-index:1000;
-  ">
-    <span id="closeComments">✖</span>
-
-    <div id="panelComments"></div>
-
-    <input id="panelInput" />
-
-    <button id="panelPostBtn">
-      Post
-    </button>
-  </div>
-`;
-
-postsEl = document.getElementById("posts");
+  // ✅ NOW posts exists
+  postsEl = document.getElementById("posts");
 
 attachEvents();
 
@@ -1794,6 +1752,7 @@ loadStories();
 
 console.log("SCRIPT END");
 
+// ✅ SCROLL SNAP
 setupScrollSnap();
 }
 
@@ -3299,35 +3258,27 @@ document
         ? "video"
         : "image";
 
-// SAVE STORY
-console.log("SESSION:", session);
-console.log("PROFILE:", profile);
-console.log("PUBLIC URL:", publicUrl);
+    // SAVE STORY
+    const { error: dbError } =
+      await supabase
+        .from("stories")
+        .insert([{
+          user_id: session.user.id,
+          name: profile?.name || "User",
+          avatar_url:
+            profile?.avatar_url || "",
+          media_url: publicUrl,
+          media_type: mediaType
+        }]);
 
-const { data: inserted, error: dbError } =
-  await supabase
-    .from("stories")
-    .insert([{
-      user_id: session?.user?.id,
-      name: profile?.name || "User",
-      avatar_url:
-        profile?.avatar_url || "",
-      media_url: publicUrl,
-      media_type: mediaType
-    }])
-    .select();
+    if (dbError) {
 
-console.log("INSERTED:", inserted);
-console.log("DB ERROR:", dbError);
+      console.log(dbError);
 
-if (dbError) {
+      alert("Database error");
 
-  console.log(dbError);
-
-  alert("Database error");
-
-  return;
-}
+      return;
+    }
 
     alert("Story uploaded!");
 
@@ -3359,8 +3310,6 @@ const { data: stories, error } =
   if (error) return console.log(error);
 
   let html = "";
-  
-  console.log("Stories:", stories);
 
   // SAVE STORIES GLOBALLY
   window.allStories = stories;
@@ -3418,7 +3367,7 @@ window.openStory = function(index) {
   showStory();
 };
 
-window.showStory = function() {
+function showStory() {
 
   clearTimeout(storyTimer);
 
@@ -3511,7 +3460,7 @@ setTimeout(() => {
   }, 5000);
 }
 
-window.nextStory = function() {
+function nextStory() {
 
   if (storyIndex < storyList.length - 1) {
     storyIndex++;
@@ -3521,7 +3470,7 @@ window.nextStory = function() {
   }
 }
 
-window.prevStory = function() {
+function prevStory() {
 
   if (storyIndex > 0) {
     storyIndex--;
@@ -3529,14 +3478,14 @@ window.prevStory = function() {
   }
 }
 
-window.handleTouchStart = function(e) {
+function handleTouchStart(e) {
 
   touchStartX =
     e.changedTouches[0].screenX;
 
 }
 
-window.handleTouchEnd = function(e) {
+function handleTouchEnd(e) {
 
   touchEndX =
     e.changedTouches[0].screenX;
@@ -3544,7 +3493,7 @@ window.handleTouchEnd = function(e) {
   handleSwipe();
 }
 
-window.handleSwipe = function() {
+function handleSwipe() {
 
   const swipeDistance =
     touchEndX - touchStartX;
@@ -3575,48 +3524,6 @@ window.closeStoryViewer = function () {
   document.getElementById(
     "storyContent"
   ).innerHTML = "";
-};
-
-// BACK BUTTON
-window.goBack = function () {
-
-  currentProfileId = null;
-
-  startApp();
-
-};
-
-// EDIT PROFILE
-window.editProfile = async function () {
-
-  const newName =
-    prompt("Enter new username");
-
-  if (!newName) return;
-
-  const user = session?.user;
-
-  if (!user) return;
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      username: newName
-    })
-    .eq("id", user.id);
-
-  if (error) {
-
-    console.log(error);
-    alert("Failed to update");
-
-    return;
-  }
-
-  alert("Profile updated");
-
-  openProfile(user.id, newName);
-
 };
 
 // ========================
