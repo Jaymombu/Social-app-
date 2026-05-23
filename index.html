@@ -322,22 +322,19 @@ color: var(--text);
   display:flex;
   gap:12px;
   overflow-x:auto;
-  padding:12px;
-  background:#111;
-  position:sticky;
-  top:60px;
-  z-index:100;
+  padding:10px;
+  margin-top:70px;
 }
 
 .story{
-  flex-shrink:0;
+  min-width:70px;
   text-align:center;
   cursor:pointer;
 }
 
 .story img{
-  width:70px;
-  height:70px;
+  width:60px;
+  height:60px;
   border-radius:50%;
   object-fit:cover;
   border:3px solid #8a2be2;
@@ -390,6 +387,78 @@ color: var(--text);
 >
   Install App
 </button>
+
+<div
+  id="storyViewer"
+
+  ontouchstart="handleTouchStart(event)"
+  ontouchend="handleTouchEnd(event)"
+
+  style="
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:black;
+    display:none;
+    z-index:999999;
+  ">
+  
+  <div id="storyProgress" style="
+  position:absolute;
+  top:10px;
+  left:10px;
+  right:10px;
+  display:flex;
+  gap:5px;
+  z-index:5;
+"></div>
+  
+  <div id="storyContent"></div>
+
+  <div
+    onclick="closeStoryViewer()"
+    style="
+      position:absolute;
+      top:20px;
+      right:20px;
+      color:white;
+      font-size:30px;
+      cursor:pointer;
+      z-index:2;
+    "
+  >
+    ×
+  </div>
+
+</div>
+
+<!-- LEFT SIDE -->
+<div
+  onclick="prevStory()"
+  style="
+    position:absolute;
+    left:0;
+    top:0;
+    width:50%;
+    height:100%;
+    z-index:4;
+  "
+></div>
+
+<!-- RIGHT SIDE -->
+<div
+  onclick="nextStory()"
+  style="
+    position:absolute;
+    right:0;
+    top:0;
+    width:50%;
+    height:100%;
+    z-index:4;
+  "
+></div>
   
   <div id="chatScreen" style="
   position:fixed;
@@ -1122,80 +1191,6 @@ supabase
   )
 
   .subscribe();
-  
-  document
-  .getElementById("storyInput")
-  .addEventListener(
-    "change",
-    uploadStory
-  );
-
-async function uploadStory(event) {
-
-  const file =
-    event.target.files[0];
-
-  if (!file) return;
-
-  // FILE NAME
-  const fileName =
-    `${session.user.id}-${Date.now()}`;
-
-  // UPLOAD TO SUPABASE
-  const { error: uploadError } =
-    await supabase.storage
-      .from("stories")
-      .upload(fileName, file);
-
-  if (uploadError) {
-
-    console.log(uploadError);
-
-    return;
-
-  }
-
-  // GET PUBLIC URL
-  const { data } =
-    supabase.storage
-      .from("stories")
-      .getPublicUrl(fileName);
-
-  const mediaUrl =
-    data.publicUrl;
-
-  // DETECT TYPE
-  const mediaType =
-    file.type.startsWith("video")
-      ? "video"
-      : "image";
-
-  // SAVE STORY
-  await supabase
-    .from("stories")
-    .insert({
-
-      user_id:
-        session.user.id,
-
-      name:
-        profile?.name || "User",
-
-      avatar_url:
-        profile?.avatar_url || "",
-
-      media_url:
-        mediaUrl,
-
-      media_type:
-        mediaType
-
-    });
-
-  // REFRESH STORIES
-  loadStories();
-
-}
 
 window.likePost = async (id) => {
   const userId = session?.user?.id;
@@ -3189,6 +3184,11 @@ if (type === "video") {
   viewer.style.background = "rgba(0,0,0,0.95)";
 };
 
+let storyIndex = 0;
+let storyList = [];
+let storyTimer;
+let touchStartX = 0;
+let touchEndX = 0;
 
 // CLOSE MEDIA
 window.closeMedia = function () {
@@ -3210,58 +3210,321 @@ window.closeMedia = function () {
 
 };
 
+// UPLOAD STORY
+document
+  .getElementById("storyInput")
+  .addEventListener("change", async (e) => {
+
+    const file = e.target.files[0];
+
+    if (!file) return;
+
+    if (!session?.user) {
+      alert("Login first");
+      return;
+    }
+
+    const fileExt =
+      file.name.split(".").pop();
+
+    const fileName =
+      `${session.user.id}-${Date.now()}.${fileExt}`;
+
+    // UPLOAD TO STORAGE
+    const { error: uploadError } =
+      await supabase.storage
+        .from("stories")
+        .upload(fileName, file);
+
+    if (uploadError) {
+
+      console.log(uploadError);
+
+      alert("Story upload failed");
+
+      return;
+    }
+
+    // GET PUBLIC URL
+    const {
+      data: { publicUrl }
+    } = supabase.storage
+      .from("stories")
+      .getPublicUrl(fileName);
+
+    // DETECT TYPE
+    const mediaType =
+      file.type.startsWith("video")
+        ? "video"
+        : "image";
+
+    // SAVE STORY
+    const { error: dbError } =
+      await supabase
+        .from("stories")
+        .insert([{
+          user_id: session.user.id,
+          name: profile?.name || "User",
+          avatar_url:
+            profile?.avatar_url || "",
+          media_url: publicUrl,
+          media_type: mediaType
+        }]);
+
+    if (dbError) {
+
+      console.log(dbError);
+
+      alert("Database error");
+
+      return;
+    }
+
+    alert("Story uploaded!");
+
+    loadStories();
+
+  });
+
 window.loadStories = async function () {
 
   const storiesBar =
     document.getElementById("storiesBar");
 
-  const { data: stories } =
-    await supabase
-      .from("stories")
-      .select("*")
-      .order("created_at", {
-        ascending: false
-      });
+  if (!storiesBar) return;
 
-  storiesBar.innerHTML = "";
+  const yesterday =
+  new Date(
+    Date.now() - 24 * 60 * 60 * 1000
+  ).toISOString();
 
-  stories.forEach(story => {
+const { data: stories, error } =
+  await supabase
+    .from("stories")
+    .select("*")
+    .gt("created_at", yesterday)
+    .order("created_at", {
+      ascending: false
+    });
 
-    storiesBar.innerHTML += `
+  if (error) return console.log(error);
 
+  let html = "";
+
+  // SAVE STORIES GLOBALLY
+  window.allStories = stories;
+
+  stories.forEach((story, index) => {
+
+    html += `
       <div
-        class="story"
-        onclick="
-          openStory(
-            '${story.media_url}',
-            '${story.media_type}'
-          )
+        onclick="openStory(${index})"
+        style="
+          width:70px;
+          text-align:center;
+          color:white;
+          cursor:pointer;
         "
       >
 
-        <img src="${story.avatar_url}">
+        <img
+          src="${story.avatar_url || 'https://via.placeholder.com/60'}"
+          style="
+            width:60px;
+            height:60px;
+            border-radius:50%;
+            object-fit:cover;
+            border:3px solid #8a2be2;
+          "
+        >
 
         <div style="
-          color:white;
           font-size:12px;
           margin-top:5px;
+          white-space:nowrap;
+          overflow:hidden;
+          text-overflow:ellipsis;
         ">
           ${story.name}
         </div>
 
       </div>
-
     `;
-
   });
 
+  storiesBar.innerHTML = html;
 };
 
-window.openStory = function(url, type) {
+window.openStory = function(index) {
 
-  openMedia(url, type);
+  storyList = window.allStories || [];
+  storyIndex = index;
+
+  document.getElementById(
+    "storyViewer"
+  ).style.display = "block";
+
+  showStory();
+};
+
+function showStory() {
+
+  clearTimeout(storyTimer);
+
+  const story = storyList[storyIndex];
+
+  if (!story) return;
+
+  const container =
+    document.getElementById("storyContent");
+
+  // 🔥 ADD HERE
+  const progress =
+    document.getElementById("storyProgress");
+
+  progress.innerHTML = "";
+
+  storyList.forEach((_, i) => {
+
+  progress.innerHTML += `
+
+    <div style="
+      flex:1;
+      height:3px;
+      background:rgba(255,255,255,0.3);
+      border-radius:10px;
+      overflow:hidden;
+    ">
+
+      <div
+        id="storyBar${i}"
+        style="
+          width:${
+            i < storyIndex
+              ? "100%"
+              : "0%"
+          };
+          height:100%;
+          background:white;
+          transition:${
+            i === storyIndex
+              ? "5s linear"
+              : "none"
+          };
+        "
+      ></div>
+
+    </div>
+
+  `;
+
+});
+
+setTimeout(() => {
+
+  const activeBar =
+    document.getElementById(
+      `storyBar${storyIndex}`
+    );
+
+  if (activeBar) {
+
+    activeBar.style.width = "100%";
+
+  }
+
+}, 50);
+
+  // IMAGE
+  if (story.media_type === "image") {
+
+    container.innerHTML = `
+      <img
+        src="${story.media_url}"
+        style="width:100%;height:100%;object-fit:contain;">
+    `;
+
+  } else {
+
+    container.innerHTML = `
+      <video autoplay playsinline
+        style="width:100%;height:100%;object-fit:contain;">
+        <source src="${story.media_url}">
+      </video>
+    `;
+  }
+
+  // AUTO NEXT AFTER 5 SECONDS
+  storyTimer = setTimeout(() => {
+    nextStory();
+  }, 5000);
+}
+
+function nextStory() {
+
+  if (storyIndex < storyList.length - 1) {
+    storyIndex++;
+    showStory();
+  } else {
+    closeStoryViewer();
+  }
+}
+
+function prevStory() {
+
+  if (storyIndex > 0) {
+    storyIndex--;
+    showStory();
+  }
+}
+
+function handleTouchStart(e) {
+
+  touchStartX =
+    e.changedTouches[0].screenX;
 
 }
+
+function handleTouchEnd(e) {
+
+  touchEndX =
+    e.changedTouches[0].screenX;
+
+  handleSwipe();
+}
+
+function handleSwipe() {
+
+  const swipeDistance =
+    touchEndX - touchStartX;
+
+  // SWIPE RIGHT
+  if (swipeDistance > 50) {
+
+    prevStory();
+
+  }
+
+  // SWIPE LEFT
+  else if (swipeDistance < -50) {
+
+    nextStory();
+
+  }
+}
+
+window.closeStoryViewer = function () {
+
+  clearTimeout(storyTimer);
+
+  document.getElementById(
+    "storyViewer"
+  ).style.display = "none";
+
+  document.getElementById(
+    "storyContent"
+  ).innerHTML = "";
+};
 
 // ========================
 // GLOBAL FUNCTIONS
