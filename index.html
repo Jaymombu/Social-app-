@@ -1659,21 +1659,35 @@ if (postBtn) {
   }
 
   // ✅ LOGIN
-  const loginBtn = document.getElementById("login");
-  if (loginBtn) {
-    loginBtn.onclick = async () => {
-      console.log("🔐 Login clicked");
+  const loginBtn =
+  document.getElementById("login");
 
+console.log("LOGIN BTN:", loginBtn);
+
+if (loginBtn) {
+
+  loginBtn.onclick = async () => {
+
+    console.log("🔐 LOGIN CLICKED");
+
+    const { data, error } =
       await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-    };
-  }
-} // ✅ ONLY ONE closing bracket
 
+        provider: "google",
+
+        options: {
+          redirectTo:
+            "https://jaymombu.github.io/Social-app-/"
+        }
+
+      });
+
+    console.log("LOGIN RESULT:", data, error);
+
+  };
+
+}
+}
 // ✅ START APP FUNCTION (you were missing this too)
 let postsEl = null;
 let scrollTimeout;
@@ -1681,84 +1695,99 @@ let scrollTimeout;
 function startApp() {
 
   document.getElementById("app").innerHTML = `
-    <div style="padding:10px;">
+  <div style="padding:10px;">
 
-      <div id="tabs" style="
-        display:flex;
-        justify-content:space-around;
-        margin-bottom:10px;
-        color:#aaa;
-        font-weight:bold;
-      ">
-        <div id="tab-explore" class="active-tab">
-          🌍 Explore
-        </div>
-
-        <div id="tab-following">
-          👥 Following
-        </div>
+    <div id="tabs" style="
+      display:flex;
+      justify-content:space-around;
+      margin-bottom:10px;
+      color:#aaa;
+      font-weight:bold;
+    ">
+      <div id="tab-explore" class="active-tab">
+        🌍 Explore
       </div>
 
-      ${
-        session
-          ? `
-           <textarea 
-  id="postInput"
-  placeholder="Write something..."
-  style="
-    width:100%;
-    height:80px;
-    margin-bottom:10px;
-  "
-></textarea>
-
-<input
-  type="file"
-  id="mediaInput"
-  accept="image/*,video/*"
-  style="margin-bottom:10px;"
-/>
-
-<button id="postBtn">
-  Post
-</button>
-          `
-          : `
-            <button id="login">Login</button>
-          `
-      }
-
-      <div id="posts"></div>
-
+      <div id="tab-following">
+        👥 Following
+      </div>
     </div>
 
-    <div id="commentsPanel" style="
-      position:fixed;
-      bottom:0;
-      left:0;
-      right:0;
-      height:60%;
-      background:#111;
-      color:white;
-      display:none;
-      flex-direction:column;
-      padding:10px;
-      z-index:1000;
-    ">
-      <span id="closeComments">✖</span>
+    ${
+      session
+        ? `
+          <textarea 
+            id="postInput"
+            placeholder="Write something..."
+            style="
+              width:100%;
+              height:80px;
+              margin-bottom:10px;
+            "
+          ></textarea>
 
-      <div id="panelComments"></div>
+          <input
+            type="file"
+            id="mediaInput"
+            accept="image/*,video/*"
+            style="margin-bottom:10px;"
+          />
 
-      <input id="panelInput" />
+          <button id="postBtn">
+            Post
+          </button>
+        `
+        : `
+          <button
+            id="login"
+            style="
+              position:fixed;
+              top:70px;
+              left:15px;
+              z-index:9999;
+              padding:10px 16px;
+              border:none;
+              border-radius:12px;
+              background:#8a2be2;
+              color:white;
+              font-weight:bold;
+            "
+          >
+            Login
+          </button>
+        `
+    }
 
-      <button id="panelPostBtn">
-        Post
-      </button>
-    </div>
-  `;
+    <div id="posts"></div>
 
-  // ✅ NOW posts exists
-  postsEl = document.getElementById("posts");
+  </div>
+
+  <div id="commentsPanel" style="
+    position:fixed;
+    bottom:0;
+    left:0;
+    right:0;
+    height:60%;
+    background:#111;
+    color:white;
+    display:none;
+    flex-direction:column;
+    padding:10px;
+    z-index:1000;
+  ">
+    <span id="closeComments">✖</span>
+
+    <div id="panelComments"></div>
+
+    <input id="panelInput" />
+
+    <button id="panelPostBtn">
+      Post
+    </button>
+  </div>
+`;
+
+postsEl = document.getElementById("posts");
 
 attachEvents();
 
@@ -1768,7 +1797,6 @@ loadStories();
 
 console.log("SCRIPT END");
 
-// ✅ SCROLL SNAP
 setupScrollSnap();
 }
 
