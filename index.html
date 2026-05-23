@@ -3,767 +3,529 @@
 <head>
 
   <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#8a2be2">
-  
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  
-  <link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
-  
-  <title>Social App</title>
-<style>
-  /* RESET */
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: sans-serif;
-  transition: background 0.3s, color 0.3s;
-}
+  <meta name="theme-color" content="#8a2be2">
 
-/* 🔥 FULL SCREEN SCROLL */
-#posts {
-  min-height: 100vh;
-  overflow-y: auto;
-  padding-top: 60px;
-  padding-bottom: 120px;
-  box-sizing: border-box;
-}
-
-/* 📱 POST CARD */
-.post-card {
-  background: #111;
-  border: 1px solid #222;
-  border-radius: 18px;
-  padding: 14px;
-  margin: 12px;
-  color: white;
-  overflow: hidden;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-}
-
-/* 🎥 MEDIA FULLSCREEN */
-.post-card img:not(.avatar),
-.post-card video {
-  max-width: 100%;
-  width: auto;
-  height: auto;
-
-  max-height: 500px;
-
-  border-radius: 16px;
-  margin-top: 12px;
-
-  object-fit: contain;
-
-  display: block;
-}
-
-/* 📝 TEXT (bottom left) */
-.post-text {
-  position: absolute;
-  bottom: 80px;
-  left: 10px;
-  color: white;
-  z-index: 2;
-}
-
-/* ❤️ ACTIONS (right side vertical) */
-.post-actions {
-  position: absolute;
-  right: 10px;
-  bottom: 100px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  z-index: 2;
-}
-
-.post-actions button {
-  background: rgba(0,0,0,0.5);
-  border: none;
-  color: white;
-  padding: 10px;
-  border-radius: 50%;
-}
-
-/* 🔊 TAP TO UNMUTE */
-.video-wrapper {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.tap-unmute {
-  position: absolute;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.6);
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 14px;
-  pointer-events: none;
-}
-
-/* 🔝 TOP NAV */
-#topNav {
-  position: fixed;
-  top: 0;
-  width: 100%;
-  height: 50px;
-
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-
-  background: rgba(0,0,0,0.6);
-  color: #aaa;
-  font-weight: bold;
-  z-index: 1000;
-}
-
-#topNav .active {
-  color: white;
-  border-bottom: 2px solid white;
-}
-
-#topNav .search {
-  position: absolute;
-  right: 15px;
-}
-
-/* 🔽 BOTTOM NAV */
-#bottomNav {
-  position: fixed;
-  bottom: 0;
-  width: 100%;
-  height: 60px;
-
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-
-  background: rgba(0,0,0,0.6);
-  color: white;
-  z-index: 1000;
-}
-
-/* ➕ PLUS BUTTON */
-#plusBtn {
-  background: white;
-  color: black;
-  font-size: 28px;
-  padding: 5px 15px;
-  border-radius: 12px;
-  position: relative;
-}
-
-#plusBtn::before {
-  content: "";
-  position: absolute;
-  left: -5px;
-  right: -5px;
-  top: 0;
-  bottom: 0;
-  background: linear-gradient(90deg, cyan, pink);
-  border-radius: 14px;
-  z-index: -1;
-}
-
-/* 📝 CREATE PANEL */
-#createPanel {
-  position: fixed;
-  bottom: 80px;
-  left: 10px;
-  right: 10px;
-  background: #111;
-  padding: 10px;
-  border-radius: 12px;
-  display: none;
-  z-index: 1000;
-}
-
-/* ❤️ LIKE ANIMATION */
-.like-btn.pop {
-  transform: scale(1.2);
-  transition: 0.2s;
-}
-#posts {
-  position: relative;
-  z-index: 1;
-}
-
-#topNav {
-  z-index: 1000;
-}
-
-#bottomNav {
-  z-index: 1000;
-}
-
-#createPanel {
-  z-index: 1001;
-}
-#commentsPanel {
-  position: fixed;
-  bottom: -100%;
-  left: 0;
-  width: 100%;
-  height: 60%;
-  background: var(--card);
-color: var(--text);
-  transition: bottom 0.3s ease;
-  z-index: 2000;
-  border-top-left-radius: 15px;
-  border-top-right-radius: 15px;
-}
-
-#commentsPanel.active {
-  bottom: 0;
-}
-
-.comments-content {
-  padding: 15px;
-}
-:root {
-  --bg: #ffffff;
-  --text: #111111;
-  --card: #f2f2f2;
-  --button: #222222;
-  --border: #dddddd;
-}
-
-.dark {
-  --bg: #0f0f0f;
-  --text: #ffffff;
-  --card: #1c1c1c;
-  --button: #333333;
-  --border: #444444;
-}
-.action-btn {
-  background: var(--button);
-  color: var(--text);
-}
-.panel {
-  background: var(--card);
-}
-.muted {
-  color: #aaa;
-}
-.active-tab {
-  color: white;
-  border-bottom: 2px solid white;
-  padding-bottom: 5px;
-}
-.post-card button {
-  border:none;
-  border-radius:10px;
-  padding:10px 14px;
-  font-weight:600;
-  color:white;
-}
-
-#mediaViewer{
-  position:fixed;
-  inset:0;
-  background:black;
-  z-index:99999;
-
-  display:none;
-
-  justify-content:center;
-  align-items:center;
-
-  overflow:hidden;
-}
-
-#mediaContainer{
-  width:100%;
-  height:100%;
-
-  display:flex;
-  justify-content:center;
-  align-items:center;
-
-  overflow:hidden;
-
-  padding:20px;
-  box-sizing:border-box;
-}
-
-#mediaContainer img{
-  max-width:100%;
-  max-height:100%;
-
-  width:auto;
-  height:auto;
-
-  object-fit:contain;
-  display:block;
-}
-
-#mediaContainer video{
-  width:auto !important;
-  height:auto !important;
-
-  max-width:95vw;
-  max-height:95vh;
-
-  object-fit:contain;
-
-  display:block;
-
-  background:black;
-  border-radius:12px;
-}
-
-#storiesBar{
-  display:flex;
-  gap:12px;
-  overflow-x:auto;
-  padding:10px;
-  margin-top:70px;
-}
-
-.story{
-  min-width:70px;
-  text-align:center;
-  cursor:pointer;
-}
-
-.story img{
-  width:60px;
-  height:60px;
-  border-radius:50%;
-  object-fit:cover;
-  border:3px solid #8a2be2;
-}
-
-</style>
-</head>
-<body class="dark">
-  
-  <div id="storiesBar" style="
-  position:sticky;
-  top:55px;
-  z-index:2000;
-
-  display:flex;
-  gap:12px;
-  overflow-x:auto;
-
-  padding:12px;
-  min-height:90px;
-
-  background:#111;
-  border-bottom:1px solid #222;
-
-  align-items:center;
-
-  scrollbar-width:none;
-"></div>
-
-<div style="height:20px;"></div>
-  
-<label
-  for="storyInput"
-  style="
-    position:fixed;
-    top:130px;
-    right:15px;
-    z-index:9999;
-    width:50px;
-    height:50px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    background:#8a2be2;
-    color:white;
-    border-radius:50%;
-    cursor:pointer;
-    font-size:30px;
-    box-shadow:0 4px 12px rgba(0,0,0,0.4);
-  "
->
-  +
-</label>
-
-<input
-  type="file"
-  id="storyInput"
-  accept="image/*,video/*"
-  style="display:none"
->
-  
-  <button
-  id="installBtn"
-  style="
-    display:none;
-    position:fixed;
-    top:15px;
-    right:15px;
-    z-index:9999;
-    padding:10px 16px;
-    border:none;
-    border-radius:12px;
-    background:#8a2be2;
-    color:white;
-  "
->
-  Install App
-</button>
-
-<div
-  id="storyViewer"
-
-  ontouchstart="handleTouchStart(event)"
-  ontouchend="handleTouchEnd(event)"
-
-  style="
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background:black;
-    display:none;
-    z-index:999999;
-  ">
-  
-  <div id="storyProgress" style="
-  position:absolute;
-  top:10px;
-  left:10px;
-  right:10px;
-  display:flex;
-  gap:5px;
-  z-index:5;
-"></div>
-  
-  <div id="storyContent"></div>
-
-  <div
-    onclick="closeStoryViewer()"
-    style="
-      position:absolute;
-      top:20px;
-      right:20px;
-      color:white;
-      font-size:30px;
-      cursor:pointer;
-      z-index:2;
+  <meta
+    name="viewport"
+    content="
+      width=device-width,
+      initial-scale=1,
+      maximum-scale=1,
+      user-scalable=no
     "
   >
-    ×
-  </div>
 
-</div>
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
 
-<!-- LEFT SIDE -->
-<div
-  onclick="prevStory()"
-  style="
-    position:absolute;
-    left:0;
-    top:0;
-    width:50%;
-    height:100%;
-    z-index:4;
-  "
-></div>
+  <title>Social App</title>
 
-<!-- RIGHT SIDE -->
-<div
-  onclick="nextStory()"
-  style="
-    position:absolute;
-    right:0;
-    top:0;
-    width:50%;
-    height:100%;
-    z-index:4;
-  "
-></div>
-  
-  <div id="chatScreen" style="
-  position:fixed;
-  inset:0;
-  background:#0f0f0f;
-  z-index:5000;
-  display:none;
-  flex-direction:column;
-">
+  <style>
 
-  <!-- HEADER -->
-  <div style="
-    height:60px;
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding:0 15px;
-    border-bottom:1px solid #222;
-    background:#111;
-  ">
+    body{
+      margin:0;
+      background:#0f0f0f;
+      color:white;
+      font-family:sans-serif;
+    }
 
-    <button onclick="closeChat()" style="
-  background:none;
-  border:none;
-  color:white;
-  font-size:22px;
-  cursor:pointer;
-">
-  ←
-</button>
+    /* TOP NAV */
+    #topNav{
+      position:fixed;
+      top:0;
+      left:0;
+      right:0;
+      height:55px;
 
-   <img
-  id="chatAvatar"
-  src="https://via.placeholder.com/40"
+      display:flex;
+      justify-content:space-around;
+      align-items:center;
 
-  onclick="
-    openMedia(
-      this.src,
-      'image'
-    )
-  "
+      background:#111;
 
-  style="
-    width:40px;
-    height:40px;
-    border-radius:50%;
-    object-fit:cover;
-    background:#222;
-    cursor:pointer;
-  "
-/>
+      z-index:3000;
+
+      border-bottom:1px solid #222;
+    }
+
+    /* MAIN CONTENT */
+    #feed{
+      padding-top:65px;
+      padding-bottom:100px;
+    }
+
+    /* CREATE POST */
+    #createPost{
+      padding:15px;
+      border-bottom:1px solid #222;
+      background:#111;
+    }
+
+    #createPost textarea{
+      width:100%;
+      min-height:70px;
+
+      background:#222;
+      color:white;
+
+      border:none;
+      border-radius:15px;
+
+      padding:15px;
+      box-sizing:border-box;
+
+      resize:none;
+      outline:none;
+    }
+
+    /* STORIES */
+    #storiesBar{
+      display:flex;
+      gap:12px;
+
+      overflow-x:auto;
+
+      padding:12px;
+
+      background:#111;
+
+      border-bottom:1px solid #222;
+
+      scrollbar-width:none;
+    }
+
+    /* STORY CARD */
+    .story-card{
+      min-width:110px;
+      height:180px;
+
+      border-radius:18px;
+
+      overflow:hidden;
+
+      position:relative;
+
+      flex-shrink:0;
+
+      background:#222;
+
+      cursor:pointer;
+    }
+
+    .story-card img.story-bg{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+    }
+
+    .story-avatar{
+      position:absolute;
+      top:10px;
+      left:10px;
+
+      width:45px;
+      height:45px;
+
+      border-radius:50%;
+      border:3px solid #8a2be2;
+
+      object-fit:cover;
+    }
+
+    .story-name{
+      position:absolute;
+      bottom:10px;
+      left:10px;
+      right:10px;
+
+      font-size:14px;
+      font-weight:bold;
+
+      color:white;
+
+      text-shadow:0 2px 5px rgba(0,0,0,0.8);
+    }
+
+    /* POSTS */
+    #posts{
+      padding:10px;
+    }
+
+    .post-card{
+      background:#111;
+      border:1px solid #222;
+
+      border-radius:20px;
+
+      padding:14px;
+
+      margin-bottom:15px;
+    }
+
+    /* FLOATING STORY BUTTON */
+    #storyAddBtn{
+      position:fixed;
+
+      top:140px;
+      right:15px;
+
+      width:55px;
+      height:55px;
+
+      border-radius:50%;
+
+      background:#8a2be2;
+      color:white;
+
+      display:flex;
+      justify-content:center;
+      align-items:center;
+
+      font-size:34px;
+
+      z-index:5000;
+
+      cursor:pointer;
+
+      box-shadow:0 4px 12px rgba(0,0,0,0.4);
+    }
+
+    /* STORY VIEWER */
+    #storyViewer{
+      position:fixed;
+      inset:0;
+
+      background:black;
+
+      display:none;
+
+      z-index:999999;
+    }
+
+    #storyProgress{
+      position:absolute;
+
+      top:10px;
+      left:10px;
+      right:10px;
+
+      display:flex;
+      gap:5px;
+
+      z-index:5;
+    }
+
+    #storyContent{
+      width:100%;
+      height:100%;
+
+      display:flex;
+      justify-content:center;
+      align-items:center;
+    }
+
+    /* MEDIA VIEWER */
+    #mediaViewer{
+      position:fixed;
+      inset:0;
+
+      background:black;
+
+      display:none;
+
+      justify-content:center;
+      align-items:center;
+
+      z-index:99999;
+    }
+
+    #mediaContainer{
+      width:100%;
+      height:100%;
+
+      display:flex;
+      justify-content:center;
+      align-items:center;
+
+      overflow:auto;
+    }
+
+    #mediaContainer img,
+    #mediaContainer video{
+      max-width:95%;
+      max-height:95%;
+
+      object-fit:contain;
+    }
+
+  </style>
+
+</head>
+
+<body class="dark">
+
+  <!-- TOP NAV -->
+  <div id="topNav">
+
+    <div class="active-tab">
+      🌍 Explore
+    </div>
 
     <div>
-      <div
-        id="chatName"
-        style="
-          color:white;
-          font-weight:bold;
-        "
-      >
-        User
-      </div>
-
-      <div style="
-        color:#aaa;
-        font-size:12px;
-      ">
-        Active now
-      </div>
+      👥 Following
     </div>
 
   </div>
 
-  <!-- MESSAGES -->
-  <div
-    id="chatMessages"
-    style="
-      flex:1;
-      overflow-y:auto;
-      padding:15px;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    "
-  ></div>
+  <!-- MAIN FEED -->
+  <div id="feed">
 
-<!-- INPUT -->
-<div style="
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:10px;
-  background:#111;
-  border-top:1px solid #222;
-">
+    <!-- CREATE POST -->
+    <div id="createPost">
 
-  <input
-    id="chatInput"
-    placeholder="Message..."
-    style="
-      flex:1;
-      background:#222;
-      border:none;
-      color:white;
-      padding:12px;
-      border-radius:25px;
-      outline:none;
-    "
-  />
+      <textarea
+        placeholder="Write something..."
+      ></textarea>
+
+      <div style="
+        margin-top:10px;
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+      ">
+
+        <input
+          type="file"
+        >
+
+        <button style="
+          background:#8a2be2;
+          border:none;
+          color:white;
+          padding:10px 20px;
+          border-radius:10px;
+        ">
+          Post
+        </button>
+
+      </div>
+
+    </div>
+
+    <!-- STORIES -->
+    <div id="storiesBar"></div>
+
+    <!-- POSTS -->
+    <div id="posts"></div>
+
+  </div>
+
+  <!-- ADD STORY -->
+  <label
+    id="storyAddBtn"
+    for="storyInput"
+  >
+    +
+  </label>
 
   <input
     type="file"
-    id="chatMedia"
+    id="storyInput"
     accept="image/*,video/*"
-    style="
-      color:white;
-      width:90px;
-    "
-  />
+    style="display:none"
+  >
 
+  <!-- INSTALL BUTTON -->
   <button
-    onclick="sendMessage()"
+    id="installBtn"
+
+    style="
+      display:none;
+
+      position:fixed;
+      top:12px;
+      right:15px;
+
+      z-index:6000;
+
+      padding:12px 18px;
+
+      border:none;
+      border-radius:14px;
+
+      background:#8a2be2;
+      color:white;
+    "
+  >
+    Install App
+  </button>
+
+  <!-- STORY VIEWER -->
+  <div
+    id="storyViewer"
+
+    ontouchstart="
+      handleTouchStart(event)
+    "
+
+    ontouchend="
+      handleTouchEnd(event)
+    "
+  >
+
+    <!-- PROGRESS -->
+    <div id="storyProgress"></div>
+
+    <!-- CONTENT -->
+    <div id="storyContent"></div>
+
+    <!-- LEFT TAP -->
+    <div
+      onclick="prevStory()"
+
       style="
-        background:#0084ff;
-        border:none;
+        position:absolute;
+        left:0;
+        top:0;
+
+        width:50%;
+        height:100%;
+
+        z-index:4;
+      "
+    ></div>
+
+    <!-- RIGHT TAP -->
+    <div
+      onclick="nextStory()"
+
+      style="
+        position:absolute;
+        right:0;
+        top:0;
+
+        width:50%;
+        height:100%;
+
+        z-index:4;
+      "
+    ></div>
+
+    <!-- CLOSE -->
+    <div
+      onclick="closeStoryViewer()"
+
+      style="
+        position:absolute;
+        top:20px;
+        right:20px;
+
         color:white;
-        padding:10px 18px;
-        border-radius:20px;
-        font-weight:bold;
+
+        font-size:35px;
+
+        z-index:6;
+
+        cursor:pointer;
       "
     >
-      Send
-    </button>
+      ×
+    </div>
 
   </div>
 
-</div>
-
-<div id="inboxScreen" style="
-  position:fixed;
-  inset:0;
-  background:#0f0f0f;
-  z-index:4000;
-  display:none;
-  flex-direction:column;
-">
-
-  <div style="
-  padding:15px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  border-bottom:1px solid #222;
-">
-
-  <div style="
-    font-size:22px;
-    font-weight:bold;
-    color:white;
-  ">
-    Chats
-  </div>
-
+  <!-- CHAT BUTTON -->
   <button
-    onclick="
-      document.getElementById('inboxScreen').style.display='none'
-    "
-    style="
-      background:none;
-      border:none;
-      color:white;
-      font-size:24px;
-      cursor:pointer;
-    "
-  >
-    ✕
-  </button>
-
-</div>
-
-  <div
-    id="inboxList"
-    style="
-      flex:1;
-      overflow-y:auto;
-    "
-  ></div>
-
-</div>
-
-<button
-  id="floatingChatsBtn"
-  onclick="openInbox()"
-  style="
-    position:fixed;
-    bottom:80px;
-    right:20px;
-    width:60px;
-    height:60px;
-    border-radius:50%;
-    border:none;
-    background:#0084ff;
-    color:white;
-    font-size:24px;
-    z-index:3000;
-    box-shadow:0 4px 12px rgba(0,0,0,0.4);
-  "
->
-  💬
-</button>
-
-<div id="app"></div>
-
-<!-- MEDIA VIEWER -->
-<div
-  id="mediaViewer"
-
-  style="
-    position:fixed;
-    inset:0;
-    background:black;
-    z-index:99999;
-    display:none;
-    justify-content:center;
-    align-items:center;
-    flex-direction:column;
-  "
->
-
-  <button
-    onclick="closeMedia()"
+    id="floatingChatsBtn"
 
     style="
-      position:absolute;
-      top:20px;
-      left:20px;
-      background:none;
-      border:none;
-      color:white;
-      font-size:35px;
-      z-index:2;
-    "
-  >
-    ✕
-  </button>
+      position:fixed;
 
-  <a
-    id="downloadMedia"
-    download
-
-    style="
-      position:absolute;
-      top:20px;
+      bottom:80px;
       right:20px;
+
+      width:60px;
+      height:60px;
+
+      border-radius:50%;
+
+      border:none;
+
       background:#0084ff;
       color:white;
-      padding:10px 16px;
-      border-radius:10px;
-      text-decoration:none;
-      font-weight:bold;
-      z-index:2;
+
+      font-size:24px;
+
+      z-index:3000;
     "
   >
-    Download
-  </a>
+    💬
+  </button>
 
- <div
-  id="mediaContainer"
-  style="
-    width:100vw;
-    height:100vh;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    overflow:auto;
-  "
-></div>
+  <!-- MEDIA VIEWER -->
+  <div id="mediaViewer">
 
-</div>
+    <button
+      onclick="closeMedia()"
+
+      style="
+        position:absolute;
+        top:20px;
+        left:20px;
+
+        background:none;
+        border:none;
+
+        color:white;
+
+        font-size:35px;
+
+        z-index:2;
+      "
+    >
+      ✕
+    </button>
+
+    <a
+      id="downloadMedia"
+      download
+
+      style="
+        position:absolute;
+        top:20px;
+        right:20px;
+
+        background:#0084ff;
+
+        color:white;
+
+        padding:10px 16px;
+
+        border-radius:10px;
+
+        text-decoration:none;
+
+        z-index:2;
+      "
+    >
+      Download
+    </a>
+
+    <div id="mediaContainer"></div>
+
+  </div>
+
+  <!-- APP -->
+  <div id="app"></div>
+
+  <script type="module">
+
+    // YOUR JAVASCRIPT HERE
+
+  </script>
+
+</body>
+</html>
 
 <script type="module">
   console.log("SCRIPT START");
