@@ -344,20 +344,36 @@ color: var(--text);
 </head>
 <body class="dark">
   
-  <div id="storiesBar"></div>
+  <div id="storiesBar" style="
+  display:flex;
+  gap:12px;
+  overflow-x:auto;
+  padding:10px;
+  margin-top:60px;
+  background:#111;
+  border-bottom:1px solid #222;
+  min-height:90px;
+  align-items:center;
+"></div>
   
-  <label
+<label
   for="storyInput"
   style="
     position:fixed;
-    top:70px;
+    top:110px;
     right:15px;
     z-index:9999;
+    width:50px;
+    height:50px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
     background:#8a2be2;
     color:white;
-    padding:10px;
     border-radius:50%;
     cursor:pointer;
+    font-size:30px;
+    box-shadow:0 4px 12px rgba(0,0,0,0.4);
   "
 >
   +
