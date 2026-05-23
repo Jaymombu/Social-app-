@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-
+  
   <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#8a2be2">
   
@@ -318,147 +318,9 @@ color: var(--text);
   border-radius:12px;
 }
 
-#storiesBar{
-  display:flex;
-  gap:12px;
-  overflow-x:auto;
-  padding:10px;
-  margin-top:70px;
-}
-
-.story{
-  min-width:70px;
-  text-align:center;
-  cursor:pointer;
-}
-
-.story img{
-  width:60px;
-  height:60px;
-  border-radius:50%;
-  object-fit:cover;
-  border:3px solid #8a2be2;
-}
-
 </style>
 </head>
 <body class="dark">
-  
-  <div id="storiesBar"></div>
-  
-  <label
-  for="storyInput"
-  style="
-    position:fixed;
-    top:70px;
-    right:15px;
-    z-index:9999;
-    background:#8a2be2;
-    color:white;
-    padding:10px;
-    border-radius:50%;
-    cursor:pointer;
-  "
->
-  +
-</label>
-
-<input
-  type="file"
-  id="storyInput"
-  accept="image/*,video/*"
-  style="display:none"
->
-  
-  <button
-  id="installBtn"
-  style="
-    display:none;
-    position:fixed;
-    top:15px;
-    right:15px;
-    z-index:9999;
-    padding:10px 16px;
-    border:none;
-    border-radius:12px;
-    background:#8a2be2;
-    color:white;
-  "
->
-  Install App
-</button>
-
-<div
-  id="storyViewer"
-
-  ontouchstart="handleTouchStart(event)"
-  ontouchend="handleTouchEnd(event)"
-
-  style="
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background:black;
-    display:none;
-    z-index:999999;
-  ">
-  
-  <div id="storyProgress" style="
-  position:absolute;
-  top:10px;
-  left:10px;
-  right:10px;
-  display:flex;
-  gap:5px;
-  z-index:5;
-"></div>
-  
-  <div id="storyContent"></div>
-
-  <div
-    onclick="closeStoryViewer()"
-    style="
-      position:absolute;
-      top:20px;
-      right:20px;
-      color:white;
-      font-size:30px;
-      cursor:pointer;
-      z-index:2;
-    "
-  >
-    ×
-  </div>
-
-</div>
-
-<!-- LEFT SIDE -->
-<div
-  onclick="prevStory()"
-  style="
-    position:absolute;
-    left:0;
-    top:0;
-    width:50%;
-    height:100%;
-    z-index:4;
-  "
-></div>
-
-<!-- RIGHT SIDE -->
-<div
-  onclick="nextStory()"
-  style="
-    position:absolute;
-    right:0;
-    top:0;
-    width:50%;
-    height:100%;
-    z-index:4;
-  "
-></div>
   
   <div id="chatScreen" style="
   position:fixed;
@@ -797,8 +659,9 @@ setTheme(savedTheme);
 init();
 
   function renderPost(post) {
-
     
+    console.log(post);
+
   const postsDiv =
     document.getElementById("posts");
 
@@ -827,22 +690,16 @@ init();
 
   let mediaHTML = "";
 
-  if (!post.file_url) {
-  mediaHTML = "";
-}
+  
   // IMAGE
 if (
   post.media_type === "image" &&
-  post.file_url &&
-  post.file_url !== "null"
-)
- {
+  post.file_url
+) {
 
   mediaHTML = `
- <img
-  src="${post.file_url}"
-  loading="lazy"
-  decoding="async"
+  <img
+    src="${post.file_url}"
 
     onclick="
       openMedia(
@@ -869,28 +726,25 @@ if (
 // VIDEO
 if (
   post.media_type === "video" &&
-  post.file_url &&
-  post.file_url !== "null"
-)
- {
+  post.file_url
+) {
 
   mediaHTML = `
-  <video
-    src="${post.file_url}"
-    preload="metadata"
-    controls
-    playsinline
-    muted
-    loop
-    style="
-      width:100%;
-      margin-top:10px;
-      border-radius:12px;
-      max-height:700px;
-      object-fit:cover;
-    "
-  ></video>
-`;
+    <video
+      src="${post.file_url}"
+      controls
+      playsinline
+      muted
+      loop
+      style="
+        width:100%;
+        margin-top:10px;
+        border-radius:12px;
+        max-height:700px;
+        object-fit:cover;
+      "
+    ></video>
+  `;
 }
 
   // ======================
@@ -1028,59 +882,8 @@ if (
     }
   `;
 
-  postsDiv.prepend(div);
+  postsDiv.appendChild(div);
 }
-
-// SAVE POSTS OFFLINE
-function savePostsOffline(posts) {
-  localStorage.setItem(
-    "offline_posts",
-    JSON.stringify(posts)
-  );
-}
-
-// LOAD POSTS OFFLINE
-function loadOfflinePosts() {
-  return JSON.parse(
-    localStorage.getItem("offline_posts") || "[]"
-  );
-}
-
-let deferredPrompt;
-
-window.addEventListener(
-  "beforeinstallprompt",
-  (e) => {
-
-    e.preventDefault();
-
-    deferredPrompt = e;
-
-    // SHOW INSTALL BUTTON
-    installBtn.style.display = "block";
-
-  }
-);
-
-function postHTML(post) {
-
-  return `
-    <div class="post-card">
-
-      <img
-        src="${post.media_url}"
-        loading="lazy"
-        decoding="async"
-      >
-
-    </div>
-  `;
-
-}
-
-let postPage = 0;
-const POSTS_PER_PAGE = 10;
-let loadingPosts = false;
 
 // ✅ 3. DEFINE loadPosts
 window.loadPosts = async function () {
@@ -1104,16 +907,12 @@ window.loadPosts = async function () {
   if (activeTab === "explore") {
 
     const response = await supabase
-  .from("posts")
-  .select("*")
-  .order("created_at", {
-    ascending: false
-  })
-  .range(
-    postPage * POSTS_PER_PAGE,
-    (postPage + 1) * POSTS_PER_PAGE - 1
-  );
-      
+      .from("posts")
+      .select("*")
+      .order("created_at", {
+        ascending: false
+      });
+
     posts = response.data;
     error = response.error;
 
@@ -1133,6 +932,7 @@ window.loadPosts = async function () {
 
   }
 
+  postsDiv.innerHTML = "";
 
   if (error) {
 
@@ -1152,45 +952,12 @@ window.loadPosts = async function () {
 
   }
 
- posts.forEach(renderPost);
+  posts.forEach(renderPost);
 
-observeVideos();
+  observeVideos();
 
 };
 
-supabase
-  .channel("posts-feed")
-
-  .on(
-    "postgres_changes",
-    {
-      event: "INSERT",
-      schema: "public",
-      table: "posts"
-    },
-
-    (payload) => {
-
-      const existing =
-        document.getElementById(
-          payload.new.id
-        );
-
-      if (existing) return;
-
-      if (postPage === 0) {
-
-        renderPost(payload.new);
-
-        observeVideos();
-
-      }
-
-    }
-
-  )
-
-  .subscribe();
 
 window.likePost = async (id) => {
   const userId = session?.user?.id;
@@ -1744,16 +1511,14 @@ function startApp() {
   // ✅ NOW posts exists
   postsEl = document.getElementById("posts");
 
-attachEvents();
+  attachEvents();
 
-loadPosts();
+  loadPosts();
 
-loadStories();
+  console.log("SCRIPT END");
 
-console.log("SCRIPT END");
-
-// ✅ SCROLL SNAP
-setupScrollSnap();
+  // ✅ SCROLL SNAP
+  setupScrollSnap();
 }
 
 async function createPost() {
@@ -1836,6 +1601,7 @@ async function createPost() {
 // ========================
 // AUTO SNAP
 // ========================
+
 function setupScrollSnap() {
 
   if (!postsEl) return;
@@ -1844,27 +1610,8 @@ function setupScrollSnap() {
 
     clearTimeout(scrollTimeout);
 
-    // LOAD MORE POSTS
-    if (
-
-      postsEl.scrollTop +
-      postsEl.clientHeight >=
-
-      postsEl.scrollHeight - 1000
-
-    ) {
-
-      postPage++;
-
-      loadPosts();
-
-    }
-
-    // SNAP TO POST
     scrollTimeout = setTimeout(() => {
-
       snapToNearestPost();
-
     }, 120);
 
   });
@@ -2640,7 +2387,6 @@ window.closeChat = function () {
   
   requestAnimationFrame(() => {
   loadPosts();
-  loadStories();
 });
 
 };
@@ -3184,11 +2930,6 @@ if (type === "video") {
   viewer.style.background = "rgba(0,0,0,0.95)";
 };
 
-let storyIndex = 0;
-let storyList = [];
-let storyTimer;
-let touchStartX = 0;
-let touchEndX = 0;
 
 // CLOSE MEDIA
 window.closeMedia = function () {
@@ -3208,322 +2949,6 @@ window.closeMedia = function () {
 
   }, 200);
 
-};
-
-// UPLOAD STORY
-document
-  .getElementById("storyInput")
-  .addEventListener("change", async (e) => {
-
-    const file = e.target.files[0];
-
-    if (!file) return;
-
-    if (!session?.user) {
-      alert("Login first");
-      return;
-    }
-
-    const fileExt =
-      file.name.split(".").pop();
-
-    const fileName =
-      `${session.user.id}-${Date.now()}.${fileExt}`;
-
-    // UPLOAD TO STORAGE
-    const { error: uploadError } =
-      await supabase.storage
-        .from("stories")
-        .upload(fileName, file);
-
-    if (uploadError) {
-
-      console.log(uploadError);
-
-      alert("Story upload failed");
-
-      return;
-    }
-
-    // GET PUBLIC URL
-    const {
-      data: { publicUrl }
-    } = supabase.storage
-      .from("stories")
-      .getPublicUrl(fileName);
-
-    // DETECT TYPE
-    const mediaType =
-      file.type.startsWith("video")
-        ? "video"
-        : "image";
-
-    // SAVE STORY
-    const { error: dbError } =
-      await supabase
-        .from("stories")
-        .insert([{
-          user_id: session.user.id,
-          name: profile?.name || "User",
-          avatar_url:
-            profile?.avatar_url || "",
-          media_url: publicUrl,
-          media_type: mediaType
-        }]);
-
-    if (dbError) {
-
-      console.log(dbError);
-
-      alert("Database error");
-
-      return;
-    }
-
-    alert("Story uploaded!");
-
-    loadStories();
-
-  });
-
-window.loadStories = async function () {
-
-  const storiesBar =
-    document.getElementById("storiesBar");
-
-  if (!storiesBar) return;
-
-  const yesterday =
-  new Date(
-    Date.now() - 24 * 60 * 60 * 1000
-  ).toISOString();
-
-const { data: stories, error } =
-  await supabase
-    .from("stories")
-    .select("*")
-    .gt("created_at", yesterday)
-    .order("created_at", {
-      ascending: false
-    });
-
-  if (error) return console.log(error);
-
-  let html = "";
-
-  // SAVE STORIES GLOBALLY
-  window.allStories = stories;
-
-  stories.forEach((story, index) => {
-
-    html += `
-      <div
-        onclick="openStory(${index})"
-        style="
-          width:70px;
-          text-align:center;
-          color:white;
-          cursor:pointer;
-        "
-      >
-
-        <img
-          src="${story.avatar_url || 'https://via.placeholder.com/60'}"
-          style="
-            width:60px;
-            height:60px;
-            border-radius:50%;
-            object-fit:cover;
-            border:3px solid #8a2be2;
-          "
-        >
-
-        <div style="
-          font-size:12px;
-          margin-top:5px;
-          white-space:nowrap;
-          overflow:hidden;
-          text-overflow:ellipsis;
-        ">
-          ${story.name}
-        </div>
-
-      </div>
-    `;
-  });
-
-  storiesBar.innerHTML = html;
-};
-
-window.openStory = function(index) {
-
-  storyList = window.allStories || [];
-  storyIndex = index;
-
-  document.getElementById(
-    "storyViewer"
-  ).style.display = "block";
-
-  showStory();
-};
-
-function showStory() {
-
-  clearTimeout(storyTimer);
-
-  const story = storyList[storyIndex];
-
-  if (!story) return;
-
-  const container =
-    document.getElementById("storyContent");
-
-  // 🔥 ADD HERE
-  const progress =
-    document.getElementById("storyProgress");
-
-  progress.innerHTML = "";
-
-  storyList.forEach((_, i) => {
-
-  progress.innerHTML += `
-
-    <div style="
-      flex:1;
-      height:3px;
-      background:rgba(255,255,255,0.3);
-      border-radius:10px;
-      overflow:hidden;
-    ">
-
-      <div
-        id="storyBar${i}"
-        style="
-          width:${
-            i < storyIndex
-              ? "100%"
-              : "0%"
-          };
-          height:100%;
-          background:white;
-          transition:${
-            i === storyIndex
-              ? "5s linear"
-              : "none"
-          };
-        "
-      ></div>
-
-    </div>
-
-  `;
-
-});
-
-setTimeout(() => {
-
-  const activeBar =
-    document.getElementById(
-      `storyBar${storyIndex}`
-    );
-
-  if (activeBar) {
-
-    activeBar.style.width = "100%";
-
-  }
-
-}, 50);
-
-  // IMAGE
-  if (story.media_type === "image") {
-
-    container.innerHTML = `
-      <img
-        src="${story.media_url}"
-        style="width:100%;height:100%;object-fit:contain;">
-    `;
-
-  } else {
-
-    container.innerHTML = `
-      <video autoplay playsinline
-        style="width:100%;height:100%;object-fit:contain;">
-        <source src="${story.media_url}">
-      </video>
-    `;
-  }
-
-  // AUTO NEXT AFTER 5 SECONDS
-  storyTimer = setTimeout(() => {
-    nextStory();
-  }, 5000);
-}
-
-function nextStory() {
-
-  if (storyIndex < storyList.length - 1) {
-    storyIndex++;
-    showStory();
-  } else {
-    closeStoryViewer();
-  }
-}
-
-function prevStory() {
-
-  if (storyIndex > 0) {
-    storyIndex--;
-    showStory();
-  }
-}
-
-function handleTouchStart(e) {
-
-  touchStartX =
-    e.changedTouches[0].screenX;
-
-}
-
-function handleTouchEnd(e) {
-
-  touchEndX =
-    e.changedTouches[0].screenX;
-
-  handleSwipe();
-}
-
-function handleSwipe() {
-
-  const swipeDistance =
-    touchEndX - touchStartX;
-
-  // SWIPE RIGHT
-  if (swipeDistance > 50) {
-
-    prevStory();
-
-  }
-
-  // SWIPE LEFT
-  else if (swipeDistance < -50) {
-
-    nextStory();
-
-  }
-}
-
-window.closeStoryViewer = function () {
-
-  clearTimeout(storyTimer);
-
-  document.getElementById(
-    "storyViewer"
-  ).style.display = "none";
-
-  document.getElementById(
-    "storyContent"
-  ).innerHTML = "";
 };
 
 // ========================
@@ -3611,49 +3036,11 @@ supabase
 </script>
 
 <script>
-if ("serviceWorker" in navigator) {
-
-  window.addEventListener("load", () => {
-
-    navigator.serviceWorker
-      .register("/sw.js")
-      .then(() => console.log("SW registered"));
-
-  });
-
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js')
+    .then(() => console.log('Service Worker Registered'))
+    .catch(err => console.log('SW failed:', err));
 }
-</script>
-
-<script>
-
-let deferredPrompt;
-
-window.addEventListener(
-  "beforeinstallprompt",
-  (e) => {
-
-    e.preventDefault();
-
-    deferredPrompt = e;
-
-    document.getElementById("installBtn")
-      .style.display = "block";
-
-  }
-);
-
-document
-  .getElementById("installBtn")
-  .addEventListener("click", async () => {
-
-    if (!deferredPrompt) return;
-
-    deferredPrompt.prompt();
-
-    deferredPrompt = null;
-
-  });
-
 </script>
 
 </body>
