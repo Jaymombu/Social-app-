@@ -1,0 +1,3047 @@
+<!DOCTYPE html>
+<html>
+<head>
+  
+  <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#8a2be2">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  
+  <link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+  
+  <title>Social App</title>
+<style>
+  /* RESET */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: sans-serif;
+  transition: background 0.3s, color 0.3s;
+}
+
+/* 🔥 FULL SCREEN SCROLL */
+#posts {
+  min-height: 100vh;
+  overflow-y: auto;
+  padding-top: 60px;
+  padding-bottom: 120px;
+  box-sizing: border-box;
+}
+
+/* 📱 POST CARD */
+.post-card {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 18px;
+  padding: 14px;
+  margin: 12px;
+  color: white;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+}
+
+/* 🎥 MEDIA FULLSCREEN */
+.post-card img:not(.avatar),
+.post-card video {
+  max-width: 100%;
+  width: auto;
+  height: auto;
+
+  max-height: 500px;
+
+  border-radius: 16px;
+  margin-top: 12px;
+
+  object-fit: contain;
+
+  display: block;
+}
+
+/* 📝 TEXT (bottom left) */
+.post-text {
+  position: absolute;
+  bottom: 80px;
+  left: 10px;
+  color: white;
+  z-index: 2;
+}
+
+/* ❤️ ACTIONS (right side vertical) */
+.post-actions {
+  position: absolute;
+  right: 10px;
+  bottom: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 2;
+}
+
+.post-actions button {
+  background: rgba(0,0,0,0.5);
+  border: none;
+  color: white;
+  padding: 10px;
+  border-radius: 50%;
+}
+
+/* 🔊 TAP TO UNMUTE */
+.video-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.tap-unmute {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.6);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+/* 🔝 TOP NAV */
+#topNav {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  height: 50px;
+
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+
+  background: rgba(0,0,0,0.6);
+  color: #aaa;
+  font-weight: bold;
+  z-index: 1000;
+}
+
+#topNav .active {
+  color: white;
+  border-bottom: 2px solid white;
+}
+
+#topNav .search {
+  position: absolute;
+  right: 15px;
+}
+
+/* 🔽 BOTTOM NAV */
+#bottomNav {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  height: 60px;
+
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+
+  background: rgba(0,0,0,0.6);
+  color: white;
+  z-index: 1000;
+}
+
+/* ➕ PLUS BUTTON */
+#plusBtn {
+  background: white;
+  color: black;
+  font-size: 28px;
+  padding: 5px 15px;
+  border-radius: 12px;
+  position: relative;
+}
+
+#plusBtn::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  right: -5px;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, cyan, pink);
+  border-radius: 14px;
+  z-index: -1;
+}
+
+/* 📝 CREATE PANEL */
+#createPanel {
+  position: fixed;
+  bottom: 80px;
+  left: 10px;
+  right: 10px;
+  background: #111;
+  padding: 10px;
+  border-radius: 12px;
+  display: none;
+  z-index: 1000;
+}
+
+/* ❤️ LIKE ANIMATION */
+.like-btn.pop {
+  transform: scale(1.2);
+  transition: 0.2s;
+}
+#posts {
+  position: relative;
+  z-index: 1;
+}
+
+#topNav {
+  z-index: 1000;
+}
+
+#bottomNav {
+  z-index: 1000;
+}
+
+#createPanel {
+  z-index: 1001;
+}
+#commentsPanel {
+  position: fixed;
+  bottom: -100%;
+  left: 0;
+  width: 100%;
+  height: 60%;
+  background: var(--card);
+color: var(--text);
+  transition: bottom 0.3s ease;
+  z-index: 2000;
+  border-top-left-radius: 15px;
+  border-top-right-radius: 15px;
+}
+
+#commentsPanel.active {
+  bottom: 0;
+}
+
+.comments-content {
+  padding: 15px;
+}
+:root {
+  --bg: #ffffff;
+  --text: #111111;
+  --card: #f2f2f2;
+  --button: #222222;
+  --border: #dddddd;
+}
+
+.dark {
+  --bg: #0f0f0f;
+  --text: #ffffff;
+  --card: #1c1c1c;
+  --button: #333333;
+  --border: #444444;
+}
+.action-btn {
+  background: var(--button);
+  color: var(--text);
+}
+.panel {
+  background: var(--card);
+}
+.muted {
+  color: #aaa;
+}
+.active-tab {
+  color: white;
+  border-bottom: 2px solid white;
+  padding-bottom: 5px;
+}
+.post-card button {
+  border:none;
+  border-radius:10px;
+  padding:10px 14px;
+  font-weight:600;
+  color:white;
+}
+
+#mediaViewer{
+  position:fixed;
+  inset:0;
+  background:black;
+  z-index:99999;
+
+  display:none;
+
+  justify-content:center;
+  align-items:center;
+
+  overflow:hidden;
+}
+
+#mediaContainer{
+  width:100%;
+  height:100%;
+
+  display:flex;
+  justify-content:center;
+  align-items:center;
+
+  overflow:hidden;
+
+  padding:20px;
+  box-sizing:border-box;
+}
+
+#mediaContainer img{
+  max-width:100%;
+  max-height:100%;
+
+  width:auto;
+  height:auto;
+
+  object-fit:contain;
+  display:block;
+}
+
+#mediaContainer video{
+  width:auto !important;
+  height:auto !important;
+
+  max-width:95vw;
+  max-height:95vh;
+
+  object-fit:contain;
+
+  display:block;
+
+  background:black;
+  border-radius:12px;
+}
+
+</style>
+</head>
+<body class="dark">
+  
+  <div id="chatScreen" style="
+  position:fixed;
+  inset:0;
+  background:#0f0f0f;
+  z-index:5000;
+  display:none;
+  flex-direction:column;
+">
+
+  <!-- HEADER -->
+  <div style="
+    height:60px;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:0 15px;
+    border-bottom:1px solid #222;
+    background:#111;
+  ">
+
+    <button onclick="closeChat()" style="
+  background:none;
+  border:none;
+  color:white;
+  font-size:22px;
+  cursor:pointer;
+">
+  ←
+</button>
+
+   <img
+  id="chatAvatar"
+  src="https://via.placeholder.com/40"
+
+  onclick="
+    openMedia(
+      this.src,
+      'image'
+    )
+  "
+
+  style="
+    width:40px;
+    height:40px;
+    border-radius:50%;
+    object-fit:cover;
+    background:#222;
+    cursor:pointer;
+  "
+/>
+
+    <div>
+      <div
+        id="chatName"
+        style="
+          color:white;
+          font-weight:bold;
+        "
+      >
+        User
+      </div>
+
+      <div style="
+        color:#aaa;
+        font-size:12px;
+      ">
+        Active now
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MESSAGES -->
+  <div
+    id="chatMessages"
+    style="
+      flex:1;
+      overflow-y:auto;
+      padding:15px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    "
+  ></div>
+
+<!-- INPUT -->
+<div style="
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px;
+  background:#111;
+  border-top:1px solid #222;
+">
+
+  <input
+    id="chatInput"
+    placeholder="Message..."
+    style="
+      flex:1;
+      background:#222;
+      border:none;
+      color:white;
+      padding:12px;
+      border-radius:25px;
+      outline:none;
+    "
+  />
+
+  <input
+    type="file"
+    id="chatMedia"
+    accept="image/*,video/*"
+    style="
+      color:white;
+      width:90px;
+    "
+  />
+
+  <button
+    onclick="sendMessage()"
+      style="
+        background:#0084ff;
+        border:none;
+        color:white;
+        padding:10px 18px;
+        border-radius:20px;
+        font-weight:bold;
+      "
+    >
+      Send
+    </button>
+
+  </div>
+
+</div>
+
+<div id="inboxScreen" style="
+  position:fixed;
+  inset:0;
+  background:#0f0f0f;
+  z-index:4000;
+  display:none;
+  flex-direction:column;
+">
+
+  <div style="
+  padding:15px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-bottom:1px solid #222;
+">
+
+  <div style="
+    font-size:22px;
+    font-weight:bold;
+    color:white;
+  ">
+    Chats
+  </div>
+
+  <button
+    onclick="
+      document.getElementById('inboxScreen').style.display='none'
+    "
+    style="
+      background:none;
+      border:none;
+      color:white;
+      font-size:24px;
+      cursor:pointer;
+    "
+  >
+    ✕
+  </button>
+
+</div>
+
+  <div
+    id="inboxList"
+    style="
+      flex:1;
+      overflow-y:auto;
+    "
+  ></div>
+
+</div>
+
+<button
+  id="floatingChatsBtn"
+  onclick="openInbox()"
+  style="
+    position:fixed;
+    bottom:80px;
+    right:20px;
+    width:60px;
+    height:60px;
+    border-radius:50%;
+    border:none;
+    background:#0084ff;
+    color:white;
+    font-size:24px;
+    z-index:3000;
+    box-shadow:0 4px 12px rgba(0,0,0,0.4);
+  "
+>
+  💬
+</button>
+
+<div id="app"></div>
+
+<!-- MEDIA VIEWER -->
+<div
+  id="mediaViewer"
+
+  style="
+    position:fixed;
+    inset:0;
+    background:black;
+    z-index:99999;
+    display:none;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+  "
+>
+
+  <button
+    onclick="closeMedia()"
+
+    style="
+      position:absolute;
+      top:20px;
+      left:20px;
+      background:none;
+      border:none;
+      color:white;
+      font-size:35px;
+      z-index:2;
+    "
+  >
+    ✕
+  </button>
+
+  <a
+    id="downloadMedia"
+    download
+
+    style="
+      position:absolute;
+      top:20px;
+      right:20px;
+      background:#0084ff;
+      color:white;
+      padding:10px 16px;
+      border-radius:10px;
+      text-decoration:none;
+      font-weight:bold;
+      z-index:2;
+    "
+  >
+    Download
+  </a>
+
+ <div
+  id="mediaContainer"
+  style="
+    width:100vw;
+    height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    overflow:auto;
+  "
+></div>
+
+</div>
+
+<script type="module">
+  console.log("SCRIPT START");
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
+
+const supabase = createClient(
+  "https://kixxdbkfvigunvxbvmfy.supabase.co",
+  "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M"
+);
+
+console.log("🚀 Starting app...");
+
+// ✅ GLOBAL SESSION
+let session = null;
+
+let currentProfileId = null;
+let currentProfileName = null;
+let activeTab = "explore";
+
+// 🔁 keep session always updated
+supabase.auth.onAuthStateChange((event, newSession) => {
+  console.log("🔄 session updated:", newSession);
+  session = newSession;
+});
+
+async function init() {
+  const { data } = await supabase.auth.getSession();
+  session = data.session;
+
+  console.log("INIT SESSION:", session);
+
+  startApp(); // ✅ ONLY here
+}
+
+function setTheme(theme) {
+  if (theme === "dark") {
+    document.body.classList.add("dark");
+  } else {
+    document.body.classList.remove("dark");
+  }
+
+  localStorage.setItem("theme", theme);
+}
+
+function toggleTheme() {
+  const isDark = document.body.classList.contains("dark");
+
+  setTheme(isDark ? "light" : "dark");
+}
+
+// LOAD SAVED THEME
+const savedTheme =
+  localStorage.getItem("theme") || "dark";
+
+setTheme(savedTheme);
+
+init();
+
+  function renderPost(post) {
+    
+    console.log(post);
+
+  const postsDiv =
+    document.getElementById("posts");
+
+  const time =
+    new Date(post.created_at)
+      .toLocaleString();
+
+  const isOwner =
+    session?.user?.id &&
+    String(session.user.id) ===
+    String(post.user_id);
+
+  const isLiked =
+    (post.liked_by || [])
+      .includes(session?.user?.id);
+
+  const div =
+    document.createElement("div");
+
+  div.id = post.id;
+  div.className = "post-card";
+
+  // ======================
+  // MEDIA HTML
+  // ======================
+
+  let mediaHTML = "";
+
+  
+  // IMAGE
+if (
+  post.media_type === "image" &&
+  post.file_url
+) {
+
+  mediaHTML = `
+  <img
+    src="${post.file_url}"
+
+    onclick="
+      openMedia(
+        '${post.file_url}',
+        'image'
+      )
+    "
+
+    style="
+      max-width:100%;
+      width:auto;
+      height:auto;
+      margin-top:10px;
+      border-radius:12px;
+      max-height:600px;
+      object-fit:contain;
+      display:block;
+      cursor:pointer;
+    "
+  />
+`;
+}
+
+// VIDEO
+if (
+  post.media_type === "video" &&
+  post.file_url
+) {
+
+  mediaHTML = `
+    <video
+      src="${post.file_url}"
+      controls
+      playsinline
+      muted
+      loop
+      style="
+        width:100%;
+        margin-top:10px;
+        border-radius:12px;
+        max-height:700px;
+        object-fit:cover;
+      "
+    ></video>
+  `;
+}
+
+  // ======================
+  // POST HTML
+  // ======================
+
+  div.innerHTML = `
+    <div style="
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+">
+
+      <img 
+  class="avatar"
+
+  src="${
+    post.avatar_url &&
+    post.avatar_url !== "null"
+      ? post.avatar_url
+      : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(post.name)
+  }"
+
+  onerror="
+    this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(post.name)}'
+  "
+
+  style="
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    object-fit:cover;
+    background:#222;
+    flex-shrink:0;
+  "
+/>
+
+     <div style="flex:1; overflow:hidden;">
+
+        <div
+  onclick="openProfile(
+    '${post.user_id}',
+    '${post.name}'
+  )"
+  style="
+    font-weight:bold;
+    cursor:pointer;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  "
+>
+          ${post.name}
+        </div>
+
+        <div style="
+          font-size:12px;
+          color:#aaa;
+        ">
+          ${time}
+        </div>
+
+      </div>
+
+    </div>
+
+   <div style="margin-top:10px;">
+  ${post.content || ""}
+</div>
+
+    ${mediaHTML}
+
+    <div style="margin-top:8px;">
+      ❤️ ${post.likes || 0}
+    </div>
+
+    <button
+      onclick="likePost('${post.id}')"
+      style="
+        margin-top:5px;
+        background:${
+          isLiked
+            ? '#ff4d6d'
+            : '#222'
+        };
+        color:white;
+        border:none;
+        padding:5px 10px;
+        border-radius:5px;
+      "
+    >
+      ${
+        isLiked
+          ? "❤️ Liked"
+          : "🤍 Like"
+      }
+      (${post.likes || 0})
+    </button>
+
+    <button
+      onclick="openComments('${post.id}')"
+      style="
+        margin-top:5px;
+        background:#333;
+        color:white;
+        border:none;
+        padding:5px 10px;
+        border-radius:5px;
+      "
+    >
+      💬 Comment
+    </button>
+    
+    
+
+    ${
+      isOwner
+        ? `
+          <button
+            onclick="deletePost('${post.id}')"
+            style="
+              margin-top:8px;
+              background:#ff4d4d;
+              border:none;
+              color:white;
+              padding:5px 8px;
+              border-radius:5px;
+            "
+          >
+            Delete
+          </button>
+        `
+        : ""
+    }
+  `;
+
+  postsDiv.appendChild(div);
+}
+
+// ✅ 3. DEFINE loadPosts
+window.loadPosts = async function () {
+
+  console.log("🔥 loadPosts running...");
+
+  const postsDiv =
+    document.getElementById("posts");
+
+  // IMPORTANT
+  if (!postsDiv) {
+
+    console.log("❌ posts div not found");
+    return;
+
+  }
+
+  let posts = [];
+  let error = null;
+
+  if (activeTab === "explore") {
+
+    const response = await supabase
+      .from("posts")
+      .select("*")
+      .order("created_at", {
+        ascending: false
+      });
+
+    posts = response.data;
+    error = response.error;
+
+  }
+
+  if (activeTab === "following") {
+
+    const response = await supabase
+      .from("posts")
+      .select("*")
+      .order("created_at", {
+        ascending: false
+      });
+
+    posts = response.data;
+    error = response.error;
+
+  }
+
+  postsDiv.innerHTML = "";
+
+  if (error) {
+
+    postsDiv.innerHTML =
+      "❌ Error loading posts";
+
+    return;
+
+  }
+
+  if (!posts || posts.length === 0) {
+
+    postsDiv.innerHTML =
+      "😢 No posts yet";
+
+    return;
+
+  }
+
+  posts.forEach(renderPost);
+
+  observeVideos();
+
+};
+
+
+window.likePost = async (id) => {
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    alert("Login to like posts");
+    return;
+  }
+
+  const postDiv = document.getElementById(id);
+  const btn = postDiv?.querySelector("button");
+
+  // get current post
+  const { data: post, error } = await supabase
+    .from("posts")
+    .select("likes, liked_by")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.log("❌ fetch error:", error);
+    return;
+  }
+
+  let likedBy = post.liked_by || [];
+  const isLiked = likedBy.includes(userId);
+
+  let newLikes;
+  let updatedLikedBy;
+
+  if (isLiked) {
+    updatedLikedBy = likedBy.filter(uid => uid !== userId);
+    newLikes = (post.likes || 1) - 1;
+  } else {
+    updatedLikedBy = [...likedBy, userId];
+    newLikes = (post.likes || 0) + 1;
+  }
+
+  // ✅ INSTANT UI UPDATE (no waiting)
+  if (btn) {
+    btn.innerHTML = `${!isLiked ? "❤️ Liked" : "🤍 Like"} (${newLikes})`;
+    btn.style.background = !isLiked ? "#ff4d6d" : "#222";
+  }
+
+  // 🔥 save to database
+  await supabase
+    .from("posts")
+    .update({
+      likes: newLikes,
+      liked_by: updatedLikedBy
+    })
+    .eq("id", id);
+
+  // ❌ REMOVE THIS (realtime will handle updates)
+  // loadPosts();
+};
+
+window.deletePost = async (id) => {
+  const { error } = await supabase.from("posts").delete().eq("id", id);
+
+  if (error) {
+    console.log("❌ delete error:", error);
+    return;
+  }
+
+  loadPosts();
+};
+
+let currentPostId = null;
+
+window.openComments = (postId) => {
+  console.log("💬 opening comments for:", postId);
+
+  currentPostId = postId;
+
+  const panel = document.getElementById("commentsPanel");
+  panel.style.display = "flex";
+
+  loadComments(postId);
+};
+
+async function loadComments(postId) {
+  console.log("📥 loading comments for:", postId);
+
+  const { data, error } = await supabase
+    .from("comments")
+    .select("*")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+
+  const container = document.getElementById("panelComments");
+
+  if (error) {
+  console.log("❌ profile fetch error:", error);
+}
+
+// ✅ DO NOT RETURN — continue anyway
+
+  if (!data || data.length === 0) {
+    container.innerHTML = "No comments yet";
+    return;
+  }
+
+  container.innerHTML = data.map(c => `
+    <div style="margin-bottom:5px;">
+      <b>${c.name}</b>: ${c.content}
+    </div>
+  `).join("");
+}
+
+window.goHome = () => {
+  startApp(); // ✅ NOT reload
+};
+
+window.openProfile = async (userId, name) => {
+  console.log("Logged in:", session?.user?.id);
+console.log("Profile opened:", userId);
+  const { data } = await supabase.auth.getSession();
+  session = data.session;
+
+  // ✅ GET PROFILE FIRST
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .maybeSingle();
+    
+    const { count: followersCount } = await supabase
+  .from("follows")
+  .select("*", { count: "exact", head: true })
+  .eq("following_id", userId);
+
+const { count: followingCount } = await supabase
+  .from("follows")
+  .select("*", { count: "exact", head: true })
+  .eq("follower_id", userId);
+
+  document.getElementById("app").innerHTML = `
+    <div style="padding:15px; color:white;">
+    <button id="themeToggle">🌙 Theme</button>
+      <button onclick="goHome()">← Back</button>
+
+     <div style="display:flex;align-items:center;gap:10px;">
+
+  <img 
+  src="${profile?.avatar_url || 'https://via.placeholder.com/60'}"
+
+  onclick="
+    openMedia(
+      '${profile?.avatar_url || 'https://via.placeholder.com/60'}',
+      'image'
+    )
+  "
+
+  style="
+    width:120px;
+    height:120px;
+    object-fit:contain;
+    border-radius:50%;
+    background:#222;
+    cursor:pointer;
+    display:block;
+  "
+/>
+
+  <div>
+
+    <h2>
+      ${profile?.name || name}
+    </h2>
+
+    <div style="margin-top:5px;color:#aaa;">
+      ${followersCount || 0} followers ·
+      ${followingCount || 0} following
+    </div>
+
+    <!-- FOLLOW BUTTON GOES HERE -->
+    <div id="followContainer"></div>
+
+  </div>
+
+</div>
+
+      ${
+        String(session?.user?.id) === String(userId)
+          ? `<button onclick="openEditProfile()">Edit</button>`
+          : ""
+      }
+
+      <div id="profilePosts"></div>
+    </div>
+  `;
+
+  // ✅ THEN load posts
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  const container = document.getElementById("profilePosts");
+
+  if (error) {
+    container.innerHTML = "Error loading posts";
+    return;
+  }
+
+  if (!posts || posts.length === 0) {
+    container.innerHTML = "No posts yet";
+    return;
+  }
+
+  container.innerHTML = posts.map(post => `
+    <div style="border-bottom:1px solid #333; padding:10px 0;">
+      <div>${post.content || ""}</div>
+      <div style="font-size:12px;color:#aaa;">
+        ${new Date(post.created_at).toLocaleString()}
+      </div>
+    </div>
+  `).join("");
+
+
+const followContainer =
+  document.getElementById("followContainer");
+
+if (
+  session?.user?.id &&
+  session.user.id !== userId
+) {
+
+  const { data: existingFollow } = await supabase
+    .from("follows")
+    .select("*")
+    .eq("follower_id", session.user.id)
+    .eq("following_id", userId)
+    .maybeSingle();
+
+  const isFollowing = !!existingFollow;
+
+  followContainer.innerHTML = `
+    <button id="followBtn"
+      style="
+        margin-top:10px;
+        padding:8px 14px;
+        border:none;
+        border-radius:8px;
+        background:${isFollowing ? "#444" : "#1d9bf0"};
+        color:white;
+      ">
+      ${isFollowing ? "Following" : "Follow"}
+    </button>
+  `;
+
+  document.getElementById("followBtn").onclick =
+    async () => {
+
+      if (isFollowing) {
+
+        await supabase
+          .from("follows")
+          .delete()
+          .eq("follower_id", session.user.id)
+          .eq("following_id", userId);
+
+      } else {
+
+        const { error } = await supabase
+  .from("follows")
+  .insert({
+    follower_id: session.user.id,
+    following_id: userId
+  });
+
+console.log(error);
+
+      }
+
+      openProfile(userId, name);
+
+    };
+}
+};
+
+  window.openEditProfile = async () => {
+  alert("EDIT FUNCTION RUNNING");
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  session = sessionData.session;
+
+  if (!session?.user) {
+    alert("You are not logged in");
+    return;
+  }
+
+  const user = session.user;
+
+  // ✅ SAFE FETCH (no crashing)
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  console.log("PROFILE DATA:", data);
+  console.log("PROFILE ERROR:", error);
+
+  // ❌ DO NOT STOP if error
+
+  document.getElementById("app").innerHTML = `
+    <div style="padding:15px; color:white;">
+      <button onclick="goHome()">← Back</button>
+
+      <h2>Edit Profile</h2>
+
+      <input id="editName" placeholder="Name" value="${data?.name || ""}" />
+      <input type="file" id="avatarFile" accept="image/*" />
+      <textarea id="editBio" placeholder="Bio">${data?.bio || ""}</textarea>
+
+      <button id="saveProfile">Save</button>
+    </div>
+  `;
+  
+  document.getElementById("saveProfile").onclick = async () => {
+  const name = document.getElementById("editName").value;
+  const bio = document.getElementById("editBio").value;
+
+  const fileInput = document.getElementById("avatarFile");
+  const file = fileInput.files[0];
+
+  let avatarUrl = null;
+
+  if (file) {
+    const originalFile = file;
+    const fileName =
+  `${session.user.id}-${Date.now()}-${file.name}`;
+
+    const { data, error: uploadError } = await supabase.storage
+  .from("avatars")
+  .upload(fileName, originalFile, {
+    cacheControl: "3600",
+    upsert: true
+  });
+
+console.log("UPLOAD RESULT:", data);
+console.log("UPLOAD ERROR:", uploadError);
+
+    if (uploadError) {
+      alert("Upload failed");
+      console.log(uploadError);
+      return;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(fileName);
+
+    avatarUrl =
+  publicUrlData.publicUrl + "?t=" + Date.now();
+  }
+
+  const { data: oldProfile } = await supabase
+    .from("profiles")
+    .select("avatar_url")
+    .eq("id", session.user.id)
+    .single();
+
+  const { error } = await supabase.from("profiles").upsert({
+    id: session.user.id,
+    name,
+    avatar_url: avatarUrl || oldProfile?.avatar_url,
+    bio
+  });
+
+  if (error) {
+    alert("Save failed");
+    console.log(error);
+    return;
+  }
+
+  openProfile(session.user.id, name);
+};
+};
+function attachEvents() {
+  
+  const exploreTab = document.getElementById("tab-explore");
+const followingTab = document.getElementById("tab-following");
+
+if (exploreTab) {
+  exploreTab.onclick = () => {
+    activeTab = "explore";
+
+    exploreTab.classList.add("active-tab");
+    followingTab.classList.remove("active-tab");
+
+    loadPosts();
+  };
+}
+
+if (followingTab) {
+  followingTab.onclick = () => {
+    activeTab = "following";
+
+    followingTab.classList.add("active-tab");
+    exploreTab.classList.remove("active-tab");
+
+    loadPosts();
+  };
+}
+  
+  const themeBtn = document.getElementById("themeToggle");
+
+if (themeBtn) {
+  themeBtn.onclick = toggleTheme;
+}
+
+  
+  // POST BUTTON
+const postBtn = document.getElementById("postBtn");
+
+if (postBtn) {
+  postBtn.onclick = createPost;
+}
+      
+
+  // ✅ COMMENTS POST (MOVED INSIDE)
+  const panelBtn = document.getElementById("panelPostBtn");
+  if (panelBtn) {
+    panelBtn.onclick = async () => {
+      const input = document.getElementById("panelInput");
+      if (!input.value) return;
+
+      await supabase.from("comments").insert({
+        post_id: currentPostId,
+        content: input.value,
+        user_id: session?.user?.id || null,
+        name: session?.user?.email || "Guest"
+      });
+
+      input.value = "";
+      loadComments(currentPostId);
+    };
+  }
+
+  // ✅ CLOSE COMMENTS
+  const closeBtn = document.getElementById("closeComments");
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      document.getElementById("commentsPanel").style.display = "none";
+    };
+  }
+
+  // ✅ LOGIN
+  const loginBtn = document.getElementById("login");
+  if (loginBtn) {
+    loginBtn.onclick = async () => {
+      console.log("🔐 Login clicked");
+
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin
+        }
+      });
+    };
+  }
+} // ✅ ONLY ONE closing bracket
+
+// ✅ START APP FUNCTION (you were missing this too)
+let postsEl = null;
+let scrollTimeout;
+
+function startApp() {
+
+  document.getElementById("app").innerHTML = `
+    <div style="padding:10px;">
+
+      <div id="tabs" style="
+        display:flex;
+        justify-content:space-around;
+        margin-bottom:10px;
+        color:#aaa;
+        font-weight:bold;
+      ">
+        <div id="tab-explore" class="active-tab">
+          🌍 Explore
+        </div>
+
+        <div id="tab-following">
+          👥 Following
+        </div>
+      </div>
+
+      ${
+        session
+          ? `
+           <textarea 
+  id="postInput"
+  placeholder="Write something..."
+  style="
+    width:100%;
+    height:80px;
+    margin-bottom:10px;
+  "
+></textarea>
+
+<input
+  type="file"
+  id="mediaInput"
+  accept="image/*,video/*"
+  style="margin-bottom:10px;"
+/>
+
+<button id="postBtn">
+  Post
+</button>
+          `
+          : `
+            <button id="login">Login</button>
+          `
+      }
+
+      <div id="posts"></div>
+
+    </div>
+
+    <div id="commentsPanel" style="
+      position:fixed;
+      bottom:0;
+      left:0;
+      right:0;
+      height:60%;
+      background:#111;
+      color:white;
+      display:none;
+      flex-direction:column;
+      padding:10px;
+      z-index:1000;
+    ">
+      <span id="closeComments">✖</span>
+
+      <div id="panelComments"></div>
+
+      <input id="panelInput" />
+
+      <button id="panelPostBtn">
+        Post
+      </button>
+    </div>
+  `;
+
+  // ✅ NOW posts exists
+  postsEl = document.getElementById("posts");
+
+  attachEvents();
+
+  loadPosts();
+
+  console.log("SCRIPT END");
+
+  // ✅ SCROLL SNAP
+  setupScrollSnap();
+}
+
+async function createPost() {
+
+  const input =
+    document.getElementById("postInput");
+
+  const mediaInput =
+    document.getElementById("mediaInput");
+
+  const content =
+    input.value.trim();
+
+  const file =
+    mediaInput.files[0];
+
+  let mediaUrl = null;
+  let mediaType = null;
+
+  if (file) {
+
+    const fileName =
+      `${Date.now()}_${file.name}`;
+
+    const { error: uploadError } =
+      await supabase.storage
+  .from("posts_media")
+  .upload(fileName, file);
+
+    if (uploadError) {
+      console.log(uploadError);
+      alert("Upload failed");
+      return;
+    }
+
+    const { data } =
+      supabase.storage
+  .from("posts_media")
+  .getPublicUrl(fileName);
+
+    mediaUrl = data.publicUrl;
+
+    if (file.type.startsWith("image")) {
+      mediaType = "image";
+    }
+
+    if (file.type.startsWith("video")) {
+      mediaType = "video";
+    }
+  }
+
+  const { data: profile } =
+    await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+  await supabase
+    await supabase
+  .from("posts")
+  .insert([{
+    content,
+    file_url: mediaUrl,
+    media_type: mediaType,
+    user_id: session.user.id,
+    name:
+      profile?.name ||
+      session.user.email,
+    avatar_url:
+      profile?.avatar_url || null
+  }]);
+
+  input.value = "";
+  mediaInput.value = "";
+
+  loadPosts();
+}
+
+// ========================
+// AUTO SNAP
+// ========================
+
+function setupScrollSnap() {
+
+  if (!postsEl) return;
+
+  postsEl.addEventListener("scroll", () => {
+
+    clearTimeout(scrollTimeout);
+
+    scrollTimeout = setTimeout(() => {
+      snapToNearestPost();
+    }, 120);
+
+  });
+
+}
+
+function snapToNearestPost() {
+
+  const posts =
+    document.querySelectorAll(".post-card");
+
+  if (!posts.length) return;
+
+  const scrollTop = postsEl.scrollTop;
+
+  let closest = null;
+  let minDistance = Infinity;
+
+  posts.forEach((post) => {
+
+    const offset = post.offsetTop;
+
+    const distance =
+      Math.abs(offset - scrollTop);
+
+    if (distance < minDistance) {
+      minDistance = distance;
+      closest = post;
+    }
+
+  });
+
+  if (closest) {
+
+    postsEl.scrollTo({
+      top: closest.offsetTop,
+      behavior: "smooth"
+    });
+
+  }
+}
+
+let currentChatUser = null;
+
+window.openChat = async function(userId, name) {
+
+  if (!session?.user) {
+    alert("Please login first");
+    return;
+  }
+
+  currentChatUser = userId;
+
+  document.getElementById("app")
+    .style.display = "none";
+
+  document.getElementById("chatScreen")
+    .style.display = "flex";
+
+  document.getElementById("chatName")
+    .innerText = name;
+
+  // GET PROFILE
+  const { data: profile } =
+    await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
+
+  // SET CHAT IMAGE
+  document.getElementById(
+    "chatAvatar"
+  ).src =
+    profile?.avatar_url ||
+    "https://ui-avatars.com/api/?name=" +
+    encodeURIComponent(name);
+
+  loadMessages();
+
+};
+
+window.openInbox = async function () {
+
+  document.getElementById(
+    "inboxScreen"
+  ).style.display = "flex";
+
+  const inbox =
+    document.getElementById("inboxList");
+
+  inbox.innerHTML = "Loading...";
+
+  const { data: sessionData } =
+    await supabase.auth.getSession();
+
+  const userId =
+    sessionData.session?.user?.id;
+
+  if (!userId) return;
+
+  // GET MESSAGES
+  const { data: messages, error } =
+    await supabase
+      .from("messages")
+      .select("*")
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .order("created_at", {
+        ascending:false
+      });
+
+  if (error) {
+    inbox.innerHTML = "Error loading chats";
+    return;
+  }
+
+  if (!messages || messages.length === 0) {
+    inbox.innerHTML = "No chats yet";
+    return;
+  }
+
+  // REMOVE DUPLICATES
+  const uniqueUsers = {};
+
+  messages.forEach(msg => {
+
+    const otherUser =
+      msg.sender_id === userId
+        ? msg.receiver_id
+        : msg.sender_id;
+
+    if (!uniqueUsers[otherUser]) {
+      uniqueUsers[otherUser] = msg;
+    }
+
+  });
+
+  const chats =
+    Object.values(uniqueUsers);
+
+  inbox.innerHTML = "";
+
+  for (const msg of chats) {
+
+    const otherUser =
+      msg.sender_id === userId
+        ? msg.receiver_id
+        : msg.sender_id;
+
+    // GET PROFILE
+    const { data: profile } =
+      await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", otherUser)
+        .maybeSingle();
+
+    const div =
+      document.createElement("div");
+
+    // LONG PRESS
+    let pressTimer;
+
+    div.ontouchstart = () => {
+
+      pressTimer = setTimeout(async () => {
+
+        const confirmDelete =
+          confirm("Delete this chat?");
+
+        if (!confirmDelete) return;
+
+        await supabase
+          .from("messages")
+          .delete()
+          .or(`
+            and(sender_id.eq.${userId},receiver_id.eq.${otherUser}),
+            and(sender_id.eq.${otherUser},receiver_id.eq.${userId})
+          `);
+
+        openInbox();
+
+      }, 700);
+
+    };
+
+    div.ontouchend = () => {
+      clearTimeout(pressTimer);
+    };
+
+    div.onclick = () => {
+
+      openChat(
+        otherUser,
+        profile?.name || "User"
+      );
+
+      document.getElementById(
+        "inboxScreen"
+      ).style.display = "none";
+
+    };
+
+    div.style = `
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  padding:15px;
+  border-bottom:1px solid #222;
+  cursor:pointer;
+`;
+
+    div.innerHTML = `
+
+     <img
+  src="${
+    profile?.avatar_url ||
+    'https://ui-avatars.com/api/?name=' +
+    encodeURIComponent(profile?.name || 'U')
+  }"
+
+  onclick="
+    openMedia(
+      this.src,
+      'image'
+    )
+  "
+
+  style="
+    width:55px;
+    height:55px;
+    border-radius:50%;
+    object-fit:cover;
+    background:#222;
+    display:block;
+    cursor:pointer;
+  "
+/>
+
+      <div style="flex:1;">
+
+        <div style="
+          color:white;
+          font-weight:bold;
+          font-size:16px;
+        ">
+          ${profile?.name || "User"}
+        </div>
+
+        <div style="
+          color:#aaa;
+          margin-top:4px;
+          font-size:14px;
+          white-space:nowrap;
+          overflow:hidden;
+          text-overflow:ellipsis;
+        ">
+          ${msg.content || ""}
+        </div>
+
+      </div>
+
+    `;
+
+    inbox.appendChild(div);
+
+  }
+
+};
+
+async function loadMessages() {
+
+  // ✅ GET CURRENT USER
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  // ❌ not logged in
+  if (!session) {
+    alert("Login first");
+    return;
+  }
+
+  const myId = session.user.id;
+
+  // ✅ LOAD CHAT
+  const {
+    data,
+    error
+  } = await supabase
+    .from("messages")
+    .select("*")
+    .or(
+  `and(sender_id.eq.${myId},receiver_id.eq.${currentChatUser}),and(sender_id.eq.${currentChatUser},receiver_id.eq.${myId})`
+)
+    .order("created_at", {
+      ascending: true
+    });
+
+  console.log("MESSAGES:", data);
+  console.log("ERROR:", error);
+
+  const chat =
+    document.getElementById(
+      "chatMessages"
+    );
+
+  chat.innerHTML = "";
+
+  if (error) {
+
+  chat.innerHTML = `
+    <div style="
+      color:red;
+      padding:20px;
+      font-size:14px;
+      word-break:break-word;
+    ">
+      ❌ ${error.message}
+    </div>
+  `;
+
+  console.log(error);
+
+  return;
+}
+
+  if (!data || data.length === 0) {
+    chat.innerHTML = `
+      <div style="
+        color:#888;
+        text-align:center;
+        margin-top:20px;
+      ">
+        No messages yet
+      </div>
+    `;
+    return;
+  }
+
+  data.forEach(msg => {
+    
+    const mine =
+  msg.sender_id === myId;
+
+    const time =
+  new Date(msg.created_at)
+    .toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+chat.innerHTML += `
+  <div style="
+    display:flex;
+    justify-content:${
+      mine
+        ? "flex-end"
+        : "flex-start"
+    };
+    margin-bottom:10px;
+  ">
+
+<div
+
+  id="${msg.id}"
+
+  oncontextmenu="
+    event.preventDefault();
+    messageOptions('${msg.id}')
+  "
+
+  ontouchstart="
+    window.pressTimer = setTimeout(function(){
+      messageOptions('${msg.id}')
+    }, 700)
+  "
+
+  ontouchend="
+    clearTimeout(window.pressTimer)
+  "
+
+  ontouchmove="
+    clearTimeout(window.pressTimer)
+  "
+
+  style="
+    background:${
+      msg.media_url
+        ? 'transparent'
+        : mine
+          ? '#0084ff'
+          : '#222'
+    };
+
+    color:white;
+
+    padding:${
+      msg.media_url
+        ? '0'
+        : '10px 12px'
+    };
+
+    border-radius:18px;
+
+    max-width:75%;
+
+    overflow:hidden;
+  "
+>
+
+      <div>
+
+  ${
+    msg.media_type === "image"
+      ? `
+        <img
+          src="${msg.media_url}"
+
+          onclick="
+            openMedia(
+              '${msg.media_url}',
+              'image'
+            )
+          "
+
+          style="
+            max-width:100%;
+            width:auto;
+            height:auto;
+            max-height:320px;
+            object-fit:contain;
+            display:block;
+            margin:auto;
+            border-radius:16px;
+            margin-bottom:6px;
+            cursor:pointer;
+          "
+        />
+      `
+      : ""
+  }
+
+        ${
+          msg.media_type === "video"
+            ? `
+              <video
+                src="${msg.media_url}"
+                controls
+
+                onclick="
+                  openMedia(
+                    '${msg.media_url}',
+                    'video'
+                  )
+                "
+
+                style="
+                  width:100%;
+                  max-width:260px;
+                  max-height:320px;
+                  object-fit:cover;
+                  border-radius:16px;
+                  margin-bottom:6px;
+                  background:black;
+                "
+              ></video>
+            `
+            : ""
+        }
+
+        ${
+          msg.content
+            ? `
+              <div style="
+                margin-top:4px;
+                word-break:break-word;
+              ">
+                ${msg.content}
+              </div>
+            `
+            : ""
+        }
+
+      </div>
+
+      <div style="
+        margin-top:5px;
+        font-size:11px;
+        opacity:0.7;
+        text-align:right;
+      ">
+        ${time}
+      </div>
+
+    </div>
+
+  </div>
+`;
+  });
+
+  chat.scrollTop =
+    chat.scrollHeight;
+}
+
+async function sendMessage() {
+
+  const input =
+    document.getElementById("chatInput");
+
+  const fileInput =
+    document.getElementById("chatMedia");
+
+  const file =
+    fileInput.files[0];
+
+  // allow text OR media
+  if (
+    !input.value.trim() &&
+    !file
+  ) return;
+
+  let mediaUrl = null;
+  let mediaType = null;
+  let fileName = null;
+
+  // =====================
+  // UPLOAD FILE
+  // =====================
+
+  if (file) {
+
+    fileName =
+      Date.now() + "_" + file.name;
+
+    mediaType =
+      file.type.startsWith("video")
+        ? "video"
+        : "image";
+
+    const { error: uploadError } =
+      await supabase.storage
+        .from("chat-media")
+        .upload(fileName, file);
+
+    if (uploadError) {
+      alert(uploadError.message);
+      return;
+    }
+
+    const { data } =
+      supabase.storage
+        .from("chat-media")
+        .getPublicUrl(fileName);
+
+    mediaUrl = data.publicUrl;
+  }
+
+  // =====================
+  // SAVE MESSAGE
+  // =====================
+
+  const { error } =
+    await supabase
+      .from("messages")
+      .insert({
+        sender_id:
+          session.user.id,
+
+        receiver_id:
+          currentChatUser,
+
+        content:
+          input.value.trim(),
+
+        media_url:
+          mediaUrl,
+
+        media_type:
+          mediaType,
+
+        file_name:
+          fileName
+      });
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  input.value = "";
+  fileInput.value = "";
+
+  loadMessages();
+}
+
+window.messageOptions = async function(messageId) {
+
+  const old =
+    document.getElementById(
+      "messageMenu"
+    );
+
+  if (old) old.remove();
+
+  const menu =
+    document.createElement("div");
+
+  menu.id = "messageMenu";
+
+  menu.style = `
+    position:fixed;
+    left:50%;
+    bottom:25px;
+    transform:translateX(-50%);
+    background:#1c1c1c;
+    border:1px solid #333;
+    border-radius:18px;
+    padding:8px;
+    z-index:999999;
+    width:220px;
+    box-shadow:0 5px 25px rgba(0,0,0,0.4);
+  `;
+
+  menu.innerHTML = `
+
+    <div onclick="copyMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:white;
+        border-bottom:1px solid #333;
+      ">
+      📋 Copy
+    </div>
+
+    <div onclick="likeMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:white;
+        border-bottom:1px solid #333;
+      ">
+      ❤️ Like
+    </div>
+
+    <div onclick="shareMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:white;
+        border-bottom:1px solid #333;
+      ">
+      📤 Share
+    </div>
+
+    <div onclick="deleteMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:#ff4d4d;
+        font-weight:bold;
+      ">
+      🗑 Delete
+    </div>
+
+  `;
+
+  document.body.appendChild(menu);
+
+  setTimeout(() => {
+
+    document.onclick = () => {
+
+      const menu =
+        document.getElementById(
+          "messageMenu"
+        );
+
+      if (menu) menu.remove();
+
+      document.onclick = null;
+
+    };
+
+  }, 100);
+
+};
+
+window.copyMessage = function(messageId) {
+
+  const el =
+    document.getElementById(messageId);
+
+  if (!el) return;
+
+  navigator.clipboard.writeText(
+    el.innerText
+  );
+
+  alert("Copied");
+
+  document.getElementById(
+    "messageMenu"
+  )?.remove();
+
+};
+
+window.likeMessage = function(messageId) {
+
+  alert("❤️ Liked");
+
+  document.getElementById(
+    "messageMenu"
+  )?.remove();
+
+};
+
+window.shareMessage = async function(messageId) {
+
+  const el =
+    document.getElementById(messageId);
+
+  if (!el) return;
+
+  await navigator.share({
+    text: el.innerText
+  });
+
+  document.getElementById(
+    "messageMenu"
+  )?.remove();
+
+};
+
+window.deleteMessage = async function(messageId) {
+
+  const confirmDelete =
+    confirm("Delete message?");
+
+  if (!confirmDelete) return;
+
+  const { error } =
+    await supabase
+      .from("messages")
+      .delete()
+      .eq("id", messageId);
+
+  if (error) {
+
+    console.error(error);
+    alert(error.message);
+    return;
+
+  }
+
+  document.getElementById(messageId)?.remove();
+
+};
+
+window.closeChat = function () {
+
+  // hide current chat
+  document.getElementById(
+    "chatScreen"
+  ).style.display = "none";
+
+  // show inbox
+  document.getElementById(
+    "inboxScreen"
+  ).style.display = "flex";
+
+  // show home/feed again
+  document.getElementById(
+    "homePage"
+  ).style.display = "block";
+  
+  requestAnimationFrame(() => {
+  loadPosts();
+});
+
+};
+
+window.openMedia = function (url, type) {
+
+  const viewer = document.getElementById("mediaViewer");
+
+  // RESET VIEWER
+  viewer.innerHTML = "";
+
+  // CLOSE BUTTON
+  const closeBtn = document.createElement("div");
+
+  closeBtn.innerHTML = "✕";
+
+  closeBtn.onclick = closeMedia;
+
+  closeBtn.style.cssText = `
+    position:absolute;
+    top:20px;
+    left:20px;
+    color:white;
+    font-size:38px;
+    z-index:999999;
+    cursor:pointer;
+    user-select:none;
+  `;
+
+  viewer.appendChild(closeBtn);
+  
+  // FADE IN
+viewer.style.opacity = "0";
+
+setTimeout(() => {
+  viewer.style.opacity = "1";
+}, 10);
+
+viewer.style.transition =
+  "opacity 0.2s ease";
+
+
+// TAP BACKGROUND TO CLOSE
+viewer.addEventListener("click", e => {
+
+  if (e.target === viewer) {
+
+    closeMedia();
+  }
+
+});
+
+
+// ESC KEY CLOSE
+document.onkeydown = e => {
+
+  if (e.key === "Escape") {
+
+    closeMedia();
+  }
+
+};
+
+  // DOWNLOAD BUTTON (IMAGE ONLY)
+  if (type === "image") {
+
+    const downloadBtn = document.createElement("a");
+
+    downloadBtn.href = url;
+    downloadBtn.download = "";
+    downloadBtn.target = "_blank";
+
+    downloadBtn.innerHTML = "⬇";
+
+    downloadBtn.style.cssText = `
+      position:absolute;
+      top:20px;
+      right:20px;
+      color:white;
+      font-size:28px;
+      text-decoration:none;
+      z-index:999999;
+      background:#111;
+      padding:10px 14px;
+      border-radius:12px;
+    `;
+
+    viewer.appendChild(downloadBtn);
+  }
+
+  // CONTAINER
+  const container = document.createElement("div");
+
+container.style.cssText = `
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  position:relative;
+`;
+
+  // IMAGE
+  if (type === "image") {
+
+    const img = document.createElement("img");
+
+img.src = url;
+
+img.style.cssText = `
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+  display:block;
+  transition:transform 0.2s ease;
+  touch-action:none;
+`;
+
+container.appendChild(img);
+
+
+// ZOOM VARIABLES
+let scale = 1;
+let startDistance = 0;
+
+let currentX = 0;
+let currentY = 0;
+
+let isDragging = false;
+
+let startX = 0;
+let startY = 0;
+
+
+// DOUBLE TAP ZOOM
+img.addEventListener("dblclick", () => {
+
+  scale = scale === 1 ? 2 : 1;
+
+  updateTransform();
+});
+
+
+// TOUCH START
+img.addEventListener("touchstart", e => {
+
+  // PINCH START
+  if (e.touches.length === 2) {
+
+    startDistance = getDistance(
+      e.touches[0],
+      e.touches[1]
+    );
+  }
+
+  // DRAG START
+  if (e.touches.length === 1 && scale > 1) {
+
+    isDragging = true;
+
+    startX =
+      e.touches[0].clientX - currentX;
+
+    startY =
+      e.touches[0].clientY - currentY;
+  }
+
+});
+
+
+// TOUCH MOVE
+img.addEventListener("touchmove", e => {
+
+  e.preventDefault();
+
+  // PINCH ZOOM
+  if (e.touches.length === 2) {
+
+    const newDistance = getDistance(
+      e.touches[0],
+      e.touches[1]
+    );
+
+    scale *= newDistance / startDistance;
+
+    scale = Math.max(
+      1,
+      Math.min(scale, 5)
+    );
+
+    startDistance = newDistance;
+
+    updateTransform();
+  }
+
+  // DRAG IMAGE
+  if (e.touches.length === 1 && isDragging) {
+
+    currentX =
+      e.touches[0].clientX - startX;
+
+    currentY =
+      e.touches[0].clientY - startY;
+
+    updateTransform();
+  }
+
+}, { passive:false });
+
+
+// TOUCH END
+img.addEventListener("touchend", () => {
+
+  isDragging = false;
+});
+
+
+// APPLY TRANSFORM
+function updateTransform() {
+
+  img.style.transform =
+    `translate(${currentX}px, ${currentY}px) scale(${scale})`;
+}
+
+
+// DISTANCE BETWEEN 2 FINGERS
+function getDistance(t1, t2) {
+
+  return Math.hypot(
+    t2.clientX - t1.clientX,
+    t2.clientY - t1.clientY
+  );
+}
+
+// SWIPE DOWN TO CLOSE
+let swipeStartY = 0;
+let swipeCurrentY = 0;
+
+container.addEventListener("touchstart", e => {
+
+  if (scale === 1 && e.touches.length === 1) {
+
+    swipeStartY = e.touches[0].clientY;
+  }
+
+});
+
+container.addEventListener("touchmove", e => {
+
+  if (scale === 1 && e.touches.length === 1) {
+
+    swipeCurrentY =
+      e.touches[0].clientY - swipeStartY;
+
+    // MOVE VIEWER
+    container.style.transform =
+      `translateY(${swipeCurrentY}px)`;
+
+    // FADE BACKGROUND
+    viewer.style.background =
+      `rgba(0,0,0,${
+        0.95 - Math.abs(swipeCurrentY) / 700
+      })`;
+  }
+
+}, { passive:false });
+
+
+container.addEventListener("touchend", () => {
+
+  // CLOSE IF SWIPED FAR
+  if (Math.abs(swipeCurrentY) > 120) {
+
+    closeMedia();
+
+    return;
+  }
+
+  // RESET POSITION
+  container.style.transition =
+    "transform 0.2s ease";
+
+  container.style.transform =
+    "translateY(0px)";
+
+  viewer.style.background =
+    "rgba(0,0,0,0.95)";
+
+  setTimeout(() => {
+
+    container.style.transition = "";
+
+  }, 200);
+
+  swipeCurrentY = 0;
+});
+}
+
+  // VIDEO
+if (type === "video") {
+
+  const video = document.createElement("video");
+
+  video.src = url;
+
+  video.controls = false;
+  video.autoplay = true;
+  video.playsInline = true;
+
+  video.removeAttribute("width");
+  video.removeAttribute("height");
+
+  video.style.cssText = `
+    width:auto;
+    height:auto;
+
+    max-width:95vw;
+    max-height:95vh;
+
+    object-fit:contain;
+
+    display:block;
+    background:black;
+    border-radius:12px;
+
+    touch-action:none;
+  `;
+
+  container.appendChild(video);
+
+  // =========================
+  // PLAY BUTTON OVERLAY
+  // =========================
+
+  const playBtn = document.createElement("div");
+
+  playBtn.innerHTML = "⏸";
+
+  playBtn.style.cssText = `
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%);
+    width:90px;
+    height:90px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.9);
+    color:black;
+    font-size:40px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    opacity:0;
+    transition:0.2s;
+    pointer-events:none;
+    z-index:20;
+  `;
+
+  container.appendChild(playBtn);
+
+  // =========================
+  // GESTURE OVERLAY
+  // =========================
+
+  const gestureOverlay =
+    document.createElement("div");
+
+  gestureOverlay.style.cssText = `
+    position:absolute;
+    top:80px;
+    left:50%;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,0.7);
+    color:white;
+    padding:10px 18px;
+    border-radius:20px;
+    font-size:16px;
+    opacity:0;
+    transition:0.2s;
+    z-index:30;
+    pointer-events:none;
+  `;
+
+  container.appendChild(gestureOverlay);
+
+  // =========================
+  // VARIABLES
+  // =========================
+
+  let startY = 0;
+  let startX = 0;
+
+  let moved = false;
+
+  let brightness = 1;
+
+  let startBrightness = 1;
+  let startVolume = video.volume;
+
+  // =========================
+  // TOUCH START
+  // =========================
+
+  video.addEventListener("touchstart", e => {
+
+    if (e.touches.length !== 1) return;
+
+    moved = false;
+
+    startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
+
+    startBrightness = brightness;
+    startVolume = video.volume;
+
+  }, { passive:false });
+
+  // =========================
+  // TOUCH MOVE
+  // =========================
+
+  video.addEventListener("touchmove", e => {
+
+    if (e.touches.length !== 1) return;
+
+    e.preventDefault();
+
+    moved = true;
+
+    const touch = e.touches[0];
+
+    const deltaY =
+      startY - touch.clientY;
+
+    const percent =
+      deltaY / window.innerHeight;
+
+    // RIGHT SIDE = VOLUME
+    if (startX > window.innerWidth / 2) {
+
+      let newVolume =
+        startVolume + percent;
+
+      newVolume = Math.max(
+        0,
+        Math.min(1, newVolume)
+      );
+
+      video.volume = newVolume;
+
+      gestureOverlay.innerHTML =
+        "🔊 " +
+        Math.round(newVolume * 100) +
+        "%";
+    }
+
+    // LEFT SIDE = BRIGHTNESS
+    else {
+
+      brightness =
+        startBrightness + percent;
+
+      brightness = Math.max(
+        0.3,
+        Math.min(2, brightness)
+      );
+
+      video.style.filter =
+        `brightness(${brightness})`;
+
+      gestureOverlay.innerHTML =
+        "☀️ " +
+        Math.round(brightness * 50) +
+        "%";
+    }
+
+    gestureOverlay.style.opacity = "1";
+
+  }, { passive:false });
+
+  // =========================
+  // TOUCH END
+  // =========================
+
+  video.addEventListener("touchend", () => {
+
+    setTimeout(() => {
+
+      gestureOverlay.style.opacity = "0";
+
+    }, 500);
+
+  });
+
+  // =========================
+  // TAP PLAY / PAUSE
+  // =========================
+
+  video.addEventListener("click", e => {
+
+    e.stopPropagation();
+
+    if (moved) return;
+
+    if (video.paused) {
+
+      video.play();
+
+      playBtn.innerHTML = "⏸";
+
+    } else {
+
+      video.pause();
+
+      playBtn.innerHTML = "▶";
+
+    }
+
+    playBtn.style.opacity = "1";
+
+    clearTimeout(window.playBtnTimer);
+
+    window.playBtnTimer = setTimeout(() => {
+
+      playBtn.style.opacity = "0";
+
+    }, 700);
+
+  });
+
+}
+
+
+  viewer.appendChild(container);
+
+  // SHOW VIEWER
+  viewer.style.display = "flex";
+  viewer.style.justifyContent = "center";
+  viewer.style.alignItems = "center";
+  viewer.style.background = "rgba(0,0,0,0.95)";
+};
+
+
+// CLOSE MEDIA
+window.closeMedia = function () {
+
+  const viewer =
+    document.getElementById("mediaViewer");
+
+  viewer.style.opacity = "0";
+
+  setTimeout(() => {
+
+    viewer.style.display = "none";
+
+    document.getElementById(
+      "mediaContainer"
+    ).innerHTML = "";
+
+  }, 200);
+
+};
+
+// ========================
+// GLOBAL FUNCTIONS
+// ========================
+
+window.openProfile = openProfile;
+window.openEditProfile = openEditProfile;
+window.goHome = goHome;
+window.likePost = likePost;
+window.deletePost = deletePost;
+window.openComments = openComments;
+window.openChat = openChat;
+window.sendMessage = sendMessage;
+window.deleteMessage = deleteMessage;
+
+// ========================
+// VIDEO AUTOPLAY
+// ========================
+
+const videoObserver = new IntersectionObserver(
+  (entries) => {
+
+    entries.forEach((entry) => {
+
+      const video =
+        entry.target.querySelector("video");
+
+      if (!video) return;
+
+      if (
+        entry.isIntersecting &&
+        entry.intersectionRatio > 0.75
+      ) {
+
+        video.play().catch(() => {});
+
+      } else {
+
+        video.pause();
+
+      }
+
+    });
+
+  },
+  {
+    threshold: [0.6, 0.75, 0.9]
+  }
+);
+
+function observeVideos() {
+
+  document
+    .querySelectorAll(".post-card")
+    .forEach((post) => {
+
+      videoObserver.observe(post);
+
+    });
+
+}
+
+supabase
+  .channel("messages")
+  .on(
+    "postgres_changes",
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "messages"
+    },
+    payload => {
+
+      if (
+        payload.new.sender_id === currentChatUser ||
+        payload.new.receiver_id === currentChatUser
+      ) {
+        loadMessages();
+      }
+    }
+  )
+  .subscribe();
+
+</script>
+
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js')
+    .then(() => console.log('Service Worker Registered'))
+    .catch(err => console.log('SW failed:', err));
+}
+</script>
+
+</body>
+</html>
