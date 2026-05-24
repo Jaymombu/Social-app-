@@ -3064,15 +3064,14 @@ window.loadStories = async function () {
     ).toISOString();
 
   const { data: stories, error } =
-    await supabase
-      .from("stories")
-      .select("*")
-      .gt("created_at", yesterday)
-      .order("created_at", {
-        ascending: false
-      });
+  await supabase
+    .from("stories")
+    .select("*")
+    .order("created_at", {
+      ascending: false
+    });
 
-  console.log("Stories:", stories);
+console.log("Stories:", stories);
   
   console.log("storiesBar:", storiesBar);
 console.log("story count:", stories?.length);
