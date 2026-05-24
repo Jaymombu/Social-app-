@@ -3058,23 +3058,27 @@ window.loadStories = async function () {
 
   if (!storiesBar) return;
 
-  const yesterday =
-    new Date(
-      Date.now() - 24 * 60 * 60 * 1000
-    ).toISOString();
+  storiesBar.innerHTML = `
+  <div style="
+    color:white;
+    font-size:20px;
+  ">
+    STORIES LOADED
+  </div>
+`;
 
   const { data: stories, error } =
-  await supabase
-    .from("stories")
-    .select("*")
-    .order("created_at", {
-      ascending: false
-    });
+    await supabase
+      .from("stories")
+      .select("*")
+      .order("created_at", {
+        ascending: false
+      });
 
-console.log("Stories:", stories);
-  
+  console.log("Stories:", stories);
+
   console.log("storiesBar:", storiesBar);
-console.log("story count:", stories?.length);
+  console.log("story count:", stories?.length);
 
   if (error) {
 
@@ -3185,34 +3189,23 @@ const { data: inserted, error: dbError } =
   await supabase
     .from("stories")
     .insert([{
-
-      user_id:
-        session?.user?.id,
-
-      name:
-        profile?.name || "User",
-
-      avatar_url:
-        profile?.avatar_url || "",
-
-      media_url:
-        publicUrl,
-
-      media_type:
-        mediaType
-
+      user_id: session?.user?.id,
+      name: "User",
+      avatar_url: "",
+      media_url: publicUrl,
+      media_type: mediaType
     }])
     .select();
 
 console.log("INSERTED:", inserted);
 console.log("DB ERROR:", dbError);
+
+alert(JSON.stringify(inserted));
 alert(JSON.stringify(dbError));
 
 if (dbError) {
-
   alert("DB insert failed");
   return;
-
 }
 
     alert("Story added");
