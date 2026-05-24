@@ -3207,6 +3207,7 @@ const { data: inserted, error: dbError } =
 
 console.log("INSERTED:", inserted);
 console.log("DB ERROR:", dbError);
+alert(JSON.stringify(dbError));
 
 if (dbError) {
 
