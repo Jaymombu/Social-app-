@@ -488,6 +488,10 @@ linear-gradient(
   animation:storyFade .25s ease;
 }
 
+#storyViewer{
+  touch-action:none;
+}
+
 @keyframes storyFade{
 
   from{
@@ -556,9 +560,57 @@ linear-gradient(
 
 }
 
+@keyframes floatReact {
+
+  0%{
+    opacity:0;
+    transform:
+      translateX(-50%)
+      translateY(20px)
+      scale(0.5);
+  }
+
+  30%{
+    opacity:1;
+    transform:
+      translateX(-50%)
+      translateY(0)
+      scale(1.2);
+  }
+
+  100%{
+    opacity:0;
+    transform:
+      translateX(-50%)
+      translateY(-120px)
+      scale(1);
+  }
+
+}
+
 #storyTopBar,
 #storyReactions{
   transition:opacity .35s ease;
+}
+
+.story-zone{
+  position:absolute;
+  top:0;
+  bottom:0;
+  width:50%;
+  z-index:15;
+}
+
+.story-zone.left{
+  left:0;
+}
+
+.story-zone.right{
+  right:0;
+}
+
+.story-zone{
+  pointer-events:auto;
 }
 
 </style>
@@ -914,18 +966,23 @@ linear-gradient(
 ></div>
 
   <!-- CONTENT -->
-  <div
-    id="storyContent"
+<div
+  id="storyContent"
 
-    style="
-      width:100%;
-      height:100%;
+  style="
+    width:100%;
+    height:100%;
 
-      display:flex;
-      justify-content:center;
-      align-items:center;
-    "
-  ></div>
+    display:flex;
+    justify-content:center;
+    align-items:center;
+  "
+>
+
+  <div class="story-zone left"></div>
+  <div class="story-zone right"></div>
+
+</div>
   
   <input
   placeholder="Reply..."
@@ -3816,6 +3873,31 @@ function showStory() {
       "storyContent"
     );
     
+    container.onclick = (e) => {
+  e.stopPropagation();
+};
+
+container.ontouchstart = (e) => {
+  e.stopPropagation();
+
+  startY =
+    e.touches[0].clientY;
+
+  holdTimer = setTimeout(() => {
+
+    clearTimeout(window.storyTimer);
+
+    const video =
+      document.getElementById(
+        "storyVideo"
+      );
+
+    if(video) video.pause();
+
+  }, 200);
+
+};
+    
     container.innerHTML = `
   <div style="
     color:white;
@@ -3899,19 +3981,23 @@ container.ontouchend = (e) => {
   const screenWidth =
     window.innerWidth;
 
-  // LEFT
-  if(tapX < screenWidth / 2){
+const target =
+  e.target;
 
-    prevStory();
+if(
+  target.classList.contains(
+    "left"
+  )
+){
 
-  }
+  prevStory();
 
-  // RIGHT
-  else{
+}
+else{
 
-    nextStory();
+  nextStory();
 
-  }
+}
 
 };
 
@@ -4042,16 +4128,30 @@ if (story.media_type === "image") {
   img.onload = () => {
 
     container.innerHTML = `
-      <img
-        src="${story.media_url}"
 
-        style="
-          width:100%;
-          height:100%;
-          object-fit:contain;
-        "
-      >
-    `;
+  <div style="
+    position:absolute;
+    inset:0;
+    background:url('${story.media_url}') center/cover;
+    filter:blur(40px);
+    transform:scale(1.2);
+    opacity:.45;
+  "></div>
+
+  <!-- MAIN IMAGE -->
+  <img
+    src="${story.media_url}"
+
+    style="
+      position:relative;
+      width:100%;
+      height:100%;
+      object-fit:contain;
+      z-index:2;
+    "
+  >
+
+`;
 
     // IMAGE TIMER
     clearTimeout(window.storyTimer);
@@ -4088,11 +4188,10 @@ else {
       disablepictureinpicture
 
       style="
-        width:100%;
-        height:100%;
-        object-fit:contain;
-        background:black;
-      "
+  width:100%;
+  height:100%;
+  object-fit: cover;
+"
     ></video>
 
   `;
@@ -4256,9 +4355,28 @@ window.closeStoryViewer = function () {
 
 window.reactStory = function(emoji){
 
-  alert(
-    "Reacted with " + emoji
-  );
+  const el =
+    document.createElement("div");
+
+  el.innerHTML = emoji;
+
+  el.style = `
+    position:absolute;
+    bottom:120px;
+    left:50%;
+    transform:translateX(-50%);
+    font-size:40px;
+    z-index:9999;
+    animation:floatReact 1s ease forwards;
+  `;
+
+  document
+    .getElementById("storyViewer")
+    .appendChild(el);
+
+  setTimeout(()=>{
+    el.remove();
+  },1000);
 
 };
 
