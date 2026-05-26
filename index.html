@@ -304,61 +304,222 @@ color: var(--text);
 }
 
 #mediaContainer video{
-  width:auto !important;
-  height:auto !important;
 
-  max-width:95vw;
-  max-height:95vh;
+  max-width:100%;
+  max-height:100%;
+
+  width:auto;
+  height:auto;
 
   object-fit:contain;
 
   display:block;
 
   background:black;
+
   border-radius:12px;
+
 }
 
-/* STORIES */
-#storiesWrapper{
-  background:#111;
-  border-bottom:1px solid #222;
-  padding-top:60px;
-}
-
-#storiesHeader{
-  display:flex;
-  justify-content:space-around;
-  align-items:center;
-
-  padding:12px 0 8px;
-
-  color:#aaa;
-  font-weight:bold;
-  font-size:17px;
-}
-
-.storyTab{
-  padding-bottom:8px;
-}
-
-.storyTab.active{
-  color:white;
-  border-bottom:3px solid white;
-}
-
+/* STORIES BAR */
 #storiesBar{
   display:flex;
-  gap:14px;
-
+  gap:12px;
   overflow-x:auto;
 
-  padding:12px;
+  padding:14px;
 
   scrollbar-width:none;
 }
 
 #storiesBar::-webkit-scrollbar{
   display:none;
+}
+
+.story-card{
+  width:110px;
+  height:180px;
+
+  border-radius:18px;
+
+  overflow:hidden;
+
+  position:relative;
+
+  flex-shrink:0;
+
+  background:#111;
+
+  cursor:pointer;
+
+  border:1px solid #333;
+}
+
+.story-bg{
+  width:100%;
+  height:100%;
+
+  object-fit:cover;
+}
+
+.story-overlay{
+  position:absolute;
+  inset:0;
+
+  background:
+    linear-gradient(
+      to top,
+      rgba(0,0,0,0.85),
+      rgba(0,0,0,0.1)
+    );
+}
+
+.story-count{
+  position:absolute;
+  top:10px;
+  left:10px;
+
+  background:#1877f2;
+
+  color:white;
+
+  font-size:15px;
+  font-weight:bold;
+
+  padding:5px 10px;
+
+  border-radius:12px;
+}
+
+.story-user{
+  position:absolute;
+  bottom:12px;
+  left:10px;
+
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.story-avatar{
+  width:42px;
+  height:42px;
+
+  border-radius:50%;
+
+  border:3px solid #1877f2;
+
+  object-fit:cover;
+
+  background:white;
+  
+  padding:2px;
+
+background:
+linear-gradient(
+  45deg,
+  orange,
+  deeppink,
+  purple
+);
+}
+
+.story-username{
+  color:white;
+  font-weight:600;
+  font-size:15px;
+
+  max-width:55px;
+
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+#storyContent video{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  background:black;
+}
+
+#storyViewer{
+  overflow:hidden;
+}
+
+#storyContent{
+  position:absolute;
+  inset:0;
+}
+
+#storyContent video,
+#storyContent img{
+  pointer-events:none;
+}
+
+#storyContent::after{
+  content:"";
+  position:absolute;
+  inset:0;
+
+  background:
+  linear-gradient(
+    to top,
+    rgba(0,0,0,0.55),
+    transparent 40%
+  );
+
+  pointer-events:none;
+}
+
+#storyViewer{
+  animation:storyFade .25s ease;
+}
+
+@keyframes storyFade{
+
+  from{
+    opacity:0;
+    transform:scale(1.03);
+  }
+
+  to{
+    opacity:1;
+    transform:scale(1);
+  }
+
+}
+
+#storyViewer input::placeholder{
+  color:rgba(255,255,255,0.7);
+}
+
+@keyframes heartPop {
+
+  0%{
+    transform:
+      translate(-50%,-50%)
+      scale(0.5);
+
+    opacity:0;
+  }
+
+  50%{
+    transform:
+      translate(-50%,-50%)
+      scale(1.2);
+
+    opacity:1;
+  }
+
+  100%{
+    transform:
+      translate(-50%,-50%)
+      scale(1);
+
+    opacity:0;
+  }
+
 }
 
 </style>
@@ -665,6 +826,208 @@ color: var(--text);
     overflow:auto;
   "
 ></div>
+
+</div>
+
+<!-- STORY VIEWER -->
+<div
+  id="storyViewer"
+
+  style="
+    display:none;
+    position:fixed;
+    inset:0;
+    background:black;
+    z-index:999999;
+  "
+>
+
+  <!-- PROGRESS -->
+  <div
+    id="storyProgress"
+
+    style="
+      position:absolute;
+      top:10px;
+      left:10px;
+      right:10px;
+
+      display:flex;
+      gap:4px;
+
+      z-index:20;
+    "
+  ></div>
+  
+  <div
+  id="storyTopBar"
+
+  style="
+    position:absolute;
+    top:40px;
+    left:15px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    z-index:40;
+    color:white;
+  "
+></div>
+
+  <!-- CONTENT -->
+  <div
+    id="storyContent"
+
+    style="
+      width:100%;
+      height:100%;
+
+      display:flex;
+      justify-content:center;
+      align-items:center;
+    "
+  ></div>
+  
+  <input
+  placeholder="Reply..."
+  style="
+    position:absolute;
+    bottom:calc(20px + env(safe-area-inset-bottom));
+    left:20px;
+    right:20px;
+    height:45px;
+    border:none;
+    border-radius:25px;
+    padding:0 20px;
+    background:rgba(255,255,255,0.12);
+    backdrop-filter:blur(10px);
+    color:white;
+    z-index:60;
+  "
+>
+
+<div
+  id="storyReactions"
+
+  style="
+    position:absolute;
+    bottom:calc(80px + env(safe-area-inset-bottom));
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    gap:12px;
+    z-index:100;
+  "
+>
+
+  <button
+    onclick="reactStory('❤️')"
+
+    style="
+      width:50px;
+      height:50px;
+      border:none;
+      border-radius:50%;
+      background:rgba(255,255,255,0.15);
+      backdrop-filter:blur(10px);
+      font-size:24px;
+      color:white;
+    "
+  >
+    ❤️
+  </button>
+
+  <button
+    onclick="reactStory('🔥')"
+
+    style="
+      width:50px;
+      height:50px;
+      border:none;
+      border-radius:50%;
+      background:rgba(255,255,255,0.15);
+      backdrop-filter:blur(10px);
+      font-size:24px;
+      color:white;
+    "
+  >
+    🔥
+  </button>
+
+  <button
+    onclick="reactStory('😂')"
+
+    style="
+      width:50px;
+      height:50px;
+      border:none;
+      border-radius:50%;
+      background:rgba(255,255,255,0.15);
+      backdrop-filter:blur(10px);
+      font-size:24px;
+      color:white;
+    "
+  >
+    😂
+  </button>
+
+  <button
+    onclick="reactStory('😍')"
+
+    style="
+      width:50px;
+      height:50px;
+      border:none;
+      border-radius:50%;
+      background:rgba(255,255,255,0.15);
+      backdrop-filter:blur(10px);
+      font-size:24px;
+      color:white;
+    "
+  >
+    😍
+  </button>
+  
+  </div>
+
+<button
+  id="storyMuteBtn"
+  onclick="toggleStorySound()"
+
+  style="
+    position:absolute;
+    bottom:calc(90px + env(safe-area-inset-bottom));
+    right:20px;
+    z-index:100;
+    background:none;
+    border:none;
+    color:white;
+    font-size:24px;
+  "
+>
+  🔇
+</button>
+
+  <!-- CLOSE -->
+  <button
+    onclick="closeStoryViewer()"
+
+    style="
+      position:absolute;
+      top:20px;
+      right:20px;
+
+      background:none;
+      border:none;
+
+      color:white;
+      font-size:32px;
+
+      z-index:30;
+    "
+  >
+    ✕
+  </button>
 
 </div>
 
@@ -3125,13 +3488,23 @@ window.loadStories = async function () {
 
   if (!storiesBar) return;
 
-  const { data: stories, error } =
-    await supabase
-      .from("stories")
-      .select("*")
-      .order("created_at", {
-        ascending: false
-      });
+  // GET STORIES
+  const yesterday =
+  new Date(
+    Date.now() - 86400000
+  ).toISOString();
+
+const { data: stories, error } =
+  await supabase
+    .from("stories")
+    .select("*")
+    .gte(
+      "created_at",
+      yesterday
+    )
+    .order("created_at", {
+      ascending:false
+    });
 
   if (error) {
 
@@ -3140,15 +3513,13 @@ window.loadStories = async function () {
 
   }
 
-  window.storyList = stories || [];
-
-  // EMPTY STATE
+  // EMPTY
   if (!stories || stories.length === 0) {
 
     storiesBar.innerHTML = `
       <div style="
         color:#777;
-        padding:10px;
+        padding:15px;
       ">
         No stories yet
       </div>
@@ -3158,55 +3529,114 @@ window.loadStories = async function () {
 
   }
 
-  let html = "";
+  // GROUP STORIES BY USER
+  const grouped = {};
 
-  stories.forEach((story, index) => {
+  stories.forEach(story => {
 
-    const avatar =
-      story.avatar_url && story.avatar_url !== ""
-        ? story.avatar_url
-        : `https://ui-avatars.com/api/?name=${encodeURIComponent(story.name)}`;
+    const userId =
+      story.user_id || "unknown";
 
-    html += `
+    if (!grouped[userId]) {
 
-      <div
-        onclick="openStory(${index})"
-        style="
-          width:70px;
-          text-align:center;
-          color:white;
-          cursor:pointer;
-          flex-shrink:0;
-        "
-      >
+      grouped[userId] = {
 
-        <img
-          src="${avatar}"
+        name:
+          story.name || "User",
 
-          style="
-            width:60px;
-            height:60px;
-            border-radius:50%;
-            object-fit:cover;
-            border:3px solid #8a2be2;
-          "
-        >
+        avatar:
+          story.avatar_url &&
+          story.avatar_url !== ""
 
-        <div style="
-          font-size:12px;
-          margin-top:5px;
-          white-space:nowrap;
-          overflow:hidden;
-          text-overflow:ellipsis;
-        ">
-          ${story.name}
-        </div>
+            ? story.avatar_url
 
-      </div>
+            : `https://ui-avatars.com/api/?name=${
+                encodeURIComponent(
+                  story.name || "User"
+                )
+              }`,
 
-    `;
+        stories: []
+
+      };
+
+    }
+
+    grouped[userId]
+      .stories
+      .push(story);
 
   });
+
+  // SAVE GROUPS
+  window.storyGroups =
+    Object.values(grouped);
+
+  let html = "";
+
+  // CREATE STORY CARDS
+  window.storyGroups.forEach(
+    (group, index) => {
+      
+      const seen =
+  localStorage.getItem(
+    "seen_" +
+    group.stories[0].user_id
+  ) === "true";
+
+      const latestStory =
+        group.stories[0];
+
+      html += `
+
+        <div
+  class="story-card"
+  onclick="openStory(${index})"
+
+  style="
+    opacity:${seen ? "0.5" : "1"};
+    border:${
+      seen
+        ? "1px solid #555"
+        : "2px solid #1877f2"
+    };
+  "
+>
+
+          <!-- BACKGROUND -->
+          <img
+            class="story-bg"
+            src="${latestStory.media_url}"
+          >
+
+          <!-- OVERLAY -->
+          <div class="story-overlay"></div>
+
+          <!-- COUNT -->
+          <div class="story-count">
+            ${group.stories.length}
+          </div>
+
+          <!-- USER -->
+          <div class="story-user">
+
+            <img
+              class="story-avatar"
+              src="${group.avatar}"
+            >
+
+            <div class="story-username">
+              ${group.name}
+            </div>
+
+          </div>
+
+        </div>
+
+      `;
+
+    }
+  );
 
   storiesBar.innerHTML = html;
 
@@ -3292,13 +3722,31 @@ if (dbError) {
 
 }
 
-window.openStory = function(index) {
+window.openStory = function(index){
 
-  window.storyIndex = index;
+  // SAVE ACTIVE USER
+  window.activeUserIndex = index;
 
+  // CURRENT USER STORIES
+  window.currentGroup =
+    window.storyGroups[index];
+
+  // USER STORY LIST
+  window.storyList =
+    window.currentGroup.stories;
+
+  // START FROM FIRST STORY
+  window.storyIndex = 0;
+
+  // OPEN VIEWER
   document.getElementById(
     "storyViewer"
   ).style.display = "block";
+  
+  localStorage.setItem(
+  "seen_" + window.currentGroup.stories[0].user_id,
+  "true"
+);
 
   showStory();
 
@@ -3322,70 +3770,210 @@ function showStory() {
     document.getElementById(
       "storyContent"
     );
+    
+    container.innerHTML = `
+  <div style="
+    color:white;
+    font-size:18px;
+  ">
+    Loading...
+  </div>
+`;
+    
+    let startY = 0;
+let holdTimer;
+let lastTap = 0;
+
+// TOUCH START
+container.ontouchstart = (e) => {
+
+  startY =
+    e.touches[0].clientY;
+
+  holdTimer = setTimeout(() => {
+
+    clearTimeout(window.storyTimer);
+
+    const video =
+      document.getElementById(
+        "storyVideo"
+      );
+
+    if(video) video.pause();
+
+  }, 200);
+
+};
+
+// TOUCH END
+container.ontouchend = (e) => {
+
+  clearTimeout(holdTimer);
+
+  const video =
+    document.getElementById(
+      "storyVideo"
+    );
+
+  if(video){
+
+    video.play();
+
+  }
+
+ // DOUBLE TAP ❤️
+  const now = Date.now();
+
+  if(now - lastTap < 300){
+
+    showHeart();
+
+    lastTap = 0;
+
+    return;
+
+  }
+
+  lastTap = now;
+
+  // SWIPE DOWN CLOSE
+  const endY =
+    e.changedTouches[0].clientY;
+
+  if(endY - startY > 120){
+
+    closeStoryViewer();
+    return;
+
+  }
+
+  // TAP NAVIGATION
+  const tapX =
+    e.changedTouches[0].clientX;
+
+  const screenWidth =
+    window.innerWidth;
+
+  // LEFT
+  if(tapX < screenWidth / 2){
+
+    prevStory();
+
+  }
+
+  // RIGHT
+  else{
+
+    nextStory();
+
+  }
+
+};
 
   const progress =
     document.getElementById(
       "storyProgress"
     );
+    
+    document.getElementById(
+  "storyTopBar"
+).innerHTML = `
+
+  <img
+    src="${
+      story.avatar_url ||
+      'https://ui-avatars.com/api/?name=' +
+      encodeURIComponent(story.name)
+    }"
+
+    style="
+      width:40px;
+      height:40px;
+      border-radius:50%;
+      object-fit:cover;
+      border:2px solid white;
+    "
+  >
+
+  <div>
+    <div style="font-weight:bold">
+      ${story.name}
+    </div>
+
+    <div style="
+      font-size:12px;
+      opacity:0.7;
+    ">
+      Story
+    </div>
+  </div>
+
+`;
 
   progress.innerHTML = "";
 
   window.storyList.forEach((_, i) => {
 
-    progress.innerHTML += `
+  progress.innerHTML += `
 
-      <div style="
-        flex:1;
-        height:3px;
-        background:rgba(255,255,255,0.3);
-        border-radius:10px;
-        overflow:hidden;
-      ">
+    <div style="
+      flex:1;
+      height:3px;
+      background:rgba(255,255,255,0.3);
+      border-radius:10px;
+      overflow:hidden;
+    ">
 
-        <div
-          id="storyBar${i}"
+      <div
+        id="storyBar${i}"
 
-          style="
-            width:${
-              i < window.storyIndex
-                ? "100%"
-                : "0%"
-            };
+        style="
+          width:${
+            i < window.storyIndex
+              ? "100%"
+              : "0%"
+          };
 
-            height:100%;
-            background:white;
+          height:100%;
+          background:white;
 
-            transition:${
-              i === window.storyIndex
-                ? "5s linear"
-                : "none"
-            };
-          "
-        ></div>
+          transition:${
+            i === window.storyIndex
+              ? "5s linear"
+              : "none"
+          };
+        "
+      ></div>
 
-      </div>
+    </div>
 
-    `;
+  `;
 
-  });
+});
 
-  setTimeout(() => {
+setTimeout(() => {
 
-    const activeBar =
-      document.getElementById(
-        `storyBar${window.storyIndex}`
-      );
+  const activeBar =
+    document.getElementById(
+      `storyBar${window.storyIndex}`
+    );
 
-    if (activeBar) {
+  if (activeBar) {
 
-      activeBar.style.width = "100%";
+    activeBar.style.width = "100%";
 
-    }
+  }
 
-  }, 50);
+}, 50);
 
-  // IMAGE
-  if (story.media_type === "image") {
+// IMAGE
+if (story.media_type === "image") {
+
+  const img = new Image();
+
+  img.src = story.media_url;
+
+  img.onload = () => {
 
     container.innerHTML = `
       <img
@@ -3399,41 +3987,139 @@ function showStory() {
       >
     `;
 
+    // IMAGE TIMER
+    clearTimeout(window.storyTimer);
+
+    window.storyTimer =
+      setTimeout(() => {
+
+        nextStory();
+
+      }, 5000);
+
+  };
+
+}
+
+// VIDEO
+else {
+
+  container.innerHTML = `
+
+    <video
+      id="storyVideo"
+      src="${story.media_url}"
+      autoplay
+      playsinline
+      ${window.storyMuted ? "muted" : ""}
+
+      controlslist="
+        nodownload
+        nofullscreen
+        noremoteplayback
+      "
+
+      disablepictureinpicture
+
+      style="
+        width:100%;
+        height:100%;
+        object-fit:contain;
+        background:black;
+      "
+    ></video>
+
+  `;
+
+  const video =
+    document.getElementById("storyVideo");
+
+  // BLOCK MENU
+  video.addEventListener(
+    "contextmenu",
+    e => e.preventDefault()
+  );
+
+  // WAIT FOR VIDEO
+  video.onloadedmetadata = async () => {
+
+    try {
+
+      await video.play();
+
+    } catch(err) {
+
+      console.log(err);
+
+    }
+
+    clearTimeout(window.storyTimer);
+
+    const activeBar =
+      document.getElementById(
+        `storyBar${window.storyIndex}`
+      );
+
+    if (activeBar) {
+
+      activeBar.style.transition =
+        `${video.duration}s linear`;
+
+      activeBar.style.width = "100%";
+
+    }
+
+    // AUTO NEXT
+    window.storyTimer =
+      setTimeout(() => {
+
+        nextStory();
+
+      }, video.duration * 1000);
+
+  };
+
+}
+
+const next =
+  window.storyList[
+    window.storyIndex + 1
+  ];
+
+if(next){
+
+  // IMAGE PRELOAD
+  if(next.media_type === "image"){
+
+    const preload =
+      new Image();
+
+    preload.src =
+      next.media_url;
+
   }
 
-  // VIDEO
-  else {
+  // VIDEO PRELOAD
+  else{
 
-    container.innerHTML = `
+    const preloadVideo =
+      document.createElement("video");
 
-  <video
-    src="${story.media_url}"
-    autoplay
-    playsinline
-    muted
+    preloadVideo.src =
+      next.media_url;
 
-    style="
-      width:100%;
-      height:100%;
-      object-fit:contain;
-      background:black;
-    "
-  ></video>
-
-`;
+    preloadVideo.preload =
+      "auto";
 
   }
 
-  window.storyTimer = setTimeout(() => {
-
-    nextStory();
-
-  }, 5000);
+}
 
 }
 
 function nextStory() {
 
+  // NEXT STORY INSIDE USER
   if (
     window.storyIndex <
     window.storyList.length - 1
@@ -3443,13 +4129,36 @@ function nextStory() {
 
     showStory();
 
-  }
-
-  else {
-
-    closeStoryViewer();
+    return;
 
   }
+
+  // NEXT USER
+  if (
+    window.activeUserIndex <
+    window.storyGroups.length - 1
+  ) {
+
+    window.activeUserIndex++;
+
+    window.currentGroup =
+      window.storyGroups[
+        window.activeUserIndex
+      ];
+
+    window.storyList =
+      window.currentGroup.stories;
+
+    window.storyIndex = 0;
+
+    showStory();
+
+    return;
+
+  }
+
+  // END
+  closeStoryViewer();
 
 }
 
@@ -3478,6 +4187,68 @@ window.closeStoryViewer = function () {
   ).innerHTML = "";
 
 };
+
+window.reactStory = function(emoji){
+
+  alert(
+    "Reacted with " + emoji
+  );
+
+};
+
+window.storyMuted = true;
+
+window.toggleStorySound =
+function(){
+
+  const video =
+    document.getElementById(
+      "storyVideo"
+    );
+
+  if(!video) return;
+
+  video.muted =
+    !video.muted;
+
+  window.storyMuted =
+    video.muted;
+
+  document.getElementById(
+    "storyMuteBtn"
+  ).innerText =
+    video.muted ? "🔇" : "🔊";
+
+};
+
+function showHeart(){
+
+  const heart =
+    document.createElement("div");
+
+  heart.innerHTML = "❤️";
+
+  heart.style = `
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    font-size:80px;
+    z-index:999;
+    animation:heartPop .8s ease;
+  `;
+
+  document
+    .getElementById("storyViewer")
+    .appendChild(heart);
+
+  setTimeout(() => {
+
+    heart.remove();
+
+  }, 800);
+
+}
 
 // ========================
 // GLOBAL FUNCTIONS
