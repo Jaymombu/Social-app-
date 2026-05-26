@@ -436,13 +436,6 @@ linear-gradient(
   white-space:nowrap;
 }
 
-#storyContent video{
-  width:100%;
-  height:100%;
-  object-fit:contain;
-  background:black;
-}
-
 #storyViewer{
   overflow:hidden;
 }
@@ -450,24 +443,43 @@ linear-gradient(
 #storyContent{
   position:absolute;
   inset:0;
+
+  display:flex;
+  justify-content:center;
+  align-items:center;
+
+  background:black;
+  overflow:hidden;
+  
+  backdrop-filter:blur(20px);
 }
 
 #storyContent video,
 #storyContent img{
+
+  width:100%;
+  height:100%;
+
+  object-fit:cover;
+
   pointer-events:none;
+
+  display:block;
 }
 
 #storyContent::after{
+
   content:"";
+
   position:absolute;
   inset:0;
 
   background:
-  linear-gradient(
-    to top,
-    rgba(0,0,0,0.55),
-    transparent 40%
-  );
+    linear-gradient(
+      to top,
+      rgba(0,0,0,0.55),
+      transparent 40%
+    );
 
   pointer-events:none;
 }
@@ -486,6 +498,28 @@ linear-gradient(
   to{
     opacity:1;
     transform:scale(1);
+  }
+
+}
+
+#storyContent img,
+#storyContent video{
+
+  animation:
+    storyZoom .25s ease;
+
+}
+
+@keyframes storyZoom{
+
+  from{
+    transform:scale(1.05);
+    opacity:.7;
+  }
+
+  to{
+    transform:scale(1);
+    opacity:1;
   }
 
 }
@@ -520,6 +554,11 @@ linear-gradient(
     opacity:0;
   }
 
+}
+
+#storyTopBar,
+#storyReactions{
+  transition:opacity .35s ease;
 }
 
 </style>
@@ -1013,18 +1052,24 @@ linear-gradient(
     onclick="closeStoryViewer()"
 
     style="
-      position:absolute;
-      top:20px;
-      right:20px;
+  position:absolute;
+  top:50px;
+  right:20px;
 
-      background:none;
-      border:none;
+  width:45px;
+  height:45px;
 
-      color:white;
-      font-size:32px;
+  border-radius:50%;
 
-      z-index:30;
-    "
+  background:rgba(0,0,0,0.4);
+
+  border:none;
+
+  color:white;
+  font-size:32px;
+
+  z-index:30;
+"
   >
     ✕
   </button>
@@ -3877,6 +3922,14 @@ container.ontouchend = (e) => {
     
     document.getElementById(
   "storyTopBar"
+).style.opacity = "1";
+
+document.getElementById(
+  "storyReactions"
+).style.opacity = "1";
+    
+    document.getElementById(
+  "storyTopBar"
 ).innerHTML = `
 
   <img
@@ -3936,6 +3989,7 @@ container.ontouchend = (e) => {
 
           height:100%;
           background:white;
+          box-shadow:0 0 10px white;
 
           transition:${
             i === window.storyIndex
@@ -3950,6 +4004,18 @@ container.ontouchend = (e) => {
   `;
 
 });
+
+setTimeout(() => {
+
+  document.getElementById(
+    "storyTopBar"
+  ).style.opacity = "0";
+
+  document.getElementById(
+    "storyReactions"
+  ).style.opacity = "0";
+
+}, 2000);
 
 setTimeout(() => {
 
@@ -4233,20 +4299,25 @@ function showHeart(){
     top:50%;
     left:50%;
     transform:translate(-50%,-50%);
-    font-size:80px;
-    z-index:999;
-    animation:heartPop .8s ease;
+    font-size:120px;
+    z-index:9999;
+    pointer-events:none;
+
+    animation:
+      heartPop .9s ease;
   `;
 
   document
     .getElementById("storyViewer")
     .appendChild(heart);
 
+  navigator.vibrate?.(40);
+
   setTimeout(() => {
 
     heart.remove();
 
-  }, 800);
+  }, 900);
 
 }
 
