@@ -488,7 +488,8 @@ linear-gradient(
   animation:storyFade .25s ease;
 }
 
-#storyViewer{
+#storyViewer,
+#storyViewer *{
   touch-action:none;
 }
 
@@ -611,6 +612,57 @@ linear-gradient(
 
 .story-zone{
   pointer-events:auto;
+}
+
+#storyViewer{
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+
+  overscroll-behavior:none;
+
+  touch-action:none;
+}
+
+#storyViewer *{
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+
+  touch-action:none;
+}
+
+#storyViewer{
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100vh;
+  z-index:999999;
+  background:black;
+  touch-action:none;
+  overscroll-behavior:none;
+}
+
+#storyViewer *{
+  touch-action:none;
+}
+
+#storyContent,
+#storyContent img,
+#storyContent video,
+.story-card,
+#storyViewer{
+  will-change:
+    transform,
+    opacity,
+    filter;
+
+  transform:
+    translateZ(0);
+
+  backface-visibility:hidden;
+
+  perspective:1000px;
 }
 
 </style>
@@ -1089,19 +1141,29 @@ linear-gradient(
 <button
   id="storyMuteBtn"
   onclick="toggleStorySound()"
-
   style="
     position:absolute;
-    bottom:calc(90px + env(safe-area-inset-bottom));
+    bottom:120px;
     right:20px;
-    z-index:100;
-    background:none;
+
+    width:50px;
+    height:50px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    z-index:999999;
+
+    background:rgba(0,0,0,.5);
     border:none;
+    border-radius:50%;
+
     color:white;
-    font-size:24px;
+    font-size:26px;
   "
 >
-  🔇
+🔇
 </button>
 
   <!-- CLOSE -->
@@ -3062,14 +3124,14 @@ viewer.style.transition =
 
 
 // TAP BACKGROUND TO CLOSE
-viewer.addEventListener("click", e => {
+viewer.onclick = e => {
 
   if (e.target === viewer) {
 
     closeMedia();
   }
 
-});
+};
 
 
 // ESC KEY CLOSE
@@ -3152,6 +3214,7 @@ let isDragging = false;
 
 let startX = 0;
 let startY = 0;
+
 
 
 // DOUBLE TAP ZOOM
@@ -3321,13 +3384,16 @@ container.addEventListener("touchend", () => {
   // VIDEO
 if (type === "video") {
 
-  const video = document.createElement("video");
+const video = document.createElement("video");
 
-  video.src = url;
+video.id = "mediaVideo";
 
-  video.controls = false;
-  video.autoplay = true;
-  video.playsInline = true;
+video.src = url;
+
+video.controls = false;
+video.autoplay = true;
+video.playsInline = true;
+video.muted = window.storyMuted ?? true;
 
   video.removeAttribute("width");
   video.removeAttribute("height");
@@ -3409,15 +3475,14 @@ if (type === "video") {
   // VARIABLES
   // =========================
 
-  let startY = 0;
-  let startX = 0;
+ startX = 0;
 
-  let moved = false;
+moved = false;
 
-  let brightness = 1;
+brightness = 1;
 
-  let startBrightness = 1;
-  let startVolume = video.volume;
+startBrightness = 1;
+startVolume = video.volume;
 
   // =========================
   // TOUCH START
@@ -3826,47 +3891,126 @@ if (dbError) {
 
 window.openStory = function(index){
 
-  // SAVE ACTIVE USER
   window.activeUserIndex = index;
 
-  // CURRENT USER STORIES
   window.currentGroup =
     window.storyGroups[index];
 
-  // USER STORY LIST
   window.storyList =
     window.currentGroup.stories;
 
-  // START FROM FIRST STORY
   window.storyIndex = 0;
 
-  // OPEN VIEWER
-  document.getElementById(
-    "storyViewer"
-  ).style.display = "block";
-  
+  const viewer =
+    document.getElementById(
+      "storyViewer"
+    );
+
+  viewer.style.display = "block";
+
+  viewer.style.position = "fixed";
+  viewer.style.inset = "0";
+  viewer.style.width = "100vw";
+  viewer.style.height = "100vh";
+  viewer.style.zIndex = "999999";
+  viewer.style.background = "black";
+  viewer.style.touchAction = "none";
+
+  document.body.style.overflow =
+    "hidden";
+
+  document.body.style.touchAction =
+    "none";
+
+    document.documentElement.style.overflow =
+  "hidden";
+
+   document.documentElement.style.touchAction =
+  "none";
+
+  viewer.style.pointerEvents =
+    "auto";
+
   localStorage.setItem(
-  "seen_" + window.currentGroup.stories[0].user_id,
-  "true"
-);
+    "seen_" +
+    window.currentGroup.stories[0].user_id,
+    "true"
+  );
 
   showStory();
 
 };
+
+let startY = 0;
+let startX = 0;
+
+let moved = false;
+
+let brightness = 1;
+
+let startBrightness = 1;
+let startVolume = 1;
+
+let touchStartTime = 0;
+let holdTimer;
+
+let isHolding = false;
+let isDragging = false;
+
+async function recordStoryView(story) {
+
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) return;
+
+  // don't count your own view
+  if (user.id === story.user_id) return;
+
+  const { error } = await supabase
+    .from("story_views")
+    .upsert({
+      story_id: story.id,
+      viewer_id: user.id
+    });
+
+  if (error) {
+    console.log(error);
+  }
+
+}
+
+async function getStoryViews(storyId) {
+
+  const { count } =
+    await supabase
+      .from("story_views")
+      .select("*", {
+        count: "exact",
+        head: true
+      })
+      .eq("story_id", storyId);
+
+  return count || 0;
+
+}
 
 function showStory() {
 
   clearTimeout(window.storyTimer);
 
   const story =
-    window.storyList[window.storyIndex];
+  window.storyList[window.storyIndex];
 
-  if (!story) {
+if (!story) {
 
   closeStoryViewer();
   return;
 
 }
+
+recordStoryView(story);
 
   const container =
     document.getElementById(
@@ -3878,12 +4022,21 @@ function showStory() {
 };
 
 container.ontouchstart = (e) => {
+
+  e.preventDefault();
   e.stopPropagation();
+  
+  touchStartTime = Date.now();
+
+  isHolding = false;
+  isDragging = false;
 
   startY =
     e.touches[0].clientY;
 
   holdTimer = setTimeout(() => {
+
+    isHolding = true;
 
     clearTimeout(window.storyTimer);
 
@@ -3892,7 +4045,11 @@ container.ontouchstart = (e) => {
         "storyVideo"
       );
 
-    if(video) video.pause();
+    if(video){
+
+      video.pause();
+
+    }
 
   }, 200);
 
@@ -3907,40 +4064,41 @@ container.ontouchstart = (e) => {
   </div>
 `;
     
-    let startY = 0;
-let holdTimer;
 let lastTap = 0;
 
-// TOUCH START
-container.ontouchstart = (e) => {
-
-  startY =
-    e.touches[0].clientY;
-
-  holdTimer = setTimeout(() => {
-
-    clearTimeout(window.storyTimer);
-
-    const video =
-      document.getElementById(
-        "storyVideo"
-      );
-
-    if(video) video.pause();
-
-  }, 200);
-
-};
 
 // TOUCH END
 container.ontouchend = (e) => {
 
+  e.preventDefault();
+  e.stopPropagation();
+
   clearTimeout(holdTimer);
+  
+  const swipeTime =
+  Date.now() - touchStartTime;
+
+const fastSwipe =
+  swipeTime < 180;
 
   const video =
     document.getElementById(
       "storyVideo"
     );
+
+  // HOLD RELEASE
+  if(isHolding){
+
+    isHolding = false;
+
+    if(video){
+
+      video.play();
+
+    }
+
+    return;
+  }
 
   if(video){
 
@@ -3948,7 +4106,25 @@ container.ontouchend = (e) => {
 
   }
 
- // DOUBLE TAP ❤️
+  // SWIPE DOWN CLOSE
+  const endY =
+    e.changedTouches[0].clientY;
+
+  if(
+  endY - startY > 120 ||
+
+  (
+    endY - startY > 45 &&
+    fastSwipe
+  )
+){
+
+    closeStoryViewer();
+    return;
+
+  }
+
+  // DOUBLE TAP ❤️
   const now = Date.now();
 
   if(now - lastTap < 300){
@@ -3963,17 +4139,6 @@ container.ontouchend = (e) => {
 
   lastTap = now;
 
-  // SWIPE DOWN CLOSE
-  const endY =
-    e.changedTouches[0].clientY;
-
-  if(endY - startY > 120){
-
-    closeStoryViewer();
-    return;
-
-  }
-
   // TAP NAVIGATION
   const tapX =
     e.changedTouches[0].clientX;
@@ -3981,23 +4146,15 @@ container.ontouchend = (e) => {
   const screenWidth =
     window.innerWidth;
 
-const target =
-  e.target;
+  if(tapX < screenWidth / 2){
 
-if(
-  target.classList.contains(
-    "left"
-  )
-){
+    prevStory();
 
-  prevStory();
+  } else {
 
-}
-else{
+    nextStory();
 
-  nextStory();
-
-}
+  }
 
 };
 
@@ -4014,7 +4171,7 @@ document.getElementById(
   "storyReactions"
 ).style.opacity = "1";
     
-    document.getElementById(
+   document.getElementById(
   "storyTopBar"
 ).innerHTML = `
 
@@ -4024,7 +4181,6 @@ document.getElementById(
       'https://ui-avatars.com/api/?name=' +
       encodeURIComponent(story.name)
     }"
-
     style="
       width:40px;
       height:40px;
@@ -4047,7 +4203,33 @@ document.getElementById(
     </div>
   </div>
 
+  <div
+    id="storyViews"
+    style="
+      margin-left:auto;
+      color:white;
+      font-size:14px;
+    "
+  ></div>
+
 `;
+
+if (
+  session?.user?.id ===
+  story.user_id
+) {
+
+  getStoryViews(story.id)
+    .then(count => {
+
+      document.getElementById(
+        "storyViews"
+      ).textContent =
+        `👁 ${count}`;
+
+    });
+
+}
 
   progress.innerHTML = "";
 
@@ -4198,6 +4380,200 @@ else {
 
   const video =
     document.getElementById("storyVideo");
+    
+    
+    
+    // =========================
+// GESTURE OVERLAY
+// =========================
+
+const gestureOverlay =
+  document.createElement("div");
+
+gestureOverlay.style.cssText = `
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  color:white;
+  font-size:28px;
+  font-weight:bold;
+  z-index:99999;
+  opacity:0;
+  transition:.2s;
+  pointer-events:none;
+`;
+
+container.appendChild(
+  gestureOverlay
+);
+
+// =========================
+// PLAY BUTTON
+// =========================
+
+const playBtn =
+  document.createElement("div");
+
+playBtn.innerHTML = "⏸";
+
+playBtn.style.cssText = `
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font-size:70px;
+  color:white;
+  z-index:99999;
+  opacity:0;
+  transition:.2s;
+  pointer-events:none;
+`;
+
+container.appendChild(playBtn);
+
+// =========================
+// GESTURE VARIABLES
+// =========================
+
+let startX = 0;
+let moved = false;
+let brightness = 1;
+let startBrightness = 1;
+let startVolume = video.volume;
+
+// =========================
+// TOUCH START
+// =========================
+
+video.addEventListener("touchstart", e => {
+
+  if (e.touches.length !== 1) return;
+
+  moved = false;
+
+  startY = e.touches[0].clientY;
+  startX = e.touches[0].clientX;
+
+  startBrightness = brightness;
+  startVolume = video.volume;
+
+}, { passive:false });
+
+// =========================
+// TOUCH MOVE
+// =========================
+
+video.addEventListener("touchmove", e => {
+
+  if (e.touches.length !== 1) return;
+
+  e.preventDefault();
+
+  moved = true;
+
+  const touch = e.touches[0];
+
+  const deltaY =
+    startY - touch.clientY;
+
+  const percent =
+    deltaY / window.innerHeight;
+
+  // RIGHT SIDE = VOLUME
+  if (startX > window.innerWidth / 2) {
+
+    let newVolume =
+      startVolume + percent;
+
+    newVolume = Math.max(
+      0,
+      Math.min(1, newVolume)
+    );
+
+    video.volume = newVolume;
+
+    gestureOverlay.innerHTML =
+      "🔊 " +
+      Math.round(newVolume * 100) +
+      "%";
+  }
+
+  // LEFT SIDE = BRIGHTNESS
+  else {
+
+    brightness =
+      startBrightness + percent;
+
+    brightness = Math.max(
+      0.3,
+      Math.min(2, brightness)
+    );
+
+    video.style.filter =
+      `brightness(${brightness})`;
+
+    gestureOverlay.innerHTML =
+      "☀️ " +
+      Math.round(brightness * 50) +
+      "%";
+  }
+
+  gestureOverlay.style.opacity = "1";
+
+}, { passive:false });
+
+// =========================
+// TOUCH END
+// =========================
+
+video.addEventListener("touchend", () => {
+  
+  moved = false;
+
+  setTimeout(() => {
+
+    gestureOverlay.style.opacity = "0";
+
+  }, 500);
+
+});
+
+// =========================
+// TAP PLAY / PAUSE
+// =========================
+
+video.addEventListener("click", e => {
+
+  e.stopPropagation();
+
+  if (moved) return;
+
+  if (video.paused) {
+
+    video.play();
+
+    playBtn.innerHTML = "⏸";
+
+  } else {
+
+    video.pause();
+
+    playBtn.innerHTML = "▶";
+
+  }
+
+  playBtn.style.opacity = "1";
+
+  clearTimeout(window.playBtnTimer);
+
+  window.playBtnTimer = setTimeout(() => {
+
+    playBtn.style.opacity = "0";
+
+  }, 700);
+
+});
 
   // BLOCK MENU
   video.addEventListener(
@@ -4291,6 +4667,8 @@ function nextStory() {
   ) {
 
     window.storyIndex++;
+    
+    navigator.vibrate?.(8);
 
     showStory();
 
@@ -4315,6 +4693,8 @@ function nextStory() {
       window.currentGroup.stories;
 
     window.storyIndex = 0;
+    
+    navigator.vibrate?.(8);
 
     showStory();
 
@@ -4343,9 +4723,29 @@ window.closeStoryViewer = function () {
 
   clearTimeout(window.storyTimer);
 
-  document.getElementById(
-    "storyViewer"
-  ).style.display = "none";
+  document.body.style.overflow = "";
+
+  document.body.style.touchAction =
+    "";
+
+  document.body.style.pointerEvents =
+    "";
+    
+    document.documentElement.style.overflow =
+  "";
+
+document.documentElement.style.touchAction =
+  "";
+
+  const viewer =
+    document.getElementById(
+      "storyViewer"
+    );
+
+  viewer.style.display = "none";
+
+  viewer.style.pointerEvents =
+    "";
 
   document.getElementById(
     "storyContent"
@@ -4380,27 +4780,22 @@ window.reactStory = function(emoji){
 
 };
 
-window.storyMuted = true;
-
-window.toggleStorySound =
-function(){
+window.toggleStorySound = function() {
 
   const video =
-    document.getElementById(
-      "storyVideo"
+    document.querySelector(
+      "#storyContent #storyVideo"
     );
 
-  if(!video) return;
+  if (!video) return;
 
-  video.muted =
-    !video.muted;
+  video.muted = !video.muted;
 
-  window.storyMuted =
-    video.muted;
+  window.storyMuted = video.muted;
 
   document.getElementById(
     "storyMuteBtn"
-  ).innerText =
+  ).textContent =
     video.muted ? "🔇" : "🔊";
 
 };
