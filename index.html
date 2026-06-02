@@ -1987,7 +1987,24 @@ const storyBtn =
   document.getElementById("storyBtn");
 
 if (storyBtn) {
-  storyBtn.onclick = addStory;
+
+  storyBtn.onclick = () => {
+
+    document
+      .getElementById("storyInput")
+      .click();
+
+  };
+
+}
+
+const storyInput =
+  document.getElementById("storyInput");
+
+if (storyInput) {
+
+  storyInput.onchange = addStory;
+
 }
       
 
@@ -4011,7 +4028,7 @@ async function recordStoryView(story) {
 
 async function getStoryViews(storyId) {
 
-  const { count } =
+  const { count, error } =
     await supabase
       .from("story_views")
       .select("*", {
@@ -4020,8 +4037,11 @@ async function getStoryViews(storyId) {
       })
       .eq("story_id", storyId);
 
-  return count || 0;
+  console.log("Story ID:", storyId);
+  console.log("Count:", count);
+  console.log("Error:", error);
 
+  return count || 0;
 }
 
 function listenToStoryViews(storyId) {
@@ -4059,6 +4079,9 @@ function showStory() {
 
   const story =
   window.storyList[window.storyIndex];
+  
+  console.log("Story object:", story);
+console.log("Story ID:", story.id);
 
 if (!story) {
 
@@ -4284,6 +4307,10 @@ if (window.storyViewChannel) {
 
 window.storyViewChannel =
   listenToStoryViews(story.id);
+  
+  console.log("Current story:", story);
+  console.log("Story owner:", story.user_id);
+  console.log("Logged in:", session?.user?.id);
 
 // Load current count immediately
 getStoryViews(story.id)
