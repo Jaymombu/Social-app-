@@ -665,6 +665,33 @@ linear-gradient(
   perspective:1000px;
 }
 
+#storyTopBar {
+  z-index: 9999;
+  position: absolute;
+}
+
+#storyTopBar {
+  z-index: 10000;
+}
+
+#storyProgress {
+  z-index: 10000;
+}
+
+#storyReactions {
+  z-index: 10000;
+}
+
+#storyContent {
+  z-index: 1;
+}
+
+#storyViews {
+  color: white;
+  font-size: 14px;
+  z-index: 999999;
+}
+
 </style>
 </head>
 <body class="dark">
@@ -858,6 +885,30 @@ linear-gradient(
 
 </div>
 
+<div id="notificationsScreen" style="
+  position:fixed;
+  inset:0;
+  background:#0f0f0f;
+  z-index:6000;
+  display:none;
+  flex-direction:column;
+">
+
+  <div style="
+    padding:15px;
+    color:white;
+    font-size:20px;
+    font-weight:bold;
+    border-bottom:1px solid #222;
+  ">
+    Notifications
+  </div>
+
+  <div id="notificationsList"
+       style="flex:1; overflow-y:auto;"></div>
+
+</div>
+
 <button
   id="floatingChatsBtn"
   onclick="openInbox()"
@@ -877,6 +928,42 @@ linear-gradient(
   "
 >
   💬
+</button>
+
+<!-- 🔔 NOTIFICATION BUTTON -->
+<button onclick="openNotifications()" style="
+  position:fixed;
+  bottom:80px;
+  right:90px;
+  width:60px;
+  height:60px;
+  border-radius:50%;
+  border:none;
+  background:#ff2d55;
+  color:white;
+  font-size:22px;
+  z-index:9999;
+  position:relative;
+">
+  🔔
+
+  <!-- 🔴 BADGE -->
+  <span id="notifBadge" style="
+    position:absolute;
+    top:5px;
+    right:5px;
+    background:red;
+    color:white;
+    font-size:12px;
+    min-width:18px;
+    height:18px;
+    border-radius:50%;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    font-weight:bold;
+  ">0</span>
+
 </button>
 
 <div id="app">
@@ -1196,6 +1283,7 @@ linear-gradient(
 </div>
 
 <script type="module">
+
   console.log("SCRIPT START");
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
 
@@ -1203,6 +1291,16 @@ const supabase = createClient(
   "https://kixxdbkfvigunvxbvmfy.supabase.co",
   "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M"
 );
+
+let currentUser = null;
+let unreadCount = 0;
+
+(async () => {
+  const { data } = await supabase.auth.getUser();
+  currentUser = data.user;
+
+  loadUnreadCount();
+});
 
 // STORY VARIABLES
 window.storyList = [];
@@ -1222,10 +1320,20 @@ let currentProfileName = null;
 let activeTab = "explore";
 
 // 🔁 keep session always updated
-supabase.auth.onAuthStateChange((event, newSession) => {
-  console.log("🔄 session updated:", newSession);
-  session = newSession;
-});
+supabase.auth.onAuthStateChange(
+  async (event, newSession) => {
+
+    session = newSession;
+
+    const { data } =
+      await supabase.auth.getUser();
+
+    currentUser = data.user;
+
+    loadUnreadCount();
+
+  }
+);
 
 async function init() {
   const { data } = await supabase.auth.getSession();
@@ -3936,23 +4044,19 @@ if (dbError) {
 
 window.openStory = function(index){
 
+  if (!window.storyGroups || !window.storyGroups[index]) {
+    console.error("Story group not ready");
+    return;
+  }
+
   window.activeUserIndex = index;
-
-  window.currentGroup =
-    window.storyGroups[index];
-
-  window.storyList =
-    window.currentGroup.stories;
-
+  window.currentGroup = window.storyGroups[index];
+  window.storyList = window.currentGroup.stories;
   window.storyIndex = 0;
 
-  const viewer =
-    document.getElementById(
-      "storyViewer"
-    );
+  const viewer = document.getElementById("storyViewer");
 
   viewer.style.display = "block";
-
   viewer.style.position = "fixed";
   viewer.style.inset = "0";
   viewer.style.width = "100vw";
@@ -3960,30 +4064,14 @@ window.openStory = function(index){
   viewer.style.zIndex = "999999";
   viewer.style.background = "black";
   viewer.style.touchAction = "none";
+  viewer.style.pointerEvents = "auto";
 
-  document.body.style.overflow =
-    "hidden";
+  document.body.style.overflow = "hidden";
+  document.documentElement.style.overflow = "hidden";
 
-  document.body.style.touchAction =
-    "none";
-
-    document.documentElement.style.overflow =
-  "hidden";
-
-   document.documentElement.style.touchAction =
-  "none";
-
-  viewer.style.pointerEvents =
-    "auto";
-
-  localStorage.setItem(
-    "seen_" +
-    window.currentGroup.stories[0].user_id,
-    "true"
-  );
-
-  showStory();
-
+  setTimeout(() => {
+    showStory();
+  }, 0);
 };
 
 let startY = 0;
@@ -4004,42 +4092,49 @@ let isDragging = false;
 
 async function recordStoryView(story) {
 
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
+  const { data: { user } } =
+    await supabase.auth.getUser();
 
   if (!user) return;
 
-  // don't count your own view
   if (user.id === story.user_id) return;
 
+  // CHECK IF ALREADY VIEWED
+  const { data: existing } = await supabase
+    .from("story_views")
+    .select("id")
+    .eq("story_id", story.id)
+    .eq("viewer_id", user.id)
+    .maybeSingle();
+
+  if (existing) return;
+
+  // INSERT NEW VIEW
   const { error } = await supabase
     .from("story_views")
-    .upsert({
+    .insert([{
       story_id: story.id,
-      viewer_id: user.id
-    });
+      viewer_id: user.id,
+      viewed_at: new Date()
+    }]);
 
-  if (error) {
-    console.log(error);
-  }
-
+  if (error) console.log(error);
 }
 
 async function getStoryViews(storyId) {
 
-  const { count, error } =
-    await supabase
-      .from("story_views")
-      .select("*", {
-        count: "exact",
-        head: true
-      })
-      .eq("story_id", storyId);
+  const { count, error } = await supabase
+    .from("story_views")
+    .select("*", {
+      count: "exact",
+      head: true
+    })
+    .eq("story_id", storyId);
 
-  console.log("Story ID:", storyId);
-  console.log("Count:", count);
-  console.log("Error:", error);
+  if (error) {
+    console.log(error);
+    return 0;
+  }
 
   return count || 0;
 }
@@ -4051,7 +4146,7 @@ function listenToStoryViews(storyId) {
     .on(
       "postgres_changes",
       {
-        event: "*",
+        event: "INSERT",
         schema: "public",
         table: "story_views",
         filter: `story_id=eq.${storyId}`
@@ -4060,11 +4155,14 @@ function listenToStoryViews(storyId) {
 
         const count = await getStoryViews(storyId);
 
-        const el = document.getElementById("storyViews");
+        requestAnimationFrame(() => {
+          const el = document.getElementById("storyViews");
 
-        if (el) {
-          el.textContent = `👁 ${count}`;
-        }
+          if (el) {
+            el.textContent = `👁 ${count}`;
+            el.style.opacity = "1";
+          }
+        });
 
       }
     )
@@ -4077,18 +4175,22 @@ function showStory() {
 
   clearTimeout(window.storyTimer);
 
+  if (!window.storyList || !Array.isArray(window.storyList)) {
+    console.error("storyList not ready", window.storyList);
+    return;
+  }
+
   const story =
-  window.storyList[window.storyIndex];
-  
+    window.storyList[window.storyIndex];
+
+  if (!story) {
+    console.error("Invalid story index:", window.storyIndex);
+    closeStoryViewer();
+    return;
+  }
+
   console.log("Story object:", story);
-console.log("Story ID:", story.id);
-
-if (!story) {
-
-  closeStoryViewer();
-  return;
-
-}
+  console.log("Story ID:", story.id);
 
 recordStoryView(story);
 
@@ -4316,14 +4418,12 @@ window.storyViewChannel =
 getStoryViews(story.id)
   .then(count => {
 
-    const el =
-      document.getElementById(
-        "storyViews"
-      );
+    const el = document.getElementById("storyViews");
 
     if (el) {
-      el.textContent =
-        `👁 ${count}`;
+      el.style.display = "block";
+      el.style.opacity = "1";
+      el.textContent = `👁 ${count}`;
     }
 
   });
@@ -4954,6 +5054,140 @@ function showHeart(){
 
 }
 
+async function loadNotifications() {
+
+  if (!currentUser) return;
+
+  const { data } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", currentUser.id)
+    .order("created_at", {
+      ascending: false
+    });
+
+  const list =
+    document.getElementById(
+      "notificationsList"
+    );
+
+  if (!data || data.length === 0) {
+
+    list.innerHTML = `
+      <div style="
+        color:#777;
+        padding:15px;
+      ">
+        No notifications
+      </div>
+    `;
+
+    return;
+  }
+
+  list.innerHTML = data.map(n => `
+    <div style="
+      padding:12px;
+      border-bottom:1px solid #222;
+      color:white;
+    ">
+      ${n.message}
+    </div>
+  `).join("");
+}
+
+window.openNotifications = async function () {
+
+  document.getElementById("notificationsScreen")
+    .style.display = "flex";
+
+  await loadNotifications();
+
+  if (!currentUser) return;
+
+  await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", currentUser.id)
+    .eq("read", false);
+
+  unreadCount = 0;
+  updateNotifBadge();
+};
+
+if (!window.notificationsSubscription) {
+
+  window.notificationsSubscription =
+    supabase
+      .channel("notifications_channel")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications"
+        },
+        (payload) => {
+
+          const n = payload.new;
+
+          if (
+            currentUser &&
+            n.user_id === currentUser.id
+          ) {
+
+            loadUnreadCount();
+
+            const screen =
+              document.getElementById(
+                "notificationsScreen"
+              );
+
+            if (
+              screen &&
+              screen.style.display === "flex"
+            ) {
+              loadNotifications();
+            }
+
+          }
+
+        }
+      )
+      .subscribe();
+
+}
+  
+  async function loadUnreadCount() {
+
+  if (!currentUser) return;
+
+  const { data } = await supabase
+    .from("notifications")
+    .select("id")
+    .eq("user_id", currentUser.id)
+    .eq("read", false);
+
+  unreadCount = data ? data.length : 0;
+
+  updateNotifBadge();
+}
+
+function updateNotifBadge() {
+
+  const badge = document.getElementById("notifBadge");
+
+  if (!badge) return;
+
+  if (unreadCount > 0) {
+    badge.style.display = "flex";
+    badge.textContent = unreadCount;
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+
 
 // ========================
 // GLOBAL FUNCTIONS
@@ -5042,6 +5276,7 @@ if (!window.messagesSubscription) {
       .subscribe();
 
 }
+
 
 </script>
 
