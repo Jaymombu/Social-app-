@@ -376,19 +376,19 @@ color: var(--text);
 
 .story-count{
   position:absolute;
-  top:10px;
-  left:10px;
-
+  top:6px;
+  right:6px;
   background:#1877f2;
-
   color:white;
-
-  font-size:15px;
+  font-size:12px;
   font-weight:bold;
-
-  padding:5px 10px;
-
-  border-radius:12px;
+  min-width:18px;
+  height:18px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:5;
 }
 
 .story-user{
@@ -2098,6 +2098,14 @@ function startApp() {
 <button id="storyBtn">
   Add Story
 </button>
+
+<input
+  type="file"
+  id="storyInput"
+  accept="image/*,video/*"
+  hidden
+>
+
           `
           : `
             <button id="login">Login</button>
@@ -3044,21 +3052,30 @@ window.deleteMessage = async function(messageId) {
 
   if (!confirmDelete) return;
 
+  console.log(
+    "Deleting:",
+    messageId
+  );
+
   const { error } =
     await supabase
       .from("messages")
       .delete()
       .eq("id", messageId);
 
+  console.log(
+    "Delete error:",
+    error
+  );
+
   if (error) {
 
-    console.error(error);
     alert(error.message);
     return;
 
   }
 
-  document.getElementById(messageId)?.remove();
+  loadMessages();
 
 };
 
@@ -3076,7 +3093,7 @@ window.closeChat = function () {
 
   // show home/feed again
   document.getElementById(
-    "homePage"
+    "app"
   ).style.display = "block";
   
   requestAnimationFrame(() => {
@@ -3639,10 +3656,7 @@ window.closeMedia = function () {
   setTimeout(() => {
 
     viewer.style.display = "none";
-
-    document.getElementById(
-      "mediaContainer"
-    ).innerHTML = "";
+    viewer.innerHTML = "";
 
   }, 200);
 
@@ -3813,9 +3827,9 @@ async function addStory() {
 
   try {
 
-    const file =
-      document.getElementById("mediaInput")
-      ?.files?.[0];
+   const file =
+  document.getElementById("storyInput")
+  ?.files?.[0];
 
     if (!file) {
       alert("Choose image first");
@@ -3854,13 +3868,27 @@ async function addStory() {
         ? "video"
         : "image";
 
+const { data: profile } =
+  await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+// REPLACE OLD INSERT WITH THIS
 const { data: inserted, error: dbError } =
   await supabase
     .from("stories")
     .insert([{
-      user_id: session?.user?.id,
-      name: "User",
-      avatar_url: "",
+      user_id: session.user.id,
+
+      name:
+        profile?.name ||
+        session.user.email,
+
+      avatar_url:
+        profile?.avatar_url || "",
+
       media_url: publicUrl,
       media_type: mediaType
     }])
@@ -3994,6 +4022,35 @@ async function getStoryViews(storyId) {
 
   return count || 0;
 
+}
+
+function listenToStoryViews(storyId) {
+
+  const channel = supabase
+    .channel("story_views_" + storyId)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "story_views",
+        filter: `story_id=eq.${storyId}`
+      },
+      async () => {
+
+        const count = await getStoryViews(storyId);
+
+        const el = document.getElementById("storyViews");
+
+        if (el) {
+          el.textContent = `👁 ${count}`;
+        }
+
+      }
+    )
+    .subscribe();
+
+  return channel;
 }
 
 function showStory() {
@@ -4163,13 +4220,19 @@ const fastSwipe =
       "storyProgress"
     );
     
-    document.getElementById(
-  "storyTopBar"
-).style.opacity = "1";
+   const topBar =
+  document.getElementById("storyTopBar");
 
-document.getElementById(
-  "storyReactions"
-).style.opacity = "1";
+if (topBar) {
+  topBar.style.opacity = "1";
+}
+
+const reactions =
+  document.getElementById("storyReactions");
+
+if (reactions) {
+  reactions.style.opacity = "1";
+}
     
    document.getElementById(
   "storyTopBar"
@@ -4214,22 +4277,37 @@ document.getElementById(
 
 `;
 
-if (
-  session?.user?.id ===
-  story.user_id
-) {
+// REAL-TIME STORY VIEWS
+if (window.storyViewChannel) {
+  supabase.removeChannel(window.storyViewChannel);
+}
 
-  getStoryViews(story.id)
-    .then(count => {
+window.storyViewChannel =
+  listenToStoryViews(story.id);
 
+// Load current count immediately
+getStoryViews(story.id)
+  .then(count => {
+
+    const el =
       document.getElementById(
         "storyViews"
-      ).textContent =
+      );
+
+    if (el) {
+      el.textContent =
         `👁 ${count}`;
+    }
 
-    });
+  });
 
-}
+console.log("story", story);
+
+console.log(
+  "storyViews element",
+  document.getElementById("storyViews")
+);
+
 
   progress.innerHTML = "";
 
@@ -4275,13 +4353,19 @@ if (
 
 setTimeout(() => {
 
-  document.getElementById(
-    "storyTopBar"
-  ).style.opacity = "0";
+  const topBar =
+    document.getElementById("storyTopBar");
 
-  document.getElementById(
-    "storyReactions"
-  ).style.opacity = "0";
+  if (topBar) {
+    topBar.style.opacity = "0";
+  }
+
+  const reactions =
+    document.getElementById("storyReactions");
+
+  if (reactions) {
+    reactions.style.opacity = "0";
+  }
 
 }, 2000);
 
@@ -4720,6 +4804,15 @@ function prevStory() {
 }
 
 window.closeStoryViewer = function () {
+  
+  if (window.storyViewChannel) {
+  supabase.removeChannel(
+    window.storyViewChannel
+  );
+
+  window.storyViewChannel =
+    null;
+}
 
   clearTimeout(window.storyTimer);
 
@@ -4834,6 +4927,7 @@ function showHeart(){
 
 }
 
+
 // ========================
 // GLOBAL FUNCTIONS
 // ========================
@@ -4895,26 +4989,32 @@ function observeVideos() {
 
 }
 
-supabase
-  .channel("messages")
-  .on(
-    "postgres_changes",
-    {
-      event: "INSERT",
-      schema: "public",
-      table: "messages"
-    },
-    payload => {
+if (!window.messagesSubscription) {
 
-      if (
-        payload.new.sender_id === currentChatUser ||
-        payload.new.receiver_id === currentChatUser
-      ) {
-        loadMessages();
-      }
-    }
-  )
-  .subscribe();
+  window.messagesSubscription =
+    supabase
+      .channel("messages")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "messages"
+        },
+        payload => {
+
+          if (
+            payload.new.sender_id === currentChatUser ||
+            payload.new.receiver_id === currentChatUser
+          ) {
+            loadMessages();
+          }
+
+        }
+      )
+      .subscribe();
+
+}
 
 </script>
 
