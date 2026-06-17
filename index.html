@@ -1505,6 +1505,11 @@ let unreadCount = 0;
 let notificationFilter = "all";
 let notificationCache = [];
 
+// ✅ ADD HERE
+window.notificationCache = window.notificationCache || [];
+window.notificationFilter = window.notificationFilter || "all";
+window.seenNotifications = window.seenNotifications || new Set();
+
 const notifSound = new Audio("notification.mp3");
 notifSound.volume = 0.5;
 
@@ -5469,17 +5474,20 @@ async function loadNotifications() {
   if (!currentUser) return;
 
   const { data } = await supabase
-  .from("notifications")   // 🔥 CHANGE HERE
+  .from("grouped_notifications")   // 🔥 CHANGE HERE
   .select("*")                     // 🔥 SIMPLIFIED
   .eq("user_id", currentUser.id)   // 🔥 SAME FILTER
-  .order("last_time", {
-    ascending: false
-  });
+.order("last_time", {
+  ascending: false
+});
 
 notificationCache = mergeFromServer([...notificationCache], data || []);
 
 // STEP 1: start from cache
-let notifications = [...notificationCache];
+let notifications = [...notificationCache].sort(
+  (a, b) =>
+    new Date(b.last_time) - new Date(a.last_time)
+);
 
 // STEP 2: filter by type
 if (notificationFilter !== "all") {
@@ -5504,33 +5512,29 @@ if (search) {
 // STEP 4: render FINAL result ONLY
 
 
-const list =
-  document.getElementById(
-    "notificationsList"
-  );
+const list = document.getElementById("notificationsList");
 
-if (notifications.length === 0) {
+if (!list) {
+  console.warn("notificationsList missing in DOM");
+  return;
+}
 
-    list.innerHTML = `
-      <div style="
-        color:#777;
-        padding:15px;
-      ">
-        No notifications
-      </div>
-    `;
-
-    return;
+if (!notifications.length) {
+  list.innerHTML = `
+    <div style="color:#777;padding:15px;">
+      No notifications
+    </div>
+  `;
+  return;
 }
 
 renderNotifications(notifications);
 }
 
-
 window.openNotification = async function(id) {
   const { data, error } =
     await supabase
-      .from("notifications")
+      .from("grouped_notifications")
       .select("*")
       .eq("id", id)
       .single();
@@ -5538,7 +5542,7 @@ window.openNotification = async function(id) {
   if (error || !data) return;
 
   await supabase
-    .from("notifications")
+    .from("grouped_notifications")
     .update({ read: true })
     .eq("id", id);
     
@@ -5626,7 +5630,7 @@ window.deleteNotification = async function(id) {
   if (!ok) return;
 
   await supabase
-    .from("notifications")
+    .from("grouped_notifications")
     .delete()
     .eq("id", id);
 
@@ -5646,7 +5650,7 @@ window.clearNotifications = async function() {
   if (!ok) return;
 
   await supabase
-    .from("notifications")
+    .from("grouped_notifications")
     .delete()
     .eq("user_id", currentUser.id);
 
@@ -5665,22 +5669,21 @@ window.filterNotifications = function(type) {
 
 async function openNotifications() {
 
-  document.getElementById("notificationsScreen")
-    .style.display = "flex";
+  const screen = document.getElementById("notificationsScreen");
+if (screen) screen.style.display = "flex";
 
   await loadNotifications();
 
   if (!currentUser) return;
 
   await supabase
-    .from("notifications")
+    .from("grouped_notifications")
     .update({ read: true })
     .eq("user_id", currentUser.id)
     .eq("read", false);
 
   loadUnreadCount();
-}
-
+};
 window.openNotifications = openNotifications;
 
 function getNotifKey(n) {
@@ -5697,7 +5700,7 @@ if (!window.notificationsSubscription) {
         {
           event: "INSERT",
           schema: "public",
-          table: "notifications"
+         table: "grouped_notifications"
         },
 (payload) => {
 
@@ -5713,13 +5716,16 @@ if (!window.notificationsSubscription) {
   tabChannel.postMessage(n);
 
   // ✅ ONLY ONCE each
-  mergeNotification(n);
-  showToastNotification(n);
+  notificationCache.unshift({
+  ...n
+});
+
+showToastNotification(n);
 
   const screen = document.getElementById("notificationsScreen");
 
   if (screen && screen.style.display === "flex") {
-    renderNotifications([...notificationCache]);
+    loadNotifications();
   }
 
   // ✅ ONLY ONCE
@@ -5762,7 +5768,7 @@ tabChannel.onmessage = (event) => {
   if (!currentUser) return;
 
   const { count, error } = await supabase
-  .from("notifications")
+ .from("grouped_notifications")
   .select("*", { count: "exact", head: true })
   .eq("user_id", currentUser.id)
   .eq("read", false);
@@ -5916,7 +5922,8 @@ function renderNotifications(notifications = notificationCache) {
     if (n.type === "follow") icon = "👤";
     if (n.type === "message") icon = "📩";
 
-    const time = formatTime(n.last_time || n.created_at);
+    const rawTime = n.last_time || n.created_at || new Date().toISOString();
+const time = formatTime(rawTime);
 
     let text = n.message;
 
@@ -5954,34 +5961,37 @@ function formatTime(dateString) {
 function mergeFromServer(cache, serverData) {
   const map = new Map();
 
-  // keep realtime merged data
+  // 1. keep existing cache
   cache.forEach(n => {
-    const key = `${n.type}_${n.post_id || 0}_${n.story_id || 0}_${n.sender_id || 0}`;
-    map.set(key, { ...n });
+    map.set(n.id, { ...n });
   });
 
-  // merge server data
+  // 2. merge server data safely
   serverData.forEach(n => {
-    const key = `${n.type}_${n.post_id || 0}_${n.story_id || 0}_${n.sender_id || 0}`;
-
-    if (map.has(key)) {
-  map.set(key, {
-    ...map.get(key),
-    last_time: n.last_time
-  });
-} else {
-  map.set(key, {
-    ...n
-  });
-}
+    if (map.has(n.id)) {
+      map.set(n.id, {
+        ...map.get(n.id),
+        ...n
+      });
+    } else {
+      map.set(n.id, { ...n });
+    }
   });
 
-  return Array.from(map.values());
+  return Array.from(map.values()).sort(
+  (a, b) =>
+    new Date(b.last_time || b.created_at) -
+    new Date(a.last_time || a.created_at)
+);
 }
+
+
 
 // ========================
 // GLOBAL FUNCTIONS
 // ========================
+window.openNotifications = openNotifications;
+window.openNotification = openNotification;
 
 window.loadUnreadCount = loadUnreadCount;
 window.openProfile = openProfile;
