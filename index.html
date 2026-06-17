@@ -692,6 +692,53 @@ linear-gradient(
   z-index: 999999;
 }
 
+@keyframes bellPulse {
+
+  0%{
+    transform:scale(1);
+  }
+
+  50%{
+    transform:scale(1.08);
+  }
+
+  100%{
+    transform:scale(1);
+  }
+
+}
+
+#notificationBtn.hasUnread{
+  animation:bellPulse 1.5s infinite;
+}
+
+#notifBadge{
+  animation:pulseNotif 1.5s infinite;
+}
+
+@keyframes pulseNotif{
+
+  0%{
+    transform:scale(1);
+  }
+
+  50%{
+    transform:scale(1.25);
+  }
+
+  100%{
+    transform:scale(1);
+  }
+
+}
+
+@keyframes fadeInOut {
+  0% { opacity:0; transform:translate(-50%, -20px); }
+  10% { opacity:1; transform:translate(-50%, 0); }
+  90% { opacity:1; }
+  100% { opacity:0; transform:translate(-50%, -20px); }
+}
+
 </style>
 </head>
 <body class="dark">
@@ -885,30 +932,6 @@ linear-gradient(
 
 </div>
 
-<div id="notificationsScreen" style="
-  position:fixed;
-  inset:0;
-  background:#0f0f0f;
-  z-index:6000;
-  display:none;
-  flex-direction:column;
-">
-
-  <div style="
-    padding:15px;
-    color:white;
-    font-size:20px;
-    font-weight:bold;
-    border-bottom:1px solid #222;
-  ">
-    Notifications
-  </div>
-
-  <div id="notificationsList"
-       style="flex:1; overflow-y:auto;"></div>
-
-</div>
-
 <button
   id="floatingChatsBtn"
   onclick="openInbox()"
@@ -930,39 +953,93 @@ linear-gradient(
   💬
 </button>
 
-<!-- 🔔 NOTIFICATION BUTTON -->
-<button onclick="openNotifications()" style="
-  position:fixed;
-  bottom:80px;
-  right:90px;
-  width:60px;
-  height:60px;
-  border-radius:50%;
-  border:none;
-  background:#ff2d55;
-  color:white;
-  font-size:22px;
-  z-index:9999;
-  position:relative;
-">
-  🔔
+<button
+  id="notificationBtn"
+  onclick="openNotifications()"
+  style="
+    position:fixed;
+    top:12px;
+    right:12px;
 
-  <!-- 🔴 BADGE -->
-  <span id="notifBadge" style="
-    position:absolute;
-    top:5px;
-    right:5px;
-    background:red;
-    color:white;
-    font-size:12px;
-    min-width:18px;
-    height:18px;
+    width:56px;
+    height:56px;
+
+    border:none;
     border-radius:50%;
-    display:none;
+
+    background:linear-gradient(
+      135deg,
+      #ff2d55,
+      #ff6b81
+    );
+
+    color:white;
+    font-size:24px;
+
+    z-index:999999;
+
+    cursor:pointer;
+
+    box-shadow:
+      0 6px 20px rgba(255,45,85,.4);
+
+    display:flex;
     align-items:center;
     justify-content:center;
-    font-weight:bold;
-  ">0</span>
+
+    transition:.25s;
+  "
+
+  onmousedown="
+    this.style.transform='scale(.92)'
+  "
+
+  onmouseup="
+    this.style.transform='scale(1)'
+  "
+
+  ontouchstart="
+    this.style.transform='scale(.92)'
+  "
+
+  ontouchend="
+    this.style.transform='scale(1)'
+  "
+>
+  🔔
+
+  <span
+    id="notifBadge"
+    style="
+      position:absolute;
+
+      top:-4px;
+      right:-4px;
+
+      min-width:22px;
+      height:22px;
+
+      padding:0 6px;
+
+      border-radius:999px;
+
+      background:#ff0000;
+      color:white;
+
+      font-size:11px;
+      font-weight:bold;
+
+      display:none;
+      align-items:center;
+      justify-content:center;
+
+      border:2px solid white;
+
+      box-shadow:
+        0 0 10px rgba(255,0,0,.7);
+    "
+  >
+  </span>
 
 </button>
 
@@ -1124,6 +1201,7 @@ linear-gradient(
 </div>
   
   <input
+  id="storyReplyInput"
   placeholder="Reply..."
   style="
     position:absolute;
@@ -1140,6 +1218,37 @@ linear-gradient(
     z-index:60;
   "
 >
+
+<button
+  onclick="sendStoryReply()"
+  style="
+    position:absolute;
+    bottom:20px;
+    right:20px;
+    height:45px;
+    padding:0 20px;
+    border:none;
+    border-radius:25px;
+    background:#1877f2;
+    color:white;
+    z-index:60;
+  "
+>
+  Send
+</button>
+
+<div id="storyReplies"
+  style="
+    position:absolute;
+    left:20px;
+    bottom:140px;
+    color:white;
+    max-height:120px;
+    overflow-y:auto;
+    font-size:14px;
+    z-index:9999;
+  ">
+</div>
 
 <div
   id="storyReactions"
@@ -1282,6 +1391,103 @@ linear-gradient(
 
 </div>
 
+<div
+  id="notificationsScreen"
+  style="
+    display:none;
+    position:fixed;
+    inset:0;
+    background:#000;
+    z-index:999999;
+    flex-direction:column;
+  "
+>
+
+  <div style="
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:15px;
+  border-bottom:1px solid #222;
+  color:white;
+">
+
+  <div style="
+    display:flex;
+    align-items:center;
+  ">
+    <button onclick="
+      document.getElementById('notificationsScreen').style.display='none'
+    ">
+      ←
+    </button>
+
+    <div style="margin-left:10px;">
+      Notifications
+    </div>
+  </div>
+
+  <button
+    onclick="clearNotifications()"
+    style="
+      background:none;
+      border:none;
+      color:#1877f2;
+      font-weight:bold;
+      cursor:pointer;
+    "
+  >
+    Clear All
+  </button>
+
+</div>
+
+<div
+  id="notificationFilters"
+  style="
+    display:flex;
+    gap:8px;
+    padding:10px;
+    overflow-x:auto;
+    border-bottom:1px solid #222;
+  "
+>
+
+  <button onclick="filterNotifications('all')">All</button>
+  <button onclick="filterNotifications('like')">Likes</button>
+  <button onclick="filterNotifications('comment')">Comments</button>
+  <button onclick="filterNotifications('follow')">Follows</button>
+  <button onclick="filterNotifications('message')">Messages</button>
+  <button onclick="filterNotifications('story_reply')">Stories</button>
+
+</div>
+
+<input
+  id="notificationSearch"
+  placeholder="Search notifications..."
+  oninput="loadNotifications()"
+  style="
+    width:calc(100% - 20px);
+    margin:10px;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    background:#1a1a1a;
+    color:white;
+    outline:none;
+  "
+>
+
+<div
+  id="notificationsList"
+  style="
+    flex:1;
+    overflow:auto;
+  "
+></div>
+
+</div>
+
 <script type="module">
 
   console.log("SCRIPT START");
@@ -1292,15 +1498,48 @@ const supabase = createClient(
   "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M"
 );
 
+window.supabase = supabase;
+
 let currentUser = null;
 let unreadCount = 0;
+let notificationFilter = "all";
+let notificationCache = [];
+
+const notifSound = new Audio("notification.mp3");
+notifSound.volume = 0.5;
+
+let lastNotifTime = 0;
+
+const tabChannel = new BroadcastChannel("notifications_channel");
+const seenNotifications = new Set();
+let batchQueue = [];
+let batchTimer = null;
 
 (async () => {
-  const { data } = await supabase.auth.getUser();
-  currentUser = data.user;
+  const { data, error } = await supabase.auth.getUser();
 
-  loadUnreadCount();
-});
+  if (error) {
+    console.log("Auth error:", error);
+    return;
+  }
+
+  currentUser = data.user;
+  
+  if (currentUser) {
+  registerPush().catch(console.error);
+}
+  
+
+  if (!currentUser) return;
+
+  await loadUnreadCount();
+
+  try {
+    await registerPush();
+  } catch (err) {
+    console.log("Push registration failed:", err);
+  }
+})();
 
 // STORY VARIABLES
 window.storyList = [];
@@ -1331,6 +1570,13 @@ supabase.auth.onAuthStateChange(
     currentUser = data.user;
 
     loadUnreadCount();
+
+    if (
+      event === "SIGNED_IN" ||
+      event === "SIGNED_OUT"
+    ) {
+      startApp();
+    }
 
   }
 );
@@ -1367,6 +1613,12 @@ const savedTheme =
 setTheme(savedTheme);
 
 init();
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text || "";
+  return div.innerHTML;
+}
 
   function renderPost(post) {
     
@@ -1522,8 +1774,8 @@ if (
 
     </div>
 
-   <div style="margin-top:10px;">
-  ${post.content || ""}
+  <div style="margin-top:10px;">
+  ${escapeHtml(post.content)}
 </div>
 
     ${mediaHTML}
@@ -1532,8 +1784,9 @@ if (
       ❤️ ${post.likes || 0}
     </div>
 
-    <button
-      onclick="likePost('${post.id}')"
+   <button
+  class="like-btn"
+  onclick="likePost('${post.id}')"
       style="
         margin-top:5px;
         background:${
@@ -1592,7 +1845,9 @@ if (
     }
   `;
 
-  postsDiv.appendChild(div);
+  if (!postsDiv) return;
+
+postsDiv.appendChild(div);
 }
 
 // ✅ 3. DEFINE loadPosts
@@ -1630,17 +1885,35 @@ window.loadPosts = async function () {
 
   if (activeTab === "following") {
 
-    const response = await supabase
-      .from("posts")
-      .select("*")
-      .order("created_at", {
-        ascending: false
-      });
+  const userId = session?.user?.id;
 
-    posts = response.data;
-    error = response.error;
-
+  if (!userId) {
+    postsDiv.innerHTML = "Login to view following feed";
+    return;
   }
+
+  const { data: follows } = await supabase
+    .from("follows")
+    .select("following_id")
+    .eq("follower_id", userId);
+
+  const followingIds =
+    follows?.map(f => f.following_id) || [];
+
+  if (followingIds.length === 0) {
+    postsDiv.innerHTML = "You're not following anyone";
+    return;
+  }
+
+  const response = await supabase
+    .from("posts")
+    .select("*")
+    .in("user_id", followingIds)
+    .order("created_at", { ascending: false });
+
+  posts = response.data;
+  error = response.error;
+}
 
   postsDiv.innerHTML = "";
 
@@ -1678,7 +1951,8 @@ window.likePost = async (id) => {
   }
 
   const postDiv = document.getElementById(id);
-  const btn = postDiv?.querySelector("button");
+  const btn =
+  postDiv?.querySelector(".like-btn");
 
   // get current post
   const { data: post, error } = await supabase
@@ -1771,11 +2045,12 @@ async function loadComments(postId) {
     return;
   }
 
-  container.innerHTML = data.map(c => `
-    <div style="margin-bottom:5px;">
-      <b>${c.name}</b>: ${c.content}
-    </div>
-  `).join("");
+ container.innerHTML = data.map(c => `
+  <div style="margin-bottom:5px;">
+    <b>${escapeHtml(c.name)}</b>:
+    ${escapeHtml(c.content)}
+  </div>
+`).join("");
 }
 
 window.goHome = () => {
@@ -1795,6 +2070,12 @@ console.log("Profile opened:", userId);
     .eq("id", userId)
     .maybeSingle();
     
+    const avatarUrl =
+  profile?.avatar_url &&
+  profile.avatar_url !== "null"
+    ? profile.avatar_url
+    : "https://via.placeholder.com/60";
+    
     const { count: followersCount } = await supabase
   .from("follows")
   .select("*", { count: "exact", head: true })
@@ -1813,7 +2094,7 @@ const { count: followingCount } = await supabase
      <div style="display:flex;align-items:center;gap:10px;">
 
   <img 
-  src="${profile?.avatar_url || 'https://via.placeholder.com/60'}"
+src="${avatarUrl}"
 
   onclick="
     openMedia(
@@ -1861,6 +2142,8 @@ const { count: followingCount } = await supabase
     </div>
   `;
 
+attachEvents();
+
   // ✅ THEN load posts
   const { data: posts, error } = await supabase
     .from("posts")
@@ -1882,7 +2165,7 @@ const { count: followingCount } = await supabase
 
   container.innerHTML = posts.map(post => `
     <div style="border-bottom:1px solid #333; padding:10px 0;">
-      <div>${post.content || ""}</div>
+     <div>${escapeHtml(post.content)}</div>
       <div style="font-size:12px;color:#aaa;">
         ${new Date(post.created_at).toLocaleString()}
       </div>
@@ -2050,73 +2333,84 @@ console.log("UPLOAD ERROR:", uploadError);
   openProfile(session.user.id, name);
 };
 };
+
+window.createPost = async function () {
+  const input = document.getElementById("postInput");
+  if (!input || !input.value.trim()) return;
+
+  const { error } = await supabase.from("posts").insert({
+    content: input.value,
+    user_id: session?.user?.id || null,
+    name: session?.user?.email || "Guest"
+  });
+
+  if (error) {
+    console.log("POST ERROR:", error);
+    return;
+  }
+
+  input.value = "";
+  loadPosts();
+};
+
 function attachEvents() {
-  
+
   const exploreTab = document.getElementById("tab-explore");
-const followingTab = document.getElementById("tab-following");
+  const followingTab = document.getElementById("tab-following");
 
-if (exploreTab) {
-  exploreTab.onclick = () => {
-    activeTab = "explore";
+  if (exploreTab && followingTab) {
 
-    exploreTab.classList.add("active-tab");
-    followingTab.classList.remove("active-tab");
+    exploreTab.onclick = () => {
+      activeTab = "explore";
 
-    loadPosts();
-  };
-}
+      exploreTab.classList.add("active-tab");
+      followingTab.classList.remove("active-tab");
 
-if (followingTab) {
-  followingTab.onclick = () => {
-    activeTab = "following";
+      loadPosts();
+    };
 
-    followingTab.classList.add("active-tab");
-    exploreTab.classList.remove("active-tab");
+    followingTab.onclick = () => {
+      activeTab = "following";
 
-    loadPosts();
-  };
-}
-  
+      followingTab.classList.add("active-tab");
+      exploreTab.classList.remove("active-tab");
+
+      loadPosts();
+    };
+  }
+
   const themeBtn = document.getElementById("themeToggle");
+  if (themeBtn) {
+    themeBtn.onclick = toggleTheme;
+  }
 
-if (themeBtn) {
-  themeBtn.onclick = toggleTheme;
-}
+  const postBtn = document.getElementById("postBtn");
+  if (postBtn) {
+    postBtn.onclick = createPost;
+  }
 
-  
-  // POST BUTTON
-const postBtn = document.getElementById("postBtn");
+  const loginBtn = document.getElementById("login");
+  if (loginBtn) {
+    loginBtn.onclick = async () => {
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin }
+      });
+    };
+  }
 
-if (postBtn) {
-  postBtn.onclick = createPost;
-}
+  const storyBtn = document.getElementById("storyBtn");
+  if (storyBtn) {
+    storyBtn.onclick = () => {
+      document.getElementById("storyInput")?.click();
+    };
+  }
 
-const storyBtn =
-  document.getElementById("storyBtn");
+  const storyInput = document.getElementById("storyInput");
+  if (storyInput) {
+    storyInput.onchange = addStory;
+  }
 
-if (storyBtn) {
-
-  storyBtn.onclick = () => {
-
-    document
-      .getElementById("storyInput")
-      .click();
-
-  };
-
-}
-
-const storyInput =
-  document.getElementById("storyInput");
-
-if (storyInput) {
-
-  storyInput.onchange = addStory;
-
-}
-      
-
-  // ✅ COMMENTS POST (MOVED INSIDE)
   const panelBtn = document.getElementById("panelPostBtn");
   if (panelBtn) {
     panelBtn.onclick = async () => {
@@ -2135,29 +2429,13 @@ if (storyInput) {
     };
   }
 
-  // ✅ CLOSE COMMENTS
   const closeBtn = document.getElementById("closeComments");
   if (closeBtn) {
     closeBtn.onclick = () => {
       document.getElementById("commentsPanel").style.display = "none";
     };
   }
-
-  // ✅ LOGIN
-  const loginBtn = document.getElementById("login");
-  if (loginBtn) {
-    loginBtn.onclick = async () => {
-      console.log("🔐 Login clicked");
-
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: window.location.origin
-        }
-      });
-    };
-  }
-} // ✅ ONLY ONE closing bracket
+}
 
 // ✅ START APP FUNCTION (you were missing this too)
 let postsEl = null;
@@ -2183,23 +2461,11 @@ function startApp() {
           👥 Following
         </div>
       </div>
-      
-      <div id="storiesBar" style="
-  display:flex;
-  gap:12px;
-  overflow-x:auto;
-  padding:10px;
-  background:#111;
-  border-bottom:1px solid #222;
-  min-height:90px;
-  align-items:center;
-">
-</div>
 
       ${
         session
           ? `
-           <textarea 
+<textarea
   id="postInput"
   placeholder="Write something..."
   style="
@@ -2216,26 +2482,23 @@ function startApp() {
   style="margin-bottom:10px;"
 />
 
-<button id="postBtn">
-  Post
-</button>
+<button id="postBtn">Post</button>
 
-<button id="storyBtn">
-  Add Story
-</button>
+<button id="storyBtn">Add Story</button>
 
 <input
   type="file"
   id="storyInput"
   accept="image/*,video/*"
-  hidden
->
-
-          `
+  style="display:none;"
+/>
+`
           : `
-            <button id="login">Login</button>
-          `
+<button id="login">Login</button>
+`
       }
+
+      <div id="storiesBar"></div>
 
       <div id="posts"></div>
 
@@ -2263,81 +2526,17 @@ function startApp() {
       <button id="panelPostBtn">
         Post
       </button>
-    
+
     </div>
+  `;
 
-<div id="storyViewer" style="
-  display:none;
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:100%;
-  background:black;
-  z-index:99999;
-">
-
-  <div id="storyProgress" style="
-    display:flex;
-    gap:4px;
-    padding:10px;
-    position:absolute;
-    top:0;
-    left:0;
-    width:100%;
-    z-index:2;
-  ">
-  </div>
-
-  <div
-    id="storyContent"
-
-    ontouchstart="handleTouchStart(event)"
-    ontouchend="handleTouchEnd(event)"
-
-    style="
-      width:100%;
-      height:100%;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-    "
-  >
-  </div>
-
-  <button
-    onclick="closeStoryViewer()"
-
-    style="
-      position:absolute;
-      top:20px;
-      right:20px;
-      z-index:5;
-      background:none;
-      border:none;
-      color:white;
-      font-size:30px;
-    "
-  >
-    ✕
-  </button>
-
-</div>
-
-`;
-
-  // ✅ NOW posts exists
   postsEl = document.getElementById("posts");
 
-  attachEvents();
-
-  loadPosts();
+ loadPosts();
 loadStories();
-
-console.log("SCRIPT END");
-
-// ✅ SCROLL SNAP
 setupScrollSnap();
+
+setTimeout(attachEvents, 0);
 }
 
 async function createPost() {
@@ -2356,11 +2555,16 @@ async function createPost() {
 
   let mediaUrl = null;
   let mediaType = null;
+  
+  if (!session?.user) {
+  alert("Please login first");
+  return;
+}
 
   if (file) {
 
     const fileName =
-      `${Date.now()}_${file.name}`;
+  `${session.user.id}_${Date.now()}_${file.name}`;
 
     const { error: uploadError } =
       await supabase.storage
@@ -2590,11 +2794,11 @@ window.openInbox = async function () {
 
     // GET PROFILE
     const { data: profile } =
-      await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", otherUser)
-        .maybeSingle();
+  await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", otherUser)
+    .maybeSingle();
 
     const div =
       document.createElement("div");
@@ -2685,7 +2889,7 @@ window.openInbox = async function () {
           font-weight:bold;
           font-size:16px;
         ">
-          ${profile?.name || "User"}
+          ${escapeHtml(profile?.name || "User")}
         </div>
 
         <div style="
@@ -2696,7 +2900,7 @@ window.openInbox = async function () {
           overflow:hidden;
           text-overflow:ellipsis;
         ">
-          ${msg.content || ""}
+         ${escapeHtml(msg.content || "")}
         </div>
 
       </div>
@@ -2791,7 +2995,7 @@ async function loadMessages() {
       minute: '2-digit'
     });
 
-chat.innerHTML += `
+chat.innerHTML +=`
   <div style="
     display:flex;
     justify-content:${
@@ -2911,17 +3115,17 @@ chat.innerHTML += `
         }
 
         ${
-          msg.content
-            ? `
-              <div style="
-                margin-top:4px;
-                word-break:break-word;
-              ">
-                ${msg.content}
-              </div>
-            `
-            : ""
-        }
+  msg.content
+    ? `
+      <div style="
+        margin-top:4px;
+        word-break:break-word;
+      ">
+        ${escapeHtml(msg.content)}
+      </div>
+    `
+    : ""
+}
 
       </div>
 
@@ -2954,6 +3158,11 @@ async function sendMessage() {
 
   const file =
     fileInput.files[0];
+    
+    if (!session?.user) {
+  alert("Please login first");
+  return;
+}
 
   // allow text OR media
   if (
@@ -2968,11 +3177,33 @@ async function sendMessage() {
   // =====================
   // UPLOAD FILE
   // =====================
+  
+  if (file) {
+
+  const allowed = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "video/mp4",
+    "video/webm"
+  ];
+
+  if (!allowed.includes(file.type)) {
+    alert("Unsupported file type");
+    return;
+  }
+
+}
+
+if (file && file.size > 50 * 1024 * 1024) {
+  alert("File too large");
+  return;
+}
 
   if (file) {
 
     fileName =
-      Date.now() + "_" + file.name;
+  `${session.user.id}_${Date.now()}_${file.name}`;
 
     mediaType =
       file.type.startsWith("video")
@@ -3160,9 +3391,14 @@ window.shareMessage = async function(messageId) {
 
   if (!el) return;
 
+  if (navigator.share) {
   await navigator.share({
     text: el.innerText
   });
+} else {
+  navigator.clipboard.writeText(el.innerText);
+  alert("Copied to clipboard");
+}
 
   document.getElementById(
     "messageMenu"
@@ -3171,6 +3407,11 @@ window.shareMessage = async function(messageId) {
 };
 
 window.deleteMessage = async function(messageId) {
+  
+  if (!session?.user) {
+  alert("Please login first");
+  return;
+}
 
   const confirmDelete =
     confirm("Delete message?");
@@ -3772,6 +4013,8 @@ startVolume = video.volume;
 
 // CLOSE MEDIA
 window.closeMedia = function () {
+  
+  document.onkeydown = null;
 
   const viewer =
     document.getElementById("mediaViewer");
@@ -3786,6 +4029,9 @@ window.closeMedia = function () {
   }, 200);
 
 };
+
+window.storyMuted =
+  localStorage.getItem("storyMuted") === "true";
 
 window.loadStories = async function () {
 
@@ -3836,9 +4082,8 @@ const { data: stories, error } =
   }
 
   // GROUP STORIES BY USER
-  const grouped = {};
-
-  stories.forEach(story => {
+  const grouped = [];
+stories.forEach(story => {
 
     const userId =
       story.user_id || "unknown";
@@ -4072,6 +4317,21 @@ window.openStory = function(index){
   setTimeout(() => {
     showStory();
   }, 0);
+  
+  setTimeout(() => {
+
+  const replyInput =
+    document.getElementById(
+      "storyReplyInput"
+    );
+
+  if (!replyInput) return;
+
+  replyInput.onfocus = pauseStory;
+replyInput.onblur = resumeStory;
+  
+
+}, 100);
 };
 
 let startY = 0;
@@ -4081,14 +4341,15 @@ let moved = false;
 
 let brightness = 1;
 
-let startBrightness = 1;
-let startVolume = 1;
-
 let touchStartTime = 0;
 let holdTimer;
 
 let isHolding = false;
 let isDragging = false;
+
+window.storyPaused = false;
+window.storyRemaining = 0;
+window.storyStartTime = 0;
 
 async function recordStoryView(story) {
 
@@ -4171,7 +4432,110 @@ function listenToStoryViews(storyId) {
   return channel;
 }
 
-function showStory() {
+let uiHideTimer;
+
+window.pauseStory = function() {
+
+  if (window.storyPaused) return;
+
+  window.storyPaused = true;
+
+  clearTimeout(window.storyTimer);
+
+  const elapsed =
+    Date.now() - window.storyStartTime;
+
+  window.storyRemaining =
+    Math.max(
+      0,
+      (window.storyDuration || 5000) - elapsed
+    );
+
+  const video =
+    document.getElementById("storyVideo");
+    
+
+  if (video) {
+    video.pause();
+  }
+
+};
+
+window.resumeStory = function() {
+
+  if (!window.storyPaused) return;
+
+  window.storyPaused = false;
+
+  const video =
+  document.getElementById(
+    "storyVideo"
+  );
+
+if (video) {
+  video.muted = window.storyMuted;
+}
+
+// sync button too
+const btn = document.getElementById("storyMuteBtn");
+if (btn) {
+  btn.textContent = window.storyMuted ? "🔇" : "🔊";
+}
+
+  if (video) {
+
+    video.play();
+
+    clearTimeout(window.storyTimer);
+
+    window.storyTimer =
+      setTimeout(
+        nextStory,
+        window.storyRemaining
+      );
+
+    return;
+  }
+
+  clearTimeout(window.storyTimer);
+
+  window.storyTimer =
+    setTimeout(
+      nextStory,
+      window.storyRemaining
+    );
+
+};
+
+function keepUIVisible() {
+
+  const topBar =
+    document.getElementById("storyTopBar");
+
+  const reactions =
+    document.getElementById("storyReactions");
+
+  if (topBar)
+    topBar.style.opacity = "1";
+
+  if (reactions)
+    reactions.style.opacity = "1";
+
+  clearTimeout(uiHideTimer);
+
+  uiHideTimer = setTimeout(() => {
+
+    if (topBar)
+      topBar.style.opacity = "0.7";
+
+    if (reactions)
+      reactions.style.opacity = "0.7";
+
+  }, 5000);
+
+}
+
+async function showStory() {
 
   clearTimeout(window.storyTimer);
 
@@ -4181,13 +4545,28 @@ function showStory() {
   }
 
   const story =
-    window.storyList[window.storyIndex];
+  window.storyList[window.storyIndex];
+  
+  // ✅ RESET REPLY INPUT ON STORY CHANGE
+const replyInput = document.getElementById("storyReplyInput");
+if (replyInput) {
+  replyInput.value = "";
+  replyInput.blur();
+}
 
-  if (!story) {
-    console.error("Invalid story index:", window.storyIndex);
-    closeStoryViewer();
-    return;
-  }
+if (!story) {
+  console.error("Invalid story index:", window.storyIndex);
+  closeStoryViewer();
+  return;
+}
+
+const box = document.getElementById("storyReplies");
+if (box) box.innerHTML = "";
+
+loadStoryReplies(story.id);
+
+
+// ✅ SAFE RESET HERE (ONLY ONCE)
 
   console.log("Story object:", story);
   console.log("Story ID:", story.id);
@@ -4198,6 +4577,8 @@ recordStoryView(story);
     document.getElementById(
       "storyContent"
     );
+    keepUIVisible();
+    
     
     container.onclick = (e) => {
   e.stopPropagation();
@@ -4207,6 +4588,8 @@ container.ontouchstart = (e) => {
 
   e.preventDefault();
   e.stopPropagation();
+  
+  keepUIVisible();
   
   touchStartTime = Date.now();
 
@@ -4218,22 +4601,11 @@ container.ontouchstart = (e) => {
 
   holdTimer = setTimeout(() => {
 
-    isHolding = true;
+  isHolding = true;
 
-    clearTimeout(window.storyTimer);
+  pauseStory();
 
-    const video =
-      document.getElementById(
-        "storyVideo"
-      );
-
-    if(video){
-
-      video.pause();
-
-    }
-
-  }, 200);
+}, 200);
 
 };
     
@@ -4264,23 +4636,30 @@ const fastSwipe =
   swipeTime < 180;
 
   const video =
-    document.getElementById(
-      "storyVideo"
-    );
+  document.getElementById(
+    "storyVideo"
+  );
+
+if (video) {
+  video.muted = window.storyMuted;
+}
+
+// UPDATE BUTTON UI
+const btn = document.getElementById("storyMuteBtn");
+if (btn) {
+  btn.textContent = window.storyMuted ? "🔇" : "🔊";
+}
 
   // HOLD RELEASE
+  
   if(isHolding){
 
-    isHolding = false;
+  isHolding = false;
 
-    if(video){
+  resumeStory();
 
-      video.play();
-
-    }
-
-    return;
-  }
+  return;
+}
 
   if(video){
 
@@ -4345,19 +4724,6 @@ const fastSwipe =
       "storyProgress"
     );
     
-   const topBar =
-  document.getElementById("storyTopBar");
-
-if (topBar) {
-  topBar.style.opacity = "1";
-}
-
-const reactions =
-  document.getElementById("storyReactions");
-
-if (reactions) {
-  reactions.style.opacity = "1";
-}
     
    document.getElementById(
   "storyTopBar"
@@ -4407,12 +4773,21 @@ if (window.storyViewChannel) {
   supabase.removeChannel(window.storyViewChannel);
 }
 
+
 window.storyViewChannel =
   listenToStoryViews(story.id);
   
+  if (window.storyReplyChannel) {
+  supabase.removeChannel(window.storyReplyChannel);
+}
+
+window.storyReplyChannel =
+  listenToStoryReplies(story.id);
+  
   console.log("Current story:", story);
   console.log("Story owner:", story.user_id);
-  console.log("Logged in:", session?.user?.id);
+const { data } = await supabase.auth.getUser();
+const user = data?.user;
 
 // Load current count immediately
 getStoryViews(story.id)
@@ -4478,23 +4853,6 @@ console.log(
 
 });
 
-setTimeout(() => {
-
-  const topBar =
-    document.getElementById("storyTopBar");
-
-  if (topBar) {
-    topBar.style.opacity = "0";
-  }
-
-  const reactions =
-    document.getElementById("storyReactions");
-
-  if (reactions) {
-    reactions.style.opacity = "0";
-  }
-
-}, 2000);
 
 setTimeout(() => {
 
@@ -4546,8 +4904,12 @@ if (story.media_type === "image") {
 
 `;
 
+keepUIVisible();
     // IMAGE TIMER
     clearTimeout(window.storyTimer);
+    
+    window.storyDuration = 5000;
+    window.storyStartTime = Date.now();
 
     window.storyTimer =
       setTimeout(() => {
@@ -4588,36 +4950,17 @@ else {
     ></video>
 
   `;
+keepUIVisible();
+
+const btn = document.getElementById("storyMuteBtn");
+
+if (btn) {
+  btn.textContent = window.storyMuted ? "🔇" : "🔊";
+}
 
   const video =
     document.getElementById("storyVideo");
     
-    
-    
-    // =========================
-// GESTURE OVERLAY
-// =========================
-
-const gestureOverlay =
-  document.createElement("div");
-
-gestureOverlay.style.cssText = `
-  position:absolute;
-  top:50%;
-  left:50%;
-  transform:translate(-50%,-50%);
-  color:white;
-  font-size:28px;
-  font-weight:bold;
-  z-index:99999;
-  opacity:0;
-  transition:.2s;
-  pointer-events:none;
-`;
-
-container.appendChild(
-  gestureOverlay
-);
 
 // =========================
 // PLAY BUTTON
@@ -4644,93 +4987,12 @@ playBtn.style.cssText = `
 container.appendChild(playBtn);
 
 // =========================
-// GESTURE VARIABLES
-// =========================
-
-let startX = 0;
-let moved = false;
-let brightness = 1;
-let startBrightness = 1;
-let startVolume = video.volume;
-
-// =========================
 // TOUCH START
 // =========================
 
 video.addEventListener("touchstart", e => {
 
-  if (e.touches.length !== 1) return;
-
-  moved = false;
-
-  startY = e.touches[0].clientY;
-  startX = e.touches[0].clientX;
-
-  startBrightness = brightness;
-  startVolume = video.volume;
-
-}, { passive:false });
-
-// =========================
-// TOUCH MOVE
-// =========================
-
-video.addEventListener("touchmove", e => {
-
-  if (e.touches.length !== 1) return;
-
-  e.preventDefault();
-
-  moved = true;
-
-  const touch = e.touches[0];
-
-  const deltaY =
-    startY - touch.clientY;
-
-  const percent =
-    deltaY / window.innerHeight;
-
-  // RIGHT SIDE = VOLUME
-  if (startX > window.innerWidth / 2) {
-
-    let newVolume =
-      startVolume + percent;
-
-    newVolume = Math.max(
-      0,
-      Math.min(1, newVolume)
-    );
-
-    video.volume = newVolume;
-
-    gestureOverlay.innerHTML =
-      "🔊 " +
-      Math.round(newVolume * 100) +
-      "%";
-  }
-
-  // LEFT SIDE = BRIGHTNESS
-  else {
-
-    brightness =
-      startBrightness + percent;
-
-    brightness = Math.max(
-      0.3,
-      Math.min(2, brightness)
-    );
-
-    video.style.filter =
-      `brightness(${brightness})`;
-
-    gestureOverlay.innerHTML =
-      "☀️ " +
-      Math.round(brightness * 50) +
-      "%";
-  }
-
-  gestureOverlay.style.opacity = "1";
+  e.stopPropagation();
 
 }, { passive:false });
 
@@ -4738,15 +5000,9 @@ video.addEventListener("touchmove", e => {
 // TOUCH END
 // =========================
 
-video.addEventListener("touchend", () => {
-  
-  moved = false;
+video.addEventListener("touchend", e => {
 
-  setTimeout(() => {
-
-    gestureOverlay.style.opacity = "0";
-
-  }, 500);
+  e.stopPropagation();
 
 });
 
@@ -4757,6 +5013,8 @@ video.addEventListener("touchend", () => {
 video.addEventListener("click", e => {
 
   e.stopPropagation();
+  
+  keepUIVisible();
 
   if (moved) return;
 
@@ -4820,6 +5078,12 @@ video.addEventListener("click", e => {
       activeBar.style.width = "100%";
 
     }
+    
+    window.storyDuration =
+  video.duration * 1000;
+
+window.storyStartTime =
+  Date.now();
 
     // AUTO NEXT
     window.storyTimer =
@@ -4966,12 +5230,103 @@ document.documentElement.style.touchAction =
 
   viewer.style.pointerEvents =
     "";
+    
+    const replyInput =
+  document.getElementById(
+    "storyReplyInput"
+  );
+
+if (replyInput) {
+  replyInput.value = "";
+}
 
   document.getElementById(
     "storyContent"
   ).innerHTML = "";
 
 };
+
+window.sendStoryReply = async function () {
+
+  const input =
+    document.getElementById(
+      "storyReplyInput"
+    );
+
+  const reply =
+    input.value.trim();
+
+  if (!reply) return;
+
+  const story =
+    window.storyList[
+      window.storyIndex
+    ];
+
+  const { data:{ user } } =
+    await supabase.auth.getUser();
+
+  if (!user) return;
+
+  const { error } =
+    await supabase
+      .from("story_replies")
+      .insert([{
+        story_id: story.id,
+        sender_id: user.id,
+        reply: reply
+      }]);
+
+  if (error) {
+    console.log(error);
+    alert(error.message);
+    return;
+  }
+  
+  // GET STORY OWNER
+if (story.user_id !== user.id) {
+
+  await supabase
+    .from("notifications")
+    .insert([{
+      user_id: story.user_id, // receiver
+
+      sender_id: user.id,
+
+      type: "story_reply",
+
+      message: `💬 Replied to your story: ${reply}`,
+
+      story_id: story.id,
+
+      created_at: new Date()
+    }]);
+
+}
+
+  input.value = "";
+  loadStoryReplies(story.id);
+
+};
+
+const replyInput =
+  document.getElementById("storyReplyInput");
+
+if (replyInput) {
+
+  replyInput.addEventListener("keydown", e => {
+
+    if (e.key === "Enter") {
+
+      e.preventDefault();
+
+      sendStoryReply();
+
+    }
+
+  });
+
+}
 
 window.reactStory = function(emoji){
 
@@ -5000,23 +5355,23 @@ window.reactStory = function(emoji){
 
 };
 
-window.toggleStorySound = function() {
+window.toggleStorySound = function () {
 
-  const video =
-    document.querySelector(
-      "#storyContent #storyVideo"
-    );
+  const video = document.getElementById("storyVideo");
 
-  if (!video) return;
+  window.storyMuted = !window.storyMuted;
 
-  video.muted = !video.muted;
+  localStorage.setItem("storyMuted", window.storyMuted);
 
-  window.storyMuted = video.muted;
+  if (video) {
+    video.muted = window.storyMuted;
+  }
 
-  document.getElementById(
-    "storyMuteBtn"
-  ).textContent =
-    video.muted ? "🔇" : "🔊";
+  const btn = document.getElementById("storyMuteBtn");
+
+  if (btn) {
+    btn.textContent = window.storyMuted ? "🔇" : "🔊";
+  }
 
 };
 
@@ -5054,24 +5409,103 @@ function showHeart(){
 
 }
 
+async function loadStoryReplies(storyId) {
+
+  const { data, error } = await supabase
+    .from("story_replies")
+    .select("*")
+    .eq("story_id", storyId)
+    .order("created_at", { ascending: true });
+
+  const box =
+    document.getElementById("storyReplies");
+
+  if (!box) return;
+
+  if (error) {
+    console.log(error);
+    return;
+  }
+
+  box.innerHTML = (data || []).map(r => `
+    <div style="margin-bottom:6px;">
+      <b>${r.sender_id.slice(0,6)}:</b> ${r.reply}
+    </div>
+  `).join("");
+}
+
+function listenToStoryReplies(storyId) {
+
+  return supabase
+    .channel("story_replies_" + storyId)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "story_replies",
+        filter: `story_id=eq.${storyId}`
+      },
+      () => {
+        loadStoryReplies(storyId);
+      }
+    )
+    .subscribe();
+}
+
 async function loadNotifications() {
 
   if (!currentUser) return;
 
   const { data } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("user_id", currentUser.id)
-    .order("created_at", {
-      ascending: false
-    });
+  .from("grouped_notifications")   // 🔥 CHANGE HERE
+  .select("*")                     // 🔥 SIMPLIFIED
+  .eq("user_id", currentUser.id)   // 🔥 SAME FILTER
+  .order("last_time", {
+    ascending: false
+  });
 
-  const list =
-    document.getElementById(
-      "notificationsList"
+notificationCache = data || [];
+let notifications = notificationCache;
+
+if (notificationFilter !== "all") {
+
+  notifications = notifications.filter(
+    n => n.type === notificationFilter
+  );
+
+}
+
+const search =
+  document.getElementById(
+    "notificationSearch"
+  )?.value?.toLowerCase() || "";
+
+if (search) {
+
+  notifications = notifications.filter(n => {
+
+    const username =
+  n.username?.toLowerCase() || "";
+
+    const message =
+      n.message?.toLowerCase() || "";
+
+    return (
+      username.includes(search) ||
+      message.includes(search)
     );
 
-  if (!data || data.length === 0) {
+  });
+
+}
+
+const list =
+  document.getElementById(
+    "notificationsList"
+  );
+
+if (notifications.length === 0) {
 
     list.innerHTML = `
       <div style="
@@ -5083,18 +5517,144 @@ async function loadNotifications() {
     `;
 
     return;
+}
+}
+
+window.openNotification = async function(id) {
+  const { data, error } =
+    await supabase
+      .from("notifications")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+  if (error || !data) return;
+
+  await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("id", id);
+    
+    document.getElementById(
+  "notificationsScreen"
+).style.display = "none";
+
+  if (data.type === "story_reply") {
+
+  if (data.story_id && window.storyList) {
+
+    const index =
+      window.storyList.findIndex(
+        s => s.id === data.story_id
+      );
+
+    if (index >= 0) {
+
+      window.storyIndex = index;
+
+      openStoryViewer(
+        window.storyList,
+        index
+      );
+
+    }
+
   }
 
-  list.innerHTML = data.map(n => `
-    <div style="
-      padding:12px;
-      border-bottom:1px solid #222;
-      color:white;
-    ">
-      ${n.message}
-    </div>
-  `).join("");
+  return;
 }
+
+  if (data.type === "like") {
+
+  if (data.post_id) {
+
+    // Scroll to post or open post screen
+    openComments(data.post_id);
+
+  }
+
+  return;
+}
+
+  if (data.type === "comment") {
+
+  if (data.post_id) {
+
+    openComments(data.post_id);
+
+  }
+
+  return;
+}
+
+  if (data.type === "follow") {
+
+  if (data.sender_id) {
+
+    openProfile(data.sender_id);
+
+  }
+
+  return;
+}
+
+  if (data.type === "message") {
+
+  if (data.sender_id) {
+
+    openChat(data.sender_id);
+
+  }
+
+  return;
+}
+};
+
+window.deleteNotification = async function(id) {
+
+  const ok = confirm(
+    "Delete this notification?"
+  );
+
+  if (!ok) return;
+
+  await supabase
+    .from("notifications")
+    .delete()
+    .eq("id", id);
+
+  loadNotifications();
+  loadUnreadCount();
+
+};
+
+window.clearNotifications = async function() {
+
+  if (!currentUser) return;
+
+  const ok = confirm(
+    "Delete all notifications?"
+  );
+
+  if (!ok) return;
+
+  await supabase
+    .from("notifications")
+    .delete()
+    .eq("user_id", currentUser.id);
+
+  loadNotifications();
+  loadUnreadCount();
+
+};
+
+window.filterNotifications = function(type) {
+
+  notificationFilter = type;
+
+  loadNotifications();
+
+};
 
 window.openNotifications = async function () {
 
@@ -5103,6 +5663,7 @@ window.openNotifications = async function () {
 
   await loadNotifications();
 
+  // DON'T block if no user (fix crash risk)
   if (!currentUser) return;
 
   await supabase
@@ -5111,8 +5672,7 @@ window.openNotifications = async function () {
     .eq("user_id", currentUser.id)
     .eq("read", false);
 
-  unreadCount = 0;
-  updateNotifBadge();
+  loadUnreadCount(); // 🔥 instead of resetting manually
 };
 
 if (!window.notificationsSubscription) {
@@ -5127,36 +5687,54 @@ if (!window.notificationsSubscription) {
           schema: "public",
           table: "notifications"
         },
-        (payload) => {
+(payload) => {
 
-          const n = payload.new;
+  const n = payload.new;
 
-          if (
-            currentUser &&
-            n.user_id === currentUser.id
-          ) {
+if (!currentUser || n.user_id !== currentUser.id) return;
 
-            loadUnreadCount();
+const key = `${n.type}_${n.post_id || ""}_${n.story_id || ""}_${n.sender_id || ""}`;
 
-            const screen =
-              document.getElementById(
-                "notificationsScreen"
-              );
+if (seenNotifications.has(key)) return;
+seenNotifications.add(key);
 
-            if (
-              screen &&
-              screen.style.display === "flex"
-            ) {
-              loadNotifications();
-            }
-
-          }
-
-        }
-      )
-      .subscribe();
-
+tabChannel.postMessage(n);
+showToastNotification(n);
+mergeNotification(n);
+renderNotifications();
+loadUnreadCount();
 }
+
+   )
+     .subscribe();
+}
+
+tabChannel.onmessage = (event) => {
+
+  const n = event.data;
+
+  // 1. FIRST: user check
+  if (!currentUser || n.user_id !== currentUser.id) return;
+
+  // 2. BUILD KEY
+  const key = `${n.type}_${n.post_id || ""}_${n.story_id || ""}_${n.sender_id || ""}`;
+
+  // 3. DEDUP CHECK (ONLY ONCE)
+  if (seenNotifications.has(key)) return;
+  seenNotifications.add(key);
+
+  // 4. UI UPDATE
+  showToastNotification(n);
+  mergeNotification(n);
+  loadUnreadCount();
+
+  const screen =
+    document.getElementById("notificationsScreen");
+
+  if (screen && screen.style.display === "flex") {
+    loadNotifications();
+  }
+};
   
   async function loadUnreadCount() {
 
@@ -5175,16 +5753,186 @@ if (!window.notificationsSubscription) {
 
 function updateNotifBadge() {
 
-  const badge = document.getElementById("notifBadge");
+  const badge =
+    document.getElementById("notifBadge");
 
-  if (!badge) return;
+  const btn =
+    document.getElementById("notificationBtn");
+
+  if (!badge || !btn) return;
 
   if (unreadCount > 0) {
+
     badge.style.display = "flex";
-    badge.textContent = unreadCount;
+
+    badge.textContent =
+      unreadCount > 99
+        ? "99+"
+        : unreadCount;
+
+    btn.classList.add("hasUnread");
+
   } else {
+
     badge.style.display = "none";
+
+    btn.classList.remove("hasUnread");
+
   }
+
+}
+
+function showToastNotification(n) {
+
+  const toast = document.createElement("div");
+
+  toast.innerText = "🔔 " + n.message;
+
+  toast.style = `
+    position:fixed;
+    top:20px;
+    left:50%;
+    transform:translateX(-50%);
+    background:#1877f2;
+    color:white;
+    padding:12px 18px;
+    border-radius:10px;
+    z-index:9999999;
+    animation:fadeInOut 2s ease;
+  `;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => toast.remove(), 2000);
+}
+
+function prependNotification(n) {
+
+  const list =
+    document.getElementById("notificationsList");
+
+  if (!list) return;
+
+  const avatar = n.avatar_url || "https://via.placeholder.com/50";
+  const username = n.username || "User";
+  const time = "Just now";
+
+  const html = `
+    <div
+      onclick="openNotification('${n.id}')"
+      style="
+        display:flex;
+        align-items:center;
+        gap:12px;
+        padding:14px;
+        border-bottom:1px solid #222;
+        background:#151515;
+        animation:fadeInOut .4s ease;
+      "
+    >
+
+      <img src="${avatar}"
+        style="width:48px;height:48px;border-radius:50%;object-fit:cover;"
+      />
+
+      <div style="flex:1;">
+        <div style="color:white;font-size:15px;">
+          <b>${username}</b> ${n.message}
+        </div>
+
+        <div style="color:#888;font-size:12px;">
+          ${time}
+        </div>
+      </div>
+
+    </div>
+  `;
+
+  list.insertAdjacentHTML("afterbegin", html);
+}
+
+function mergeNotification(n) {
+
+  const key =
+  `${n.type}_${n.post_id || 0}_${n.story_id || 0}_${n.sender_id || 0}`;
+
+  const existing = notificationCache.find(x =>
+    (x.type + "_" + x.post_id + "_" + x.story_id + "_" + x.sender_id) === key
+  );
+
+  if (existing) {
+
+    existing.count = (existing.count || 1) + 1;
+    existing.last_time = new Date().toISOString();
+    existing.message = n.message;
+
+  } else {
+
+    notificationCache.unshift({
+      ...n,
+      count: 1
+    });
+
+  }
+}
+
+function renderNotifications() {
+
+  let notifications = [...notificationCache];
+
+  const list = document.getElementById("notificationsList");
+  if (!list) return;
+
+  if (notifications.length === 0) {
+    list.innerHTML = `<div style="color:#777;padding:15px;">No notifications</div>`;
+    return;
+  }
+
+  list.innerHTML = notifications.map(n => {
+
+    const avatar = n.avatar_url || "https://via.placeholder.com/50";
+    const username = n.username || "User";
+
+    let icon = "🔔";
+    if (n.type === "story_reply") icon = "💬";
+    if (n.type === "like") icon = "❤️";
+    if (n.type === "comment") icon = "📝";
+    if (n.type === "follow") icon = "👤";
+    if (n.type === "message") icon = "📩";
+
+    const time = formatTime(n.last_time || n.created_at);
+
+    let text = n.message;
+
+    if (n.count > 1) {
+      if (n.type === "like") text = `${n.count} people liked your post`;
+      else if (n.type === "follow") text = `${n.count} people followed you`;
+      else text = `${n.count} notifications`;
+    }
+
+    return `
+      <div onclick="openNotification('${n.id}')"
+        style="display:flex;gap:12px;padding:14px;border-bottom:1px solid #222;">
+
+        <img src="${avatar}" style="width:48px;height:48px;border-radius:50%;" />
+
+        <div style="flex:1;">
+          <b>${username}</b> ${text}
+          <div style="color:#888;font-size:12px;">${time}</div>
+        </div>
+
+      </div>
+    `;
+  }).join("");
+}
+
+function formatTime(dateString) {
+  const mins = Math.floor((Date.now() - new Date(dateString)) / 60000);
+
+  if (mins < 1) return "now";
+  if (mins < 60) return mins + "m";
+  if (mins < 1440) return Math.floor(mins / 60) + "h";
+  return Math.floor(mins / 1440) + "d";
 }
 
 
@@ -5193,6 +5941,7 @@ function updateNotifBadge() {
 // GLOBAL FUNCTIONS
 // ========================
 
+window.loadUnreadCount = loadUnreadCount;
 window.openProfile = openProfile;
 window.openEditProfile = openEditProfile;
 window.goHome = goHome;
@@ -5206,6 +5955,42 @@ window.deleteMessage = deleteMessage;
 // ========================
 // VIDEO AUTOPLAY
 // ========================
+
+
+
+async function registerPush() {
+
+  if (!("serviceWorker" in navigator)) return;
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return;
+
+  const reg = await navigator.serviceWorker.register("/sw.js");
+
+  const subscription = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(
+"BKasJ4tLBWnUvRWEUMvqcWeqUq9qKmFeqvH-tNotanADuKj0aLixYV2xnkTurxdvV-ACw3QuFKvG2ZRZ_tEyuGk"
+)
+  });
+
+  await supabase.from("push_subscriptions").upsert({
+    user_id: currentUser.id,
+    subscription
+  });
+
+  window.userSubscription = subscription;
+}
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
+}
 
 const videoObserver = new IntersectionObserver(
   (entries) => {
@@ -5280,13 +6065,6 @@ if (!window.messagesSubscription) {
 
 </script>
 
-<script>
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js')
-    .then(() => console.log('Service Worker Registered'))
-    .catch(err => console.log('SW failed:', err));
-}
-</script>
 
 </body>
 </html>
