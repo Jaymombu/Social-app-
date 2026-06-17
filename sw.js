@@ -1,4 +1,4 @@
-const CACHE_NAME = "social-app-v29";
+const CACHE_NAME = "social-app-v32";
 
 const urlsToCache = [
   "./",
@@ -103,4 +103,35 @@ self.addEventListener("fetch", (event) => {
 
   );
 
+});
+
+self.addEventListener("push", (event) => {
+
+  const data = event.data ? event.data.json() : {};
+
+  event.waitUntil(
+    self.registration.showNotification(
+      data.title || "New notification",
+      {
+        body: data.body || "You have a new update",
+        icon: "/icon-192.png",
+        badge: "/icon-192.png",
+        data: data.data || {},
+        tag: "social-app",
+        renotify: true
+      }
+    )
+  );
+
+});
+
+self.addEventListener("notificationclick", (event) => {
+
+  event.notification.close();
+
+  const data = event.notification.data;
+
+  event.waitUntil(
+    clients.openWindow("/")
+  );
 });
