@@ -1510,36 +1510,38 @@ notifSound.volume = 0.5;
 
 let lastNotifTime = 0;
 
-const tabChannel = new BroadcastChannel("notifications_channel");
+const tabChannel = new BroadcastChannel("notifications_tab_sync");
 const seenNotifications = new Set();
 let batchQueue = [];
 let batchTimer = null;
 
-(async () => {
-  const { data, error } = await supabase.auth.getUser();
+async function initAuth() {
+  const { data, error } = await supabase.auth.getSession();
 
   if (error) {
-    console.log("Auth error:", error);
+    console.log("Session error:", error);
     return;
   }
 
-  currentUser = data.user;
-  
+  session = data.session;
+  currentUser = session?.user || null;
+
+  console.log("INIT SESSION:", session);
+
   if (currentUser) {
-  registerPush().catch(console.error);
-}
-  
+    console.log("USER LOADED:", currentUser.id);
 
-  if (!currentUser) return;
-
-  await loadUnreadCount();
-
-  try {
-    await registerPush();
-  } catch (err) {
-    console.log("Push registration failed:", err);
+    await loadUnreadCount();
+    await loadNotifications();
+    await registerPush().catch(console.log);
+  } else {
+    console.log("No logged-in user yet");
   }
-})();
+
+  startApp();
+}
+
+initAuth();
 
 // STORY VARIABLES
 window.storyList = [];
@@ -1559,60 +1561,69 @@ let currentProfileName = null;
 let activeTab = "explore";
 
 // 🔁 keep session always updated
-supabase.auth.onAuthStateChange(
-  async (event, newSession) => {
+supabase.auth.onAuthStateChange(async (event, newSession) => {
+  console.log("AUTH EVENT:", event);
 
-    session = newSession;
+  session = newSession;
+  currentUser = newSession?.user || null;
 
-    const { data } =
-      await supabase.auth.getUser();
-
-    currentUser = data.user;
+  if (currentUser) {
+    console.log("SIGNED IN:", currentUser.id);
 
     loadUnreadCount();
-
-    if (
-      event === "SIGNED_IN" ||
-      event === "SIGNED_OUT"
-    ) {
-      startApp();
-    }
-
+    loadNotifications();
+    registerPush().catch(console.log);
   }
-);
 
-async function init() {
-  const { data } = await supabase.auth.getSession();
-  session = data.session;
+  if (event === "SIGNED_OUT") {
+    notificationCache = [];
+    unreadCount = 0;
+    updateNotifBadge();
+  }
 
-  console.log("INIT SESSION:", session);
+  startApp();
+});
 
-  startApp(); // ✅ ONLY here
-}
+// ======================
+// THEME 
+// ======================
 
 function setTheme(theme) {
-  if (theme === "dark") {
-    document.body.classList.add("dark");
-  } else {
-    document.body.classList.remove("dark");
-  }
-
+  document.body.classList.toggle("dark", theme === "dark");
   localStorage.setItem("theme", theme);
 }
 
 function toggleTheme() {
   const isDark = document.body.classList.contains("dark");
-
   setTheme(isDark ? "light" : "dark");
 }
 
 // LOAD SAVED THEME
-const savedTheme =
-  localStorage.getItem("theme") || "dark";
+setTheme(localStorage.getItem("theme") || "dark");
 
-setTheme(savedTheme);
 
-init();
+// ======================
+// AUTH BOOTSTRAP (REPLACES init)
+// ======================
+
+async function bootstrap() {
+  const { data } = await supabase.auth.getSession();
+
+  session = data.session;
+  currentUser = session?.user || null;
+
+  console.log("BOOT SESSION:", session);
+
+  startApp();
+
+  if (currentUser) {
+    await loadUnreadCount();
+    await loadNotifications();
+    registerPush().catch(console.log);
+  }
+}
+
+bootstrap();
 
 function escapeHtml(text) {
   const div = document.createElement("div");
@@ -5429,7 +5440,7 @@ async function loadStoryReplies(storyId) {
 
   box.innerHTML = (data || []).map(r => `
     <div style="margin-bottom:6px;">
-      <b>${r.sender_id.slice(0,6)}:</b> ${r.reply}
+      <b>${(r.sender_id || "").slice(0,6)}:</b> ${r.reply}
     </div>
   `).join("");
 }
@@ -5458,47 +5469,40 @@ async function loadNotifications() {
   if (!currentUser) return;
 
   const { data } = await supabase
-  .from("grouped_notifications")   // 🔥 CHANGE HERE
+  .from("notifications")   // 🔥 CHANGE HERE
   .select("*")                     // 🔥 SIMPLIFIED
   .eq("user_id", currentUser.id)   // 🔥 SAME FILTER
   .order("last_time", {
     ascending: false
   });
 
-notificationCache = data || [];
-let notifications = notificationCache;
+notificationCache = mergeFromServer([...notificationCache], data || []);
 
+// STEP 1: start from cache
+let notifications = [...notificationCache];
+
+// STEP 2: filter by type
 if (notificationFilter !== "all") {
-
   notifications = notifications.filter(
     n => n.type === notificationFilter
   );
-
 }
 
+// STEP 3: search filter
 const search =
-  document.getElementById(
-    "notificationSearch"
-  )?.value?.toLowerCase() || "";
+  document.getElementById("notificationSearch")?.value?.toLowerCase() || "";
 
 if (search) {
-
   notifications = notifications.filter(n => {
+    const username = n.username?.toLowerCase() || "";
+    const message = n.message?.toLowerCase() || "";
 
-    const username =
-  n.username?.toLowerCase() || "";
-
-    const message =
-      n.message?.toLowerCase() || "";
-
-    return (
-      username.includes(search) ||
-      message.includes(search)
-    );
-
+    return username.includes(search) || message.includes(search);
   });
-
 }
+
+// STEP 4: render FINAL result ONLY
+
 
 const list =
   document.getElementById(
@@ -5518,7 +5522,10 @@ if (notifications.length === 0) {
 
     return;
 }
+
+renderNotifications(notifications);
 }
+
 
 window.openNotification = async function(id) {
   const { data, error } =
@@ -5656,14 +5663,13 @@ window.filterNotifications = function(type) {
 
 };
 
-window.openNotifications = async function () {
+async function openNotifications() {
 
   document.getElementById("notificationsScreen")
     .style.display = "flex";
 
   await loadNotifications();
 
-  // DON'T block if no user (fix crash risk)
   if (!currentUser) return;
 
   await supabase
@@ -5672,8 +5678,14 @@ window.openNotifications = async function () {
     .eq("user_id", currentUser.id)
     .eq("read", false);
 
-  loadUnreadCount(); // 🔥 instead of resetting manually
-};
+  loadUnreadCount();
+}
+
+window.openNotifications = openNotifications;
+
+function getNotifKey(n) {
+  return `${n.type}_${n.post_id || ""}_${n.story_id || ""}_${n.sender_id || ""}`;
+}
 
 if (!window.notificationsSubscription) {
 
@@ -5691,18 +5703,27 @@ if (!window.notificationsSubscription) {
 
   const n = payload.new;
 
-if (!currentUser || n.user_id !== currentUser.id) return;
+  if (!currentUser || n.user_id !== currentUser.id) return;
 
-const key = `${n.type}_${n.post_id || ""}_${n.story_id || ""}_${n.sender_id || ""}`;
+  const key = getNotifKey(n);
 
-if (seenNotifications.has(key)) return;
-seenNotifications.add(key);
+  if (seenNotifications.has(key)) return;
+  seenNotifications.add(key);
 
-tabChannel.postMessage(n);
-showToastNotification(n);
-mergeNotification(n);
-renderNotifications();
-loadUnreadCount();
+  tabChannel.postMessage(n);
+
+  // ✅ ONLY ONCE each
+  mergeNotification(n);
+  showToastNotification(n);
+
+  const screen = document.getElementById("notificationsScreen");
+
+  if (screen && screen.style.display === "flex") {
+    renderNotifications([...notificationCache]);
+  }
+
+  // ✅ ONLY ONCE
+  loadUnreadCount();
 }
 
    )
@@ -5717,7 +5738,7 @@ tabChannel.onmessage = (event) => {
   if (!currentUser || n.user_id !== currentUser.id) return;
 
   // 2. BUILD KEY
-  const key = `${n.type}_${n.post_id || ""}_${n.story_id || ""}_${n.sender_id || ""}`;
+  const key = getNotifKey(n);
 
   // 3. DEDUP CHECK (ONLY ONCE)
   if (seenNotifications.has(key)) return;
@@ -5726,7 +5747,7 @@ tabChannel.onmessage = (event) => {
   // 4. UI UPDATE
   showToastNotification(n);
   mergeNotification(n);
-  loadUnreadCount();
+  
 
   const screen =
     document.getElementById("notificationsScreen");
@@ -5740,13 +5761,13 @@ tabChannel.onmessage = (event) => {
 
   if (!currentUser) return;
 
-  const { data } = await supabase
-    .from("notifications")
-    .select("id")
-    .eq("user_id", currentUser.id)
-    .eq("read", false);
+  const { count, error } = await supabase
+  .from("notifications")
+  .select("*", { count: "exact", head: true })
+  .eq("user_id", currentUser.id)
+  .eq("read", false);
 
-  unreadCount = data ? data.length : 0;
+unreadCount = count || 0;
 
   updateNotifBadge();
 }
@@ -5786,7 +5807,7 @@ function showToastNotification(n) {
 
   const toast = document.createElement("div");
 
-  toast.innerText = "🔔 " + n.message;
+  toast.innerText = "🔔 " + (n.message || "New notification");
 
   toast.style = `
     position:fixed;
@@ -5853,12 +5874,9 @@ function prependNotification(n) {
 
 function mergeNotification(n) {
 
-  const key =
-  `${n.type}_${n.post_id || 0}_${n.story_id || 0}_${n.sender_id || 0}`;
+  const key = getNotifKey(n);
 
-  const existing = notificationCache.find(x =>
-    (x.type + "_" + x.post_id + "_" + x.story_id + "_" + x.sender_id) === key
-  );
+  const existing = notificationCache.find(x => getNotifKey(x) === key);
 
   if (existing) {
 
@@ -5876,9 +5894,7 @@ function mergeNotification(n) {
   }
 }
 
-function renderNotifications() {
-
-  let notifications = [...notificationCache];
+function renderNotifications(notifications = notificationCache) {
 
   const list = document.getElementById("notificationsList");
   if (!list) return;
@@ -5935,7 +5951,33 @@ function formatTime(dateString) {
   return Math.floor(mins / 1440) + "d";
 }
 
+function mergeFromServer(cache, serverData) {
+  const map = new Map();
 
+  // keep realtime merged data
+  cache.forEach(n => {
+    const key = `${n.type}_${n.post_id || 0}_${n.story_id || 0}_${n.sender_id || 0}`;
+    map.set(key, { ...n });
+  });
+
+  // merge server data
+  serverData.forEach(n => {
+    const key = `${n.type}_${n.post_id || 0}_${n.story_id || 0}_${n.sender_id || 0}`;
+
+    if (map.has(key)) {
+  map.set(key, {
+    ...map.get(key),
+    last_time: n.last_time
+  });
+} else {
+  map.set(key, {
+    ...n
+  });
+}
+  });
+
+  return Array.from(map.values());
+}
 
 // ========================
 // GLOBAL FUNCTIONS
@@ -5965,7 +6007,7 @@ async function registerPush() {
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return;
 
-  const reg = await navigator.serviceWorker.register("/sw.js");
+  const reg = await navigator.serviceWorker.register("./sw.js");
 
   const subscription = await reg.pushManager.subscribe({
     userVisibleOnly: true,
