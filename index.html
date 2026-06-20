@@ -1504,6 +1504,7 @@ let currentUser = null;
 let unreadCount = 0;
 let notificationFilter = "all";
 let notificationCache = [];
+window.postsState = [];
 
 // ✅ ADD HERE
 window.notificationCache = window.notificationCache || [];
@@ -1543,15 +1544,19 @@ async function initAuth() {
     console.log("No logged-in user yet");
   }
 
+  if (!window.__appStarted) {
+  window.__appStarted = true;
   startApp();
+}
 }
 
 initAuth();
 
 // STORY VARIABLES
-window.storyList = [];
-window.storyIndex = 0;
+window.storyList = window.storyList || [];
+window.__storyMap = new Map();
 window.storyTimer = null;
+window.storyOpenContext = null;
 
 let touchStartX = 0;
 let touchEndX = 0;
@@ -1565,6 +1570,14 @@ let currentProfileId = null;
 let currentProfileName = null;
 let activeTab = "explore";
 
+let appStarted = false;
+
+function safeStart() {
+  if (appStarted) return;
+  appStarted = true;
+
+  startApp();
+}
 // 🔁 keep session always updated
 supabase.auth.onAuthStateChange(async (event, newSession) => {
   console.log("AUTH EVENT:", event);
@@ -1586,7 +1599,7 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
     updateNotifBadge();
   }
 
-  startApp();
+  safeStart();
 });
 
 // ======================
@@ -1606,29 +1619,20 @@ function toggleTheme() {
 // LOAD SAVED THEME
 setTheme(localStorage.getItem("theme") || "dark");
 
+function setStories(list) {
+  window.storyList = Array.isArray(list) ? list : [];
 
-// ======================
-// AUTH BOOTSTRAP (REPLACES init)
-// ======================
+  window.__storyMap = new Map(
+    window.storyList.map(s => [String(s.id), s])
+  );
 
-async function bootstrap() {
-  const { data } = await supabase.auth.getSession();
-
-  session = data.session;
-  currentUser = session?.user || null;
-
-  console.log("BOOT SESSION:", session);
-
-  startApp();
-
-  if (currentUser) {
-    await loadUnreadCount();
-    await loadNotifications();
-    registerPush().catch(console.log);
-  }
+  // ✅ RESET STORY STATE EVERY TIME USER OPENS STORIES
+  window.storyIndex = 0;
+  window.storyPaused = false;
+  window.storyRemaining = 0;
+  window.storyStartTime = 0;
 }
 
-bootstrap();
 
 function escapeHtml(text) {
   const div = document.createElement("div");
@@ -1636,7 +1640,12 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-  function renderPost(post) {
+  function renderPostElement(post) {
+    
+    if (!window.renderedPosts) window.renderedPosts = new Set();
+
+if (window.renderedPosts.has(post.id)) return;
+window.renderedPosts.add(post.id);
     
     console.log(post);
 
@@ -1659,7 +1668,7 @@ function escapeHtml(text) {
   const div =
     document.createElement("div");
 
-  div.id = post.id;
+  div.id = `post-${post.id}`;
   div.className = "post-card";
 
   // ======================
@@ -1862,8 +1871,12 @@ if (
   `;
 
   if (!postsDiv) return;
+  
+  console.log("RENDERING POST:", post.id);
+  
+  console.log("APPENDING TO:", postsDiv);
 
-postsDiv.appendChild(div);
+return div;
 }
 
 // ✅ 3. DEFINE loadPosts
@@ -1931,7 +1944,20 @@ window.loadPosts = async function () {
   error = response.error;
 }
 
-  postsDiv.innerHTML = "";
+function renderFeed(posts) {
+  const postsDiv = document.getElementById("posts");
+  if (!postsDiv) return;
+
+  postsDiv.replaceChildren();
+
+  posts.forEach(post => {
+    const el = renderPostElement(post);
+    postsDiv.appendChild(el);
+  });
+}
+
+window.renderedPosts = new Set();
+  postsDiv.replaceChildren();
 
   if (error) {
 
@@ -1950,8 +1976,20 @@ window.loadPosts = async function () {
     return;
 
   }
+  console.log("POST COUNT:", posts?.length);
+console.log("POST IDS:", posts?.map(p => p.id));
 
-  posts.forEach(renderPost);
+console.log(
+  "POST CONTAINERS:",
+  document.querySelectorAll("#posts").length
+);
+window.postsState = posts || [];
+renderFeed(window.postsState);
+
+console.log(
+  "POST ELEMENTS AFTER RENDER:",
+  document.querySelectorAll(".post-card").length
+);
 
   observeVideos();
 
@@ -2011,9 +2049,29 @@ window.likePost = async (id) => {
     })
     .eq("id", id);
 
-  // ❌ REMOVE THIS (realtime will handle updates)
-  // loadPosts();
+upsertPost({
+  id,
+  likes: newLikes,
+  liked_by: updatedLikedBy
+});
 };
+
+function upsertPost(updatedPost) {
+  if (!window.postsState) return;
+
+  const index = window.postsState.findIndex(p => p.id === updatedPost.id);
+
+  if (index >= 0) {
+    window.postsState[index] = {
+      ...window.postsState[index],
+      ...updatedPost
+    };
+  } else {
+    window.postsState.unshift(updatedPost);
+  }
+
+  renderFeed(window.postsState);
+}
 
 window.deletePost = async (id) => {
   const { error } = await supabase.from("posts").delete().eq("id", id);
@@ -2458,6 +2516,8 @@ let postsEl = null;
 let scrollTimeout;
 
 function startApp() {
+  
+  console.log("START APP CALLED");
 
   document.getElementById("app").innerHTML = `
     <div style="padding:10px;">
@@ -4207,6 +4267,15 @@ stories.forEach(story => {
 
   storiesBar.innerHTML = html;
 
+// 🔗 DEEP LINK SUPPORT (OPEN STORY BY URL)
+  const params = new URLSearchParams(location.search);
+  const storyId = params.get("story");
+
+  if (storyId) {
+    setTimeout(() => {
+      window.openStoryById(storyId);
+    }, 300);
+  }
 };
 
 async function addStory() {
@@ -4312,7 +4381,8 @@ window.openStory = function(index){
 
   window.activeUserIndex = index;
   window.currentGroup = window.storyGroups[index];
-  window.storyList = window.currentGroup.stories;
+  setStories(window.currentGroup.stories);
+  
   window.storyIndex = 0;
 
   const viewer = document.getElementById("storyViewer");
@@ -4348,6 +4418,78 @@ replyInput.onblur = resumeStory;
   
 
 }, 100);
+};
+
+window.openStoryAt = function(groupIndex, storyIndex, context = null) {
+
+  if (!window.storyGroups?.[groupIndex]) return;
+
+  window.storyOpenContext = context;
+
+  window.activeUserIndex = groupIndex;
+  window.currentGroup = window.storyGroups[groupIndex];
+
+  setStories(window.currentGroup.stories);
+
+  window.storyIndex = storyIndex;
+
+  const viewer = document.getElementById("storyViewer");
+
+  viewer.style.display = "block";
+  viewer.style.position = "fixed";
+  viewer.style.inset = "0";
+  viewer.style.zIndex = "999999";
+  viewer.style.background = "black";
+
+  document.body.style.overflow = "hidden";
+
+  setTimeout(() => {
+    showStory(true); // pass flag
+  }, 0);
+};
+
+window.openStoryById = function(storyId, context = null) {
+
+  if (!window.storyGroups) return;
+
+  for (let i = 0; i < window.storyGroups.length; i++) {
+
+    const group = window.storyGroups[i];
+
+    const found = group.stories.find(
+      s => String(s.id) === String(storyId)
+    );
+
+    if (found) {
+
+      const storyIndex = group.stories.findIndex(
+        s => String(s.id) === String(storyId)
+      );
+
+      window.activeUserIndex = i;
+      window.currentGroup = group;
+
+      setStories(group.stories);
+
+      window.storyIndex = storyIndex;
+
+      window.storyOpenContext =
+        context || {
+          type: "direct",
+          story_id: storyId
+        };
+
+      window.openStoryAt(
+        i,
+        storyIndex,
+        window.storyOpenContext
+      );
+
+      return;
+    }
+  }
+
+  console.warn("Story not found:", storyId);
 };
 
 let startY = 0;
@@ -4551,7 +4693,12 @@ function keepUIVisible() {
 
 }
 
-async function showStory() {
+async function showStory(isDirectOpen = false) {
+
+  if (!window.storyList?.length) {
+    console.log("No stories available in showStory");
+    return;
+  }
 
   clearTimeout(window.storyTimer);
 
@@ -4562,6 +4709,21 @@ async function showStory() {
 
   const story =
   window.storyList[window.storyIndex];
+  
+  if (
+  isDirectOpen &&
+  window.storyOpenContext?.type === "reply"
+) {
+
+  const el = document.getElementById("storyTopBar");
+
+  if (el) {
+    el.style.boxShadow = "0 0 20px rgba(24,119,242,0.8)";
+    el.style.borderRadius = "10px";
+  }
+
+  console.log("Direct story open mode:", window.storyOpenContext);
+}
   
   // ✅ RESET REPLY INPUT ON STORY CHANGE
 const replyInput = document.getElementById("storyReplyInput");
@@ -5221,6 +5383,16 @@ window.closeStoryViewer = function () {
     null;
 }
 
+if (window.storyReplyChannel) {
+
+  supabase.removeChannel(
+    window.storyReplyChannel
+  );
+
+  window.storyReplyChannel = null;
+
+}
+
   clearTimeout(window.storyTimer);
 
   document.body.style.overflow = "";
@@ -5480,6 +5652,7 @@ async function loadNotifications() {
 .order("last_time", {
   ascending: false
 });
+console.log("NOTIFICATION DATA:", data);
 
 notificationCache = mergeFromServer([...notificationCache], data || []);
 
@@ -5527,8 +5700,17 @@ if (!notifications.length) {
   `;
   return;
 }
-
-renderNotifications(notifications);
+console.log("RENDERING:", notifications);
+list.innerHTML = notifications.map(n => `
+  <div style="
+    padding:15px;
+    border-bottom:1px solid #333;
+    color:white;
+  ">
+    ${n.type}
+    ${n.username || ""}
+  </div>
+`).join("");
 }
 
 window.openNotification = async function(id) {
@@ -5550,27 +5732,25 @@ window.openNotification = async function(id) {
   "notificationsScreen"
 ).style.display = "none";
 
-  if (data.type === "story_reply") {
+if (data.type === "story_reply") {
 
-  if (data.story_id && window.storyList) {
+  if (!data.story_id) return;
 
-    const index =
-      window.storyList.findIndex(
-        s => s.id === data.story_id
-      );
+  if (window.__openingStory === data.story_id) return;
+  window.__openingStory = data.story_id;
 
-    if (index >= 0) {
-
-      window.storyIndex = index;
-
-      openStoryViewer(
-        window.storyList,
-        index
-      );
-
-    }
-
+  window.openStoryById(
+  data.story_id,
+  {
+    type: "reply",
+    story_id: data.story_id
   }
+);
+
+  setTimeout(() => {
+    window.__openingStory = null;
+    window.storyOpenContext = null;
+  }, 1000);
 
   return;
 }
@@ -5613,7 +5793,10 @@ window.openNotification = async function(id) {
 
   if (data.sender_id) {
 
-    openChat(data.sender_id);
+    openChat(
+      data.sender_id,
+      data.username || "User"
+    );
 
   }
 
@@ -5687,7 +5870,7 @@ if (screen) screen.style.display = "flex";
 window.openNotifications = openNotifications;
 
 function getNotifKey(n) {
-  return `${n.type}_${n.post_id || ""}_${n.story_id || ""}_${n.sender_id || ""}`;
+  return n.id;
 }
 
 if (!window.notificationsSubscription) {
@@ -5716,20 +5899,19 @@ if (!window.notificationsSubscription) {
   tabChannel.postMessage(n);
 
   // ✅ ONLY ONCE each
-  notificationCache.unshift({
-  ...n
-});
+  mergeNotification(n);
 
 showToastNotification(n);
 
-  const screen = document.getElementById("notificationsScreen");
+const screen =
+  document.getElementById("notificationsScreen");
 
-  if (screen && screen.style.display === "flex") {
-    loadNotifications();
-  }
+if (screen && screen.style.display === "flex") {
+  renderNotifications();
+}
 
-  // ✅ ONLY ONCE
-  loadUnreadCount();
+unreadCount++;
+updateNotifBadge();
 }
 
    )
@@ -5913,7 +6095,8 @@ function renderNotifications(notifications = notificationCache) {
   list.innerHTML = notifications.map(n => {
 
     const avatar = n.avatar_url || "https://via.placeholder.com/50";
-    const username = n.username || "User";
+    const username =
+  escapeHtml(n.username || "User");
 
     let icon = "🔔";
     if (n.type === "story_reply") icon = "💬";
@@ -5925,7 +6108,8 @@ function renderNotifications(notifications = notificationCache) {
     const rawTime = n.last_time || n.created_at || new Date().toISOString();
 const time = formatTime(rawTime);
 
-    let text = n.message;
+    let text =
+  escapeHtml(n.message || "");
 
     if (n.count > 1) {
       if (n.type === "like") text = `${n.count} people liked your post`;
@@ -6101,12 +6285,23 @@ if (!window.messagesSubscription) {
         },
         payload => {
 
-          if (
-            payload.new.sender_id === currentChatUser ||
-            payload.new.receiver_id === currentChatUser
-          ) {
-            loadMessages();
-          }
+         const msg = payload.new;
+
+if (
+  (
+    msg.sender_id === currentUser.id &&
+    msg.receiver_id === currentChatUser
+  )
+  ||
+  (
+    msg.sender_id === currentChatUser &&
+    msg.receiver_id === currentUser.id
+  )
+) {
+
+  loadMessages();
+
+}
 
         }
       )
