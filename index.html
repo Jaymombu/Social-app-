@@ -1202,18 +1202,16 @@ linear-gradient(
   
   <input
   id="storyReplyInput"
-  placeholder="Reply..."
   style="
     position:absolute;
-    bottom:calc(20px + env(safe-area-inset-bottom));
+    bottom:20px;
     left:20px;
-    right:20px;
+    right:100px; /* leave room for Send button */
     height:45px;
     border:none;
     border-radius:25px;
     padding:0 20px;
     background:rgba(255,255,255,0.12);
-    backdrop-filter:blur(10px);
     color:white;
     z-index:60;
   "
@@ -1255,7 +1253,7 @@ linear-gradient(
 
   style="
     position:absolute;
-    bottom:calc(80px + env(safe-area-inset-bottom));
+    bottom:80px;
     left:50%;
     transform:translateX(-50%);
     display:flex;
@@ -2160,7 +2158,7 @@ const { count: followingCount } = await supabase
   .select("*", { count: "exact", head: true })
   .eq("follower_id", userId);
 
-  document.getElementById("app").innerHTML = `
+ document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
     <button id="themeToggle">🌙 Theme</button>
       <button onclick="goHome()">← Back</button>
@@ -2516,8 +2514,6 @@ let postsEl = null;
 let scrollTimeout;
 
 function startApp() {
-  
-  console.log("START APP CALLED");
 
   document.getElementById("app").innerHTML = `
     <div style="padding:10px;">
@@ -2561,13 +2557,6 @@ function startApp() {
 <button id="postBtn">Post</button>
 
 <button id="storyBtn">Add Story</button>
-
-<input
-  type="file"
-  id="storyInput"
-  accept="image/*,video/*"
-  style="display:none;"
-/>
 `
           : `
 <button id="login">Login</button>
@@ -2608,11 +2597,10 @@ function startApp() {
 
   postsEl = document.getElementById("posts");
 
- loadPosts();
-loadStories();
-setupScrollSnap();
-
-setTimeout(attachEvents, 0);
+  attachEvents();
+  loadPosts();
+  loadStories();
+  setupScrollSnap();
 }
 
 async function createPost() {
@@ -4438,13 +4426,17 @@ window.openStoryAt = function(groupIndex, storyIndex, context = null) {
   viewer.style.display = "block";
   viewer.style.position = "fixed";
   viewer.style.inset = "0";
+  viewer.style.width = "100vw";
+  viewer.style.height = "100vh";
   viewer.style.zIndex = "999999";
   viewer.style.background = "black";
+  viewer.style.touchAction = "none";
+  viewer.style.pointerEvents = "auto";
 
   document.body.style.overflow = "hidden";
 
   setTimeout(() => {
-    showStory(true); // pass flag
+    showStory(true);
   }, 0);
 };
 
@@ -5373,6 +5365,8 @@ function prevStory() {
 }
 
 window.closeStoryViewer = function () {
+  
+  console.trace("closeStoryViewer fired");
   
   if (window.storyViewChannel) {
   supabase.removeChannel(
