@@ -739,6 +739,20 @@ linear-gradient(
   100% { opacity:0; transform:translate(-50%, -20px); }
 }
 
+#storyViewer {
+  display: none;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: black;
+  z-index: 999999;
+}
+
+#storyViewer.active {
+  display: block;
+}
+
 </style>
 </head>
 <body class="dark">
@@ -1555,6 +1569,7 @@ window.storyList = window.storyList || [];
 window.__storyMap = new Map();
 window.storyTimer = null;
 window.storyOpenContext = null;
+window.__storyOpen = false;
 
 let touchStartX = 0;
 let touchEndX = 0;
@@ -2514,6 +2529,8 @@ let postsEl = null;
 let scrollTimeout;
 
 function startApp() {
+  
+  console.log("START APP CALLED");
 
   document.getElementById("app").innerHTML = `
     <div style="padding:10px;">
@@ -2557,6 +2574,13 @@ function startApp() {
 <button id="postBtn">Post</button>
 
 <button id="storyBtn">Add Story</button>
+
+<input
+  type="file"
+  id="storyInput"
+  accept="image/*,video/*"
+  style="display:none;"
+/>
 `
           : `
 <button id="login">Login</button>
@@ -2597,10 +2621,11 @@ function startApp() {
 
   postsEl = document.getElementById("posts");
 
-  attachEvents();
-  loadPosts();
-  loadStories();
-  setupScrollSnap();
+ loadPosts();
+loadStories();
+setupScrollSnap();
+
+setTimeout(attachEvents, 0);
 }
 
 async function createPost() {
@@ -4372,25 +4397,22 @@ window.openStory = function(index){
   setStories(window.currentGroup.stories);
   
   window.storyIndex = 0;
+  
+  window.__storyOpen = true;
 
   const viewer = document.getElementById("storyViewer");
 
+  viewer.classList.add("active");
   viewer.style.display = "block";
-  viewer.style.position = "fixed";
-  viewer.style.inset = "0";
-  viewer.style.width = "100vw";
-  viewer.style.height = "100vh";
-  viewer.style.zIndex = "999999";
-  viewer.style.background = "black";
-  viewer.style.touchAction = "none";
-  viewer.style.pointerEvents = "auto";
 
   document.body.style.overflow = "hidden";
   document.documentElement.style.overflow = "hidden";
 
-  setTimeout(() => {
+  requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
     showStory();
-  }, 0);
+  });
+});
   
   setTimeout(() => {
 
@@ -5365,6 +5387,8 @@ function prevStory() {
 }
 
 window.closeStoryViewer = function () {
+  
+  window.__storyOpen = false;
   
   console.trace("closeStoryViewer fired");
   
