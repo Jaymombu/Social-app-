@@ -1227,37 +1227,40 @@ linear-gradient(
 </div>
   
   <input
-  id="storyReplyInput"
-  style="
-    position:fixed;
-    bottom:20px;
-    left:20px;
-    right:100px;
-    height:45px;
-    border:none;
-    border-radius:25px;
-    padding:0 20px;
-    background:rgba(255,255,255,.12);
-    color:white;
-    z-index:9999999;
-  "
->
+id="storyReplyInput"
+style="
+position:fixed;
+bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
+left:20px;
+right:100px;
+height:45px;
+border:none;
+border-radius:25px;
+padding:0 20px;
+background:rgba(255,255,255,.12);
+color:white;
+z-index:9999999;
+"
+
+> 
 
 <button
-  onclick="sendStoryReply()"
-  style="
-    position:fixed;
-    bottom:20px;
-    right:20px;
-    height:45px;
-    padding:0 20px;
-    border:none;
-    border-radius:25px;
-    background:#1877f2;
-    color:white;
-    z-index:9999999;
-  "
->
+onclick="sendStoryReply()"
+style="
+position:fixed;
+bottom: calc(env(safe-area-inset-bottom, 0px) + 80px);
+right:20px;
+height:45px;
+padding:0 20px;
+border:none;
+border-radius:25px;
+background:#1877f2;
+color:white;
+z-index:9999999;
+"
+
+> 
+
 Send
 </button>
 
