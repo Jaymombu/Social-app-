@@ -753,6 +753,18 @@ linear-gradient(
   display: block;
 }
 
+#storyReplyInput::placeholder{
+  color:white;
+  opacity:1;
+}
+
+#storyReplyInput,
+#storyViewer button[onclick="sendStoryReply()"]{
+    display:block !important;
+    visibility:visible !important;
+    opacity:1 !important;
+}
+
 </style>
 </head>
 <body class="dark">
@@ -1217,24 +1229,24 @@ linear-gradient(
   <input
   id="storyReplyInput"
   style="
-    position:absolute;
+    position:fixed;
     bottom:20px;
     left:20px;
-    right:100px; /* leave room for Send button */
+    right:100px;
     height:45px;
     border:none;
     border-radius:25px;
     padding:0 20px;
-    background:rgba(255,255,255,0.12);
+    background:rgba(255,255,255,.12);
     color:white;
-    z-index:60;
+    z-index:9999999;
   "
 >
 
 <button
   onclick="sendStoryReply()"
   style="
-    position:absolute;
+    position:fixed;
     bottom:20px;
     right:20px;
     height:45px;
@@ -1243,10 +1255,10 @@ linear-gradient(
     border-radius:25px;
     background:#1877f2;
     color:white;
-    z-index:60;
+    z-index:9999999;
   "
 >
-  Send
+Send
 </button>
 
 <div id="storyReplies"
@@ -4410,7 +4422,21 @@ window.openStory = function(index){
 
   requestAnimationFrame(() => {
   requestAnimationFrame(() => {
+
+    const input =
+      document.getElementById("storyReplyInput");
+
+    console.log("reply input", input);
+
+    if (input) {
+      input.style.display = "block";
+      input.style.visibility = "visible";
+      input.style.opacity = "1";
+      input.style.zIndex = "999999";
+    }
+
     showStory();
+
   });
 });
   
@@ -4445,6 +4471,9 @@ window.openStoryAt = function(groupIndex, storyIndex, context = null) {
 
   const viewer = document.getElementById("storyViewer");
 
+viewer.classList.add("active");
+viewer.style.display = "block";
+
   viewer.style.display = "block";
   viewer.style.position = "fixed";
   viewer.style.inset = "0";
@@ -4458,8 +4487,39 @@ window.openStoryAt = function(groupIndex, storyIndex, context = null) {
   document.body.style.overflow = "hidden";
 
   setTimeout(() => {
-    showStory(true);
-  }, 0);
+
+  const input =
+    document.getElementById("storyReplyInput");
+
+  console.log("reply input", input);
+
+  if (input) {
+    input.style.display = "block";
+    input.style.visibility = "visible";
+    input.style.opacity = "1";
+    input.style.zIndex = "999999";
+  }
+
+  showStory(true);
+
+}, 0);
+  
+  setTimeout(() => {
+
+  const input =
+    document.getElementById("storyReplyInput");
+
+  console.log("reply input", input);
+
+  if (input) {
+
+    input.style.display = "block";
+    input.style.visibility = "visible";
+    input.style.opacity = "1";
+
+  }
+
+}, 500);
 };
 
 window.openStoryById = function(storyId, context = null) {
