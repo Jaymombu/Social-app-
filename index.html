@@ -5202,9 +5202,12 @@ ${story.user_id === currentUser?.id ? `
 
 <div
   id="storyViews"
+  onclick="toggleStoryViewers()"
   style="
+    margin-left:auto;
     color:white;
     font-size:14px;
+    cursor:pointer;
   "
 ></div>
 
@@ -5679,6 +5682,8 @@ if (audio) {
 }
 
 window.deleteStory = async function(storyId){
+  
+  alert("Deleting story...");
 
   const ok =
     confirm("Delete this story?");
@@ -5707,10 +5712,14 @@ window.deleteStory = async function(storyId){
       .eq("id", storyId);
 
   if (error) {
-    console.log(error);
-    alert(error.message);
-    return;
-  }
+
+  alert(
+    "Delete failed: " +
+    JSON.stringify(error)
+  );
+
+  return;
+}
 
   closeStoryViewer();
 
