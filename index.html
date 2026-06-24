@@ -765,63 +765,24 @@ linear-gradient(
     opacity:1 !important;
 }
 
-#storyBottomBar{
-  position:fixed;
-  left:10px;
-  right:10px;
-  bottom:calc(env(safe-area-inset-bottom, 0px) + 12px);
-
-  display:flex;
-  align-items:center;
-  gap:6px;
-
-  z-index:9999999;
-}
-
-#storyReplyInput{
-  flex:1;
-  height:42px;
-
-  border:none;
-  border-radius:999px;
-
-  padding:0 15px;
-
-  background:rgba(255,255,255,.12);
-  backdrop-filter:blur(10px);
-
-  color:white;
-  outline:none;
-}
-
-#storyBottomBar button{
-  height:42px;
-
-  border:none;
-  border-radius:999px;
-
-  background:rgba(255,255,255,.15);
-
-  color:white;
-
-  padding:0 12px;
-}
-
-#storyBottomBar button:first-of-type{
-  background:#1877f2;
-  font-size:14px;
-  font-weight:600;
-}
-
-:root {
-  --vh: 1vh;
-}
-
 #storyReplyBar {
   position: fixed;
   left: 12px;
   right: 12px;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+
+  bottom: env(safe-area-inset-bottom, 12px);
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 6px;
+
+  border-radius: 999px;
+
+  background: rgba(255,255,255,.12);
+  backdrop-filter: blur(12px);
+
   z-index: 9999999;
 
   transition: transform 0.2s ease;
@@ -1046,8 +1007,8 @@ linear-gradient(
   onclick="openNotifications()"
   style="
     position:fixed;
-    top:12px;
-    right:12px;
+    bottom:150px;
+    right:20px;
 
     width:56px;
     height:56px;
@@ -1350,7 +1311,7 @@ linear-gradient(
     position:absolute;
     left:15px;
     right:15px;
-    bottom:120px;
+    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
 
     color:white;
     max-height:120px;
@@ -1660,6 +1621,8 @@ setVH();
 window.addEventListener("resize", setVH);
 window.addEventListener("orientationchange", setVH);
 
+let lastOffset = 0;
+
 function adjustReplyBar() {
   const bar = document.getElementById("storyReplyBar");
   if (!bar || !window.visualViewport) return;
@@ -1669,16 +1632,15 @@ function adjustReplyBar() {
   const keyboardOffset =
     window.innerHeight - (vv.height + vv.offsetTop);
 
-  const safeOffset = Math.max(keyboardOffset, 0);
+  const target = Math.max(0, keyboardOffset);
 
-  if (safeOffset > 80) {
-    bar.style.transform = `translateY(-${safeOffset}px)`;
-  } else {
-    bar.style.transform = "translateY(0)";
-  }
+  if (Math.abs(target - lastOffset) < 2) return;
+
+  lastOffset = target;
+  bar.style.transform = `translateY(-${target}px)`;
 }
 
-// run once
+// init
 adjustReplyBar();
 
 window.visualViewport?.addEventListener("resize", adjustReplyBar);
@@ -1749,6 +1711,8 @@ async function initAuth() {
 initAuth();
 
 // STORY VARIABLES
+window.currentStoryVideo = null;
+
 window.storyList = window.storyList || [];
 window.__storyMap = new Map();
 window.storyTimer = null;
@@ -4887,7 +4851,7 @@ window.pauseStory = function() {
 
   if (window.storyPaused) return;
 
-  window.storyPaused = true;
+  window.storyPaused = true; // ADD THIS
 
   clearTimeout(window.storyTimer);
 
@@ -4902,19 +4866,17 @@ window.pauseStory = function() {
 
   const video =
     document.getElementById("storyVideo");
-    
 
   if (video) {
     video.pause();
   }
-  
+
   const audio =
-  document.getElementById("storyAudio");
+    document.getElementById("storyAudio");
 
-if (audio) {
-  audio.pause();
-}
-
+  if (audio) {
+    audio.pause();
+  }
 };
 
 window.resumeStory = function() {
@@ -4924,43 +4886,39 @@ window.resumeStory = function() {
   window.storyPaused = false;
 
   const video =
-  document.getElementById(
-    "storyVideo"
-  );
-
-if (video) {
-  video.muted = window.storyMuted;
-}
-
-// sync button too
-const btn = document.getElementById("storyMuteBtn");
-if (btn) {
-  btn.textContent = window.storyMuted ? "🔇" : "🔊";
-}
+    document.getElementById("storyVideo");
 
   if (video) {
-  video.play();
-}
+    video.muted = window.storyMuted;
+    video.play();
+  }
 
-const audio =
-  document.getElementById("storyAudio");
+  const btn =
+    document.getElementById("storyMuteBtn");
 
-if (
-  audio &&
-  audio.src &&
-  !window.storyMuted
-) {
-  audio.play().catch(() => {});
-}
+  if (btn) {
+    btn.textContent =
+      window.storyMuted ? "🔇" : "🔊";
+  }
 
-clearTimeout(window.storyTimer);
+  const audio =
+    document.getElementById("storyAudio");
 
-window.storyTimer =
-  setTimeout(
-    nextStory,
-    window.storyRemaining
-  );
+  if (
+    audio &&
+    audio.src &&
+    !window.storyMuted
+  ) {
+    audio.play().catch(() => {});
+  }
 
+  clearTimeout(window.storyTimer);
+
+  window.storyTimer =
+    setTimeout(
+      nextStory,
+      window.storyRemaining
+    );
 };
 
 function keepUIVisible() {
@@ -6217,58 +6175,34 @@ async function loadStoryViewers(storyId) {
 
 window.toggleStoryViewers = async function () {
 
-  const story =
-  window.storyList?.[window.storyIndex];
-
-if (!story) return;
-
-  const panel = document.getElementById("storyViewersPanel");
+  const panel =
+    document.getElementById("storyViewersPanel");
 
   if (!panel) return;
 
-  const isOpen = getComputedStyle(panel).display !== "none";
+  const isOpen =
+    getComputedStyle(panel).display !== "none";
 
-  // CLOSE
   if (isOpen) {
+
     panel.style.display = "none";
-    resumeStory();
+
+    window.resumeStory();
+
     return;
   }
 
-  // OPEN
-  pauseStory();
+  const story =
+    window.storyList?.[window.storyIndex];
+
+  if (!story) return;
+
+  window.pauseStory();
 
   await loadStoryViewers(story.id);
 
   panel.style.display = "block";
 };
-
-function pauseStory() {
-  storyPausedByUI = true;
-
-  const video = document.querySelector("#storyContent video");
-  const audio = document.getElementById("storyAudio");
-
-  video?.pause();
-  audio?.pause();
-
-  clearTimeout(window.storyTimer);
-  window.storyTimer = null;
-}
-
-function resumeStory() {
-  if (!storyPausedByUI) return;
-
-  storyPausedByUI = false;
-
-  const video = document.querySelector("#storyContent video");
-  const audio = document.getElementById("storyAudio");
-
-  video?.play().catch(() => {});
-  audio?.play().catch(() => {});
-
-  window.startStoryTimer?.();
-}
 
 function listenToStoryReplies(storyId) {
 
