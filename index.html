@@ -821,11 +821,11 @@ linear-gradient(
   position: fixed;
   left: 12px;
   right: 12px;
-
-  /* IMPORTANT FIX */
-  bottom: calc(var(--vh, 1vh) * 2);
-
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
   z-index: 9999999;
+
+  transition: transform 0.2s ease;
+  will-change: transform;
 }
 </style>
 </head>
@@ -1367,14 +1367,14 @@ linear-gradient(
   position:fixed;
   left:12px;
   right:12px;
-
-  bottom: calc(var(--vh, 1vh) * 2);
+  bottom:0;
 
   display:flex;
   align-items:center;
   gap:8px;
 
   padding:6px;
+  padding-bottom: env(safe-area-inset-bottom, 12px);
 
   border-radius:999px;
 
@@ -1385,7 +1385,6 @@ linear-gradient(
 "
 >
   
-
   <!-- INPUT -->
   <input
     id="storyReplyInput"
@@ -1661,36 +1660,31 @@ setVH();
 window.addEventListener("resize", setVH);
 window.addEventListener("orientationchange", setVH);
 
-window.visualViewport?.addEventListener("resize", () => {
-  const bar = document.getElementById("storyReplyBar");
-  if (!bar) return;
-
-  const keyboardOpen =
-    window.visualViewport.height < window.innerHeight * 0.75;
-
-  bar.style.transform = keyboardOpen
-    ? "translateY(-70px)"
-    : "translateY(0)";
-});
-
 function adjustReplyBar() {
   const bar = document.getElementById("storyReplyBar");
   if (!bar || !window.visualViewport) return;
 
-  const keyboardOpen =
-    window.visualViewport.height < window.innerHeight * 0.75;
+  const vv = window.visualViewport;
 
-  bar.style.transform = keyboardOpen
-    ? "translateY(-70px)"
-    : "translateY(0)";
+  const keyboardOffset =
+    window.innerHeight - (vv.height + vv.offsetTop);
+
+  const safeOffset = Math.max(keyboardOffset, 0);
+
+  if (safeOffset > 80) {
+    bar.style.transform = `translateY(-${safeOffset}px)`;
+  } else {
+    bar.style.transform = "translateY(0)";
+  }
 }
 
-// run once immediately
+// run once
 adjustReplyBar();
 
-// listen for keyboard / viewport changes
 window.visualViewport?.addEventListener("resize", adjustReplyBar);
 window.visualViewport?.addEventListener("scroll", adjustReplyBar);
+window.addEventListener("resize", adjustReplyBar);
+window.addEventListener("orientationchange", adjustReplyBar);
 
   console.log("SCRIPT START");
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -1767,6 +1761,7 @@ let touchEndX = 0;
 console.log("🚀 Starting app...");
 
 // ✅ GLOBAL SESSION
+let storyPausedByUI = false;
 let session = null;
 
 let currentProfileId = null;
@@ -6223,23 +6218,57 @@ async function loadStoryViewers(storyId) {
 window.toggleStoryViewers = async function () {
 
   const story =
-    window.storyList[window.storyIndex];
+  window.storyList?.[window.storyIndex];
 
-  const panel =
-    document.getElementById("storyViewersPanel");
+if (!story) return;
+
+  const panel = document.getElementById("storyViewersPanel");
 
   if (!panel) return;
 
+  const isOpen = getComputedStyle(panel).display !== "none";
+
   // CLOSE
-  if (panel.style.display === "block") {
+  if (isOpen) {
     panel.style.display = "none";
+    resumeStory();
     return;
   }
+
+  // OPEN
+  pauseStory();
 
   await loadStoryViewers(story.id);
 
   panel.style.display = "block";
 };
+
+function pauseStory() {
+  storyPausedByUI = true;
+
+  const video = document.querySelector("#storyContent video");
+  const audio = document.getElementById("storyAudio");
+
+  video?.pause();
+  audio?.pause();
+
+  clearTimeout(window.storyTimer);
+  window.storyTimer = null;
+}
+
+function resumeStory() {
+  if (!storyPausedByUI) return;
+
+  storyPausedByUI = false;
+
+  const video = document.querySelector("#storyContent video");
+  const audio = document.getElementById("storyAudio");
+
+  video?.play().catch(() => {});
+  audio?.play().catch(() => {});
+
+  window.startStoryTimer?.();
+}
 
 function listenToStoryReplies(storyId) {
 
