@@ -635,12 +635,14 @@ linear-gradient(
 #storyViewer{
   position:fixed;
   inset:0;
+
   width:100vw;
-  height:100vh;
-  z-index:999999;
+  height:100dvh; /* dynamic viewport */
+
   background:black;
-  touch-action:none;
-  overscroll-behavior:none;
+  z-index:999999;
+
+  overflow:hidden;
 }
 
 #storyViewer *{
@@ -765,26 +767,21 @@ linear-gradient(
     opacity:1 !important;
 }
 
-#storyReplyBar {
-  position: fixed;
-  left: 12px;
-  right: 12px;
+#storyReplyBar{
+  position:fixed;
+  left:12px;
+  right:12px;
+  bottom:calc(env(safe-area-inset-bottom) + 60px);
+}
 
-  bottom: 16px;
+#storyReplies{
+  bottom: calc(env(safe-area-inset-bottom) + 80px);
+}
 
-  display: flex;
-  align-items: center;
-  gap: 8px;
-
-  padding: 6px;
-  padding-bottom: env(safe-area-inset-bottom, 6px);
-
-  border-radius: 999px;
-
-  background: rgba(255,255,255,.12);
-  backdrop-filter: blur(12px);
-
-  z-index: 2147483647;
+#storyReplyBar{
+  display:flex !important;
+  visibility:visible !important;
+  opacity:1 !important;
 }
 </style>
 </head>
@@ -1306,17 +1303,17 @@ linear-gradient(
 <!-- STORY REPLIES (kept above bar) -->
 <div id="storyReplies"
   style="
-    position:absolute;
+    position:fixed;
     left:15px;
     right:15px;
-    bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+   bottom: calc(env(safe-area-inset-bottom) + 80px);
 
     color:white;
     max-height:120px;
     overflow-y:auto;
 
     font-size:14px;
-   z-index: 2147483647;
+    z-index: 999999;
   ">
 </div>
 
@@ -1327,21 +1324,21 @@ linear-gradient(
   left:12px;
   right:12px;
 
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  bottom: calc(env(safe-area-inset-bottom) + 60px);
 
   display:flex;
   align-items:center;
   gap:8px;
 
   padding:6px;
-  padding-bottom: env(safe-area-inset-bottom, 16px);
+  
 
   border-radius:999px;
 
   background:rgba(255,255,255,.12);
   backdrop-filter:blur(12px);
 
- z-index: 2147483647;
+ z-index: 999999;
 "
 >
   
@@ -1460,7 +1457,7 @@ linear-gradient(
   style="
     position:absolute;
     right:20px;
-    bottom:90px;
+    bottom:120px;
 
     width:50px;
     height:50px;
