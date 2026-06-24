@@ -770,20 +770,21 @@ linear-gradient(
   left: 12px;
   right: 12px;
 
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  bottom: 16px;
 
   display: flex;
   align-items: center;
   gap: 8px;
 
   padding: 6px;
+  padding-bottom: env(safe-area-inset-bottom, 6px);
 
   border-radius: 999px;
 
   background: rgba(255,255,255,.12);
   backdrop-filter: blur(12px);
 
-  z-index: 9999999;
+  z-index: 2147483647;
 }
 </style>
 </head>
@@ -1308,14 +1309,14 @@ linear-gradient(
     position:absolute;
     left:15px;
     right:15px;
-    bottom: calc(160px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(120px + env(safe-area-inset-bottom, 0px));
 
     color:white;
     max-height:120px;
     overflow-y:auto;
 
     font-size:14px;
-    z-index:999999;
+   z-index: 2147483647;
   ">
 </div>
 
@@ -1326,21 +1327,21 @@ linear-gradient(
   left:12px;
   right:12px;
 
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
 
   display:flex;
   align-items:center;
   gap:8px;
 
   padding:6px;
-  padding-bottom: env(safe-area-inset-bottom, 12px);
+  padding-bottom: env(safe-area-inset-bottom, 16px);
 
   border-radius:999px;
 
   background:rgba(255,255,255,.12);
   backdrop-filter:blur(12px);
 
-  z-index:9999999;
+ z-index: 2147483647;
 "
 >
   
