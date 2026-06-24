@@ -770,7 +770,7 @@ linear-gradient(
   left: 12px;
   right: 12px;
 
-  bottom: env(safe-area-inset-bottom, 12px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
 
   display: flex;
   align-items: center;
@@ -784,9 +784,6 @@ linear-gradient(
   backdrop-filter: blur(12px);
 
   z-index: 9999999;
-
-  transition: transform 0.2s ease;
-  will-change: transform;
 }
 </style>
 </head>
@@ -1311,7 +1308,7 @@ linear-gradient(
     position:absolute;
     left:15px;
     right:15px;
-    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(160px + env(safe-area-inset-bottom, 0px));
 
     color:white;
     max-height:120px;
@@ -1328,7 +1325,8 @@ linear-gradient(
   position:fixed;
   left:12px;
   right:12px;
-  bottom:0;
+
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
 
   display:flex;
   align-items:center;
@@ -1609,44 +1607,6 @@ linear-gradient(
 </div>
 
 <script type="module">
-
-function setVH() {
-  document.documentElement.style.setProperty(
-    "--vh",
-    window.innerHeight * 0.01 + "px"
-  );
-}
-
-setVH();
-window.addEventListener("resize", setVH);
-window.addEventListener("orientationchange", setVH);
-
-let lastOffset = 0;
-
-function adjustReplyBar() {
-  const bar = document.getElementById("storyReplyBar");
-  if (!bar || !window.visualViewport) return;
-
-  const vv = window.visualViewport;
-
-  const keyboardOffset =
-    window.innerHeight - (vv.height + vv.offsetTop);
-
-  const target = Math.max(0, keyboardOffset);
-
-  if (Math.abs(target - lastOffset) < 2) return;
-
-  lastOffset = target;
-  bar.style.transform = `translateY(-${target}px)`;
-}
-
-// init
-adjustReplyBar();
-
-window.visualViewport?.addEventListener("resize", adjustReplyBar);
-window.visualViewport?.addEventListener("scroll", adjustReplyBar);
-window.addEventListener("resize", adjustReplyBar);
-window.addEventListener("orientationchange", adjustReplyBar);
 
   console.log("SCRIPT START");
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
