@@ -812,6 +812,21 @@ linear-gradient(
   font-size:14px;
   font-weight:600;
 }
+
+:root {
+  --vh: 1vh;
+}
+
+#storyReplyBar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+
+  /* IMPORTANT FIX */
+  bottom: calc(var(--vh, 1vh) * 2);
+
+  z-index: 9999999;
+}
 </style>
 </head>
 <body class="dark">
@@ -1239,20 +1254,29 @@ linear-gradient(
     "
   ></div>
   
-  <div
-  id="storyTopBar"
-
+<div id="storyTopBar"
+  onclick="toggleStoryViewers()"
   style="
-    position:absolute;
-    top:40px;
-    left:15px;
-    display:flex;
-    align-items:center;
-    gap:10px;
-    z-index:40;
-    color:white;
-  "
-></div>
+  position:absolute;
+  top:40px;
+  left:15px;
+  right:15px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  z-index:40;
+  color:white;
+  cursor:pointer;
+  flex-wrap:nowrap;
+"
+
+  <!-- existing user info gets injected here -->
+  
+  <div style="font-size:12px;opacity:0.7;">
+    Tap to view 👁
+  </div>
+
+</div>
 
   <!-- CONTENT -->
 <div
@@ -1275,6 +1299,50 @@ linear-gradient(
 
 </div>
 
+<div
+  id="storyViewersPanel"
+  style="
+    display:none;
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    height:55%;
+    background:#111;
+    z-index:99999999;
+    border-radius:20px 20px 0 0;
+    overflow:auto;
+  "
+>
+
+  <div
+    style="
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:12px;
+      border-bottom:1px solid #333;
+      color:white;
+    "
+  >
+    <b>👁 Viewers</b>
+
+    <button
+      onclick="closeStoryViewers()"
+      style="
+        background:none;
+        border:none;
+        color:white;
+        font-size:22px;
+      "
+    >
+      ✕
+    </button>
+  </div>
+
+  <div id="storyViewersContent"></div>
+
+</div>
   
 <!-- STORY REPLIES (kept above bar) -->
 <div id="storyReplies"
@@ -1296,43 +1364,27 @@ linear-gradient(
 <!-- SINGLE BOTTOM CONTROL BAR -->
 <div id="storyReplyBar"
   style="
-    position:fixed;
-    left:12px;
-    right:12px;
-    bottom:calc(env(safe-area-inset-bottom, 0px) + 15px);
+  position:fixed;
+  left:12px;
+  right:12px;
 
-    display:flex;
-    align-items:center;
-    gap:8px;
+  bottom: calc(var(--vh, 1vh) * 2);
 
-    padding:6px;
+  display:flex;
+  align-items:center;
+  gap:8px;
 
-    border-radius:999px;
+  padding:6px;
 
-    background:rgba(255,255,255,.12);
-    backdrop-filter:blur(12px);
+  border-radius:999px;
 
-    z-index:9999999;
-  "
+  background:rgba(255,255,255,.12);
+  backdrop-filter:blur(12px);
+
+  z-index:9999999;
+"
 >
   
-  <div
-  id="storyViewerList"
-  style="
-    position:absolute;
-    bottom:80px;
-    left:10px;
-    right:10px;
-    max-height:200px;
-    overflow:auto;
-    color:white;
-    display:none;
-    z-index:9999;
-    background:rgba(0,0,0,.6);
-    border-radius:12px;
-    padding:10px;
-  "
-></div>
 
   <!-- INPUT -->
   <input
@@ -1597,6 +1649,48 @@ linear-gradient(
 </div>
 
 <script type="module">
+
+function setVH() {
+  document.documentElement.style.setProperty(
+    "--vh",
+    window.innerHeight * 0.01 + "px"
+  );
+}
+
+setVH();
+window.addEventListener("resize", setVH);
+window.addEventListener("orientationchange", setVH);
+
+window.visualViewport?.addEventListener("resize", () => {
+  const bar = document.getElementById("storyReplyBar");
+  if (!bar) return;
+
+  const keyboardOpen =
+    window.visualViewport.height < window.innerHeight * 0.75;
+
+  bar.style.transform = keyboardOpen
+    ? "translateY(-70px)"
+    : "translateY(0)";
+});
+
+function adjustReplyBar() {
+  const bar = document.getElementById("storyReplyBar");
+  if (!bar || !window.visualViewport) return;
+
+  const keyboardOpen =
+    window.visualViewport.height < window.innerHeight * 0.75;
+
+  bar.style.transform = keyboardOpen
+    ? "translateY(-70px)"
+    : "translateY(0)";
+}
+
+// run once immediately
+adjustReplyBar();
+
+// listen for keyboard / viewport changes
+window.visualViewport?.addEventListener("resize", adjustReplyBar);
+window.visualViewport?.addEventListener("scroll", adjustReplyBar);
 
   console.log("SCRIPT START");
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm";
@@ -5152,10 +5246,7 @@ if (
     );
     
     
-   document.getElementById(
-  "storyTopBar"
-).innerHTML = `
-
+   document.getElementById("storyTopBar").innerHTML = `
   <img
     src="${
       story.avatar_url ||
@@ -5171,46 +5262,52 @@ if (
     "
   >
 
- <div>
-  <div style="font-weight:bold">
-    ${story.name}
+  <div style="display:flex;flex-direction:column;">
+    <div style="font-weight:bold">
+      ${story.name}
+    </div>
+
+    <div style="font-size:12px;opacity:0.7;">
+      Story
+    </div>
+
+    <div style="font-size:11px;opacity:0.6;">
+      Tap to view 👁
+    </div>
   </div>
 
-  <div style="
-    font-size:12px;
-    opacity:0.7;
-  ">
-    Story
-  </div>
-</div>
+  ${
+    story.user_id === currentUser?.id
+      ? `
+        <button
+          onclick="deleteStory('${story.id}')"
+          style="
+            margin-left:auto;
+            background:none;
+            border:none;
+            color:white;
+            font-size:20px;
+            cursor:pointer;
+          "
+        >
+          🗑
+        </button>
+      `
+      : ""
+  }
 
-${story.user_id === currentUser?.id ? `
-  <button
-    onclick="deleteStory('${story.id}')"
+  <div
+    id="storyViews"
+    onclick="toggleStoryViewers()"
     style="
       margin-left:auto;
-      background:none;
-      border:none;
       color:white;
-      font-size:20px;
+      font-size:14px;
       cursor:pointer;
+      min-width:40px;
+      text-align:right;
     "
-  >
-    🗑
-  </button>
-` : ""}
-
-<div
-  id="storyViews"
-  onclick="toggleStoryViewers()"
-  style="
-    margin-left:auto;
-    color:white;
-    font-size:14px;
-    cursor:pointer;
-  "
-></div>
-
+  ></div>
 `;
 
 // REAL-TIME STORY VIEWS
@@ -5682,51 +5779,44 @@ if (audio) {
 }
 
 window.deleteStory = async function(storyId){
-  
-  alert("Deleting story...");
 
-  const ok =
-    confirm("Delete this story?");
-
+  const ok = confirm("Delete this story?");
   if (!ok) return;
 
-  await supabase
-    .from("story_views")
-    .delete()
-    .eq("story_id", storyId);
-
-  await supabase
-    .from("story_replies")
-    .delete()
-    .eq("story_id", storyId);
-
-  await supabase
-    .from("story_reactions")
-    .delete()
-    .eq("story_id", storyId);
-
-  const { error } =
+  const { error, data } =
     await supabase
       .from("stories")
       .delete()
-      .eq("id", storyId);
+      .eq("id", storyId)
+      .select();
 
   if (error) {
+    alert(error.message);
+    return;
+  }
+  
+  window.storyList =
+  window.storyList.filter(
+    s => s.id !== storyId
+  );
+  
+  if (window.storyList.length === 0) {
+  closeStoryViewer();
+} else {
+  window.storyIndex = 0;
+  showStory();
+}
 
   alert(
-    "Delete failed: " +
-    JSON.stringify(error)
+    "Deleted rows: " +
+    (data?.length || 0)
   );
-
-  return;
-}
 
   closeStoryViewer();
 
   if (typeof loadStories === "function") {
     loadStories();
   }
-
 };
 
 window.closeStoryViewer = function () {
@@ -5984,6 +6074,17 @@ if (audio && audio.src) {
 
 };
 
+window.closeStoryViewers = function () {
+
+  const panel =
+    document.getElementById("storyViewersPanel");
+
+  if (panel) {
+    panel.style.display = "none";
+  }
+
+};
+
 function showHeart(){
 
   const heart =
@@ -6056,12 +6157,15 @@ async function loadStoryViewers(storyId) {
     return;
   }
 
+  const box =
+    document.getElementById("storyViewersContent");
+
+  if (!box) return;
+
   if (!views?.length) {
 
-    document.getElementById(
-      "storyViewerList"
-    ).innerHTML =
-      "<div>No viewers yet</div>";
+    box.innerHTML =
+      "<div style='color:white'>No viewers yet</div>";
 
     return;
   }
@@ -6069,29 +6173,18 @@ async function loadStoryViewers(storyId) {
   const ids =
     views.map(v => v.viewer_id);
 
-  const {
-    data: profiles
-  } = await supabase
+  const { data: profiles } =
+    await supabase
       .from("profiles")
-      .select(`
-        id,
-        name,
-        avatar_url
-      `)
+      .select("id, name, avatar_url")
       .in("id", ids);
-
-  const box =
-    document.getElementById(
-      "storyViewerList"
-    );
-
-  if (!box) return;
 
   box.innerHTML = `
 
     <div style="
       font-weight:bold;
       margin-bottom:10px;
+      color:white;
     ">
       👁 ${views.length} Views
     </div>
@@ -6103,14 +6196,11 @@ async function loadStoryViewers(storyId) {
         align-items:center;
         gap:10px;
         margin-bottom:8px;
+        color:white;
       ">
 
         <img
-          src="${
-            p.avatar_url ||
-            "https://via.placeholder.com/40"
-          }"
-
+          src="${p.avatar_url || "https://via.placeholder.com/40"}"
           style="
             width:40px;
             height:40px;
@@ -6130,36 +6220,25 @@ async function loadStoryViewers(storyId) {
   `;
 }
 
-window.toggleStoryViewers =
-  async function() {
+window.toggleStoryViewers = async function () {
 
   const story =
-    window.storyList[
-      window.storyIndex
-    ];
+    window.storyList[window.storyIndex];
 
-  const box =
-    document.getElementById(
-      "storyViewerList"
-    );
+  const panel =
+    document.getElementById("storyViewersPanel");
 
-  if (!box) return;
+  if (!panel) return;
 
-  if (
-    box.style.display === "block"
-  ) {
-
-    box.style.display = "none";
+  // CLOSE
+  if (panel.style.display === "block") {
+    panel.style.display = "none";
     return;
-
   }
 
-  await loadStoryViewers(
-    story.id
-  );
+  await loadStoryViewers(story.id);
 
-  box.style.display = "block";
-
+  panel.style.display = "block";
 };
 
 function listenToStoryReplies(storyId) {
