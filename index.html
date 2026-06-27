@@ -741,18 +741,19 @@ linear-gradient(
   100% { opacity:0; transform:translate(-50%, -20px); }
 }
 
-#storyViewer {
-  display: none;
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  background: black;
-  z-index: 999999;
+#storyViewer{
+  display:none;
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100dvh;
+  background:black;
+  z-index:999999;
+  overflow:hidden;
 }
 
-#storyViewer.active {
-  display: block;
+#storyViewer.active{
+  display:flex;
 }
 
 #storyReplyInput::placeholder{
@@ -768,14 +769,20 @@ linear-gradient(
 }
 
 #storyReplyBar{
-  position:fixed;
-  left:12px;
-  right:12px;
-  bottom: calc(env(safe-area-inset-bottom) + 85px);
+    position:fixed;
+    left:12px;
+    right:12px;
+    bottom:max(16px, calc(env(safe-area-inset-bottom) + 85px));
 }
 
 #storyReplies{
-  bottom: calc(env(safe-area-inset-bottom) + 155px);
+    bottom:max(86px, calc(env(safe-area-inset-bottom) + 155px));
+}
+
+#storyMuteBtn{
+    position:fixed;
+    right:20px;
+    bottom:max(80px, calc(env(safe-area-inset-bottom) + 150px));
 }
 
 #storyReplyBar{
@@ -783,6 +790,7 @@ linear-gradient(
   visibility:visible !important;
   opacity:1 !important;
 }
+
 </style>
 </head>
 <body class="dark">
@@ -1183,13 +1191,13 @@ linear-gradient(
 <!-- STORY VIEWER -->
 <div
   id="storyViewer"
-
   style="
     display:none;
     position:fixed;
     inset:0;
     background:black;
     z-index:999999;
+    flex-direction:column;
   "
 >
 
@@ -1210,21 +1218,23 @@ linear-gradient(
     "
   ></div>
   
-<div id="storyTopBar"
+<div
+  id="storyTopBar"
   onclick="toggleStoryViewers()"
   style="
-  position:absolute;
-  top:40px;
-  left:15px;
-  right:15px;
-  display:flex;
-  align-items:center;
-  gap:10px;
-  z-index:40;
-  color:white;
-  cursor:pointer;
-  flex-wrap:nowrap;
-"
+    position:absolute;
+    top:40px;
+    left:15px;
+    right:15px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    z-index:40;
+    color:white;
+    cursor:pointer;
+    flex-wrap:nowrap;
+  "
+>
 
   <!-- existing user info gets injected here -->
   
@@ -1306,7 +1316,6 @@ linear-gradient(
     position:fixed;
     left:15px;
     right:15px;
-   bottom: calc(env(safe-area-inset-bottom) + 155px);
 
     color:white;
     max-height:120px;
@@ -1323,8 +1332,6 @@ linear-gradient(
   position:fixed;
   left:12px;
   right:12px;
-
-  bottom: calc(env(safe-area-inset-bottom) + 85px);
 
   display:flex;
   align-items:center;
@@ -1394,7 +1401,7 @@ linear-gradient(
       border-radius:50%;
       background:none;
       font-size:24px;
-      color:none;
+      color:white;
     "
   >
     ❤️
@@ -1410,7 +1417,7 @@ linear-gradient(
       border-radius:50%;
       background:none;
       font-size:24px;
-      color:none;
+      color:white;
     "
   >
     🔥
@@ -1426,7 +1433,7 @@ linear-gradient(
       border-radius:50%;
       background:none;
       font-size:24px;
-      color:none;
+      color:white;
     "
   >
     😂
@@ -1442,7 +1449,7 @@ linear-gradient(
       border-radius:50%;
       background:none;
       font-size:24px;
-      color:none;
+      color:white;
     "
   >
     😍
@@ -1455,9 +1462,9 @@ linear-gradient(
   id="storyMuteBtn"
   onclick="toggleStorySound()"
   style="
-    position:absolute;
+    position:fixed;
     right:20px;
-    bottom:120px;
+    
 
     width:50px;
     height:50px;
@@ -1725,20 +1732,17 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
 function adjustStoryBar() {
   const bar = document.getElementById("storyReplyBar");
 
-  if (window.visualViewport) {
-    const offset =
-      window.innerHeight - window.visualViewport.height;
+  if (!bar || !window.visualViewport) return;
 
-    bar.style.bottom = (offset + 16) + "px";
-  }
+  const offset = window.innerHeight - window.visualViewport.height;
+
+  bar.style.bottom = (offset + 16) + "px";
 }
 
-window.visualViewport?.addEventListener(
-  "resize",
-  adjustStoryBar
-);
+window.addEventListener("load", adjustStoryBar);
 
-adjustStoryBar();
+window.visualViewport?.addEventListener("resize", adjustStoryBar);
+window.addEventListener("resize", adjustStoryBar);
 
 // ======================
 // THEME 
@@ -2756,6 +2760,12 @@ function startApp() {
  loadPosts();
 loadStories();
 setupScrollSnap();
+
+adjustStoryBar();
+
+if (session && currentUser) {
+    registerPush();
+}
 
 setTimeout(attachEvents, 0);
 }
@@ -4563,9 +4573,9 @@ window.openStory = function(index){
 
   window.activeUserIndex = index;
   window.currentGroup = window.storyGroups[index];
-  setStories(window.currentGroup.stories);
-  
   window.storyIndex = 0;
+
+setStories(window.currentGroup.stories);
   
   window.__storyOpen = true;
 
@@ -4628,8 +4638,7 @@ window.openStoryAt = function(groupIndex, storyIndex, context = null) {
 
   const viewer = document.getElementById("storyViewer");
 
-viewer.classList.add("active");
-viewer.style.display = "block";
+  viewer.classList.add("active");
 
   viewer.style.display = "block";
   viewer.style.position = "fixed";
@@ -5865,22 +5874,24 @@ window.sendStoryReply = async function () {
   // GET STORY OWNER
 if (story.user_id !== user.id) {
 
-  await supabase
-    .from("notifications")
-    .insert([{
-      user_id: story.user_id, // receiver
+ const { data: profile } = await supabase
+  .from("profiles")
+  .select("name, avatar_url")
+  .eq("id", user.id)
+  .single();
 
-      sender_id: user.id,
-
-      type: "story_reply",
-
-      message: `💬 Replied to your story: ${reply}`,
-
-      story_id: story.id,
-
-      created_at: new Date()
-    }]);
-
+await supabase
+  .from("notifications")
+  .insert([{
+    user_id: story.user_id,
+    sender_id: user.id,
+    username: profile.name,
+    avatar_url: profile.avatar_url,
+    type: "story_reply",
+    message: `💬 Replied to your story: ${reply}`,
+    story_id: story.id,
+    created_at: new Date()
+  }]);
 }
 
   input.value = "";
@@ -5934,16 +5945,24 @@ window.reactStory = async function(emoji){
   // NOTIFY OWNER
   if (story.user_id !== user.id) {
 
-    await supabase
-      .from("notifications")
-      .insert([{
-        user_id: story.user_id,
-        sender_id: user.id,
-        type: "story_reaction",
-        message: `${emoji} reacted to your story`,
-        story_id: story.id,
-        created_at: new Date()
-      }]);
+    const { data: profile } = await supabase
+  .from("profiles")
+  .select("name, avatar_url")
+  .eq("id", user.id)
+  .single();
+
+await supabase
+  .from("notifications")
+  .insert([{
+    user_id: story.user_id,
+    sender_id: user.id,
+    username: profile.name,
+    avatar_url: profile.avatar_url,
+    type: "story_reaction",
+    message: `${emoji} reacted to your story`,
+    story_id: story.id,
+    created_at: new Date()
+  }]);
 
   }
 
@@ -6068,7 +6087,7 @@ async function loadStoryReplies(storyId) {
 
   box.innerHTML = (data || []).map(r => `
     <div style="margin-bottom:6px;">
-      <b>${(r.sender_id || "").slice(0,6)}:</b> ${r.reply}
+      <b>${(r.sender_id || "").slice(0,6)}:</b> ${escapeHtml(r.reply)}
     </div>
   `).join("");
 }
@@ -6259,16 +6278,8 @@ if (!notifications.length) {
   return;
 }
 console.log("RENDERING:", notifications);
-list.innerHTML = notifications.map(n => `
-  <div style="
-    padding:15px;
-    border-bottom:1px solid #333;
-    color:white;
-  ">
-    ${n.type}
-    ${n.username || ""}
-  </div>
-`).join("");
+notificationCache = notifications;
+renderNotifications(notificationCache);
 }
 
 window.openNotification = async function(id) {
@@ -6784,9 +6795,16 @@ window.deleteMessage = deleteMessage;
 
 async function registerPush() {
 
-  if (!("serviceWorker" in navigator)) return;
+  if (
+    !("serviceWorker" in navigator) ||
+    !("Notification" in window)
+  ) {
+    console.log("Push notifications not supported.");
+    return;
+  }
 
   const permission = await Notification.requestPermission();
+
   if (permission !== "granted") return;
 
   const reg = await navigator.serviceWorker.register("./sw.js");
