@@ -4732,6 +4732,8 @@ window.openStoryById = function(storyId, context = null) {
   console.warn("Story not found:", storyId);
 };
 
+let replyOffset = 20;
+
 let startY = 0;
 let startX = 0;
 
@@ -6068,12 +6070,23 @@ function showHeart(){
 }
 
 async function loadStoryReplies(storyId) {
+  
+  replyOffset = 20;
 
   const { data, error } = await supabase
-    .from("story_replies")
-    .select("*")
-    .eq("story_id", storyId)
-    .order("created_at", { ascending: true });
+  .from("story_replies")
+  .select(`
+    reply,
+    created_at,
+    sender_id,
+    profiles:profiles(
+      name,
+      avatar_url
+    )
+  `)
+  .eq("story_id", storyId)
+  .order("created_at", { ascending: true })
+  .range(0, 19);
 
   const box =
     document.getElementById("storyReplies");
@@ -6085,11 +6098,20 @@ async function loadStoryReplies(storyId) {
     return;
   }
 
-  box.innerHTML = (data || []).map(r => `
-    <div style="margin-bottom:6px;">
-      <b>${(r.sender_id || "").slice(0,6)}:</b> ${escapeHtml(r.reply)}
-    </div>
-  `).join("");
+  if (!data?.length) {
+    box.innerHTML = `
+      <div style="
+        color:#999;
+        text-align:center;
+        padding:10px;
+      ">
+        No replies yet
+      </div>
+    `;
+    return;
+  }
+
+  renderReplies(data);
 }
 
 async function loadStoryViewers(storyId) {
@@ -6211,8 +6233,26 @@ function listenToStoryReplies(storyId) {
         table: "story_replies",
         filter: `story_id=eq.${storyId}`
       },
-      () => {
-        loadStoryReplies(storyId);
+      async (payload) => {
+
+        const { data } = await supabase
+          .from("story_replies")
+          .select(`
+            reply,
+            created_at,
+            sender_id,
+            profiles:profiles(
+              name,
+              avatar_url
+            )
+          `)
+          .eq("id", payload.new.id)
+          .single();
+
+        if (data) {
+          appendReplies([data]);
+        }
+
       }
     )
     .subscribe();
@@ -6768,7 +6808,56 @@ function mergeFromServer(cache, serverData) {
 );
 }
 
+function renderReplies(data) {
 
+  const box = document.getElementById("storyReplies");
+  box.innerHTML = "";
+
+  appendReplies(data);
+}
+
+async function loadMoreReplies(storyId) {
+
+  const { data, error } = await supabase
+    .from("story_replies")
+    .select(`
+      reply,
+      created_at,
+      sender_id,
+      profiles:profiles(
+        name,
+        avatar_url
+      )
+    `)
+    .eq("story_id", storyId)
+    .order("created_at", { ascending: true })
+    .range(replyOffset, replyOffset + 19);
+
+  if (error || !data?.length) return;
+
+  replyOffset += 20;
+
+  appendReplies(data);
+}
+
+function appendReplies(data) {
+  const box = document.getElementById("storyReplies");
+
+  const html = data.map(r => `
+    <div style="display:flex;gap:10px;margin-bottom:10px;">
+      <img src="${r.profiles?.avatar_url || 'https://via.placeholder.com/40'}"
+        style="width:40px;height:40px;border-radius:50%;">
+
+      <div>
+        <b style="color:white">${escapeHtml(r.profiles?.name || "User")}</b>
+        <div style="color:white">${escapeHtml(r.reply)}</div>
+        <small style="color:#888">${formatTime(r.created_at)}</small>
+      </div>
+    </div>
+  `).join("");
+
+  box.insertAdjacentHTML("beforeend", html);
+}
 
 // ========================
 // GLOBAL FUNCTIONS
