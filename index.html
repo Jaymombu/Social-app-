@@ -771,11 +771,11 @@ linear-gradient(
   position:fixed;
   left:12px;
   right:12px;
-  bottom:calc(env(safe-area-inset-bottom) + 60px);
+  bottom: calc(env(safe-area-inset-bottom) + 85px);
 }
 
 #storyReplies{
-  bottom: calc(env(safe-area-inset-bottom) + 80px);
+  bottom: calc(env(safe-area-inset-bottom) + 155px);
 }
 
 #storyReplyBar{
@@ -1306,7 +1306,7 @@ linear-gradient(
     position:fixed;
     left:15px;
     right:15px;
-   bottom: calc(env(safe-area-inset-bottom) + 80px);
+   bottom: calc(env(safe-area-inset-bottom) + 155px);
 
     color:white;
     max-height:120px;
@@ -1324,7 +1324,7 @@ linear-gradient(
   left:12px;
   right:12px;
 
-  bottom: calc(env(safe-area-inset-bottom) + 60px);
+  bottom: calc(env(safe-area-inset-bottom) + 85px);
 
   display:flex;
   align-items:center;
@@ -1721,6 +1721,24 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
 
   safeStart();
 });
+
+function adjustStoryBar() {
+  const bar = document.getElementById("storyReplyBar");
+
+  if (window.visualViewport) {
+    const offset =
+      window.innerHeight - window.visualViewport.height;
+
+    bar.style.bottom = (offset + 16) + "px";
+  }
+}
+
+window.visualViewport?.addEventListener(
+  "resize",
+  adjustStoryBar
+);
+
+adjustStoryBar();
 
 // ======================
 // THEME 
