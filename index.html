@@ -1625,6 +1625,7 @@ window.supabase = supabase;
 
 let currentUser = null;
 let unreadCount = 0;
+
 let notificationFilter = "all";
 let notificationCache = [];
 window.postsState = [];
@@ -2657,7 +2658,7 @@ function attachEvents() {
 let postsEl = null;
 let scrollTimeout;
 
-function startApp() {
+async function startApp() {
   
   console.log("START APP CALLED");
 
@@ -2764,7 +2765,8 @@ setupScrollSnap();
 adjustStoryBar();
 
 if (session && currentUser) {
-    registerPush();
+    await registerPush();
+    await loadUnreadCount();
 }
 
 setTimeout(attachEvents, 0);
@@ -6262,13 +6264,21 @@ async function loadNotifications() {
 
   if (!currentUser) return;
 
-  const { data } = await supabase
-  .from("grouped_notifications")   // 🔥 CHANGE HERE
-  .select("*")                     // 🔥 SIMPLIFIED
-  .eq("user_id", currentUser.id)   // 🔥 SAME FILTER
-.order("last_time", {
-  ascending: false
-});
+  const { data, error } = await supabase
+  .from("grouped_notifications")
+  .select("*")
+  .eq("user_id", currentUser.id)
+  .order("last_time", { ascending: false });
+
+alert(
+  "User: " + currentUser.id +
+  "\nRows: " + (data ? data.length : 0) +
+  "\nError: " + JSON.stringify(error)
+);
+
+console.log("CURRENT USER:", currentUser.id);
+console.log("ERROR:", error);
+console.log("DATA:", data);
 console.log("NOTIFICATION DATA:", data);
 
 notificationCache = mergeFromServer([...notificationCache], data || []);
@@ -6585,6 +6595,8 @@ unreadCount = count || 0;
 }
 
 function updateNotifBadge() {
+  
+  console.log("Updating badge:", unreadCount);
 
   const badge =
     document.getElementById("notifBadge");
