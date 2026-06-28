@@ -2758,7 +2758,7 @@ async function startApp() {
 
   postsEl = document.getElementById("posts");
 
- loadPosts();
+loadPosts();
 loadStories();
 setupScrollSnap();
 
@@ -2768,6 +2768,11 @@ if (session && currentUser) {
     await registerPush();
     await loadUnreadCount();
 }
+
+// ADD THESE 3 LINES HERE
+alert("Badge exists: " + !!document.getElementById("notifBadge"));
+alert("Button exists: " + !!document.getElementById("notificationBtn"));
+alert("Unread: " + unreadCount);
 
 setTimeout(attachEvents, 0);
 }
@@ -6609,47 +6614,50 @@ tabChannel.onmessage = (event) => {
   if (!currentUser) return;
 
   const { count, error } = await supabase
- .from("grouped_notifications")
-  .select("*", { count: "exact", head: true })
-  .eq("user_id", currentUser.id)
-  .eq("read", false);
+    .from("notifications")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", currentUser.id)
+    .eq("read", false);
 
-unreadCount = count || 0;
+  // 👇 ADD IT HERE
+  alert(
+    "Unread count: " + count +
+    "\nError: " + JSON.stringify(error)
+  );
+
+  unreadCount = count || 0;
 
   updateNotifBadge();
 }
 
 function updateNotifBadge() {
-  
-  console.log("Updating badge:", unreadCount);
 
-  const badge =
-    document.getElementById("notifBadge");
+  const badge = document.getElementById("notifBadge");
+  const btn = document.getElementById("notificationBtn");
 
-  const btn =
-    document.getElementById("notificationBtn");
+  alert("Badge exists: " + !!badge);
+  alert("Button exists: " + !!btn);
+  alert("Unread: " + unreadCount);
 
   if (!badge || !btn) return;
 
   if (unreadCount > 0) {
 
     badge.style.display = "flex";
+    badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
 
-    badge.textContent =
-      unreadCount > 99
-        ? "99+"
-        : unreadCount;
+    // NEW ALERTS
+    alert("Display: " + badge.style.display);
+    alert("Text: " + badge.textContent);
 
     btn.classList.add("hasUnread");
 
   } else {
 
     badge.style.display = "none";
-
     btn.classList.remove("hasUnread");
 
   }
-
 }
 
 function showToastNotification(n) {
