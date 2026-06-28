@@ -759,7 +759,7 @@ overflow-x:auto;
 position:relative;
 z-index:2;
 
-padding:11px 21px;
+padding:12px 22px;
 
 border:none;
 border-radius:18px;
@@ -5956,7 +5956,7 @@ if (story.user_id !== user.id) {
 
 const { data: notifData, error: notifError } = 
 await supabase
-  .from("grouped_notifications")
+  .from("notifications")
   .insert([{
     user_id: story.user_id,
     sender_id: user.id,
@@ -6029,7 +6029,7 @@ window.reactStory = async function(emoji){
   .single();
 
 await supabase
-  .from("grouped_notifications")
+  .from("notifications")
   .insert([{
     user_id: story.user_id,
     sender_id: user.id,
@@ -6338,7 +6338,7 @@ async function loadNotifications() {
   if (!currentUser) return;
 
   const { data, error } = await supabase
-  .from("grouped_notifications")
+  .from("notifications")
   .select("*")
   .eq("user_id", currentUser.id);
 
@@ -6416,7 +6416,7 @@ renderNotifications(notificationCache);
 window.openNotification = async function(id) {
   const { data, error } =
     await supabase
-      .from("grouped_notifications")
+      .from("notifications")
       .select("*")
       .eq("id", id)
       .single();
@@ -6424,7 +6424,7 @@ window.openNotification = async function(id) {
   if (error || !data) return;
 
   await supabase
-  .from("grouped_notifications")
+  .from("notifications")
   .update({ read: true })
   .eq("id", id);
 
@@ -6542,7 +6542,7 @@ window.deleteNotification = async function(id) {
   if (!ok) return;
 
   await supabase
-    .from("grouped_notifications")
+    .from("notifications")
     .delete()
     .eq("id", id);
 
@@ -6562,7 +6562,7 @@ window.clearNotifications = async function() {
   if (!ok) return;
 
   await supabase
-    .from("grouped_notifications")
+    .from("notifications")
     .delete()
     .eq("user_id", currentUser.id);
 
@@ -6595,7 +6595,7 @@ if (screen) screen.style.display = "flex";
   if (!currentUser) return;
 
   await supabase
-    .from("grouped_notifications")
+    .from("notifications")
     .update({ read: true })
     .eq("user_id", currentUser.id)
     .eq("read", false);
@@ -6687,7 +6687,7 @@ if (screen && screen.style.display === "flex") {
   if (!currentUser) return;
 
   const { data, error } = await supabase
-    .from("grouped_notifications")
+    .from("notifications")
     .select("id", { count: "exact" })
     .eq("user_id", currentUser.id)
     .eq("read", false);
