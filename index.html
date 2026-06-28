@@ -6274,10 +6274,14 @@ async function loadNotifications() {
   alert("Passed currentUser check");
 
   const { data, error } = await supabase
-    .from("grouped_notifications")
-    .select("*")
-    .eq("user_id", currentUser.id)
-    .order("last_time", { ascending: false });
+  .from("notifications")
+  .select("*")
+  .eq("user_id", currentUser.id);
+
+alert(
+  "Rows: " + (data ? data.length : 0) +
+  "\nError: " + JSON.stringify(error)
+);
 
   alert(
     "User: " + currentUser.id +
