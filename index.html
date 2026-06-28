@@ -6409,7 +6409,7 @@ if (!notifications.length) {
   return;
 }
 console.log("RENDERING:", notifications);
-notificationCache = notifications;
+notificationCache = mergeFromServer([], notifications);
 renderNotifications(notificationCache);
 }
 
@@ -6588,19 +6588,34 @@ window.setNotificationFilter = function(button, type) {
 async function openNotifications() {
 
   const screen = document.getElementById("notificationsScreen");
-if (screen) screen.style.display = "flex";
+  if (screen) screen.style.display = "flex";
 
   await loadNotifications();
 
   if (!currentUser) return;
 
-  await supabase
+  const { error } = await supabase
     .from("notifications")
     .update({ read: true })
     .eq("user_id", currentUser.id)
     .eq("read", false);
+    
+    console.log("UPDATE ERROR:", error);
 
-  loadUnreadCount();
+  if (error) {
+    console.log(error);
+    return;
+  }
+
+  // Update local cache
+  notificationCache.forEach(n => {
+    n.read = true;
+  });
+
+  renderNotifications(notificationCache);
+
+  unreadCount = 0;
+  updateNotifBadge();
 };
 window.openNotifications = openNotifications;
 
@@ -6618,7 +6633,7 @@ if (!window.notificationsSubscription) {
         {
           event: "INSERT",
           schema: "public",
-         table: "grouped_notifications"
+          table: "notifications"
         },
 (payload) => {
 
