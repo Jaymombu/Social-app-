@@ -741,6 +741,58 @@ linear-gradient(
   100% { opacity:0; transform:translate(-50%, -20px); }
 }
 
+#notificationFilters{
+
+position:relative;
+
+display:flex;
+gap:12px;
+
+padding:8px;
+
+overflow-x:auto;
+
+}
+
+.notifFilter{
+
+position:relative;
+z-index:2;
+
+padding:11px 21px;
+
+border:none;
+border-radius:18px;
+
+background:#252525;
+
+color:white;
+
+font-size:15px;
+font-weight:bold;
+
+transition:.3s;
+
+white-space:nowrap;
+
+}
+
+.notifFilter.active{
+
+background:#1f6fff;
+
+box-shadow:0 0 20px rgba(31,111,255,.45);
+
+transform:translateY(-2px);
+
+}
+
+.notifFilter:active{
+
+transform:scale(.95);
+
+}
+
 #storyViewer{
   display:none;
   position:fixed;
@@ -1565,23 +1617,42 @@ linear-gradient(
 
 </div>
 
-<div
-  id="notificationFilters"
-  style="
-    display:flex;
-    gap:8px;
-    padding:10px;
-    overflow-x:auto;
-    border-bottom:1px solid #222;
-  "
->
+<div id="notificationFilters" style="
+display:flex;
+gap:12px;
+overflow-x:auto;
+padding:10px 14px;
+">
 
-  <button onclick="filterNotifications('all')">All</button>
-  <button onclick="filterNotifications('like')">Likes</button>
-  <button onclick="filterNotifications('comment')">Comments</button>
-  <button onclick="filterNotifications('follow')">Follows</button>
-  <button onclick="filterNotifications('message')">Messages</button>
-  <button onclick="filterNotifications('story_reply')">Stories</button>
+<button class="notifFilter active"
+onclick="setNotificationFilter(this,'all')">
+All
+</button>
+
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'like')">
+Likes
+</button>
+
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'comment')">
+Comments
+</button>
+
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'follow')">
+Follows
+</button>
+
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'message')">
+Messages
+</button>
+
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'stories')">
+Stories
+</button>
 
 </div>
 
@@ -2768,12 +2839,6 @@ if (session && currentUser) {
     await registerPush();
     await loadUnreadCount();
 }
-
-// ADD THESE 3 LINES HERE
-alert("Badge exists: " + !!document.getElementById("notifBadge"));
-alert("Button exists: " + !!document.getElementById("notificationBtn"));
-alert("Unread: " + unreadCount);
-
 setTimeout(attachEvents, 0);
 }
 
@@ -5891,7 +5956,7 @@ if (story.user_id !== user.id) {
 
 const { data: notifData, error: notifError } = 
 await supabase
-  .from("notifications")
+  .from("grouped_notifications")
   .insert([{
     user_id: story.user_id,
     sender_id: user.id,
@@ -5904,13 +5969,6 @@ await supabase
     last_time: new Date(),
     read: false
   }]);
-
-alert(
-  "Notification error:\n" +
-  JSON.stringify(notifError)
-);
-
-console.log("Notification insert:", notifData, notifError);
 }
 
   input.value = "";
@@ -5971,7 +6029,7 @@ window.reactStory = async function(emoji){
   .single();
 
 await supabase
-  .from("notifications")
+  .from("grouped_notifications")
   .insert([{
     user_id: story.user_id,
     sender_id: user.id,
@@ -6277,32 +6335,12 @@ function listenToStoryReplies(storyId) {
 
 async function loadNotifications() {
 
-  alert("loadNotifications started");
-
-  alert(
-    "currentUser:\n" +
-    JSON.stringify(currentUser)
-  );
-
   if (!currentUser) return;
 
-  alert("Passed currentUser check");
-
   const { data, error } = await supabase
-  .from("notifications")
+  .from("grouped_notifications")
   .select("*")
   .eq("user_id", currentUser.id);
-
-alert(
-  "Rows: " + (data ? data.length : 0) +
-  "\nError: " + JSON.stringify(error)
-);
-
-  alert(
-    "User: " + currentUser.id +
-    "\nRows: " + (data ? data.length : 0) +
-    "\nError: " + JSON.stringify(error)
-  );
 
   // ...the rest of your code...
 
@@ -6321,9 +6359,22 @@ let notifications = [...notificationCache].sort(
 
 // STEP 2: filter by type
 if (notificationFilter !== "all") {
-  notifications = notifications.filter(
-    n => n.type === notificationFilter
-  );
+
+  if (notificationFilter === "stories") {
+
+    notifications = notifications.filter(n =>
+      n.type === "story_reply" ||
+      n.type === "story_reaction"
+    );
+
+  } else {
+
+    notifications = notifications.filter(
+      n => n.type === notificationFilter
+    );
+
+  }
+
 }
 
 // STEP 3: search filter
@@ -6373,9 +6424,22 @@ window.openNotification = async function(id) {
   if (error || !data) return;
 
   await supabase
-    .from("grouped_notifications")
-    .update({ read: true })
-    .eq("id", id);
+  .from("grouped_notifications")
+  .update({ read: true })
+  .eq("id", id);
+
+// Update local cache immediately
+const item = notificationCache.find(n => n.id === id);
+
+if (item && !item.read) {
+  item.read = true;
+
+  if (unreadCount > 0) {
+    unreadCount--;
+  }
+
+  updateNotifBadge();
+}
     
     document.getElementById(
   "notificationsScreen"
@@ -6466,6 +6530,7 @@ if (data.type === "story_reaction") {
 
   return;
 }
+renderNotifications();
 };
 
 window.deleteNotification = async function(id) {
@@ -6506,7 +6571,13 @@ window.clearNotifications = async function() {
 
 };
 
-window.filterNotifications = function(type) {
+window.setNotificationFilter = function(button, type) {
+
+  document
+    .querySelectorAll(".notifFilter")
+    .forEach(btn => btn.classList.remove("active"));
+
+  button.classList.add("active");
 
   notificationFilter = type;
 
@@ -6565,17 +6636,19 @@ if (!window.notificationsSubscription) {
   // ✅ ONLY ONCE each
   mergeNotification(n);
 
+if (!n.read) {
+  unreadCount++;
+  updateNotifBadge();
+}
+
 showToastNotification(n);
 
 const screen =
   document.getElementById("notificationsScreen");
 
 if (screen && screen.style.display === "flex") {
-  renderNotifications();
+  renderNotifications(notificationCache);
 }
-
-unreadCount++;
-updateNotifBadge();
 }
 
    )
@@ -6597,35 +6670,37 @@ tabChannel.onmessage = (event) => {
   seenNotifications.add(key);
 
   // 4. UI UPDATE
-  showToastNotification(n);
   mergeNotification(n);
-  
 
-  const screen =
-    document.getElementById("notificationsScreen");
+showToastNotification(n);
 
-  if (screen && screen.style.display === "flex") {
-    loadNotifications();
-  }
+const screen =
+  document.getElementById("notificationsScreen");
+
+if (screen && screen.style.display === "flex") {
+  renderNotifications(notificationCache);
+}
 };
   
   async function loadUnreadCount() {
 
   if (!currentUser) return;
 
-  const { count, error } = await supabase
-    .from("notifications")
-    .select("*", { count: "exact", head: true })
+  const { data, error } = await supabase
+    .from("grouped_notifications")
+    .select("id", { count: "exact" })
     .eq("user_id", currentUser.id)
     .eq("read", false);
+    
+    unreadCount = 0;
+    updateNotifBadge();
 
-  // 👇 ADD IT HERE
-  alert(
-    "Unread count: " + count +
-    "\nError: " + JSON.stringify(error)
-  );
+  if (error) {
+    console.log(error);
+    return;
+  }
 
-  unreadCount = count || 0;
+  unreadCount = data ? data.length : 0;
 
   updateNotifBadge();
 }
@@ -6635,20 +6710,12 @@ function updateNotifBadge() {
   const badge = document.getElementById("notifBadge");
   const btn = document.getElementById("notificationBtn");
 
-  alert("Badge exists: " + !!badge);
-  alert("Button exists: " + !!btn);
-  alert("Unread: " + unreadCount);
-
   if (!badge || !btn) return;
 
   if (unreadCount > 0) {
 
     badge.style.display = "flex";
     badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
-
-    // NEW ALERTS
-    alert("Display: " + badge.style.display);
-    alert("Text: " + badge.textContent);
 
     btn.classList.add("hasUnread");
 
@@ -6731,24 +6798,30 @@ function prependNotification(n) {
 
 function mergeNotification(n) {
 
-  const key = getNotifKey(n);
+  const index = notificationCache.findIndex(x => x.id === n.id);
 
-  const existing = notificationCache.find(x => getNotifKey(x) === key);
+  if (index >= 0) {
 
-  if (existing) {
-
-    existing.count = (existing.count || 1) + 1;
-    existing.last_time = new Date().toISOString();
-    existing.message = n.message;
+    notificationCache[index] = {
+      ...notificationCache[index],
+      ...n
+    };
 
   } else {
 
     notificationCache.unshift({
       ...n,
-      count: 1
+      count: n.count || 1
     });
 
   }
+
+  notificationCache.sort(
+    (a, b) =>
+      new Date(b.last_time || b.created_at) -
+      new Date(a.last_time || a.created_at)
+  );
+
 }
 
 function renderNotifications(notifications = notificationCache) {
@@ -6801,9 +6874,18 @@ const time = formatTime(rawTime);
 
 }
 
-    return `
-      <div onclick="openNotification('${n.id}')"
-        style="display:flex;gap:12px;padding:14px;border-bottom:1px solid #222;">
+    const bg = n.read ? "#151515" : "#1b2d4a";
+
+return `
+  <div onclick="openNotification('${n.id}')"
+    style="
+      display:flex;
+      gap:12px;
+      padding:14px;
+      border-bottom:1px solid #222;
+      background:${bg};
+      transition:.25s;
+    ">
 
         <img src="${avatar}" style="width:48px;height:48px;border-radius:50%;" />
 
