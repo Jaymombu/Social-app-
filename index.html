@@ -5884,7 +5884,8 @@ if (story.user_id !== user.id) {
   .eq("id", user.id)
   .single();
 
-const { data: notifData, error: notifError } = await supabase
+const { data: notifData, error: notifError } = 
+await supabase
   .from("notifications")
   .insert([{
     user_id: story.user_id,
@@ -5894,7 +5895,9 @@ const { data: notifData, error: notifError } = await supabase
     type: "story_reply",
     message: `💬 Replied to your story: ${reply}`,
     story_id: story.id,
-    created_at: new Date().toISOString()
+    created_at: new Date(),
+    last_time: new Date(),
+    read: false
   }]);
 
 alert(
