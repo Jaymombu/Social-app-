@@ -6592,26 +6592,24 @@ async function openNotifications() {
 
   await loadNotifications();
 
-alert("loadNotifications finished");
+if (!currentUser) return;
 
-  if (!currentUser) return;
+const { error } = await supabase
+  .from("notifications")
+  .update({ read: true })
+  .eq("user_id", currentUser.id)
+  .eq("read", false);
 
-  const { error } = await supabase
-    .from("notifications")
-    .update({ read: true })
-    .eq("user_id", currentUser.id)
-    .eq("read", false);
-    
-    console.log("UPDATE ERROR:", error);
+if (error) {
+  console.log(error);
+  return;
+}
 
-if (error) return;
+unreadCount = 0;
+updateNotifBadge();
 
-  // Update local cache
-  notificationCache.forEach(n => {
-    n.read = true;
-  });
-
-  renderNotifications(notificationCache);
+// Reload from Supabase so the UI gets the updated read values
+await loadNotifications();
 
   unreadCount = 0;
   updateNotifBadge();
