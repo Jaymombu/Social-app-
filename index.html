@@ -6660,24 +6660,31 @@ window.deleteNotification = async function(id) {
 
 };
 
-window.clearNotifications = async function() {
+window.clearNotifications = async function () {
 
-  if (!currentUser) return;
+  alert("Function started");
 
-  const ok = confirm(
-    "Delete all notifications?"
-  );
+  if (!currentUser) {
+    alert("No currentUser");
+    return;
+  }
 
+  const ok = confirm("Delete all notifications?");
   if (!ok) return;
 
-  await supabase
+  const { error } = await supabase
     .from("notifications")
     .delete()
     .eq("user_id", currentUser.id);
 
-  loadNotifications();
-  loadUnreadCount();
+  alert("Delete error: " + JSON.stringify(error));
 
+  if (error) return;
+
+  notificationCache = [];
+  renderNotifications([]);
+  unreadCount = 0;
+  updateNotifBadge();
 };
 
 window.setNotificationFilter = function(button, type) {
