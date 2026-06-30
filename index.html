@@ -2255,13 +2255,40 @@ window.likePost = async (id) => {
   }
 
   // 🔥 save to database
+  const { data: updatedPost } = await supabase
+  .from("posts")
+  .update({
+    likes: newLikes,
+    liked_by: updatedLikedBy
+  })
+  .eq("id", id)
+  .select("user_id")
+  .single();
+  
+  // CREATE LIKE NOTIFICATION
+if (!isLiked && updatedPost && updatedPost.user_id !== userId) {
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, avatar_url")
+    .eq("id", userId)
+    .single();
+
   await supabase
-    .from("posts")
-    .update({
-      likes: newLikes,
-      liked_by: updatedLikedBy
-    })
-    .eq("id", id);
+    .from("notifications")
+    .insert([{
+      user_id: updatedPost.user_id,
+      sender_id: userId,
+      username: profile.name,
+      avatar_url: profile.avatar_url,
+      type: "like",
+      message: "❤️ liked your post",
+      post_id: id,
+      created_at: new Date(),
+      read: false
+    }]);
+
+}
 
 upsertPost({
   id,
@@ -2512,7 +2539,29 @@ if (
     following_id: userId
   });
 
-console.log(error);
+if (error) {
+  console.log(error);
+  return;
+}
+
+const { data: profile } = await supabase
+  .from("profiles")
+  .select("name, avatar_url")
+  .eq("id", session.user.id)
+  .single();
+
+await supabase
+  .from("notifications")
+  .insert([{
+    user_id: userId,
+    sender_id: session.user.id,
+    username: profile.name,
+    avatar_url: profile.avatar_url,
+    type: "follow",
+    message: "started following you",
+    created_at: new Date(),
+    read: false
+  }]);
 
       }
 
@@ -2705,15 +2754,52 @@ function attachEvents() {
       const input = document.getElementById("panelInput");
       if (!input.value) return;
 
-      await supabase.from("comments").insert({
-        post_id: currentPostId,
-        content: input.value,
-        user_id: session?.user?.id || null,
-        name: session?.user?.email || "Guest"
-      });
+      const { error } = await supabase
+  .from("comments")
+  .insert({
+    post_id: currentPostId,
+    content: input.value,
+    user_id: session.user.id,
+    name: session.user.email || "Guest"
+  });
 
-      input.value = "";
-      loadComments(currentPostId);
+if (error) {
+  console.log(error);
+  return;
+}
+
+// Get the post owner
+const { data: post } = await supabase
+  .from("posts")
+  .select("user_id")
+  .eq("id", currentPostId)
+  .single();
+
+if (post && post.user_id !== session.user.id) {
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, avatar_url")
+    .eq("id", session.user.id)
+    .single();
+
+  await supabase
+    .from("notifications")
+    .insert([{
+      user_id: post.user_id,
+      sender_id: session.user.id,
+      username: profile.name,
+      avatar_url: profile.avatar_url,
+      type: "comment",
+      message: "💬 commented on your post",
+      post_id: currentPostId,
+      created_at: new Date(),
+      read: false
+    }]);
+}
+
+input.value = "";
+loadComments(currentPostId);
     };
   }
 
@@ -3562,6 +3648,31 @@ if (file && file.size > 50 * 1024 * 1024) {
     alert(error.message);
     return;
   }
+  
+  // Notify the receiver
+const { data: profile } = await supabase
+  .from("profiles")
+  .select("name, avatar_url")
+  .eq("id", session.user.id)
+  .single();
+
+await supabase
+  .from("notifications")
+  .insert([{
+    user_id: currentChatUser,
+    sender_id: session.user.id,
+    username: profile?.name || session.user.email,
+    avatar_url: profile?.avatar_url || null,
+    type: "message",
+    message: input.value.trim()
+    ? "📩 sent you a message"
+  : mediaType === "video"
+    ? "🎥 sent you a video"
+    : "📷 sent you a photo",
+    
+    created_at: new Date(),
+    read: false
+  }]);
 
   input.value = "";
   fileInput.value = "";
@@ -6029,17 +6140,19 @@ window.reactStory = async function(emoji){
   .single();
 
 await supabase
-  .from("notifications")
-  .insert([{
-    user_id: story.user_id,
-    sender_id: user.id,
-    username: profile.name,
-    avatar_url: profile.avatar_url,
-    type: "story_reaction",
-    message: `${emoji} reacted to your story`,
-    story_id: story.id,
-    created_at: new Date()
-  }]);
+.from("notifications")
+.insert([{
+  user_id: story.user_id,
+  sender_id: user.id,
+  username: profile.name,
+  avatar_url: profile.avatar_url,
+  type: "story_reaction",
+  message: `${emoji} reacted to your story`,
+  story_id: story.id,
+  created_at: new Date(),
+  last_time: new Date(),
+  read: false
+}]);
 
   }
 
@@ -6430,15 +6543,12 @@ window.openNotification = async function(id) {
 // Update local cache immediately
 const item = notificationCache.find(n => n.id === id);
 
-if (item && !item.read) {
+if (item) {
   item.read = true;
-
-  if (unreadCount > 0) {
-    unreadCount--;
-  }
-
-  updateNotifBadge();
 }
+
+renderNotifications();
+loadUnreadCount();
     
     document.getElementById(
   "notificationsScreen"
@@ -6627,10 +6737,7 @@ if (!window.notificationsSubscription) {
   // ✅ ONLY ONCE each
   mergeNotification(n);
 
-if (!n.read) {
-  unreadCount++;
-  updateNotifBadge();
-}
+loadUnreadCount();
 
 showToastNotification(n);
 
@@ -6643,6 +6750,28 @@ if (screen && screen.style.display === "flex") {
 }
 
    )
+   
+   .on(
+  "postgres_changes",
+  {
+    event: "UPDATE",
+    schema: "public",
+    table: "notifications"
+  },
+  (payload) => {
+
+    const updated = payload.new;
+
+    const item = notificationCache.find(n => n.id === updated.id);
+
+    if (item) {
+      Object.assign(item, updated);
+    }
+
+    renderNotifications(notificationCache);
+    loadUnreadCount();
+  }
+)
      .subscribe();
 }
 
@@ -6662,6 +6791,8 @@ tabChannel.onmessage = (event) => {
 
   // 4. UI UPDATE
   mergeNotification(n);
+  
+  loadUnreadCount();
 
 showToastNotification(n);
 
@@ -6683,8 +6814,7 @@ if (screen && screen.style.display === "flex") {
     .eq("user_id", currentUser.id)
     .eq("read", false);
     
-    unreadCount = 0;
-    updateNotifBadge();
+    
 
   if (error) {
     console.log(error);
