@@ -6341,15 +6341,6 @@ async function loadNotifications() {
   .from("notifications")
   .select("*")
   .eq("user_id", currentUser.id);
-  
-  alert(
-  JSON.stringify(
-    data.map(n => ({
-      id: n.id,
-      read: n.read
-    }))
-  )
-);
 
   // ...the rest of your code...
 
@@ -6594,7 +6585,6 @@ window.setNotificationFilter = function(button, type) {
 };
 async function openNotifications() {
 
-  alert("openNotifications() called");
 
   const screen = document.getElementById("notificationsScreen");
   
@@ -6613,11 +6603,6 @@ alert("loadNotifications finished");
     .eq("read", false);
     
     console.log("UPDATE ERROR:", error);
-
-  alert(
-  "Update error:\n" +
-  JSON.stringify(error)
-);
 
 if (error) return;
 
@@ -6903,11 +6888,9 @@ const time = formatTime(rawTime);
 
 }
 
-alert(
-  "Read value = " + n.read
-);
+console.log("Notification:", n.id, "read =", n.read, typeof n.read);
 
-    const bg = n.read ? "#151515" : "#1b2d4a";
+    const bg = n.read === true ? "#151515" : "red";
 
 return `
   <div onclick="openNotification('${n.id}')"
