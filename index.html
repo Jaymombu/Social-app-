@@ -6672,12 +6672,14 @@ window.clearNotifications = async function () {
   const ok = confirm("Delete all notifications?");
   if (!ok) return;
 
-  const { error } = await supabase
-    .from("notifications")
-    .delete()
-    .eq("user_id", currentUser.id);
+  const { data: deleted, error } = await supabase
+  .from("notifications")
+  .delete()
+  .eq("user_id", currentUser.id)
+  .select();
 
-  alert("Delete error: " + JSON.stringify(error));
+console.log("Deleted rows:", deleted);
+alert("Deleted rows: " + JSON.stringify(deleted));
 
   if (error) return;
 
