@@ -6584,13 +6584,17 @@ window.setNotificationFilter = function(button, type) {
   loadNotifications();
 
 };
-
 async function openNotifications() {
 
+  alert("openNotifications() called");
+
   const screen = document.getElementById("notificationsScreen");
+  
   if (screen) screen.style.display = "flex";
 
   await loadNotifications();
+
+alert("loadNotifications finished");
 
   if (!currentUser) return;
 
@@ -6602,10 +6606,12 @@ async function openNotifications() {
     
     console.log("UPDATE ERROR:", error);
 
-  if (error) {
-    console.log(error);
-    return;
-  }
+  alert(
+  "Update error:\n" +
+  JSON.stringify(error)
+);
+
+if (error) return;
 
   // Update local cache
   notificationCache.forEach(n => {
