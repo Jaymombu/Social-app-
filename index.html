@@ -6583,37 +6583,16 @@ window.setNotificationFilter = function(button, type) {
   loadNotifications();
 
 };
+
 async function openNotifications() {
 
-
   const screen = document.getElementById("notificationsScreen");
-  
+
   if (screen) screen.style.display = "flex";
 
   await loadNotifications();
-
-if (!currentUser) return;
-
-const { error } = await supabase
-  .from("notifications")
-  .update({ read: true })
-  .eq("user_id", currentUser.id)
-  .eq("read", false);
-
-if (error) {
-  console.log(error);
-  return;
 }
 
-unreadCount = 0;
-updateNotifBadge();
-
-// Reload from Supabase so the UI gets the updated read values
-await loadNotifications();
-
-  unreadCount = 0;
-  updateNotifBadge();
-};
 window.openNotifications = openNotifications;
 
 function getNotifKey(n) {
