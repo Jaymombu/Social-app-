@@ -6418,8 +6418,7 @@ if (!notifications.length) {
   return;
 }
 console.log("RENDERING:", notifications);
-notificationCache = mergeFromServer([], notifications);
-renderNotifications(notificationCache);
+renderNotifications(notifications);
 }
 
 window.openNotification = async function(id) {
@@ -6943,30 +6942,27 @@ function formatTime(dateString) {
 }
 
 function mergeFromServer(cache, serverData) {
+
   const map = new Map();
 
-  // 1. keep existing cache
-  cache.forEach(n => {
+  // Server data always wins
+  serverData.forEach(n => {
     map.set(n.id, { ...n });
   });
 
-  // 2. merge server data safely
-  serverData.forEach(n => {
-    if (map.has(n.id)) {
-      map.set(n.id, {
-        ...map.get(n.id),
-        ...n
-      });
-    } else {
+  // Add cached items only if they don't already exist
+  cache.forEach(n => {
+    if (!map.has(n.id)) {
       map.set(n.id, { ...n });
     }
   });
 
-  return Array.from(map.values()).sort(
-  (a, b) =>
-    new Date(b.last_time || b.created_at) -
-    new Date(a.last_time || a.created_at)
-);
+  return [...map.values()].sort(
+    (a, b) =>
+      new Date(b.last_time || b.created_at) -
+      new Date(a.last_time || a.created_at)
+  );
+
 }
 
 function renderReplies(data) {
