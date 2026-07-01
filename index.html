@@ -1614,6 +1614,18 @@ transform:scale(.95);
   >
     Clear All
   </button>
+  
+  <button
+  onclick="markAllNotificationsRead()"
+  style="
+    background:none;
+    border:none;
+    color:#1877f2;
+    font-weight:bold;
+    cursor:pointer;
+  ">
+  Mark all read
+</button>
 
 </div>
 
@@ -1661,7 +1673,7 @@ Stories
   placeholder="Search notifications..."
   oninput="loadNotifications()"
   style="
-    width:calc(100% - 20px);
+    width:calc(96% - 20px);
     margin:10px;
     padding:12px;
     border:none;
@@ -2265,29 +2277,64 @@ window.likePost = async (id) => {
   .select("user_id")
   .single();
   
-  // CREATE LIKE NOTIFICATION
-if (!isLiked && updatedPost && updatedPost.user_id !== userId) {
+  // Create or update like notification
+if (!isLiked) {
 
   const { data: profile } = await supabase
     .from("profiles")
     .select("name, avatar_url")
-    .eq("id", userId)
+    .eq("id", session.user.id)
     .single();
 
-  await supabase
-    .from("notifications")
-    .insert([{
-      user_id: updatedPost.user_id,
-      sender_id: userId,
-      username: profile.name,
-      avatar_url: profile.avatar_url,
-      type: "like",
-      message: "❤️ liked your post",
-      post_id: id,
-      created_at: new Date(),
-      read: false
-    }]);
+  const { data: postOwner } = await supabase
+    .from("posts")
+    .select("user_id")
+    .eq("id", id)
+    .single();
 
+  if (postOwner && postOwner.user_id !== session.user.id) {
+
+    const { data: existing } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", postOwner.user_id)
+      .eq("type", "like")
+      .eq("post_id", id)
+      .maybeSingle();
+
+    if (existing) {
+
+      await supabase
+        .from("notifications")
+        .update({
+          count: (existing.count || 1) + 1,
+          username: profile.name,
+          avatar_url: profile.avatar_url,
+          last_time: new Date()
+        })
+        .eq("id", existing.id);
+
+    } else {
+
+      await supabase
+        .from("notifications")
+        .insert({
+          user_id: postOwner.user_id,
+          sender_id: session.user.id,
+          username: profile.name,
+          avatar_url: profile.avatar_url,
+          type: "like",
+          post_id: id,
+          message: "liked your post",
+          count: 1,
+          created_at: new Date(),
+          last_time: new Date(),
+          read: false
+        });
+
+    }
+
+  }
 }
 
 upsertPost({
@@ -2538,30 +2585,55 @@ if (
     follower_id: session.user.id,
     following_id: userId
   });
+  
+  if (!error) {
 
-if (error) {
-  console.log(error);
-  return;
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, avatar_url")
+    .eq("id", session.user.id)
+    .single();
+
+  const { data: existing } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("type", "follow")
+    .maybeSingle();
+
+  if (existing) {
+
+    await supabase
+      .from("notifications")
+      .update({
+        count: (existing.count || 1) + 1,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        last_time: new Date(),
+        message: "started following you"
+      })
+      .eq("id", existing.id);
+
+  } else {
+
+    await supabase
+      .from("notifications")
+      .insert({
+        user_id: userId,
+        sender_id: session.user.id,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        type: "follow",
+        message: "started following you",
+        count: 1,
+        created_at: new Date(),
+        last_time: new Date(),
+        read: false
+      });
+
+  }
+
 }
-
-const { data: profile } = await supabase
-  .from("profiles")
-  .select("name, avatar_url")
-  .eq("id", session.user.id)
-  .single();
-
-await supabase
-  .from("notifications")
-  .insert([{
-    user_id: userId,
-    sender_id: session.user.id,
-    username: profile.name,
-    avatar_url: profile.avatar_url,
-    type: "follow",
-    message: "started following you",
-    created_at: new Date(),
-    read: false
-  }]);
 
       }
 
@@ -2762,13 +2834,8 @@ function attachEvents() {
     user_id: session.user.id,
     name: session.user.email || "Guest"
   });
-
-if (error) {
-  console.log(error);
-  return;
-}
-
-// Get the post owner
+  
+  // Notify post owner
 const { data: post } = await supabase
   .from("posts")
   .select("user_id")
@@ -2783,20 +2850,53 @@ if (post && post.user_id !== session.user.id) {
     .eq("id", session.user.id)
     .single();
 
-  await supabase
+  const { data: existing } = await supabase
     .from("notifications")
-    .insert([{
-      user_id: post.user_id,
-      sender_id: session.user.id,
-      username: profile.name,
-      avatar_url: profile.avatar_url,
-      type: "comment",
-      message: "💬 commented on your post",
-      post_id: currentPostId,
-      created_at: new Date(),
-      read: false
-    }]);
+    .select("*")
+    .eq("user_id", post.user_id)
+    .eq("type", "comment")
+    .eq("post_id", currentPostId)
+    .maybeSingle();
+
+  if (existing) {
+
+    await supabase
+      .from("notifications")
+      .update({
+        count: (existing.count || 1) + 1,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        last_time: new Date(),
+        message: "commented on your post"
+      })
+      .eq("id", existing.id);
+
+  } else {
+
+    await supabase
+      .from("notifications")
+      .insert({
+        user_id: post.user_id,
+        sender_id: session.user.id,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        type: "comment",
+        post_id: currentPostId,
+        message: "commented on your post",
+        count: 1,
+        created_at: new Date(),
+        last_time: new Date(),
+        read: false
+      });
+
+  }
 }
+
+if (error) {
+  console.log(error);
+  return;
+}
+
 
 input.value = "";
 loadComments(currentPostId);
@@ -3656,23 +3756,54 @@ const { data: profile } = await supabase
   .eq("id", session.user.id)
   .single();
 
-await supabase
+const { data: existing } = await supabase
   .from("notifications")
-  .insert([{
-    user_id: currentChatUser,
-    sender_id: session.user.id,
-    username: profile?.name || session.user.email,
-    avatar_url: profile?.avatar_url || null,
-    type: "message",
-    message: input.value.trim()
-    ? "📩 sent you a message"
-  : mediaType === "video"
-    ? "🎥 sent you a video"
-    : "📷 sent you a photo",
-    
-    created_at: new Date(),
-    read: false
-  }]);
+  .select("*")
+  .eq("user_id", currentChatUser)
+  .eq("type", "message")
+  .eq("sender_id", session.user.id)
+  .maybeSingle();
+
+if (existing) {
+
+  await supabase
+    .from("notifications")
+    .update({
+      count: (existing.count || 1) + 1,
+      username: profile.name,
+      avatar_url: profile.avatar_url,
+      message: input.value.trim()
+        ? "📩 sent you a message"
+        : mediaType === "video"
+          ? "🎥 sent you a video"
+          : "📷 sent you a photo",
+      last_time: new Date(),
+      read: false
+    })
+    .eq("id", existing.id);
+
+} else {
+
+  await supabase
+    .from("notifications")
+    .insert({
+      user_id: currentChatUser,
+      sender_id: session.user.id,
+      username: profile.name,
+      avatar_url: profile.avatar_url,
+      type: "message",
+      message: input.value.trim()
+        ? "📩 sent you a message"
+        : mediaType === "video"
+          ? "🎥 sent you a video"
+          : "📷 sent you a photo",
+      count: 1,
+      created_at: new Date(),
+      last_time: new Date(),
+      read: false
+    });
+
+}
 
   input.value = "";
   fileInput.value = "";
@@ -6055,31 +6186,56 @@ window.sendStoryReply = async function () {
     alert(error.message);
     return;
   }
-  
-  // GET STORY OWNER
+
 if (story.user_id !== user.id) {
 
- const { data: profile } = await supabase
-  .from("profiles")
-  .select("name, avatar_url")
-  .eq("id", user.id)
-  .single();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, avatar_url")
+    .eq("id", user.id)
+    .single();
 
-const { data: notifData, error: notifError } = 
-await supabase
-  .from("notifications")
-  .insert([{
-    user_id: story.user_id,
-    sender_id: user.id,
-    username: profile.name,
-    avatar_url: profile.avatar_url,
-    type: "story_reply",
-    message: `💬 Replied to your story: ${reply}`,
-    story_id: story.id,
-    created_at: new Date(),
-    last_time: new Date(),
-    read: false
-  }]);
+  const { data: existing } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", story.user_id)
+    .eq("type", "story_reply")
+    .eq("story_id", story.id)
+    .maybeSingle();
+
+  if (existing) {
+
+    await supabase
+      .from("notifications")
+      .update({
+        count: (existing.count || 1) + 1,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        message: `💬 Replied to your story: ${reply}`,
+        last_time: new Date(),
+        read: false
+      })
+      .eq("id", existing.id);
+
+  } else {
+
+    await supabase
+      .from("notifications")
+      .insert({
+        user_id: story.user_id,
+        sender_id: user.id,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        type: "story_reply",
+        message: `💬 Replied to your story: ${reply}`,
+        story_id: story.id,
+        count: 1,
+        created_at: new Date(),
+        last_time: new Date(),
+        read: false
+      });
+
+  }
 }
 
   input.value = "";
@@ -6130,31 +6286,57 @@ window.reactStory = async function(emoji){
       emoji: emoji
     }]);
 
-  // NOTIFY OWNER
-  if (story.user_id !== user.id) {
+// NOTIFY OWNER
+if (story.user_id !== user.id) {
 
-    const { data: profile } = await supabase
-  .from("profiles")
-  .select("name, avatar_url")
-  .eq("id", user.id)
-  .single();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, avatar_url")
+    .eq("id", user.id)
+    .single();
 
-await supabase
-.from("notifications")
-.insert([{
-  user_id: story.user_id,
-  sender_id: user.id,
-  username: profile.name,
-  avatar_url: profile.avatar_url,
-  type: "story_reaction",
-  message: `${emoji} reacted to your story`,
-  story_id: story.id,
-  created_at: new Date(),
-  last_time: new Date(),
-  read: false
-}]);
+  const { data: existing } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", story.user_id)
+    .eq("type", "story_reaction")
+    .eq("story_id", story.id)
+    .maybeSingle();
+
+  if (existing) {
+
+    await supabase
+      .from("notifications")
+      .update({
+        count: (existing.count || 1) + 1,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        message: `${emoji} reacted to your story`,
+        last_time: new Date(),
+        read: false
+      })
+      .eq("id", existing.id);
+
+  } else {
+
+    await supabase
+      .from("notifications")
+      .insert({
+        user_id: story.user_id,
+        sender_id: user.id,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        type: "story_reaction",
+        message: `${emoji} reacted to your story`,
+        story_id: story.id,
+        count: 1,
+        created_at: new Date(),
+        last_time: new Date(),
+        read: false
+      });
 
   }
+}
 
   // ANIMATION
   const el =
@@ -6662,31 +6844,50 @@ window.deleteNotification = async function(id) {
 
 window.clearNotifications = async function () {
 
-  alert("Function started");
-
-  if (!currentUser) {
-    alert("No currentUser");
-    return;
-  }
+  if (!currentUser) return;
 
   const ok = confirm("Delete all notifications?");
   if (!ok) return;
 
-  const { data: deleted, error } = await supabase
-  .from("notifications")
-  .delete()
-  .eq("user_id", currentUser.id)
-  .select();
+  const { error } = await supabase
+    .from("notifications")
+    .delete()
+    .eq("user_id", currentUser.id);
 
-console.log("Deleted rows:", deleted);
-alert("Deleted rows: " + JSON.stringify(deleted));
-
-  if (error) return;
+  if (error) {
+    console.log(error);
+    return;
+  }
 
   notificationCache = [];
   renderNotifications([]);
   unreadCount = 0;
   updateNotifBadge();
+};
+
+window.markAllNotificationsRead = async function () {
+
+  if (!currentUser) return;
+
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", currentUser.id)
+    .eq("read", false);
+
+  if (error) {
+    console.log(error);
+    return;
+  }
+
+  notificationCache.forEach(n => {
+    n.read = true;
+  });
+
+  unreadCount = 0;
+  updateNotifBadge();
+
+  renderNotifications(notificationCache);
 };
 
 window.setNotificationFilter = function(button, type) {
