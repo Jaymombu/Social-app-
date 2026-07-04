@@ -25,7 +25,7 @@ body {
 #posts {
   min-height: 100vh;
   overflow-y: auto;
-  padding-top: 60px;
+  padding-top: 10px;
   padding-bottom: 120px;
   box-sizing: border-box;
 }
@@ -110,27 +110,28 @@ body {
 #topNav {
   position: fixed;
   top: 0;
-  width: 100%;
-  height: 50px;
+  left: 0;
+  right: 0;
+
+  height: 60px;
 
   display: flex;
-  justify-content: space-around;
+  justify-content: space-between;
   align-items: center;
 
-  background: rgba(0,0,0,0.6);
-  color: #aaa;
-  font-weight: bold;
+  padding: 0 15px;
+  box-sizing: border-box;
+
+  background: #111;
+  border-bottom: 1px solid #222;
+
+  color: white;
   z-index: 1000;
 }
 
 #topNav .active {
   color: white;
   border-bottom: 2px solid white;
-}
-
-#topNav .search {
-  position: absolute;
-  right: 15px;
 }
 
 /* 🔽 BOTTOM NAV */
@@ -843,9 +844,102 @@ transform:scale(.95);
   opacity:1 !important;
 }
 
+#storiesWrapper{
+    margin-top:60px;
+}
+
 </style>
 </head>
 <body class="dark">
+  
+  <div id="topBar" style="
+position:fixed;
+top:0;
+left:0;
+right:0;
+height:60px;
+background:#111;
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:0 15px;
+border-bottom:1px solid #222;
+z-index:999999;
+">
+
+  <div style="
+    color:white;
+    font-size:22px;
+    font-weight:bold;
+  ">
+    SocialApp
+  </div>
+
+  <div style="
+    display:flex;
+    align-items:center;
+    gap:18px;
+  ">
+
+    <button
+      onclick="openSearch()"
+      style="
+        background:none;
+        border:none;
+        color:white;
+        font-size:24px;
+      "
+    >
+      🔍
+    </button>
+
+    <button
+      onclick="openInbox()"
+      style="
+        background:none;
+        border:none;
+        color:white;
+        font-size:24px;
+      "
+    >
+      💬
+    </button>
+
+    <button
+      onclick="openNotifications()"
+      style="
+        position:relative;
+        background:none;
+        border:none;
+        color:white;
+        font-size:24px;
+      "
+    >
+      🔔
+
+      <span
+        id="notifBadge"
+        style="
+          position:absolute;
+          top:-5px;
+          right:-5px;
+          min-width:18px;
+          height:18px;
+          border-radius:50%;
+          background:red;
+          color:white;
+          font-size:10px;
+          display:none;
+          justify-content:center;
+          align-items:center;
+        "
+      ></span>
+
+    </button>
+
+  </div>
+
+</div>
   
   <div id="chatScreen" style="
   position:fixed;
@@ -1076,117 +1170,6 @@ transform:scale(.95);
   ></div>
 
 </div>
-
-<button
-  id="floatingChatsBtn"
-  onclick="openInbox()"
-  style="
-    position:fixed;
-    bottom:80px;
-    right:20px;
-    width:60px;
-    height:60px;
-    border-radius:50%;
-    border:none;
-    background:#0084ff;
-    color:white;
-    font-size:24px;
-    z-index:3000;
-    box-shadow:0 4px 12px rgba(0,0,0,0.4);
-  "
->
-  💬
-</button>
-
-<button
-  id="notificationBtn"
-  onclick="openNotifications()"
-  style="
-    position:fixed;
-    bottom:150px;
-    right:20px;
-
-    width:56px;
-    height:56px;
-
-    border:none;
-    border-radius:50%;
-
-    background:linear-gradient(
-      135deg,
-      #ff2d55,
-      #ff6b81
-    );
-
-    color:white;
-    font-size:24px;
-
-    z-index:999999;
-
-    cursor:pointer;
-
-    box-shadow:
-      0 6px 20px rgba(255,45,85,.4);
-
-    display:flex;
-    align-items:center;
-    justify-content:center;
-
-    transition:.25s;
-  "
-
-  onmousedown="
-    this.style.transform='scale(.92)'
-  "
-
-  onmouseup="
-    this.style.transform='scale(1)'
-  "
-
-  ontouchstart="
-    this.style.transform='scale(.92)'
-  "
-
-  ontouchend="
-    this.style.transform='scale(1)'
-  "
->
-  🔔
-
-  <span
-    id="notifBadge"
-    style="
-      position:absolute;
-
-      top:-4px;
-      right:-4px;
-
-      min-width:22px;
-      height:22px;
-
-      padding:0 6px;
-
-      border-radius:999px;
-
-      background:#ff0000;
-      color:white;
-
-      font-size:11px;
-      font-weight:bold;
-
-      display:none;
-      align-items:center;
-      justify-content:center;
-
-      border:2px solid white;
-
-      box-shadow:
-        0 0 10px rgba(255,0,0,.7);
-    "
-  >
-  </span>
-
-</button>
 
 <div id="app">
 
@@ -1732,6 +1715,49 @@ Stories
     overflow:auto;
   "
 ></div>
+
+</div>
+
+<div id="searchScreen" style="
+position:fixed;
+inset:0;
+background:#0f0f0f;
+display:none;
+flex-direction:column;
+z-index:9000;
+">
+
+<div style="
+display:flex;
+align-items:center;
+padding:15px;
+border-bottom:1px solid #333;
+">
+
+<button onclick="closeSearch()">←</button>
+
+<input
+id="userSearchInput"
+placeholder="Search users..."
+oninput="searchUsers()"
+style="
+flex:1;
+margin-left:10px;
+padding:12px;
+border:none;
+border-radius:10px;
+background:#222;
+color:white;
+">
+</div>
+
+<div
+id="searchResults"
+style="
+flex:1;
+overflow:auto;
+">
+</div>
 
 </div>
 
@@ -4533,6 +4559,12 @@ let currentPostId = null;
 // =====================================================
 
 window.openComments = (postId) => {
+  
+  if (!session?.user) {
+  alert("Please log in first.");
+  return;
+}
+  
   console.log("💬 opening comments for:", postId);
 
   currentPostId = postId;
@@ -4738,6 +4770,11 @@ if (
 
   document.getElementById("followBtn").onclick =
     async () => {
+      
+      if (!session?.user) {
+  alert("Please log in first.");
+  return;
+}
 
       if (isFollowing) {
 
@@ -4853,6 +4890,12 @@ if (
   `;
   
   document.getElementById("saveProfile").onclick = async () => {
+    
+    if (!session?.user) {
+  alert("Please log in first.");
+  return;
+}
+    
   const name = document.getElementById("editName").value;
   const bio = document.getElementById("editBio").value;
 
@@ -5062,6 +5105,77 @@ loadComments(currentPostId);
     };
   }
 }
+
+window.openSearch = function () {
+  document.getElementById("searchScreen").style.display = "flex";
+  document.getElementById("userSearchInput").focus();
+};
+
+window.closeSearch = function () {
+  document.getElementById("searchScreen").style.display = "none";
+};
+
+window.searchUsers = async function () {
+
+  const text =
+    document.getElementById("userSearchInput")
+      .value.trim();
+
+  if (!text) {
+    document.getElementById("searchResults").innerHTML = "";
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,name,avatar_url,online,last_seen")
+    .ilike("name", "%" + text + "%")
+    .limit(20);
+
+  if (error) {
+    console.log(error);
+    return;
+  }
+
+  document.getElementById("searchResults").innerHTML =
+    data.map(user => `
+      <div
+        onclick="closeSearch(); openProfile('${user.id}', '${user.name.replace(/'/g, "\\'")}')"
+        style="
+          display:flex;
+          align-items:center;
+          gap:10px;
+          padding:12px;
+          border-bottom:1px solid #222;
+          cursor:pointer;
+        ">
+        <img
+          src="${user.avatar_url || 'https://via.placeholder.com/40'}"
+          style="
+            width:40px;
+            height:40px;
+            border-radius:50%;
+            object-fit:cover;
+          ">
+       <div>
+  <div style="color:white;font-weight:bold;">
+    ${user.name}
+  </div>
+
+  <div style="color:#888;font-size:12px;">
+    ${
+      user.online
+        ? "🟢 Online"
+        : "Last seen: " +
+          (user.last_seen
+            ? new Date(user.last_seen).toLocaleString()
+            : "Unknown")
+    }
+  </div>
+</div>
+      </div>
+    `).join("");
+};
 
 // =====================================================
 // APPLICATION STARTUP
