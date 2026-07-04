@@ -25,7 +25,7 @@ body {
 #posts {
   min-height: 100vh;
   overflow-y: auto;
-  padding-top: 10px;
+  padding-top: 20px;
   padding-bottom: 120px;
   box-sizing: border-box;
 }
@@ -852,95 +852,6 @@ transform:scale(.95);
 </head>
 <body class="dark">
   
-  <div id="topBar" style="
-position:fixed;
-top:0;
-left:0;
-right:0;
-height:60px;
-background:#111;
-display:flex;
-justify-content:space-between;
-align-items:center;
-padding:0 15px;
-border-bottom:1px solid #222;
-z-index:999999;
-">
-
-  <div style="
-    color:white;
-    font-size:22px;
-    font-weight:bold;
-  ">
-    SocialApp
-  </div>
-
-  <div style="
-    display:flex;
-    align-items:center;
-    gap:18px;
-  ">
-
-    <button
-      onclick="openSearch()"
-      style="
-        background:none;
-        border:none;
-        color:white;
-        font-size:24px;
-      "
-    >
-      🔍
-    </button>
-
-    <button
-      onclick="openInbox()"
-      style="
-        background:none;
-        border:none;
-        color:white;
-        font-size:24px;
-      "
-    >
-      💬
-    </button>
-
-    <button
-      onclick="openNotifications()"
-      style="
-        position:relative;
-        background:none;
-        border:none;
-        color:white;
-        font-size:24px;
-      "
-    >
-      🔔
-
-      <span
-        id="notifBadge"
-        style="
-          position:absolute;
-          top:-5px;
-          right:-5px;
-          min-width:18px;
-          height:18px;
-          border-radius:50%;
-          background:red;
-          color:white;
-          font-size:10px;
-          display:none;
-          justify-content:center;
-          align-items:center;
-        "
-      ></span>
-
-    </button>
-
-  </div>
-
-</div>
-  
   <div id="chatScreen" style="
   position:fixed;
   inset:0;
@@ -1191,6 +1102,87 @@ z-index:999999;
     <div id="storiesBar"></div>
 
   </div>
+  
+  <div id="topBar" style="
+position:sticky;
+top:0;
+left:0;
+right:0;
+height:60px;
+background:#111;
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:0 15px;
+border-bottom:1px solid #222;
+z-index:999999;
+">
+
+  <div style="
+    display:flex;
+    align-items:center;
+    gap:18px;
+  ">
+
+    <button
+      onclick="openSearch()"
+      style="
+        background:none;
+        border:none;
+        color:white;
+        font-size:24px;
+      "
+    >
+      🔍
+    </button>
+
+    <button
+      onclick="openInbox()"
+      style="
+        background:none;
+        border:none;
+        color:white;
+        font-size:24px;
+      "
+    >
+      💬
+    </button>
+
+    <button
+      onclick="openNotifications()"
+      style="
+        position:relative;
+        background:none;
+        border:none;
+        color:white;
+        font-size:24px;
+      "
+    >
+      🔔
+
+      <span
+        id="notifBadge"
+        style="
+          position:absolute;
+          top:-5px;
+          right:-5px;
+          min-width:18px;
+          height:18px;
+          border-radius:50%;
+          background:red;
+          color:white;
+          font-size:10px;
+          display:none;
+          justify-content:center;
+          align-items:center;
+        "
+      ></span>
+
+    </button>
+
+  </div>
+
+</div>
 
   <!-- POSTS -->
   <div id="posts"></div>
