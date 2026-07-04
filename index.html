@@ -898,24 +898,38 @@ transform:scale(.95);
   "
 />
 
-    <div>
-      <div
-        id="chatName"
-        style="
-          color:white;
-          font-weight:bold;
-        "
-      >
-        User
-      </div>
+   <div>
+  <div
+    id="chatName"
+    style="
+      color:white;
+      font-weight:bold;
+    "
+  >
+    User
+  </div>
 
-      <div style="
-        color:#aaa;
-        font-size:12px;
-      ">
-        Active now
-      </div>
-    </div>
+  <div
+    id="chatStatus"
+    style="
+      color:#aaa;
+      font-size:12px;
+    "
+  >
+    Offline
+  </div>
+
+  <div
+    id="typingIndicator"
+    style="
+      color:#1d9bf0;
+      font-size:12px;
+      display:none;
+    "
+  >
+    ✍️ Typing...
+  </div>
+</div>
 
   </div>
 
@@ -941,6 +955,33 @@ transform:scale(.95);
   background:#111;
   border-top:1px solid #222;
 ">
+  
+  <div id="replyPreview"
+  style="
+    display:none;
+    background:#222;
+    color:white;
+    padding:10px;
+    border-left:4px solid #0084ff;
+    margin-bottom:6px;
+    border-radius:8px;
+  ">
+
+  <div id="replyText"></div>
+
+  <button
+    onclick="cancelReply()"
+    style="
+      background:none;
+      border:none;
+      color:#ff4d4d;
+      float:right;
+      cursor:pointer;
+    ">
+    ✕
+  </button>
+
+</div>
 
   <input
     id="chatInput"
@@ -1728,6 +1769,10 @@ const seenNotifications = new Set();
 let batchQueue = [];
 let batchTimer = null;
 
+// =====================================================
+// AUTHENTICATION
+// =====================================================
+
 async function initAuth() {
   const { data, error } = await supabase.auth.getSession();
 
@@ -1738,6 +1783,16 @@ async function initAuth() {
 
   session = data.session;
   currentUser = session?.user || null;
+  
+  if (currentUser) {
+  await supabase
+    .from("profiles")
+    .update({
+      online: true,
+      last_seen: new Date()
+    })
+    .eq("id", currentUser.id);
+}
 
   console.log("INIT SESSION:", session);
 
@@ -1759,27 +1814,17 @@ async function initAuth() {
 
 initAuth();
 
-// STORY VARIABLES
-window.currentStoryVideo = null;
-
-window.storyList = window.storyList || [];
-window.__storyMap = new Map();
-window.storyTimer = null;
-window.storyOpenContext = null;
-window.__storyOpen = false;
-
 let touchStartX = 0;
 let touchEndX = 0;
 
 console.log("🚀 Starting app...");
 
 // ✅ GLOBAL SESSION
-let storyPausedByUI = false;
 let session = null;
-
 let currentProfileId = null;
 let currentProfileName = null;
 let activeTab = "explore";
+let storyPausedByUI = false;
 
 let appStarted = false;
 
@@ -1813,6 +1858,26 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
   safeStart();
 });
 
+window.logout = async function () {
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+
+  currentUser = null;
+  session = null;
+
+  alert("Logged out");
+
+  location.reload();
+};
+
+// =====================================================
+// SETTINGS
+// =====================================================
+
 function adjustStoryBar() {
   const bar = document.getElementById("storyReplyBar");
 
@@ -1845,12 +1910,26 @@ function toggleTheme() {
 // LOAD SAVED THEME
 setTheme(localStorage.getItem("theme") || "dark");
 
+// =====================================================
+// STORIES
+// =====================================================
+
 function setStories(list) {
   window.storyList = Array.isArray(list) ? list : [];
 
   window.__storyMap = new Map(
     window.storyList.map(s => [String(s.id), s])
   );
+  
+  // STORY VARIABLES
+window.currentStoryVideo = null;
+
+window.storyList = window.storyList || [];
+window.__storyMap = new Map();
+window.storyTimer = null;
+window.storyOpenContext = null;
+window.__storyOpen = false;
+
 
   // ✅ RESET STORY STATE EVERY TIME USER OPENS STORIES
   window.storyIndex = 0;
@@ -1858,2722 +1937,6 @@ function setStories(list) {
   window.storyRemaining = 0;
   window.storyStartTime = 0;
 }
-
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text || "";
-  return div.innerHTML;
-}
-
-  function renderPostElement(post) {
-    
-    if (!window.renderedPosts) window.renderedPosts = new Set();
-
-if (window.renderedPosts.has(post.id)) return;
-window.renderedPosts.add(post.id);
-    
-    console.log(post);
-
-  const postsDiv =
-    document.getElementById("posts");
-
-  const time =
-    new Date(post.created_at)
-      .toLocaleString();
-
-  const isOwner =
-    session?.user?.id &&
-    String(session.user.id) ===
-    String(post.user_id);
-
-  const isLiked =
-    (post.liked_by || [])
-      .includes(session?.user?.id);
-
-  const div =
-    document.createElement("div");
-
-  div.id = `post-${post.id}`;
-  div.className = "post-card";
-
-  // ======================
-  // MEDIA HTML
-  // ======================
-
-  let mediaHTML = "";
-
-  
-  // IMAGE
-if (
-  post.media_type === "image" &&
-  post.file_url
-) {
-
-  mediaHTML = `
-  <img
-    src="${post.file_url}"
-
-    onclick="
-      openMedia(
-        '${post.file_url}',
-        'image'
-      )
-    "
-
-    style="
-      max-width:100%;
-      width:auto;
-      height:auto;
-      margin-top:10px;
-      border-radius:12px;
-      max-height:600px;
-      object-fit:contain;
-      display:block;
-      cursor:pointer;
-    "
-  />
-`;
-}
-
-// VIDEO
-if (
-  post.media_type === "video" &&
-  post.file_url
-) {
-
-  mediaHTML = `
-    <video
-      src="${post.file_url}"
-      controls
-      playsinline
-      muted
-      loop
-      style="
-        width:100%;
-        margin-top:10px;
-        border-radius:12px;
-        max-height:700px;
-        object-fit:cover;
-      "
-    ></video>
-  `;
-}
-
-  // ======================
-  // POST HTML
-  // ======================
-
-  div.innerHTML = `
-    <div style="
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-bottom:10px;
-">
-
-      <img 
-  class="avatar"
-
-  src="${
-    post.avatar_url &&
-    post.avatar_url !== "null"
-      ? post.avatar_url
-      : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(post.name)
-  }"
-
-  onerror="
-    this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(post.name)}'
-  "
-
-  style="
-    width:50px;
-    height:50px;
-    border-radius:50%;
-    object-fit:cover;
-    background:#222;
-    flex-shrink:0;
-  "
-/>
-
-     <div style="flex:1; overflow:hidden;">
-
-        <div
-  onclick="openProfile(
-    '${post.user_id}',
-    '${post.name}'
-  )"
-  style="
-    font-weight:bold;
-    cursor:pointer;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-  "
->
-          ${post.name}
-        </div>
-
-        <div style="
-          font-size:12px;
-          color:#aaa;
-        ">
-          ${time}
-        </div>
-
-      </div>
-
-    </div>
-
-  <div style="margin-top:10px;">
-  ${escapeHtml(post.content)}
-</div>
-
-    ${mediaHTML}
-
-    <div style="margin-top:8px;">
-      ❤️ ${post.likes || 0}
-    </div>
-
-   <button
-  class="like-btn"
-  onclick="likePost('${post.id}')"
-      style="
-        margin-top:5px;
-        background:${
-          isLiked
-            ? '#ff4d6d'
-            : '#222'
-        };
-        color:white;
-        border:none;
-        padding:5px 10px;
-        border-radius:5px;
-      "
-    >
-      ${
-        isLiked
-          ? "❤️ Liked"
-          : "🤍 Like"
-      }
-      (${post.likes || 0})
-    </button>
-
-    <button
-      onclick="openComments('${post.id}')"
-      style="
-        margin-top:5px;
-        background:#333;
-        color:white;
-        border:none;
-        padding:5px 10px;
-        border-radius:5px;
-      "
-    >
-      💬 Comment
-    </button>
-    
-    
-
-    ${
-      isOwner
-        ? `
-          <button
-            onclick="deletePost('${post.id}')"
-            style="
-              margin-top:8px;
-              background:#ff4d4d;
-              border:none;
-              color:white;
-              padding:5px 8px;
-              border-radius:5px;
-            "
-          >
-            Delete
-          </button>
-        `
-        : ""
-    }
-  `;
-
-  if (!postsDiv) return;
-  
-  console.log("RENDERING POST:", post.id);
-  
-  console.log("APPENDING TO:", postsDiv);
-
-return div;
-}
-
-// ✅ 3. DEFINE loadPosts
-window.loadPosts = async function () {
-
-  console.log("🔥 loadPosts running...");
-
-  const postsDiv =
-    document.getElementById("posts");
-
-  // IMPORTANT
-  if (!postsDiv) {
-
-    console.log("❌ posts div not found");
-    return;
-
-  }
-
-  let posts = [];
-  let error = null;
-
-  if (activeTab === "explore") {
-
-    const response = await supabase
-      .from("posts")
-      .select("*")
-      .order("created_at", {
-        ascending: false
-      });
-
-    posts = response.data;
-    error = response.error;
-
-  }
-
-  if (activeTab === "following") {
-
-  const userId = session?.user?.id;
-
-  if (!userId) {
-    postsDiv.innerHTML = "Login to view following feed";
-    return;
-  }
-
-  const { data: follows } = await supabase
-    .from("follows")
-    .select("following_id")
-    .eq("follower_id", userId);
-
-  const followingIds =
-    follows?.map(f => f.following_id) || [];
-
-  if (followingIds.length === 0) {
-    postsDiv.innerHTML = "You're not following anyone";
-    return;
-  }
-
-  const response = await supabase
-    .from("posts")
-    .select("*")
-    .in("user_id", followingIds)
-    .order("created_at", { ascending: false });
-
-  posts = response.data;
-  error = response.error;
-}
-
-function renderFeed(posts) {
-  const postsDiv = document.getElementById("posts");
-  if (!postsDiv) return;
-
-  postsDiv.replaceChildren();
-
-  posts.forEach(post => {
-    const el = renderPostElement(post);
-    postsDiv.appendChild(el);
-  });
-}
-
-window.renderedPosts = new Set();
-  postsDiv.replaceChildren();
-
-  if (error) {
-
-    postsDiv.innerHTML =
-      "❌ Error loading posts";
-
-    return;
-
-  }
-
-  if (!posts || posts.length === 0) {
-
-    postsDiv.innerHTML =
-      "😢 No posts yet";
-
-    return;
-
-  }
-  console.log("POST COUNT:", posts?.length);
-console.log("POST IDS:", posts?.map(p => p.id));
-
-console.log(
-  "POST CONTAINERS:",
-  document.querySelectorAll("#posts").length
-);
-window.postsState = posts || [];
-renderFeed(window.postsState);
-
-console.log(
-  "POST ELEMENTS AFTER RENDER:",
-  document.querySelectorAll(".post-card").length
-);
-
-  observeVideos();
-
-};
-
-
-window.likePost = async (id) => {
-  const userId = session?.user?.id;
-
-  if (!userId) {
-    alert("Login to like posts");
-    return;
-  }
-
-  const postDiv = document.getElementById(id);
-  const btn =
-  postDiv?.querySelector(".like-btn");
-
-  // get current post
-  const { data: post, error } = await supabase
-    .from("posts")
-    .select("likes, liked_by")
-    .eq("id", id)
-    .single();
-
-  if (error) {
-    console.log("❌ fetch error:", error);
-    return;
-  }
-
-  let likedBy = post.liked_by || [];
-  const isLiked = likedBy.includes(userId);
-
-  let newLikes;
-  let updatedLikedBy;
-
-  if (isLiked) {
-    updatedLikedBy = likedBy.filter(uid => uid !== userId);
-    newLikes = (post.likes || 1) - 1;
-  } else {
-    updatedLikedBy = [...likedBy, userId];
-    newLikes = (post.likes || 0) + 1;
-  }
-
-  // ✅ INSTANT UI UPDATE (no waiting)
-  if (btn) {
-    btn.innerHTML = `${!isLiked ? "❤️ Liked" : "🤍 Like"} (${newLikes})`;
-    btn.style.background = !isLiked ? "#ff4d6d" : "#222";
-  }
-
-  // 🔥 save to database
-  const { data: updatedPost } = await supabase
-  .from("posts")
-  .update({
-    likes: newLikes,
-    liked_by: updatedLikedBy
-  })
-  .eq("id", id)
-  .select("user_id")
-  .single();
-  
-  // Create or update like notification
-if (!isLiked) {
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, avatar_url")
-    .eq("id", session.user.id)
-    .single();
-
-  const { data: postOwner } = await supabase
-    .from("posts")
-    .select("user_id")
-    .eq("id", id)
-    .single();
-
-  if (postOwner && postOwner.user_id !== session.user.id) {
-
-    const { data: existing } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", postOwner.user_id)
-      .eq("type", "like")
-      .eq("post_id", id)
-      .maybeSingle();
-
-    if (existing) {
-
-      await supabase
-        .from("notifications")
-        .update({
-          count: (existing.count || 1) + 1,
-          username: profile.name,
-          avatar_url: profile.avatar_url,
-          last_time: new Date()
-        })
-        .eq("id", existing.id);
-
-    } else {
-
-      await supabase
-        .from("notifications")
-        .insert({
-          user_id: postOwner.user_id,
-          sender_id: session.user.id,
-          username: profile.name,
-          avatar_url: profile.avatar_url,
-          type: "like",
-          post_id: id,
-          message: "liked your post",
-          count: 1,
-          created_at: new Date(),
-          last_time: new Date(),
-          read: false
-        });
-
-    }
-
-  }
-}
-
-upsertPost({
-  id,
-  likes: newLikes,
-  liked_by: updatedLikedBy
-});
-};
-
-function upsertPost(updatedPost) {
-  if (!window.postsState) return;
-
-  const index = window.postsState.findIndex(p => p.id === updatedPost.id);
-
-  if (index >= 0) {
-    window.postsState[index] = {
-      ...window.postsState[index],
-      ...updatedPost
-    };
-  } else {
-    window.postsState.unshift(updatedPost);
-  }
-
-  renderFeed(window.postsState);
-}
-
-window.deletePost = async (id) => {
-  const { error } = await supabase.from("posts").delete().eq("id", id);
-
-  if (error) {
-    console.log("❌ delete error:", error);
-    return;
-  }
-
-  loadPosts();
-};
-
-let currentPostId = null;
-
-window.openComments = (postId) => {
-  console.log("💬 opening comments for:", postId);
-
-  currentPostId = postId;
-
-  const panel = document.getElementById("commentsPanel");
-  panel.style.display = "flex";
-
-  loadComments(postId);
-};
-
-async function loadComments(postId) {
-  console.log("📥 loading comments for:", postId);
-
-  const { data, error } = await supabase
-    .from("comments")
-    .select("*")
-    .eq("post_id", postId)
-    .order("created_at", { ascending: true });
-
-  const container = document.getElementById("panelComments");
-
-  if (error) {
-  console.log("❌ profile fetch error:", error);
-}
-
-// ✅ DO NOT RETURN — continue anyway
-
-  if (!data || data.length === 0) {
-    container.innerHTML = "No comments yet";
-    return;
-  }
-
- container.innerHTML = data.map(c => `
-  <div style="margin-bottom:5px;">
-    <b>${escapeHtml(c.name)}</b>:
-    ${escapeHtml(c.content)}
-  </div>
-`).join("");
-}
-
-window.goHome = () => {
-  startApp(); // ✅ NOT reload
-};
-
-window.openProfile = async (userId, name) => {
-  console.log("Logged in:", session?.user?.id);
-console.log("Profile opened:", userId);
-  const { data } = await supabase.auth.getSession();
-  session = data.session;
-
-  // ✅ GET PROFILE FIRST
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .maybeSingle();
-    
-    const avatarUrl =
-  profile?.avatar_url &&
-  profile.avatar_url !== "null"
-    ? profile.avatar_url
-    : "https://via.placeholder.com/60";
-    
-    const { count: followersCount } = await supabase
-  .from("follows")
-  .select("*", { count: "exact", head: true })
-  .eq("following_id", userId);
-
-const { count: followingCount } = await supabase
-  .from("follows")
-  .select("*", { count: "exact", head: true })
-  .eq("follower_id", userId);
-
- document.getElementById("app").innerHTML = `
-    <div style="padding:15px; color:white;">
-    <button id="themeToggle">🌙 Theme</button>
-      <button onclick="goHome()">← Back</button>
-
-     <div style="display:flex;align-items:center;gap:10px;">
-
-  <img 
-src="${avatarUrl}"
-
-  onclick="
-    openMedia(
-      '${profile?.avatar_url || 'https://via.placeholder.com/60'}',
-      'image'
-    )
-  "
-
-  style="
-    width:120px;
-    height:120px;
-    object-fit:contain;
-    border-radius:50%;
-    background:#222;
-    cursor:pointer;
-    display:block;
-  "
-/>
-
-  <div>
-
-    <h2>
-      ${profile?.name || name}
-    </h2>
-
-    <div style="margin-top:5px;color:#aaa;">
-      ${followersCount || 0} followers ·
-      ${followingCount || 0} following
-    </div>
-
-    <!-- FOLLOW BUTTON GOES HERE -->
-    <div id="followContainer"></div>
-
-  </div>
-
-</div>
-
-      ${
-        String(session?.user?.id) === String(userId)
-          ? `<button onclick="openEditProfile()">Edit</button>`
-          : ""
-      }
-
-      <div id="profilePosts"></div>
-    </div>
-  `;
-
-attachEvents();
-
-  // ✅ THEN load posts
-  const { data: posts, error } = await supabase
-    .from("posts")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
-
-  const container = document.getElementById("profilePosts");
-
-  if (error) {
-    container.innerHTML = "Error loading posts";
-    return;
-  }
-
-  if (!posts || posts.length === 0) {
-    container.innerHTML = "No posts yet";
-    return;
-  }
-
-  container.innerHTML = posts.map(post => `
-    <div style="border-bottom:1px solid #333; padding:10px 0;">
-     <div>${escapeHtml(post.content)}</div>
-      <div style="font-size:12px;color:#aaa;">
-        ${new Date(post.created_at).toLocaleString()}
-      </div>
-    </div>
-  `).join("");
-
-
-const followContainer =
-  document.getElementById("followContainer");
-
-if (
-  session?.user?.id &&
-  session.user.id !== userId
-) {
-
-  const { data: existingFollow } = await supabase
-    .from("follows")
-    .select("*")
-    .eq("follower_id", session.user.id)
-    .eq("following_id", userId)
-    .maybeSingle();
-
-  const isFollowing = !!existingFollow;
-
-  followContainer.innerHTML = `
-    <button id="followBtn"
-      style="
-        margin-top:10px;
-        padding:8px 14px;
-        border:none;
-        border-radius:8px;
-        background:${isFollowing ? "#444" : "#1d9bf0"};
-        color:white;
-      ">
-      ${isFollowing ? "Following" : "Follow"}
-    </button>
-  `;
-
-  document.getElementById("followBtn").onclick =
-    async () => {
-
-      if (isFollowing) {
-
-        await supabase
-          .from("follows")
-          .delete()
-          .eq("follower_id", session.user.id)
-          .eq("following_id", userId);
-
-      } else {
-
-        const { error } = await supabase
-  .from("follows")
-  .insert({
-    follower_id: session.user.id,
-    following_id: userId
-  });
-  
-  if (!error) {
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, avatar_url")
-    .eq("id", session.user.id)
-    .single();
-
-  const { data: existing } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("type", "follow")
-    .maybeSingle();
-
-  if (existing) {
-
-    await supabase
-      .from("notifications")
-      .update({
-        count: (existing.count || 1) + 1,
-        username: profile.name,
-        avatar_url: profile.avatar_url,
-        last_time: new Date(),
-        message: "started following you"
-      })
-      .eq("id", existing.id);
-
-  } else {
-
-    await supabase
-      .from("notifications")
-      .insert({
-        user_id: userId,
-        sender_id: session.user.id,
-        username: profile.name,
-        avatar_url: profile.avatar_url,
-        type: "follow",
-        message: "started following you",
-        count: 1,
-        created_at: new Date(),
-        last_time: new Date(),
-        read: false
-      });
-
-  }
-
-}
-
-      }
-
-      openProfile(userId, name);
-
-    };
-}
-};
-
-  window.openEditProfile = async () => {
-  alert("EDIT FUNCTION RUNNING");
-
-  const { data: sessionData } = await supabase.auth.getSession();
-  session = sessionData.session;
-
-  if (!session?.user) {
-    alert("You are not logged in");
-    return;
-  }
-
-  const user = session.user;
-
-  // ✅ SAFE FETCH (no crashing)
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", session.user.id)
-    .maybeSingle();
-
-  console.log("PROFILE DATA:", data);
-  console.log("PROFILE ERROR:", error);
-
-  // ❌ DO NOT STOP if error
-
-  document.getElementById("app").innerHTML = `
-    <div style="padding:15px; color:white;">
-      <button onclick="goHome()">← Back</button>
-
-      <h2>Edit Profile</h2>
-
-      <input id="editName" placeholder="Name" value="${data?.name || ""}" />
-      <input type="file" id="avatarFile" accept="image/*" />
-      <textarea id="editBio" placeholder="Bio">${data?.bio || ""}</textarea>
-
-      <button id="saveProfile">Save</button>
-    </div>
-  `;
-  
-  document.getElementById("saveProfile").onclick = async () => {
-  const name = document.getElementById("editName").value;
-  const bio = document.getElementById("editBio").value;
-
-  const fileInput = document.getElementById("avatarFile");
-  const file = fileInput.files[0];
-
-  let avatarUrl = null;
-
-  if (file) {
-    const originalFile = file;
-    const fileName =
-  `${session.user.id}-${Date.now()}-${file.name}`;
-
-    const { data, error: uploadError } = await supabase.storage
-  .from("avatars")
-  .upload(fileName, originalFile, {
-    cacheControl: "3600",
-    upsert: true
-  });
-
-console.log("UPLOAD RESULT:", data);
-console.log("UPLOAD ERROR:", uploadError);
-
-    if (uploadError) {
-      alert("Upload failed");
-      console.log(uploadError);
-      return;
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from("avatars")
-      .getPublicUrl(fileName);
-
-    avatarUrl =
-  publicUrlData.publicUrl + "?t=" + Date.now();
-  }
-
-  const { data: oldProfile } = await supabase
-    .from("profiles")
-    .select("avatar_url")
-    .eq("id", session.user.id)
-    .single();
-
-  const { error } = await supabase.from("profiles").upsert({
-    id: session.user.id,
-    name,
-    avatar_url: avatarUrl || oldProfile?.avatar_url,
-    bio
-  });
-
-  if (error) {
-    alert("Save failed");
-    console.log(error);
-    return;
-  }
-
-  openProfile(session.user.id, name);
-};
-};
-
-window.createPost = async function () {
-  const input = document.getElementById("postInput");
-  if (!input || !input.value.trim()) return;
-
-  const { error } = await supabase.from("posts").insert({
-    content: input.value,
-    user_id: session?.user?.id || null,
-    name: session?.user?.email || "Guest"
-  });
-
-  if (error) {
-    console.log("POST ERROR:", error);
-    return;
-  }
-
-  input.value = "";
-  loadPosts();
-};
-
-function attachEvents() {
-
-  const exploreTab = document.getElementById("tab-explore");
-  const followingTab = document.getElementById("tab-following");
-
-  if (exploreTab && followingTab) {
-
-    exploreTab.onclick = () => {
-      activeTab = "explore";
-
-      exploreTab.classList.add("active-tab");
-      followingTab.classList.remove("active-tab");
-
-      loadPosts();
-    };
-
-    followingTab.onclick = () => {
-      activeTab = "following";
-
-      followingTab.classList.add("active-tab");
-      exploreTab.classList.remove("active-tab");
-
-      loadPosts();
-    };
-  }
-
-  const themeBtn = document.getElementById("themeToggle");
-  if (themeBtn) {
-    themeBtn.onclick = toggleTheme;
-  }
-
-  const postBtn = document.getElementById("postBtn");
-  if (postBtn) {
-    postBtn.onclick = createPost;
-  }
-
-  const loginBtn = document.getElementById("login");
-  if (loginBtn) {
-    loginBtn.onclick = async () => {
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: window.location.origin }
-      });
-    };
-  }
-
-  const storyBtn = document.getElementById("storyBtn");
-  if (storyBtn) {
-    storyBtn.onclick = () => {
-      document.getElementById("storyInput")?.click();
-    };
-  }
-
-  const storyInput = document.getElementById("storyInput");
-  if (storyInput) {
-    storyInput.onchange = addStory;
-  }
-
-  const panelBtn = document.getElementById("panelPostBtn");
-  if (panelBtn) {
-    panelBtn.onclick = async () => {
-      const input = document.getElementById("panelInput");
-      if (!input.value) return;
-
-      const { error } = await supabase
-  .from("comments")
-  .insert({
-    post_id: currentPostId,
-    content: input.value,
-    user_id: session.user.id,
-    name: session.user.email || "Guest"
-  });
-  
-  // Notify post owner
-const { data: post } = await supabase
-  .from("posts")
-  .select("user_id")
-  .eq("id", currentPostId)
-  .single();
-
-if (post && post.user_id !== session.user.id) {
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, avatar_url")
-    .eq("id", session.user.id)
-    .single();
-
-  const { data: existing } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("user_id", post.user_id)
-    .eq("type", "comment")
-    .eq("post_id", currentPostId)
-    .maybeSingle();
-
-  if (existing) {
-
-    await supabase
-      .from("notifications")
-      .update({
-        count: (existing.count || 1) + 1,
-        username: profile.name,
-        avatar_url: profile.avatar_url,
-        last_time: new Date(),
-        message: "commented on your post"
-      })
-      .eq("id", existing.id);
-
-  } else {
-
-    await supabase
-      .from("notifications")
-      .insert({
-        user_id: post.user_id,
-        sender_id: session.user.id,
-        username: profile.name,
-        avatar_url: profile.avatar_url,
-        type: "comment",
-        post_id: currentPostId,
-        message: "commented on your post",
-        count: 1,
-        created_at: new Date(),
-        last_time: new Date(),
-        read: false
-      });
-
-  }
-}
-
-if (error) {
-  console.log(error);
-  return;
-}
-
-
-input.value = "";
-loadComments(currentPostId);
-    };
-  }
-
-  const closeBtn = document.getElementById("closeComments");
-  if (closeBtn) {
-    closeBtn.onclick = () => {
-      document.getElementById("commentsPanel").style.display = "none";
-    };
-  }
-}
-
-// ✅ START APP FUNCTION (you were missing this too)
-let postsEl = null;
-let scrollTimeout;
-
-async function startApp() {
-  
-  console.log("START APP CALLED");
-
-  document.getElementById("app").innerHTML = `
-    <div style="padding:10px;">
-
-      <div id="tabs" style="
-        display:flex;
-        justify-content:space-around;
-        margin-bottom:10px;
-        color:#aaa;
-        font-weight:bold;
-      ">
-        <div id="tab-explore" class="active-tab">
-          🌍 Explore
-        </div>
-
-        <div id="tab-following">
-          👥 Following
-        </div>
-      </div>
-
-      ${
-        session
-          ? `
-<textarea
-  id="postInput"
-  placeholder="Write something..."
-  style="
-    width:100%;
-    height:80px;
-    margin-bottom:10px;
-  "
-></textarea>
-
-<input
-  type="file"
-  id="mediaInput"
-  accept="image/*,video/*"
-  style="margin-bottom:10px;"
-/>
-
-<button id="postBtn">Post</button>
-
-<button id="storyBtn">Add Story</button>
-
-<input
-  type="file"
-  id="storyInput"
-  accept="image/*,video/*"
-  style="display:none;"
-/>
-
-<input
-  type="file"
-  id="storyAudioInput"
-  accept="audio/*"
-  style="display:none;"
-/>
-`
-          : `
-<button id="login">Login</button>
-`
-      }
-
-      <div id="storiesBar"></div>
-
-      <div id="posts"></div>
-
-    </div>
-
-    <div id="commentsPanel" style="
-      position:fixed;
-      bottom:0;
-      left:0;
-      right:0;
-      height:60%;
-      background:#111;
-      color:white;
-      display:none;
-      flex-direction:column;
-      padding:10px;
-      z-index:1000;
-    ">
-      <span id="closeComments">✖</span>
-
-      <div id="panelComments"></div>
-
-      <input id="panelInput" />
-
-      <button id="panelPostBtn">
-        Post
-      </button>
-
-    </div>
-  `;
-
-  postsEl = document.getElementById("posts");
-
-loadPosts();
-loadStories();
-setupScrollSnap();
-
-adjustStoryBar();
-
-if (session && currentUser) {
-    await registerPush();
-    await loadUnreadCount();
-}
-setTimeout(attachEvents, 0);
-}
-
-async function createPost() {
-
-  const input =
-    document.getElementById("postInput");
-
-  const mediaInput =
-    document.getElementById("mediaInput");
-
-  const content =
-    input.value.trim();
-
-  const file =
-    mediaInput.files[0];
-
-  let mediaUrl = null;
-  let mediaType = null;
-  
-  if (!session?.user) {
-  alert("Please login first");
-  return;
-}
-
-  if (file) {
-
-    const fileName =
-  `${session.user.id}_${Date.now()}_${file.name}`;
-
-    const { error: uploadError } =
-      await supabase.storage
-  .from("posts_media")
-  .upload(fileName, file);
-
-    if (uploadError) {
-      console.log(uploadError);
-      alert("Upload failed");
-      return;
-    }
-
-    const { data } =
-      supabase.storage
-  .from("posts_media")
-  .getPublicUrl(fileName);
-
-    mediaUrl = data.publicUrl;
-
-    if (file.type.startsWith("image")) {
-      mediaType = "image";
-    }
-
-    if (file.type.startsWith("video")) {
-      mediaType = "video";
-    }
-  }
-
-  const { data: profile } =
-    await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.user.id)
-      .maybeSingle();
-
-  const { error } =
-  await supabase
-    .from("posts")
-    .insert([{
-      content,
-      file_url: mediaUrl,
-      media_type: mediaType,
-      user_id: session.user.id,
-      name:
-        profile?.name ||
-        session.user.email,
-      avatar_url:
-        profile?.avatar_url || null
-    }]);
-
-if (error) {
-
-  console.log(error);
-  alert("Post failed");
-  return;
-
-}
-
-  input.value = "";
-  mediaInput.value = "";
-
-  loadPosts();
-}
-
-// ========================
-// AUTO SNAP
-// ========================
-
-function setupScrollSnap() {
-
-  if (!postsEl) return;
-
-  postsEl.addEventListener("scroll", () => {
-
-    clearTimeout(scrollTimeout);
-
-    scrollTimeout = setTimeout(() => {
-      snapToNearestPost();
-    }, 120);
-
-  });
-
-}
-
-function snapToNearestPost() {
-
-  const posts =
-    document.querySelectorAll(".post-card");
-
-  if (!posts.length) return;
-
-  const scrollTop = postsEl.scrollTop;
-
-  let closest = null;
-  let minDistance = Infinity;
-
-  posts.forEach((post) => {
-
-    const offset = post.offsetTop;
-
-    const distance =
-      Math.abs(offset - scrollTop);
-
-    if (distance < minDistance) {
-      minDistance = distance;
-      closest = post;
-    }
-
-  });
-
-  if (closest) {
-
-    postsEl.scrollTo({
-      top: closest.offsetTop,
-      behavior: "smooth"
-    });
-
-  }
-}
-
-let currentChatUser = null;
-
-window.openChat = async function(userId, name) {
-
-  if (!session?.user) {
-    alert("Please login first");
-    return;
-  }
-
-  currentChatUser = userId;
-
-  document.getElementById("app")
-    .style.display = "none";
-
-  document.getElementById("chatScreen")
-    .style.display = "flex";
-
-  document.getElementById("chatName")
-    .innerText = name;
-
-  // GET PROFILE
-  const { data: profile } =
-    await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .maybeSingle();
-
-  // SET CHAT IMAGE
-  document.getElementById(
-    "chatAvatar"
-  ).src =
-    profile?.avatar_url ||
-    "https://ui-avatars.com/api/?name=" +
-    encodeURIComponent(name);
-
-  loadMessages();
-
-};
-
-window.openInbox = async function () {
-
-  document.getElementById(
-    "inboxScreen"
-  ).style.display = "flex";
-
-  const inbox =
-    document.getElementById("inboxList");
-
-  inbox.innerHTML = "Loading...";
-
-  const { data: sessionData } =
-    await supabase.auth.getSession();
-
-  const userId =
-    sessionData.session?.user?.id;
-
-  if (!userId) return;
-
-  // GET MESSAGES
-  const { data: messages, error } =
-    await supabase
-      .from("messages")
-      .select("*")
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
-      .order("created_at", {
-        ascending:false
-      });
-
-  if (error) {
-    inbox.innerHTML = "Error loading chats";
-    return;
-  }
-
-  if (!messages || messages.length === 0) {
-    inbox.innerHTML = "No chats yet";
-    return;
-  }
-
-  // REMOVE DUPLICATES
-  const uniqueUsers = {};
-
-  messages.forEach(msg => {
-
-    const otherUser =
-      msg.sender_id === userId
-        ? msg.receiver_id
-        : msg.sender_id;
-
-    if (!uniqueUsers[otherUser]) {
-      uniqueUsers[otherUser] = msg;
-    }
-
-  });
-
-  const chats =
-    Object.values(uniqueUsers);
-
-  inbox.innerHTML = "";
-
-  for (const msg of chats) {
-
-    const otherUser =
-      msg.sender_id === userId
-        ? msg.receiver_id
-        : msg.sender_id;
-
-    // GET PROFILE
-    const { data: profile } =
-  await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", otherUser)
-    .maybeSingle();
-
-    const div =
-      document.createElement("div");
-
-    // LONG PRESS
-    let pressTimer;
-
-    div.ontouchstart = () => {
-
-      pressTimer = setTimeout(async () => {
-
-        const confirmDelete =
-          confirm("Delete this chat?");
-
-        if (!confirmDelete) return;
-
-        await supabase
-          .from("messages")
-          .delete()
-          .or(`
-            and(sender_id.eq.${userId},receiver_id.eq.${otherUser}),
-            and(sender_id.eq.${otherUser},receiver_id.eq.${userId})
-          `);
-
-        openInbox();
-
-      }, 700);
-
-    };
-
-    div.ontouchend = () => {
-      clearTimeout(pressTimer);
-    };
-
-    div.onclick = () => {
-
-      openChat(
-        otherUser,
-        profile?.name || "User"
-      );
-
-      document.getElementById(
-        "inboxScreen"
-      ).style.display = "none";
-
-    };
-
-    div.style = `
-  display:flex;
-  align-items:flex-start;
-  gap:12px;
-  padding:15px;
-  border-bottom:1px solid #222;
-  cursor:pointer;
-`;
-
-    div.innerHTML = `
-
-     <img
-  src="${
-    profile?.avatar_url ||
-    'https://ui-avatars.com/api/?name=' +
-    encodeURIComponent(profile?.name || 'U')
-  }"
-
-  onclick="
-    openMedia(
-      this.src,
-      'image'
-    )
-  "
-
-  style="
-    width:55px;
-    height:55px;
-    border-radius:50%;
-    object-fit:cover;
-    background:#222;
-    display:block;
-    cursor:pointer;
-  "
-/>
-
-      <div style="flex:1;">
-
-        <div style="
-          color:white;
-          font-weight:bold;
-          font-size:16px;
-        ">
-          ${escapeHtml(profile?.name || "User")}
-        </div>
-
-        <div style="
-          color:#aaa;
-          margin-top:4px;
-          font-size:14px;
-          white-space:nowrap;
-          overflow:hidden;
-          text-overflow:ellipsis;
-        ">
-         ${escapeHtml(msg.content || "")}
-        </div>
-
-      </div>
-
-    `;
-
-    inbox.appendChild(div);
-
-  }
-
-};
-
-async function loadMessages() {
-
-  // ✅ GET CURRENT USER
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
-
-  // ❌ not logged in
-  if (!session) {
-    alert("Login first");
-    return;
-  }
-
-  const myId = session.user.id;
-
-  // ✅ LOAD CHAT
-  const {
-    data,
-    error
-  } = await supabase
-    .from("messages")
-    .select("*")
-    .or(
-  `and(sender_id.eq.${myId},receiver_id.eq.${currentChatUser}),and(sender_id.eq.${currentChatUser},receiver_id.eq.${myId})`
-)
-    .order("created_at", {
-      ascending: true
-    });
-
-  console.log("MESSAGES:", data);
-  console.log("ERROR:", error);
-
-  const chat =
-    document.getElementById(
-      "chatMessages"
-    );
-
-  chat.innerHTML = "";
-
-  if (error) {
-
-  chat.innerHTML = `
-    <div style="
-      color:red;
-      padding:20px;
-      font-size:14px;
-      word-break:break-word;
-    ">
-      ❌ ${error.message}
-    </div>
-  `;
-
-  console.log(error);
-
-  return;
-}
-
-  if (!data || data.length === 0) {
-    chat.innerHTML = `
-      <div style="
-        color:#888;
-        text-align:center;
-        margin-top:20px;
-      ">
-        No messages yet
-      </div>
-    `;
-    return;
-  }
-
-  data.forEach(msg => {
-    
-    const mine =
-  msg.sender_id === myId;
-
-    const time =
-  new Date(msg.created_at)
-    .toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-
-chat.innerHTML +=`
-  <div style="
-    display:flex;
-    justify-content:${
-      mine
-        ? "flex-end"
-        : "flex-start"
-    };
-    margin-bottom:10px;
-  ">
-
-<div
-
-  id="${msg.id}"
-
-  oncontextmenu="
-    event.preventDefault();
-    messageOptions('${msg.id}')
-  "
-
-  ontouchstart="
-    window.pressTimer = setTimeout(function(){
-      messageOptions('${msg.id}')
-    }, 700)
-  "
-
-  ontouchend="
-    clearTimeout(window.pressTimer)
-  "
-
-  ontouchmove="
-    clearTimeout(window.pressTimer)
-  "
-
-  style="
-    background:${
-      msg.media_url
-        ? 'transparent'
-        : mine
-          ? '#0084ff'
-          : '#222'
-    };
-
-    color:white;
-
-    padding:${
-      msg.media_url
-        ? '0'
-        : '10px 12px'
-    };
-
-    border-radius:18px;
-
-    max-width:75%;
-
-    overflow:hidden;
-  "
->
-
-      <div>
-
-  ${
-    msg.media_type === "image"
-      ? `
-        <img
-          src="${msg.media_url}"
-
-          onclick="
-            openMedia(
-              '${msg.media_url}',
-              'image'
-            )
-          "
-
-          style="
-            max-width:100%;
-            width:auto;
-            height:auto;
-            max-height:320px;
-            object-fit:contain;
-            display:block;
-            margin:auto;
-            border-radius:16px;
-            margin-bottom:6px;
-            cursor:pointer;
-          "
-        />
-      `
-      : ""
-  }
-
-        ${
-          msg.media_type === "video"
-            ? `
-              <video
-                src="${msg.media_url}"
-                controls
-
-                onclick="
-                  openMedia(
-                    '${msg.media_url}',
-                    'video'
-                  )
-                "
-
-                style="
-                  width:100%;
-                  max-width:260px;
-                  max-height:320px;
-                  object-fit:cover;
-                  border-radius:16px;
-                  margin-bottom:6px;
-                  background:black;
-                "
-              ></video>
-            `
-            : ""
-        }
-
-        ${
-  msg.content
-    ? `
-      <div style="
-        margin-top:4px;
-        word-break:break-word;
-      ">
-        ${escapeHtml(msg.content)}
-      </div>
-    `
-    : ""
-}
-
-      </div>
-
-      <div style="
-        margin-top:5px;
-        font-size:11px;
-        opacity:0.7;
-        text-align:right;
-      ">
-        ${time}
-      </div>
-
-    </div>
-
-  </div>
-`;
-  });
-
-  chat.scrollTop =
-    chat.scrollHeight;
-}
-
-async function sendMessage() {
-
-  const input =
-    document.getElementById("chatInput");
-
-  const fileInput =
-    document.getElementById("chatMedia");
-
-  const file =
-    fileInput.files[0];
-    
-    if (!session?.user) {
-  alert("Please login first");
-  return;
-}
-
-  // allow text OR media
-  if (
-    !input.value.trim() &&
-    !file
-  ) return;
-
-  let mediaUrl = null;
-  let mediaType = null;
-  let fileName = null;
-
-  // =====================
-  // UPLOAD FILE
-  // =====================
-  
-  if (file) {
-
-  const allowed = [
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "video/mp4",
-    "video/webm"
-  ];
-
-  if (!allowed.includes(file.type)) {
-    alert("Unsupported file type");
-    return;
-  }
-
-}
-
-if (file && file.size > 50 * 1024 * 1024) {
-  alert("File too large");
-  return;
-}
-
-  if (file) {
-
-    fileName =
-  `${session.user.id}_${Date.now()}_${file.name}`;
-
-    mediaType =
-      file.type.startsWith("video")
-        ? "video"
-        : "image";
-
-    const { error: uploadError } =
-      await supabase.storage
-        .from("chat-media")
-        .upload(fileName, file);
-
-    if (uploadError) {
-      alert(uploadError.message);
-      return;
-    }
-
-    const { data } =
-      supabase.storage
-        .from("chat-media")
-        .getPublicUrl(fileName);
-
-    mediaUrl = data.publicUrl;
-  }
-
-  // =====================
-  // SAVE MESSAGE
-  // =====================
-
-  const { error } =
-    await supabase
-      .from("messages")
-      .insert({
-        sender_id:
-          session.user.id,
-
-        receiver_id:
-          currentChatUser,
-
-        content:
-          input.value.trim(),
-
-        media_url:
-          mediaUrl,
-
-        media_type:
-          mediaType,
-
-        file_name:
-          fileName
-      });
-
-  if (error) {
-    alert(error.message);
-    return;
-  }
-  
-  // Notify the receiver
-const { data: profile } = await supabase
-  .from("profiles")
-  .select("name, avatar_url")
-  .eq("id", session.user.id)
-  .single();
-
-const { data: existing } = await supabase
-  .from("notifications")
-  .select("*")
-  .eq("user_id", currentChatUser)
-  .eq("type", "message")
-  .eq("sender_id", session.user.id)
-  .maybeSingle();
-
-if (existing) {
-
-  await supabase
-    .from("notifications")
-    .update({
-      count: (existing.count || 1) + 1,
-      username: profile.name,
-      avatar_url: profile.avatar_url,
-      message: input.value.trim()
-        ? "📩 sent you a message"
-        : mediaType === "video"
-          ? "🎥 sent you a video"
-          : "📷 sent you a photo",
-      last_time: new Date(),
-      read: false
-    })
-    .eq("id", existing.id);
-
-} else {
-
-  await supabase
-    .from("notifications")
-    .insert({
-      user_id: currentChatUser,
-      sender_id: session.user.id,
-      username: profile.name,
-      avatar_url: profile.avatar_url,
-      type: "message",
-      message: input.value.trim()
-        ? "📩 sent you a message"
-        : mediaType === "video"
-          ? "🎥 sent you a video"
-          : "📷 sent you a photo",
-      count: 1,
-      created_at: new Date(),
-      last_time: new Date(),
-      read: false
-    });
-
-}
-
-  input.value = "";
-  fileInput.value = "";
-
-  loadMessages();
-}
-
-window.messageOptions = async function(messageId) {
-
-  const old =
-    document.getElementById(
-      "messageMenu"
-    );
-
-  if (old) old.remove();
-
-  const menu =
-    document.createElement("div");
-
-  menu.id = "messageMenu";
-
-  menu.style = `
-    position:fixed;
-    left:50%;
-    bottom:25px;
-    transform:translateX(-50%);
-    background:#1c1c1c;
-    border:1px solid #333;
-    border-radius:18px;
-    padding:8px;
-    z-index:999999;
-    width:220px;
-    box-shadow:0 5px 25px rgba(0,0,0,0.4);
-  `;
-
-  menu.innerHTML = `
-
-    <div onclick="copyMessage('${messageId}')"
-      style="
-        padding:14px;
-        color:white;
-        border-bottom:1px solid #333;
-      ">
-      📋 Copy
-    </div>
-
-    <div onclick="likeMessage('${messageId}')"
-      style="
-        padding:14px;
-        color:white;
-        border-bottom:1px solid #333;
-      ">
-      ❤️ Like
-    </div>
-
-    <div onclick="shareMessage('${messageId}')"
-      style="
-        padding:14px;
-        color:white;
-        border-bottom:1px solid #333;
-      ">
-      📤 Share
-    </div>
-
-    <div onclick="deleteMessage('${messageId}')"
-      style="
-        padding:14px;
-        color:#ff4d4d;
-        font-weight:bold;
-      ">
-      🗑 Delete
-    </div>
-
-  `;
-
-  document.body.appendChild(menu);
-
-  setTimeout(() => {
-
-    document.onclick = () => {
-
-      const menu =
-        document.getElementById(
-          "messageMenu"
-        );
-
-      if (menu) menu.remove();
-
-      document.onclick = null;
-
-    };
-
-  }, 100);
-
-};
-
-window.copyMessage = function(messageId) {
-
-  const el =
-    document.getElementById(messageId);
-
-  if (!el) return;
-
-  navigator.clipboard.writeText(
-    el.innerText
-  );
-
-  alert("Copied");
-
-  document.getElementById(
-    "messageMenu"
-  )?.remove();
-
-};
-
-window.likeMessage = function(messageId) {
-
-  alert("❤️ Liked");
-
-  document.getElementById(
-    "messageMenu"
-  )?.remove();
-
-};
-
-window.shareMessage = async function(messageId) {
-
-  const el =
-    document.getElementById(messageId);
-
-  if (!el) return;
-
-  if (navigator.share) {
-  await navigator.share({
-    text: el.innerText
-  });
-} else {
-  navigator.clipboard.writeText(el.innerText);
-  alert("Copied to clipboard");
-}
-
-  document.getElementById(
-    "messageMenu"
-  )?.remove();
-
-};
-
-window.deleteMessage = async function(messageId) {
-  
-  if (!session?.user) {
-  alert("Please login first");
-  return;
-}
-
-  const confirmDelete =
-    confirm("Delete message?");
-
-  if (!confirmDelete) return;
-
-  console.log(
-    "Deleting:",
-    messageId
-  );
-
-  const { error } =
-    await supabase
-      .from("messages")
-      .delete()
-      .eq("id", messageId);
-
-  console.log(
-    "Delete error:",
-    error
-  );
-
-  if (error) {
-
-    alert(error.message);
-    return;
-
-  }
-
-  loadMessages();
-
-};
-
-window.closeChat = function () {
-
-  // hide current chat
-  document.getElementById(
-    "chatScreen"
-  ).style.display = "none";
-
-  // show inbox
-  document.getElementById(
-    "inboxScreen"
-  ).style.display = "flex";
-
-  // show home/feed again
-  document.getElementById(
-    "app"
-  ).style.display = "block";
-  
-  requestAnimationFrame(() => {
-  loadPosts();
-});
-
-};
-
-window.openMedia = function (url, type) {
-
-  const viewer = document.getElementById("mediaViewer");
-
-  // RESET VIEWER
-  viewer.innerHTML = "";
-
-  // CLOSE BUTTON
-  const closeBtn = document.createElement("div");
-
-  closeBtn.innerHTML = "✕";
-
-  closeBtn.onclick = closeMedia;
-
-  closeBtn.style.cssText = `
-    position:absolute;
-    top:20px;
-    left:20px;
-    color:white;
-    font-size:38px;
-    z-index:999999;
-    cursor:pointer;
-    user-select:none;
-  `;
-
-  viewer.appendChild(closeBtn);
-  
-  // FADE IN
-viewer.style.opacity = "0";
-
-setTimeout(() => {
-  viewer.style.opacity = "1";
-}, 10);
-
-viewer.style.transition =
-  "opacity 0.2s ease";
-
-
-// TAP BACKGROUND TO CLOSE
-viewer.onclick = e => {
-
-  if (e.target === viewer) {
-
-    closeMedia();
-  }
-
-};
-
-
-// ESC KEY CLOSE
-document.onkeydown = e => {
-
-  if (e.key === "Escape") {
-
-    closeMedia();
-  }
-
-};
-
-  // DOWNLOAD BUTTON (IMAGE ONLY)
-  if (type === "image") {
-
-    const downloadBtn = document.createElement("a");
-
-    downloadBtn.href = url;
-    downloadBtn.download = "";
-    downloadBtn.target = "_blank";
-
-    downloadBtn.innerHTML = "⬇";
-
-    downloadBtn.style.cssText = `
-      position:absolute;
-      top:20px;
-      right:20px;
-      color:white;
-      font-size:28px;
-      text-decoration:none;
-      z-index:999999;
-      background:#111;
-      padding:10px 14px;
-      border-radius:12px;
-    `;
-
-    viewer.appendChild(downloadBtn);
-  }
-
-  // CONTAINER
-  const container = document.createElement("div");
-
-container.style.cssText = `
-  width:100%;
-  height:100%;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  overflow:hidden;
-  position:relative;
-`;
-
-  // IMAGE
-  if (type === "image") {
-
-    const img = document.createElement("img");
-
-img.src = url;
-
-img.style.cssText = `
-  max-width:100%;
-  max-height:100%;
-  object-fit:contain;
-  display:block;
-  transition:transform 0.2s ease;
-  touch-action:none;
-`;
-
-container.appendChild(img);
-
-
-// ZOOM VARIABLES
-let scale = 1;
-let startDistance = 0;
-
-let currentX = 0;
-let currentY = 0;
-
-let isDragging = false;
-
-let startX = 0;
-let startY = 0;
-
-
-
-// DOUBLE TAP ZOOM
-img.addEventListener("dblclick", () => {
-
-  scale = scale === 1 ? 2 : 1;
-
-  updateTransform();
-});
-
-
-// TOUCH START
-img.addEventListener("touchstart", e => {
-
-  // PINCH START
-  if (e.touches.length === 2) {
-
-    startDistance = getDistance(
-      e.touches[0],
-      e.touches[1]
-    );
-  }
-
-  // DRAG START
-  if (e.touches.length === 1 && scale > 1) {
-
-    isDragging = true;
-
-    startX =
-      e.touches[0].clientX - currentX;
-
-    startY =
-      e.touches[0].clientY - currentY;
-  }
-
-});
-
-
-// TOUCH MOVE
-img.addEventListener("touchmove", e => {
-
-  e.preventDefault();
-
-  // PINCH ZOOM
-  if (e.touches.length === 2) {
-
-    const newDistance = getDistance(
-      e.touches[0],
-      e.touches[1]
-    );
-
-    scale *= newDistance / startDistance;
-
-    scale = Math.max(
-      1,
-      Math.min(scale, 5)
-    );
-
-    startDistance = newDistance;
-
-    updateTransform();
-  }
-
-  // DRAG IMAGE
-  if (e.touches.length === 1 && isDragging) {
-
-    currentX =
-      e.touches[0].clientX - startX;
-
-    currentY =
-      e.touches[0].clientY - startY;
-
-    updateTransform();
-  }
-
-}, { passive:false });
-
-
-// TOUCH END
-img.addEventListener("touchend", () => {
-
-  isDragging = false;
-});
-
-
-// APPLY TRANSFORM
-function updateTransform() {
-
-  img.style.transform =
-    `translate(${currentX}px, ${currentY}px) scale(${scale})`;
-}
-
-
-// DISTANCE BETWEEN 2 FINGERS
-function getDistance(t1, t2) {
-
-  return Math.hypot(
-    t2.clientX - t1.clientX,
-    t2.clientY - t1.clientY
-  );
-}
-
-// SWIPE DOWN TO CLOSE
-let swipeStartY = 0;
-let swipeCurrentY = 0;
-
-container.addEventListener("touchstart", e => {
-
-  if (scale === 1 && e.touches.length === 1) {
-
-    swipeStartY = e.touches[0].clientY;
-  }
-
-});
-
-container.addEventListener("touchmove", e => {
-
-  if (scale === 1 && e.touches.length === 1) {
-
-    swipeCurrentY =
-      e.touches[0].clientY - swipeStartY;
-
-    // MOVE VIEWER
-    container.style.transform =
-      `translateY(${swipeCurrentY}px)`;
-
-    // FADE BACKGROUND
-    viewer.style.background =
-      `rgba(0,0,0,${
-        0.95 - Math.abs(swipeCurrentY) / 700
-      })`;
-  }
-
-}, { passive:false });
-
-
-container.addEventListener("touchend", () => {
-
-  // CLOSE IF SWIPED FAR
-  if (Math.abs(swipeCurrentY) > 120) {
-
-    closeMedia();
-
-    return;
-  }
-
-  // RESET POSITION
-  container.style.transition =
-    "transform 0.2s ease";
-
-  container.style.transform =
-    "translateY(0px)";
-
-  viewer.style.background =
-    "rgba(0,0,0,0.95)";
-
-  setTimeout(() => {
-
-    container.style.transition = "";
-
-  }, 200);
-
-  swipeCurrentY = 0;
-});
-}
-
-  // VIDEO
-if (type === "video") {
-
-const video = document.createElement("video");
-
-video.id = "mediaVideo";
-
-video.src = url;
-
-video.controls = false;
-video.autoplay = true;
-video.playsInline = true;
-video.muted = window.storyMuted ?? true;
-
-  video.removeAttribute("width");
-  video.removeAttribute("height");
-
-  video.style.cssText = `
-    width:auto;
-    height:auto;
-
-    max-width:95vw;
-    max-height:95vh;
-
-    object-fit:contain;
-
-    display:block;
-    background:black;
-    border-radius:12px;
-
-    touch-action:none;
-  `;
-
-  container.appendChild(video);
-
-  // =========================
-  // PLAY BUTTON OVERLAY
-  // =========================
-
-  const playBtn = document.createElement("div");
-
-  playBtn.innerHTML = "⏸";
-
-  playBtn.style.cssText = `
-    position:absolute;
-    top:50%;
-    left:50%;
-    transform:translate(-50%, -50%);
-    width:90px;
-    height:90px;
-    border-radius:50%;
-    background:rgba(255,255,255,0.9);
-    color:black;
-    font-size:40px;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    opacity:0;
-    transition:0.2s;
-    pointer-events:none;
-    z-index:20;
-  `;
-
-  container.appendChild(playBtn);
-
-  // =========================
-  // GESTURE OVERLAY
-  // =========================
-
-  const gestureOverlay =
-    document.createElement("div");
-
-  gestureOverlay.style.cssText = `
-    position:absolute;
-    top:80px;
-    left:50%;
-    transform:translateX(-50%);
-    background:rgba(0,0,0,0.7);
-    color:white;
-    padding:10px 18px;
-    border-radius:20px;
-    font-size:16px;
-    opacity:0;
-    transition:0.2s;
-    z-index:30;
-    pointer-events:none;
-  `;
-
-  container.appendChild(gestureOverlay);
-
-  // =========================
-  // VARIABLES
-  // =========================
-
- startX = 0;
-
-moved = false;
-
-brightness = 1;
-
-startBrightness = 1;
-startVolume = video.volume;
-
-  // =========================
-  // TOUCH START
-  // =========================
-
-  video.addEventListener("touchstart", e => {
-
-    if (e.touches.length !== 1) return;
-
-    moved = false;
-
-    startY = e.touches[0].clientY;
-    startX = e.touches[0].clientX;
-
-    startBrightness = brightness;
-    startVolume = video.volume;
-
-  }, { passive:false });
-
-  // =========================
-  // TOUCH MOVE
-  // =========================
-
-  video.addEventListener("touchmove", e => {
-
-    if (e.touches.length !== 1) return;
-
-    e.preventDefault();
-
-    moved = true;
-
-    const touch = e.touches[0];
-
-    const deltaY =
-      startY - touch.clientY;
-
-    const percent =
-      deltaY / window.innerHeight;
-
-    // RIGHT SIDE = VOLUME
-    if (startX > window.innerWidth / 2) {
-
-      let newVolume =
-        startVolume + percent;
-
-      newVolume = Math.max(
-        0,
-        Math.min(1, newVolume)
-      );
-
-      video.volume = newVolume;
-
-      gestureOverlay.innerHTML =
-        "🔊 " +
-        Math.round(newVolume * 100) +
-        "%";
-    }
-
-    // LEFT SIDE = BRIGHTNESS
-    else {
-
-      brightness =
-        startBrightness + percent;
-
-      brightness = Math.max(
-        0.3,
-        Math.min(2, brightness)
-      );
-
-      video.style.filter =
-        `brightness(${brightness})`;
-
-      gestureOverlay.innerHTML =
-        "☀️ " +
-        Math.round(brightness * 50) +
-        "%";
-    }
-
-    gestureOverlay.style.opacity = "1";
-
-  }, { passive:false });
-
-  // =========================
-  // TOUCH END
-  // =========================
-
-  video.addEventListener("touchend", () => {
-
-    setTimeout(() => {
-
-      gestureOverlay.style.opacity = "0";
-
-    }, 500);
-
-  });
-
-  // =========================
-  // TAP PLAY / PAUSE
-  // =========================
-
-  video.addEventListener("click", e => {
-
-    e.stopPropagation();
-
-    if (moved) return;
-
-    if (video.paused) {
-
-      video.play();
-
-      playBtn.innerHTML = "⏸";
-
-    } else {
-
-      video.pause();
-
-      playBtn.innerHTML = "▶";
-
-    }
-
-    playBtn.style.opacity = "1";
-
-    clearTimeout(window.playBtnTimer);
-
-    window.playBtnTimer = setTimeout(() => {
-
-      playBtn.style.opacity = "0";
-
-    }, 700);
-
-  });
-
-}
-
-
-  viewer.appendChild(container);
-
-  // SHOW VIEWER
-  viewer.style.display = "flex";
-  viewer.style.justifyContent = "center";
-  viewer.style.alignItems = "center";
-  viewer.style.background = "rgba(0,0,0,0.95)";
-};
-
-
-// CLOSE MEDIA
-window.closeMedia = function () {
-  
-  document.onkeydown = null;
-
-  const viewer =
-    document.getElementById("mediaViewer");
-
-  viewer.style.opacity = "0";
-
-  setTimeout(() => {
-
-    viewer.style.display = "none";
-    viewer.innerHTML = "";
-
-  }, 200);
-
-};
 
 window.storyMuted =
   localStorage.getItem("storyMuted") === "true";
@@ -5459,8 +2822,8 @@ if (
     return;
 
   }
-
- // DOUBLE TAP ❤️
+  
+   // DOUBLE TAP ❤️
   const now = Date.now();
 
   if(now - lastTap < 300){
@@ -6628,6 +3991,3008 @@ function listenToStoryReplies(storyId) {
     .subscribe();
 }
 
+// =====================================================
+// POSTS
+// =====================================================
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text || "";
+  return div.innerHTML;
+}
+
+  function renderPostElement(post) {
+    
+    if (!window.renderedPosts) window.renderedPosts = new Set();
+
+if (window.renderedPosts.has(post.id)) return;
+window.renderedPosts.add(post.id);
+    
+    console.log(post);
+
+  const postsDiv =
+    document.getElementById("posts");
+
+  const time =
+    new Date(post.created_at)
+      .toLocaleString();
+
+  const isOwner =
+    session?.user?.id &&
+    String(session.user.id) ===
+    String(post.user_id);
+
+  const isLiked =
+    (post.liked_by || [])
+      .includes(session?.user?.id);
+
+  const div =
+    document.createElement("div");
+
+  div.id = `post-${post.id}`;
+  div.className = "post-card";
+
+  // ======================
+  // MEDIA HTML
+  // ======================
+
+  let mediaHTML = "";
+
+  
+  // IMAGE
+if (
+  post.media_type === "image" &&
+  post.file_url
+) {
+
+  mediaHTML = `
+  <img
+    src="${post.file_url}"
+
+    onclick="
+      openMedia(
+        '${post.file_url}',
+        'image'
+      )
+    "
+
+    style="
+      max-width:100%;
+      width:auto;
+      height:auto;
+      margin-top:10px;
+      border-radius:12px;
+      max-height:600px;
+      object-fit:contain;
+      display:block;
+      cursor:pointer;
+    "
+  />
+`;
+}
+
+// VIDEO
+if (
+  post.media_type === "video" &&
+  post.file_url
+) {
+
+  mediaHTML = `
+    <video
+      src="${post.file_url}"
+      controls
+      playsinline
+      muted
+      loop
+      style="
+        width:100%;
+        margin-top:10px;
+        border-radius:12px;
+        max-height:700px;
+        object-fit:cover;
+      "
+    ></video>
+  `;
+}
+
+  // ======================
+  // POST HTML
+  // ======================
+
+  div.innerHTML = `
+    <div style="
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+">
+
+      <img 
+  class="avatar"
+
+  src="${
+    post.avatar_url &&
+    post.avatar_url !== "null"
+      ? post.avatar_url
+      : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(post.name)
+  }"
+
+  onerror="
+    this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(post.name)}'
+  "
+
+  style="
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    object-fit:cover;
+    background:#222;
+    flex-shrink:0;
+  "
+/>
+
+     <div style="flex:1; overflow:hidden;">
+
+        <div
+  onclick="openProfile(
+    '${post.user_id}',
+    '${post.name}'
+  )"
+  style="
+    font-weight:bold;
+    cursor:pointer;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  "
+>
+          ${post.name}
+        </div>
+
+        <div style="
+          font-size:12px;
+          color:#aaa;
+        ">
+          ${time}
+        </div>
+
+      </div>
+
+    </div>
+
+  <div style="margin-top:10px;">
+  ${escapeHtml(post.content)}
+</div>
+
+    ${mediaHTML}
+
+    <div style="margin-top:8px;">
+      ❤️ ${post.likes || 0}
+    </div>
+
+   <button
+  class="like-btn"
+  onclick="likePost('${post.id}')"
+      style="
+        margin-top:5px;
+        background:${
+          isLiked
+            ? '#ff4d6d'
+            : '#222'
+        };
+        color:white;
+        border:none;
+        padding:5px 10px;
+        border-radius:5px;
+      "
+    >
+      ${
+        isLiked
+          ? "❤️ Liked"
+          : "🤍 Like"
+      }
+      (${post.likes || 0})
+    </button>
+
+    <button
+      onclick="openComments('${post.id}')"
+      style="
+        margin-top:5px;
+        background:#333;
+        color:white;
+        border:none;
+        padding:5px 10px;
+        border-radius:5px;
+      "
+    >
+      💬 Comment
+    </button>
+    
+    
+
+    ${
+      isOwner
+        ? `
+          <button
+            onclick="deletePost('${post.id}')"
+            style="
+              margin-top:8px;
+              background:#ff4d4d;
+              border:none;
+              color:white;
+              padding:5px 8px;
+              border-radius:5px;
+            "
+          >
+            Delete
+          </button>
+        `
+        : ""
+    }
+  `;
+
+  if (!postsDiv) return;
+  
+  console.log("RENDERING POST:", post.id);
+  
+  console.log("APPENDING TO:", postsDiv);
+
+return div;
+}
+
+// ✅ 3. DEFINE loadPosts
+window.loadPosts = async function () {
+
+  console.log("🔥 loadPosts running...");
+
+  const postsDiv =
+    document.getElementById("posts");
+
+  // IMPORTANT
+  if (!postsDiv) {
+
+    console.log("❌ posts div not found");
+    return;
+
+  }
+
+  let posts = [];
+  let error = null;
+
+  if (activeTab === "explore") {
+
+    const response = await supabase
+      .from("posts")
+      .select("*")
+      .order("created_at", {
+        ascending: false
+      });
+
+    posts = response.data;
+    error = response.error;
+
+  }
+
+  if (activeTab === "following") {
+
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    postsDiv.innerHTML = "Login to view following feed";
+    return;
+  }
+
+  const { data: follows } = await supabase
+    .from("follows")
+    .select("following_id")
+    .eq("follower_id", userId);
+
+  const followingIds =
+    follows?.map(f => f.following_id) || [];
+
+  if (followingIds.length === 0) {
+    postsDiv.innerHTML = "You're not following anyone";
+    return;
+  }
+
+  const response = await supabase
+    .from("posts")
+    .select("*")
+    .in("user_id", followingIds)
+    .order("created_at", { ascending: false });
+
+  posts = response.data;
+  error = response.error;
+}
+
+window.createPost = async function () {
+  const input = document.getElementById("postInput");
+  if (!input || !input.value.trim()) return;
+
+  const { error } = await supabase.from("posts").insert({
+    content: input.value,
+    user_id: session?.user?.id || null,
+    name: session?.user?.email || "Guest"
+  });
+
+  if (error) {
+    console.log("POST ERROR:", error);
+    return;
+  }
+
+  input.value = "";
+  loadPosts();
+};
+
+function renderFeed(posts) {
+  const postsDiv = document.getElementById("posts");
+  if (!postsDiv) return;
+
+  postsDiv.replaceChildren();
+
+  posts.forEach(post => {
+    const el = renderPostElement(post);
+    postsDiv.appendChild(el);
+  });
+}
+
+window.renderedPosts = new Set();
+  postsDiv.replaceChildren();
+
+  if (error) {
+
+    postsDiv.innerHTML =
+      "❌ Error loading posts";
+
+    return;
+
+  }
+
+  if (!posts || posts.length === 0) {
+
+    postsDiv.innerHTML =
+      "😢 No posts yet";
+
+    return;
+
+  }
+  console.log("POST COUNT:", posts?.length);
+console.log("POST IDS:", posts?.map(p => p.id));
+
+console.log(
+  "POST CONTAINERS:",
+  document.querySelectorAll("#posts").length
+);
+window.postsState = posts || [];
+renderFeed(window.postsState);
+
+console.log(
+  "POST ELEMENTS AFTER RENDER:",
+  document.querySelectorAll(".post-card").length
+);
+
+  observeVideos();
+
+};
+
+
+window.likePost = async (id) => {
+  const userId = session?.user?.id;
+
+  if (!userId) {
+    alert("Login to like posts");
+    return;
+  }
+
+  const postDiv = document.getElementById(id);
+  const btn =
+  postDiv?.querySelector(".like-btn");
+
+  // get current post
+  const { data: post, error } = await supabase
+    .from("posts")
+    .select("likes, liked_by")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    console.log("❌ fetch error:", error);
+    return;
+  }
+
+  let likedBy = post.liked_by || [];
+  const isLiked = likedBy.includes(userId);
+
+  let newLikes;
+  let updatedLikedBy;
+
+  if (isLiked) {
+    updatedLikedBy = likedBy.filter(uid => uid !== userId);
+    newLikes = (post.likes || 1) - 1;
+  } else {
+    updatedLikedBy = [...likedBy, userId];
+    newLikes = (post.likes || 0) + 1;
+  }
+
+  // ✅ INSTANT UI UPDATE (no waiting)
+  if (btn) {
+    btn.innerHTML = `${!isLiked ? "❤️ Liked" : "🤍 Like"} (${newLikes})`;
+    btn.style.background = !isLiked ? "#ff4d6d" : "#222";
+  }
+
+  // 🔥 save to database
+  const { data: updatedPost } = await supabase
+  .from("posts")
+  .update({
+    likes: newLikes,
+    liked_by: updatedLikedBy
+  })
+  .eq("id", id)
+  .select("user_id")
+  .single();
+  
+  // Create or update like notification
+if (!isLiked) {
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, avatar_url")
+    .eq("id", session.user.id)
+    .single();
+
+  const { data: postOwner } = await supabase
+    .from("posts")
+    .select("user_id")
+    .eq("id", id)
+    .single();
+
+  if (postOwner && postOwner.user_id !== session.user.id) {
+
+    const { data: existing } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("user_id", postOwner.user_id)
+      .eq("type", "like")
+      .eq("post_id", id)
+      .maybeSingle();
+
+    if (existing) {
+
+      await supabase
+        .from("notifications")
+        .update({
+          count: (existing.count || 1) + 1,
+          username: profile.name,
+          avatar_url: profile.avatar_url,
+          last_time: new Date()
+        })
+        .eq("id", existing.id);
+
+    } else {
+
+      await supabase
+        .from("notifications")
+        .insert({
+          user_id: postOwner.user_id,
+          sender_id: session.user.id,
+          username: profile.name,
+          avatar_url: profile.avatar_url,
+          type: "like",
+          post_id: id,
+          message: "liked your post",
+          count: 1,
+          created_at: new Date(),
+          last_time: new Date(),
+          read: false
+        });
+
+    }
+
+  }
+}
+
+upsertPost({
+  id,
+  likes: newLikes,
+  liked_by: updatedLikedBy
+});
+};
+
+function upsertPost(updatedPost) {
+  if (!window.postsState) return;
+
+  const index = window.postsState.findIndex(p => p.id === updatedPost.id);
+
+  if (index >= 0) {
+    window.postsState[index] = {
+      ...window.postsState[index],
+      ...updatedPost
+    };
+  } else {
+    window.postsState.unshift(updatedPost);
+  }
+
+  renderFeed(window.postsState);
+}
+
+window.deletePost = async (id) => {
+  const { error } = await supabase.from("posts").delete().eq("id", id);
+
+  if (error) {
+    console.log("❌ delete error:", error);
+    return;
+  }
+
+  loadPosts();
+};
+
+let currentPostId = null;
+
+// =====================================================
+// COMMENTS
+// =====================================================
+
+window.openComments = (postId) => {
+  console.log("💬 opening comments for:", postId);
+
+  currentPostId = postId;
+
+  const panel = document.getElementById("commentsPanel");
+  panel.style.display = "flex";
+
+  loadComments(postId);
+};
+
+async function loadComments(postId) {
+  console.log("📥 loading comments for:", postId);
+
+  const { data, error } = await supabase
+    .from("comments")
+    .select("*")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+
+  const container = document.getElementById("panelComments");
+
+  if (error) {
+  console.log("❌ profile fetch error:", error);
+}
+
+// ✅ DO NOT RETURN — continue anyway
+
+  if (!data || data.length === 0) {
+    container.innerHTML = "No comments yet";
+    return;
+  }
+
+ container.innerHTML = data.map(c => `
+  <div style="margin-bottom:5px;">
+    <b>${escapeHtml(c.name)}</b>:
+    ${escapeHtml(c.content)}
+  </div>
+`).join("");
+}
+
+window.goHome = () => {
+  startApp(); // ✅ NOT reload
+};
+
+// =====================================================
+// PROFILE
+// =====================================================
+
+window.openProfile = async (userId, name) => {
+  console.log("Logged in:", session?.user?.id);
+console.log("Profile opened:", userId);
+  const { data } = await supabase.auth.getSession();
+  session = data.session;
+
+  // ✅ GET PROFILE FIRST
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .maybeSingle();
+    
+    const avatarUrl =
+  profile?.avatar_url &&
+  profile.avatar_url !== "null"
+    ? profile.avatar_url
+    : "https://via.placeholder.com/60";
+    
+    const { count: followersCount } = await supabase
+  .from("follows")
+  .select("*", { count: "exact", head: true })
+  .eq("following_id", userId);
+
+const { count: followingCount } = await supabase
+  .from("follows")
+  .select("*", { count: "exact", head: true })
+  .eq("follower_id", userId);
+
+ document.getElementById("app").innerHTML = `
+   <div style="padding:15px; color:white;">
+
+    <button id="themeToggle">🌙 Theme</button>
+
+    <button onclick="goHome()">← Back</button>
+
+    ${
+      String(session?.user?.id) === String(userId)
+        ? `<button onclick="logout()">🚪 Logout</button>`
+        : ""
+    }
+
+     <div style="display:flex;align-items:center;gap:10px;">
+
+  <img 
+src="${avatarUrl}"
+
+  onclick="
+    openMedia(
+      '${profile?.avatar_url || 'https://via.placeholder.com/60'}',
+      'image'
+    )
+  "
+
+  style="
+    width:120px;
+    height:120px;
+    object-fit:contain;
+    border-radius:50%;
+    background:#222;
+    cursor:pointer;
+    display:block;
+  "
+/>
+
+  <div>
+
+    <h2>
+      ${profile?.name || name}
+    </h2>
+
+    <div style="margin-top:5px;color:#aaa;">
+      ${followersCount || 0} followers ·
+      ${followingCount || 0} following
+    </div>
+
+    <!-- FOLLOW BUTTON GOES HERE -->
+    <div id="followContainer"></div>
+
+  </div>
+
+</div>
+
+      ${
+        String(session?.user?.id) === String(userId)
+          ? `<button onclick="openEditProfile()">Edit</button>`
+          : ""
+      }
+
+      <div id="profilePosts"></div>
+    </div>
+  `;
+
+attachEvents();
+
+  // ✅ THEN load posts
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false });
+
+  const container = document.getElementById("profilePosts");
+
+  if (error) {
+    container.innerHTML = "Error loading posts";
+    return;
+  }
+
+  if (!posts || posts.length === 0) {
+    container.innerHTML = "No posts yet";
+    return;
+  }
+
+  container.innerHTML = posts.map(post => `
+    <div style="border-bottom:1px solid #333; padding:10px 0;">
+     <div>${escapeHtml(post.content)}</div>
+      <div style="font-size:12px;color:#aaa;">
+        ${new Date(post.created_at).toLocaleString()}
+      </div>
+    </div>
+  `).join("");
+
+
+const followContainer =
+  document.getElementById("followContainer");
+
+if (
+  session?.user?.id &&
+  session.user.id !== userId
+) {
+
+  const { data: existingFollow } = await supabase
+    .from("follows")
+    .select("*")
+    .eq("follower_id", session.user.id)
+    .eq("following_id", userId)
+    .maybeSingle();
+
+  const isFollowing = !!existingFollow;
+
+  followContainer.innerHTML = `
+    <button id="followBtn"
+      style="
+        margin-top:10px;
+        padding:8px 14px;
+        border:none;
+        border-radius:8px;
+        background:${isFollowing ? "#444" : "#1d9bf0"};
+        color:white;
+      ">
+      ${isFollowing ? "Following" : "Follow"}
+    </button>
+  `;
+
+  document.getElementById("followBtn").onclick =
+    async () => {
+
+      if (isFollowing) {
+
+        await supabase
+          .from("follows")
+          .delete()
+          .eq("follower_id", session.user.id)
+          .eq("following_id", userId);
+
+      } else {
+
+        const { error } = await supabase
+  .from("follows")
+  .insert({
+    follower_id: session.user.id,
+    following_id: userId
+  });
+  
+  if (!error) {
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, avatar_url")
+    .eq("id", session.user.id)
+    .single();
+
+  const { data: existing } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("type", "follow")
+    .maybeSingle();
+
+  if (existing) {
+
+    await supabase
+      .from("notifications")
+      .update({
+        count: (existing.count || 1) + 1,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        last_time: new Date(),
+        message: "started following you"
+      })
+      .eq("id", existing.id);
+
+  } else {
+
+    await supabase
+      .from("notifications")
+      .insert({
+        user_id: userId,
+        sender_id: session.user.id,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        type: "follow",
+        message: "started following you",
+        count: 1,
+        created_at: new Date(),
+        last_time: new Date(),
+        read: false
+      });
+
+  }
+
+}
+
+      }
+
+      openProfile(userId, name);
+
+    };
+}
+};
+
+  window.openEditProfile = async () => {
+  alert("EDIT FUNCTION RUNNING");
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  session = sessionData.session;
+
+  if (!session?.user) {
+    alert("You are not logged in");
+    return;
+  }
+
+  const user = session.user;
+
+  // ✅ SAFE FETCH (no crashing)
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+  console.log("PROFILE DATA:", data);
+  console.log("PROFILE ERROR:", error);
+
+  // ❌ DO NOT STOP if error
+
+  document.getElementById("app").innerHTML = `
+    <div style="padding:15px; color:white;">
+      <button onclick="goHome()">← Back</button>
+
+      <h2>Edit Profile</h2>
+
+      <input id="editName" placeholder="Name" value="${data?.name || ""}" />
+      <input type="file" id="avatarFile" accept="image/*" />
+      <textarea id="editBio" placeholder="Bio">${data?.bio || ""}</textarea>
+
+      <button id="saveProfile">Save</button>
+    </div>
+  `;
+  
+  document.getElementById("saveProfile").onclick = async () => {
+  const name = document.getElementById("editName").value;
+  const bio = document.getElementById("editBio").value;
+
+  const fileInput = document.getElementById("avatarFile");
+  const file = fileInput.files[0];
+
+  let avatarUrl = null;
+
+  if (file) {
+    const originalFile = file;
+    const fileName =
+  `${session.user.id}-${Date.now()}-${file.name}`;
+
+    const { data, error: uploadError } = await supabase.storage
+  .from("avatars")
+  .upload(fileName, originalFile, {
+    cacheControl: "3600",
+    upsert: true
+  });
+
+console.log("UPLOAD RESULT:", data);
+console.log("UPLOAD ERROR:", uploadError);
+
+    if (uploadError) {
+      alert("Upload failed");
+      console.log(uploadError);
+      return;
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(fileName);
+
+    avatarUrl =
+  publicUrlData.publicUrl + "?t=" + Date.now();
+  }
+
+  const { data: oldProfile } = await supabase
+    .from("profiles")
+    .select("avatar_url")
+    .eq("id", session.user.id)
+    .single();
+
+  const { error } = await supabase.from("profiles").upsert({
+    id: session.user.id,
+    name,
+    avatar_url: avatarUrl || oldProfile?.avatar_url,
+    bio
+  });
+
+  if (error) {
+    alert("Save failed");
+    console.log(error);
+    return;
+  }
+
+  openProfile(session.user.id, name);
+};
+};
+
+
+function attachEvents() {
+
+  const exploreTab = document.getElementById("tab-explore");
+  const followingTab = document.getElementById("tab-following");
+
+  if (exploreTab && followingTab) {
+
+    exploreTab.onclick = () => {
+      activeTab = "explore";
+
+      exploreTab.classList.add("active-tab");
+      followingTab.classList.remove("active-tab");
+
+      loadPosts();
+    };
+
+    followingTab.onclick = () => {
+      activeTab = "following";
+
+      followingTab.classList.add("active-tab");
+      exploreTab.classList.remove("active-tab");
+
+      loadPosts();
+    };
+  }
+
+  const themeBtn = document.getElementById("themeToggle");
+  if (themeBtn) {
+    themeBtn.onclick = toggleTheme;
+  }
+
+  const postBtn = document.getElementById("postBtn");
+  if (postBtn) {
+    postBtn.onclick = createPost;
+  }
+
+  const loginBtn = document.getElementById("login");
+  if (loginBtn) {
+    loginBtn.onclick = async () => {
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin }
+      });
+    };
+  }
+
+  const storyBtn = document.getElementById("storyBtn");
+  if (storyBtn) {
+    storyBtn.onclick = () => {
+      document.getElementById("storyInput")?.click();
+    };
+  }
+
+  const storyInput = document.getElementById("storyInput");
+  if (storyInput) {
+    storyInput.onchange = addStory;
+  }
+
+  const panelBtn = document.getElementById("panelPostBtn");
+  if (panelBtn) {
+    panelBtn.onclick = async () => {
+      const input = document.getElementById("panelInput");
+      if (!input.value) return;
+
+      const { error } = await supabase
+  .from("comments")
+  .insert({
+    post_id: currentPostId,
+    content: input.value,
+    user_id: session.user.id,
+    name: session.user.email || "Guest"
+  });
+  
+  // Notify post owner
+const { data: post } = await supabase
+  .from("posts")
+  .select("user_id")
+  .eq("id", currentPostId)
+  .single();
+
+if (post && post.user_id !== session.user.id) {
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("name, avatar_url")
+    .eq("id", session.user.id)
+    .single();
+
+  const { data: existing } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", post.user_id)
+    .eq("type", "comment")
+    .eq("post_id", currentPostId)
+    .maybeSingle();
+
+  if (existing) {
+
+    await supabase
+      .from("notifications")
+      .update({
+        count: (existing.count || 1) + 1,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        last_time: new Date(),
+        message: "commented on your post"
+      })
+      .eq("id", existing.id);
+
+  } else {
+
+    await supabase
+      .from("notifications")
+      .insert({
+        user_id: post.user_id,
+        sender_id: session.user.id,
+        username: profile.name,
+        avatar_url: profile.avatar_url,
+        type: "comment",
+        post_id: currentPostId,
+        message: "commented on your post",
+        count: 1,
+        created_at: new Date(),
+        last_time: new Date(),
+        read: false
+      });
+
+  }
+}
+
+if (error) {
+  console.log(error);
+  return;
+}
+
+
+input.value = "";
+loadComments(currentPostId);
+    };
+  }
+
+  const closeBtn = document.getElementById("closeComments");
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      document.getElementById("commentsPanel").style.display = "none";
+    };
+  }
+}
+
+// =====================================================
+// APPLICATION STARTUP
+// =====================================================
+
+// ✅ START APP FUNCTION (you were missing this too)
+let postsEl = null;
+let scrollTimeout;
+
+async function startApp() {
+  
+  console.log("START APP CALLED");
+
+  document.getElementById("app").innerHTML = `
+    <div style="padding:10px;">
+
+      <div id="tabs" style="
+        display:flex;
+        justify-content:space-around;
+        margin-bottom:10px;
+        color:#aaa;
+        font-weight:bold;
+      ">
+        <div id="tab-explore" class="active-tab">
+          🌍 Explore
+        </div>
+
+        <div id="tab-following">
+          👥 Following
+        </div>
+      </div>
+
+      ${
+        session
+          ? `
+<textarea
+  id="postInput"
+  placeholder="Write something..."
+  style="
+    width:100%;
+    height:80px;
+    margin-bottom:10px;
+  "
+></textarea>
+
+<input
+  type="file"
+  id="mediaInput"
+  accept="image/*,video/*"
+  style="margin-bottom:10px;"
+/>
+
+<button id="postBtn">Post</button>
+
+<button id="storyBtn">Add Story</button>
+
+<input
+  type="file"
+  id="storyInput"
+  accept="image/*,video/*"
+  style="display:none;"
+/>
+
+<input
+  type="file"
+  id="storyAudioInput"
+  accept="audio/*"
+  style="display:none;"
+/>
+`
+          : `
+<button id="login">Login</button>
+`
+      }
+
+      <div id="storiesBar"></div>
+
+      <div id="posts"></div>
+
+    </div>
+
+    <div id="commentsPanel" style="
+      position:fixed;
+      bottom:0;
+      left:0;
+      right:0;
+      height:60%;
+      background:#111;
+      color:white;
+      display:none;
+      flex-direction:column;
+      padding:10px;
+      z-index:1000;
+    ">
+      <span id="closeComments">✖</span>
+
+      <div id="panelComments"></div>
+
+      <input id="panelInput" />
+
+      <button id="panelPostBtn">
+        Post
+      </button>
+
+    </div>
+  `;
+
+  postsEl = document.getElementById("posts");
+
+loadPosts();
+loadStories();
+setupScrollSnap();
+
+adjustStoryBar();
+
+if (session && currentUser) {
+    await registerPush();
+    await loadUnreadCount();
+}
+setTimeout(attachEvents, 0);
+}
+
+async function createPost() {
+
+  const input =
+    document.getElementById("postInput");
+
+  const mediaInput =
+    document.getElementById("mediaInput");
+
+  const content =
+    input.value.trim();
+
+  const file =
+    mediaInput.files[0];
+
+  let mediaUrl = null;
+  let mediaType = null;
+  
+  if (!session?.user) {
+  alert("Please login first");
+  return;
+}
+
+  if (file) {
+
+    const fileName =
+  `${session.user.id}_${Date.now()}_${file.name}`;
+
+    const { error: uploadError } =
+      await supabase.storage
+  .from("posts_media")
+  .upload(fileName, file);
+
+    if (uploadError) {
+      console.log(uploadError);
+      alert("Upload failed");
+      return;
+    }
+
+    const { data } =
+      supabase.storage
+  .from("posts_media")
+  .getPublicUrl(fileName);
+
+    mediaUrl = data.publicUrl;
+
+    if (file.type.startsWith("image")) {
+      mediaType = "image";
+    }
+
+    if (file.type.startsWith("video")) {
+      mediaType = "video";
+    }
+  }
+
+  const { data: profile } =
+    await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+  const { error } =
+  await supabase
+    .from("posts")
+    .insert([{
+      content,
+      file_url: mediaUrl,
+      media_type: mediaType,
+      user_id: session.user.id,
+      name:
+        profile?.name ||
+        session.user.email,
+      avatar_url:
+        profile?.avatar_url || null
+    }]);
+
+if (error) {
+
+  console.log(error);
+  alert("Post failed");
+  return;
+
+}
+
+  input.value = "";
+  mediaInput.value = "";
+
+  loadPosts();
+}
+
+// ========================
+// AUTO SNAP
+// ========================
+
+function setupScrollSnap() {
+
+  if (!postsEl) return;
+
+  postsEl.addEventListener("scroll", () => {
+
+    clearTimeout(scrollTimeout);
+
+    scrollTimeout = setTimeout(() => {
+      snapToNearestPost();
+    }, 120);
+
+  });
+
+}
+
+function snapToNearestPost() {
+
+  const posts =
+    document.querySelectorAll(".post-card");
+
+  if (!posts.length) return;
+
+  const scrollTop = postsEl.scrollTop;
+
+  let closest = null;
+  let minDistance = Infinity;
+
+  posts.forEach((post) => {
+
+    const offset = post.offsetTop;
+
+    const distance =
+      Math.abs(offset - scrollTop);
+
+    if (distance < minDistance) {
+      minDistance = distance;
+      closest = post;
+    }
+
+  });
+
+  if (closest) {
+
+    postsEl.scrollTo({
+      top: closest.offsetTop,
+      behavior: "smooth"
+    });
+
+  }
+}
+
+// =====================================================
+// CHAT
+// =====================================================
+
+let currentChatUser = null;
+
+window.openChat = async function(userId, name) {
+
+  if (!session?.user) {
+    alert("Please login first");
+    return;
+  }
+
+  currentChatUser = userId;
+
+  document.getElementById("app").style.display = "none";
+  document.getElementById("chatScreen").style.display = "flex";
+
+  document.getElementById("chatName").innerText = name;
+
+  // GET PROFILE
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .maybeSingle();
+
+  // SET CHAT IMAGE
+  document.getElementById("chatAvatar").src =
+    profile?.avatar_url ||
+    "https://ui-avatars.com/api/?name=" +
+    encodeURIComponent(name);
+
+  // ✅ SHOW ONLINE STATUS
+  document.getElementById("chatStatus").innerText =
+    profile?.online
+      ? "🟢 Online"
+      : profile?.last_seen
+        ? `Last seen ${formatTime(profile.last_seen)}`
+        : "Offline";
+        
+        await supabase
+  .from("messages")
+  .update({
+    seen: true,
+    seen_at: new Date(),
+    delivered: true
+  })
+  .eq("sender_id", userId)
+  .eq("receiver_id", session.user.id)
+  .eq("seen", false);
+
+  loadMessages();
+  
+  listenToChatStatus(userId);
+  
+  listenTyping(userId);
+
+};  
+
+function listenToChatStatus(userId) {
+
+  if (window.chatStatusChannel) {
+    supabase.removeChannel(window.chatStatusChannel);
+  }
+
+  window.chatStatusChannel = supabase
+    .channel("chat_status_" + userId)
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "profiles",
+        filter: `id=eq.${userId}`
+      },
+      (payload) => {
+
+        const profile = payload.new;
+
+        document.getElementById("chatStatus").innerText =
+          profile.online
+            ? "🟢 Online"
+            : profile.last_seen
+              ? `Last seen ${formatTime(profile.last_seen)}`
+              : "Offline";
+
+      }
+    )
+    .subscribe();
+
+}
+
+window.openInbox = async function () {
+
+  document.getElementById(
+    "inboxScreen"
+  ).style.display = "flex";
+
+  const inbox =
+    document.getElementById("inboxList");
+
+  inbox.innerHTML = "Loading...";
+
+  const { data: sessionData } =
+    await supabase.auth.getSession();
+
+  const userId =
+    sessionData.session?.user?.id;
+
+  if (!userId) return;
+
+  // GET MESSAGES
+  const { data: messages, error } =
+    await supabase
+      .from("messages")
+      .select("*")
+      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .order("created_at", {
+        ascending:false
+      });
+
+  if (error) {
+    inbox.innerHTML = "Error loading chats";
+    return;
+  }
+
+  if (!messages || messages.length === 0) {
+    inbox.innerHTML = "No chats yet";
+    return;
+  }
+
+  // REMOVE DUPLICATES
+  const uniqueUsers = {};
+
+  messages.forEach(msg => {
+
+    const otherUser =
+      msg.sender_id === userId
+        ? msg.receiver_id
+        : msg.sender_id;
+
+    if (!uniqueUsers[otherUser]) {
+      uniqueUsers[otherUser] = msg;
+    }
+
+  });
+
+  const chats =
+    Object.values(uniqueUsers);
+
+  inbox.innerHTML = "";
+
+  for (const msg of chats) {
+
+    const otherUser =
+      msg.sender_id === userId
+        ? msg.receiver_id
+        : msg.sender_id;
+
+    // GET PROFILE
+    const { data: profile } =
+  await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", otherUser)
+    .maybeSingle();
+
+    const div =
+      document.createElement("div");
+
+    // LONG PRESS
+    let pressTimer;
+
+    div.ontouchstart = () => {
+
+      pressTimer = setTimeout(async () => {
+
+        const confirmDelete =
+          confirm("Delete this chat?");
+
+        if (!confirmDelete) return;
+
+        await supabase
+          .from("messages")
+          .delete()
+          .or(`
+            and(sender_id.eq.${userId},receiver_id.eq.${otherUser}),
+            and(sender_id.eq.${otherUser},receiver_id.eq.${userId})
+          `);
+
+        openInbox();
+
+      }, 700);
+
+    };
+
+    div.ontouchend = () => {
+      clearTimeout(pressTimer);
+    };
+
+    div.onclick = () => {
+
+      openChat(
+        otherUser,
+        profile?.name || "User"
+      );
+
+      document.getElementById(
+        "inboxScreen"
+      ).style.display = "none";
+
+    };
+
+    div.style = `
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  padding:15px;
+  border-bottom:1px solid #222;
+  cursor:pointer;
+`;
+
+    div.innerHTML = `
+
+     <img
+  src="${
+    profile?.avatar_url ||
+    'https://ui-avatars.com/api/?name=' +
+    encodeURIComponent(profile?.name || 'U')
+  }"
+
+  onclick="
+    openMedia(
+      this.src,
+      'image'
+    )
+  "
+
+  style="
+    width:55px;
+    height:55px;
+    border-radius:50%;
+    object-fit:cover;
+    background:#222;
+    display:block;
+    cursor:pointer;
+  "
+/>
+
+      <div style="flex:1;">
+
+        <div style="
+          color:white;
+          font-weight:bold;
+          font-size:16px;
+        ">
+          ${escapeHtml(profile?.name || "User")}
+        </div>
+
+        <div style="
+          color:#aaa;
+          margin-top:4px;
+          font-size:14px;
+          white-space:nowrap;
+          overflow:hidden;
+          text-overflow:ellipsis;
+        ">
+         ${escapeHtml(msg.content || "")}
+        </div>
+
+      </div>
+
+    `;
+
+    inbox.appendChild(div);
+
+  }
+
+};
+
+async function loadMessages() {
+
+  // ✅ GET CURRENT USER
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
+
+  // ❌ not logged in
+  if (!session) {
+    alert("Login first");
+    return;
+  }
+
+  const myId = session.user.id;
+
+  // ✅ LOAD CHAT
+  const {
+    data,
+    error
+  } = await supabase
+    .from("messages")
+   .select(`
+  *,
+  replied:reply_to(
+    id,
+    content,
+    media_type
+  )
+`)
+    .or(
+  `and(sender_id.eq.${myId},receiver_id.eq.${currentChatUser}),and(sender_id.eq.${currentChatUser},receiver_id.eq.${myId})`
+)
+    .order("created_at", {
+      ascending: true
+    });
+
+  console.log("MESSAGES:", data);
+  console.log("ERROR:", error);
+
+  const chat =
+    document.getElementById(
+      "chatMessages"
+    );
+
+  chat.innerHTML = "";
+
+  if (error) {
+
+  chat.innerHTML = `
+    <div style="
+      color:red;
+      padding:20px;
+      font-size:14px;
+      word-break:break-word;
+    ">
+      ❌ ${error.message}
+    </div>
+  `;
+
+  console.log(error);
+
+  return;
+}
+
+  if (!data || data.length === 0) {
+    chat.innerHTML = `
+      <div style="
+        color:#888;
+        text-align:center;
+        margin-top:20px;
+      ">
+        No messages yet
+      </div>
+    `;
+    return;
+  }
+
+  data.forEach(msg => {
+    
+    const mine =
+  msg.sender_id === myId;
+
+    const time =
+  new Date(msg.created_at)
+    .toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+chat.innerHTML +=`
+  <div style="
+    display:flex;
+    justify-content:${
+      mine
+        ? "flex-end"
+        : "flex-start"
+    };
+    margin-bottom:10px;
+  ">
+
+<div
+
+  id="${msg.id}"
+
+  oncontextmenu="
+    event.preventDefault();
+    messageOptions('${msg.id}')
+  "
+
+  ontouchstart="
+    window.pressTimer = setTimeout(function(){
+      messageOptions('${msg.id}')
+    }, 700)
+  "
+
+  ontouchend="
+    clearTimeout(window.pressTimer)
+  "
+
+  ontouchmove="
+    clearTimeout(window.pressTimer)
+  "
+
+  style="
+    background:${
+      msg.media_url
+        ? 'transparent'
+        : mine
+          ? '#0084ff'
+          : '#222'
+    };
+
+    color:white;
+
+    padding:${
+      msg.media_url
+        ? '0'
+        : '10px 12px'
+    };
+
+    border-radius:18px;
+
+    max-width:75%;
+
+    overflow:hidden;
+  "
+>
+
+    <div>
+
+${
+  msg.replied
+    ? `
+      <div style="
+        background:rgba(255,255,255,.08);
+        border-left:3px solid #4fc3f7;
+        padding:8px;
+        margin-bottom:8px;
+        border-radius:8px;
+        font-size:13px;
+        opacity:.9;
+      ">
+        ↩ ${
+          msg.replied.content
+            ? escapeHtml(msg.replied.content)
+            : msg.replied.media_type === "image"
+              ? "📷 Photo"
+              : "🎥 Video"
+        }
+      </div>
+    `
+    : ""
+}
+
+${
+  msg.media_type === "image"
+      ? `
+        <img
+          src="${msg.media_url}"
+
+          onclick="
+            openMedia(
+              '${msg.media_url}',
+              'image'
+            )
+          "
+
+          style="
+            max-width:100%;
+            width:auto;
+            height:auto;
+            max-height:320px;
+            object-fit:contain;
+            display:block;
+            margin:auto;
+            border-radius:16px;
+            margin-bottom:6px;
+            cursor:pointer;
+          "
+        />
+      `
+      : ""
+  }
+
+        ${
+          msg.media_type === "video"
+            ? `
+              <video
+                src="${msg.media_url}"
+                controls
+
+                onclick="
+                  openMedia(
+                    '${msg.media_url}',
+                    'video'
+                  )
+                "
+
+                style="
+                  width:100%;
+                  max-width:260px;
+                  max-height:320px;
+                  object-fit:cover;
+                  border-radius:16px;
+                  margin-bottom:6px;
+                  background:black;
+                "
+              ></video>
+            `
+            : ""
+        }
+
+        ${
+  msg.content
+    ? `
+      <div style="
+        margin-top:4px;
+        word-break:break-word;
+      ">
+        ${escapeHtml(msg.content)}
+      </div>
+    `
+    : ""
+}
+
+      </div>
+      
+      <div style="
+  margin-top:5px;
+  font-size:11px;
+  opacity:0.7;
+  text-align:right;
+">
+  ${time}
+
+  ${
+    mine
+      ? msg.seen
+        ? `<span style="color:#4fc3f7;"> ✓✓ Seen</span>`
+        : msg.delivered
+          ? `<span> ✓✓</span>`
+          : `<span> ✓</span>`
+      : ""
+  }
+</div>
+
+${
+  msg.reaction
+    ? `
+      <div style="
+        margin-top:6px;
+        text-align:right;
+        font-size:20px;
+      ">
+        ${msg.reaction}
+      </div>
+    `
+    : ""
+}
+
+    </div>
+
+  </div>
+`;
+  });
+
+  chat.scrollTop =
+    chat.scrollHeight;
+    
+}
+
+let replyingTo = null;
+
+window.replyToMessage = function(messageId) {
+
+  replyingTo = messageId;
+
+  const msg = document.getElementById(messageId);
+
+  document.getElementById("replyText").innerText =
+    msg.innerText.slice(0, 80);
+
+  document.getElementById("replyPreview").style.display =
+    "block";
+
+  document.getElementById("chatInput").focus();
+
+  document.getElementById("messageMenu")?.remove();
+
+};
+
+window.cancelReply = function() {
+
+  replyingTo = null;
+
+  const replyPreview = document.getElementById("replyPreview");
+if (replyPreview) {
+  replyPreview.style.display = "none";
+}
+
+};
+
+async function sendMessage() {
+
+  const input =
+    document.getElementById("chatInput");
+
+  const fileInput =
+    document.getElementById("chatMedia");
+
+  const file =
+    fileInput.files[0];
+    
+    if (!session?.user) {
+  alert("Please login first");
+  return;
+}
+
+  // allow text OR media
+  if (
+    !input.value.trim() &&
+    !file
+  ) return;
+
+  let mediaUrl = null;
+  let mediaType = null;
+  let fileName = null;
+
+  // =====================
+  // UPLOAD FILE
+  // =====================
+  
+  if (file) {
+
+  const allowed = [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "video/mp4",
+    "video/webm"
+  ];
+
+  if (!allowed.includes(file.type)) {
+    alert("Unsupported file type");
+    return;
+  }
+
+}
+
+if (file && file.size > 50 * 1024 * 1024) {
+  alert("File too large");
+  return;
+}
+
+  if (file) {
+
+    fileName =
+  `${session.user.id}_${Date.now()}_${file.name}`;
+
+    mediaType =
+      file.type.startsWith("video")
+        ? "video"
+        : "image";
+
+    const { error: uploadError } =
+      await supabase.storage
+        .from("chat-media")
+        .upload(fileName, file);
+
+    if (uploadError) {
+      alert(uploadError.message);
+      return;
+    }
+
+    const { data } =
+      supabase.storage
+        .from("chat-media")
+        .getPublicUrl(fileName);
+
+    mediaUrl = data.publicUrl;
+  }
+
+  // =====================
+  // SAVE MESSAGE
+  // =====================
+
+  const { error } =
+    await supabase
+      .from("messages")
+      .insert({
+  sender_id: session.user.id,
+  receiver_id: currentChatUser,
+  content: input.value.trim(),
+  media_url: mediaUrl,
+  media_type: mediaType,
+  file_name: fileName,
+  reply_to: replyingTo
+});
+
+  if (error) {
+    alert(error.message);
+    return;
+  }
+  
+  // Notify the receiver
+const { data: profile } = await supabase
+  .from("profiles")
+  .select("name, avatar_url")
+  .eq("id", session.user.id)
+  .single();
+
+const { data: existing } = await supabase
+  .from("notifications")
+  .select("*")
+  .eq("user_id", currentChatUser)
+  .eq("type", "message")
+  .eq("sender_id", session.user.id)
+  .maybeSingle();
+
+if (existing) {
+
+  await supabase
+    .from("notifications")
+    .update({
+      count: (existing.count || 1) + 1,
+      username: profile.name,
+      avatar_url: profile.avatar_url,
+      message: input.value.trim()
+        ? "📩 sent you a message"
+        : mediaType === "video"
+          ? "🎥 sent you a video"
+          : "📷 sent you a photo",
+      last_time: new Date(),
+      read: false
+    })
+    .eq("id", existing.id);
+
+} else {
+
+  await supabase
+    .from("notifications")
+    .insert({
+      user_id: currentChatUser,
+      sender_id: session.user.id,
+      username: profile.name,
+      avatar_url: profile.avatar_url,
+      type: "message",
+      message: input.value.trim()
+        ? "📩 sent you a message"
+        : mediaType === "video"
+          ? "🎥 sent you a video"
+          : "📷 sent you a photo",
+      count: 1,
+      created_at: new Date(),
+      last_time: new Date(),
+      read: false
+    });
+
+}
+
+await supabase
+  .from("typing_status")
+  .upsert({
+    user_id: session.user.id,
+    receiver_id: currentChatUser,
+    typing: false,
+    updated_at: new Date()
+  });
+
+  input.value = "";
+  replyingTo = null;
+  const replyPreview = document.getElementById("replyPreview");
+if (replyPreview) {
+  replyPreview.style.display = "none";
+}
+  fileInput.value = "";
+
+  loadMessages();
+}
+
+const chatInput = document.getElementById("chatInput");
+
+chatInput?.addEventListener("input", async () => {
+
+  if (!session?.user || !currentChatUser) return;
+
+  await supabase
+    .from("typing_status")
+    .upsert({
+      user_id: session.user.id,
+      receiver_id: currentChatUser,
+      typing: chatInput.value.trim().length > 0,
+      updated_at: new Date()
+    });
+
+});
+
+function listenTyping(userId) {
+
+  if (window.typingChannel) {
+    supabase.removeChannel(window.typingChannel);
+  }
+
+  window.typingChannel = supabase
+    .channel("typing_" + userId)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "typing_status",
+        filter: `user_id=eq.${userId}`
+      },
+      (payload) => {
+
+        const row = payload.new;
+
+        if (!row) return;
+
+        document.getElementById("typingIndicator").style.display =
+          row.typing ? "block" : "none";
+
+      }
+    )
+    .subscribe();
+
+}
+
+window.messageOptions = async function(messageId) {
+
+  const old =
+    document.getElementById(
+      "messageMenu"
+    );
+
+  if (old) old.remove();
+
+  const menu =
+    document.createElement("div");
+
+  menu.id = "messageMenu";
+
+  menu.style = `
+    position:fixed;
+    left:50%;
+    bottom:25px;
+    transform:translateX(-50%);
+    background:#1c1c1c;
+    border:1px solid #333;
+    border-radius:18px;
+    padding:8px;
+    z-index:999999;
+    width:220px;
+    box-shadow:0 5px 25px rgba(0,0,0,0.4);
+  `;
+
+  menu.innerHTML = `
+
+    <div onclick="replyToMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:white;
+        border-bottom:1px solid #333;
+      ">
+      ↩ Reply
+    </div>
+
+    <div onclick="copyMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:white;
+        border-bottom:1px solid #333;
+      ">
+      📋 Copy
+    </div>
+
+    <div onclick="showReactionPicker('${messageId}')"
+      style="
+        padding:14px;
+        color:white;
+        border-bottom:1px solid #333;
+      ">
+      😀 React
+    </div>
+
+    <div onclick="shareMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:white;
+        border-bottom:1px solid #333;
+      ">
+      📤 Share
+    </div>
+
+    <div onclick="deleteMessage('${messageId}')"
+      style="
+        padding:14px;
+        color:#ff4d4d;
+        font-weight:bold;
+      ">
+      🗑 Delete
+    </div>
+
+`;
+
+  document.body.appendChild(menu);
+
+  setTimeout(() => {
+
+    document.onclick = () => {
+
+      const menu =
+        document.getElementById(
+          "messageMenu"
+        );
+
+      if (menu) menu.remove();
+
+      document.onclick = null;
+
+    };
+
+  }, 100);
+
+};
+
+window.showReactionPicker = function(messageId) {
+
+  const emoji = prompt("React with:\n❤️ 😂 👍 😮 😢 😡");
+
+  if (!emoji) return;
+
+  reactMessage(messageId, emoji);
+
+};
+
+window.reactMessage = async function(messageId, emoji) {
+
+  const { error } = await supabase
+    .from("messages")
+    .update({
+      reaction: emoji
+    })
+    .eq("id", messageId);
+
+  if (!error) {
+    loadMessages();
+  }
+
+};
+
+window.copyMessage = function(messageId) {
+
+  const el =
+    document.getElementById(messageId);
+
+  if (!el) return;
+
+  navigator.clipboard.writeText(
+    el.innerText
+  );
+
+  alert("Copied");
+
+  document.getElementById(
+    "messageMenu"
+  )?.remove();
+
+};
+
+window.likeMessage = function(messageId) {
+
+  alert("❤️ Liked");
+
+  document.getElementById(
+    "messageMenu"
+  )?.remove();
+
+};
+
+window.shareMessage = async function(messageId) {
+
+  const el =
+    document.getElementById(messageId);
+
+  if (!el) return;
+
+  if (navigator.share) {
+  await navigator.share({
+    text: el.innerText
+  });
+} else {
+  navigator.clipboard.writeText(el.innerText);
+  alert("Copied to clipboard");
+}
+
+  document.getElementById(
+    "messageMenu"
+  )?.remove();
+
+};
+
+window.deleteMessage = async function(messageId) {
+  
+  if (!session?.user) {
+  alert("Please login first");
+  return;
+}
+
+  const confirmDelete =
+    confirm("Delete message?");
+
+  if (!confirmDelete) return;
+
+  console.log(
+    "Deleting:",
+    messageId
+  );
+
+  const { error } =
+    await supabase
+      .from("messages")
+      .delete()
+      .eq("id", messageId);
+
+  console.log(
+    "Delete error:",
+    error
+  );
+
+  if (error) {
+
+    alert(error.message);
+    return;
+
+  }
+
+  loadMessages();
+
+};
+
+window.closeChat = async function () {
+
+  // hide current chat
+  document.getElementById(
+    "chatScreen"
+  ).style.display = "none";
+
+  // show inbox
+  document.getElementById(
+    "inboxScreen"
+  ).style.display = "flex";
+
+  // show home/feed again
+  document.getElementById(
+    "app"
+  ).style.display = "block";
+  
+  requestAnimationFrame(() => {
+  loadPosts();
+});
+
+// ✅ Stop typing when leaving the chat
+if (session?.user && currentChatUser) {
+  await supabase
+    .from("typing_status")
+    .upsert({
+      user_id: session.user.id,
+      receiver_id: currentChatUser,
+      typing: false,
+      updated_at: new Date()
+    });
+}
+
+if (window.chatStatusChannel) {
+  supabase.removeChannel(window.chatStatusChannel);
+  window.chatStatusChannel = null;
+}
+
+if (window.typingChannel) {
+  supabase.removeChannel(window.typingChannel);
+  window.typingChannel = null;
+}
+
+if (window.messageSeenChannel) {
+  supabase.removeChannel(window.messageSeenChannel);
+  window.messageSeenChannel = null;
+}
+
+};
+
+// =====================================================
+// MEDIA VIEWER
+// =====================================================
+
+window.openMedia = function (url, type) {
+
+  const viewer = document.getElementById("mediaViewer");
+
+  // RESET VIEWER
+  viewer.innerHTML = "";
+
+  // CLOSE BUTTON
+  const closeBtn = document.createElement("div");
+
+  closeBtn.innerHTML = "✕";
+
+  closeBtn.onclick = closeMedia;
+
+  closeBtn.style.cssText = `
+    position:absolute;
+    top:20px;
+    left:20px;
+    color:white;
+    font-size:38px;
+    z-index:999999;
+    cursor:pointer;
+    user-select:none;
+  `;
+
+  viewer.appendChild(closeBtn);
+  
+  // FADE IN
+viewer.style.opacity = "0";
+
+setTimeout(() => {
+  viewer.style.opacity = "1";
+}, 10);
+
+viewer.style.transition =
+  "opacity 0.2s ease";
+
+
+// TAP BACKGROUND TO CLOSE
+viewer.onclick = e => {
+
+  if (e.target === viewer) {
+
+    closeMedia();
+  }
+
+};
+
+
+// ESC KEY CLOSE
+document.onkeydown = e => {
+
+  if (e.key === "Escape") {
+
+    closeMedia();
+  }
+
+};
+
+  // DOWNLOAD BUTTON (IMAGE ONLY)
+  if (type === "image") {
+
+    const downloadBtn = document.createElement("a");
+
+    downloadBtn.href = url;
+    downloadBtn.download = "";
+    downloadBtn.target = "_blank";
+
+    downloadBtn.innerHTML = "⬇";
+
+    downloadBtn.style.cssText = `
+      position:absolute;
+      top:20px;
+      right:20px;
+      color:white;
+      font-size:28px;
+      text-decoration:none;
+      z-index:999999;
+      background:#111;
+      padding:10px 14px;
+      border-radius:12px;
+    `;
+
+    viewer.appendChild(downloadBtn);
+  }
+
+  // CONTAINER
+  const container = document.createElement("div");
+
+container.style.cssText = `
+  width:100%;
+  height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  position:relative;
+`;
+
+  // IMAGE
+  if (type === "image") {
+
+    const img = document.createElement("img");
+
+img.src = url;
+
+img.style.cssText = `
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+  display:block;
+  transition:transform 0.2s ease;
+  touch-action:none;
+`;
+
+container.appendChild(img);
+
+
+// ZOOM VARIABLES
+let scale = 1;
+let startDistance = 0;
+
+let currentX = 0;
+let currentY = 0;
+
+let isDragging = false;
+
+let startX = 0;
+let startY = 0;
+
+
+
+// DOUBLE TAP ZOOM
+img.addEventListener("dblclick", () => {
+
+  scale = scale === 1 ? 2 : 1;
+
+  updateTransform();
+});
+
+
+// TOUCH START
+img.addEventListener("touchstart", e => {
+
+  // PINCH START
+  if (e.touches.length === 2) {
+
+    startDistance = getDistance(
+      e.touches[0],
+      e.touches[1]
+    );
+  }
+
+  // DRAG START
+  if (e.touches.length === 1 && scale > 1) {
+
+    isDragging = true;
+
+    startX =
+      e.touches[0].clientX - currentX;
+
+    startY =
+      e.touches[0].clientY - currentY;
+  }
+
+});
+
+
+// TOUCH MOVE
+img.addEventListener("touchmove", e => {
+
+  e.preventDefault();
+
+  // PINCH ZOOM
+  if (e.touches.length === 2) {
+
+    const newDistance = getDistance(
+      e.touches[0],
+      e.touches[1]
+    );
+
+    scale *= newDistance / startDistance;
+
+    scale = Math.max(
+      1,
+      Math.min(scale, 5)
+    );
+
+    startDistance = newDistance;
+
+    updateTransform();
+  }
+
+  // DRAG IMAGE
+  if (e.touches.length === 1 && isDragging) {
+
+    currentX =
+      e.touches[0].clientX - startX;
+
+    currentY =
+      e.touches[0].clientY - startY;
+
+    updateTransform();
+  }
+
+}, { passive:false });
+
+
+// TOUCH END
+img.addEventListener("touchend", () => {
+
+  isDragging = false;
+});
+
+
+// APPLY TRANSFORM
+function updateTransform() {
+
+  img.style.transform =
+    `translate(${currentX}px, ${currentY}px) scale(${scale})`;
+}
+
+
+// DISTANCE BETWEEN 2 FINGERS
+function getDistance(t1, t2) {
+
+  return Math.hypot(
+    t2.clientX - t1.clientX,
+    t2.clientY - t1.clientY
+  );
+}
+
+// SWIPE DOWN TO CLOSE
+let swipeStartY = 0;
+let swipeCurrentY = 0;
+
+container.addEventListener("touchstart", e => {
+
+  if (scale === 1 && e.touches.length === 1) {
+
+    swipeStartY = e.touches[0].clientY;
+  }
+
+});
+
+container.addEventListener("touchmove", e => {
+
+  if (scale === 1 && e.touches.length === 1) {
+
+    swipeCurrentY =
+      e.touches[0].clientY - swipeStartY;
+
+    // MOVE VIEWER
+    container.style.transform =
+      `translateY(${swipeCurrentY}px)`;
+
+    // FADE BACKGROUND
+    viewer.style.background =
+      `rgba(0,0,0,${
+        0.95 - Math.abs(swipeCurrentY) / 700
+      })`;
+  }
+
+}, { passive:false });
+
+
+container.addEventListener("touchend", () => {
+
+  // CLOSE IF SWIPED FAR
+  if (Math.abs(swipeCurrentY) > 120) {
+
+    closeMedia();
+
+    return;
+  }
+
+  // RESET POSITION
+  container.style.transition =
+    "transform 0.2s ease";
+
+  container.style.transform =
+    "translateY(0px)";
+
+  viewer.style.background =
+    "rgba(0,0,0,0.95)";
+
+  setTimeout(() => {
+
+    container.style.transition = "";
+
+  }, 200);
+
+  swipeCurrentY = 0;
+});
+}
+
+  // VIDEO
+if (type === "video") {
+
+const video = document.createElement("video");
+
+video.id = "mediaVideo";
+
+video.src = url;
+
+video.controls = false;
+video.autoplay = true;
+video.playsInline = true;
+video.muted = window.storyMuted ?? true;
+
+  video.removeAttribute("width");
+  video.removeAttribute("height");
+
+  video.style.cssText = `
+    width:auto;
+    height:auto;
+
+    max-width:95vw;
+    max-height:95vh;
+
+    object-fit:contain;
+
+    display:block;
+    background:black;
+    border-radius:12px;
+
+    touch-action:none;
+  `;
+
+  container.appendChild(video);
+
+  // =========================
+  // PLAY BUTTON OVERLAY
+  // =========================
+
+  const playBtn = document.createElement("div");
+
+  playBtn.innerHTML = "⏸";
+
+  playBtn.style.cssText = `
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%, -50%);
+    width:90px;
+    height:90px;
+    border-radius:50%;
+    background:rgba(255,255,255,0.9);
+    color:black;
+    font-size:40px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    opacity:0;
+    transition:0.2s;
+    pointer-events:none;
+    z-index:20;
+  `;
+
+  container.appendChild(playBtn);
+
+  // =========================
+  // GESTURE OVERLAY
+  // =========================
+
+  const gestureOverlay =
+    document.createElement("div");
+
+  gestureOverlay.style.cssText = `
+    position:absolute;
+    top:80px;
+    left:50%;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,0.7);
+    color:white;
+    padding:10px 18px;
+    border-radius:20px;
+    font-size:16px;
+    opacity:0;
+    transition:0.2s;
+    z-index:30;
+    pointer-events:none;
+  `;
+
+  container.appendChild(gestureOverlay);
+
+  // =========================
+  // VARIABLES
+  // =========================
+
+ startX = 0;
+
+moved = false;
+
+brightness = 1;
+
+startBrightness = 1;
+startVolume = video.volume;
+
+  // =========================
+  // TOUCH START
+  // =========================
+
+  video.addEventListener("touchstart", e => {
+
+    if (e.touches.length !== 1) return;
+
+    moved = false;
+
+    startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
+
+    startBrightness = brightness;
+    startVolume = video.volume;
+
+  }, { passive:false });
+
+  // =========================
+  // TOUCH MOVE
+  // =========================
+
+  video.addEventListener("touchmove", e => {
+
+    if (e.touches.length !== 1) return;
+
+    e.preventDefault();
+
+    moved = true;
+
+    const touch = e.touches[0];
+
+    const deltaY =
+      startY - touch.clientY;
+
+    const percent =
+      deltaY / window.innerHeight;
+
+    // RIGHT SIDE = VOLUME
+    if (startX > window.innerWidth / 2) {
+
+      let newVolume =
+        startVolume + percent;
+
+      newVolume = Math.max(
+        0,
+        Math.min(1, newVolume)
+      );
+
+      video.volume = newVolume;
+
+      gestureOverlay.innerHTML =
+        "🔊 " +
+        Math.round(newVolume * 100) +
+        "%";
+    }
+
+    // LEFT SIDE = BRIGHTNESS
+    else {
+
+      brightness =
+        startBrightness + percent;
+
+      brightness = Math.max(
+        0.3,
+        Math.min(2, brightness)
+      );
+
+      video.style.filter =
+        `brightness(${brightness})`;
+
+      gestureOverlay.innerHTML =
+        "☀️ " +
+        Math.round(brightness * 50) +
+        "%";
+    }
+
+    gestureOverlay.style.opacity = "1";
+
+  }, { passive:false });
+
+  // =========================
+  // TOUCH END
+  // =========================
+
+  video.addEventListener("touchend", () => {
+
+    setTimeout(() => {
+
+      gestureOverlay.style.opacity = "0";
+
+    }, 500);
+
+  });
+
+  // =========================
+  // TAP PLAY / PAUSE
+  // =========================
+
+  video.addEventListener("click", e => {
+
+    e.stopPropagation();
+
+    if (moved) return;
+
+    if (video.paused) {
+
+      video.play();
+
+      playBtn.innerHTML = "⏸";
+
+    } else {
+
+      video.pause();
+
+      playBtn.innerHTML = "▶";
+
+    }
+
+    playBtn.style.opacity = "1";
+
+    clearTimeout(window.playBtnTimer);
+
+    window.playBtnTimer = setTimeout(() => {
+
+      playBtn.style.opacity = "0";
+
+    }, 700);
+
+  });
+
+}
+
+
+  viewer.appendChild(container);
+
+  // SHOW VIEWER
+  viewer.style.display = "flex";
+  viewer.style.justifyContent = "center";
+  viewer.style.alignItems = "center";
+  viewer.style.background = "rgba(0,0,0,0.95)";
+};
+
+
+// CLOSE MEDIA
+window.closeMedia = function () {
+  
+  document.onkeydown = null;
+
+  const viewer =
+    document.getElementById("mediaViewer");
+
+  viewer.style.opacity = "0";
+
+  setTimeout(() => {
+
+    viewer.style.display = "none";
+    viewer.innerHTML = "";
+
+  }, 200);
+
+};
+
+// =====================================================
+// NOTIFICATIONS
+// =====================================================
+
+
 async function loadNotifications() {
 
   if (!currentUser) return;
@@ -7013,6 +7378,52 @@ if (screen && screen.style.display === "flex") {
   renderNotifications(notificationCache);
 }
 };
+
+if (!window.postsSubscription) {
+
+  window.postsSubscription = supabase
+    .channel("posts_realtime")
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "posts"
+      },
+      (payload) => {
+
+        upsertPost(payload.new);
+
+        loadPosts();
+
+      }
+    )
+    .subscribe();
+
+}
+
+if (!window.commentsSubscription) {
+
+  window.commentsSubscription = supabase
+    .channel("comments_realtime")
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "comments"
+      },
+      (payload) => {
+
+        if (payload.new.post_id === currentPostId) {
+          loadComments(currentPostId);
+        }
+
+      }
+    )
+    .subscribe();
+
+}
   
   async function loadUnreadCount() {
 
@@ -7431,35 +7842,46 @@ if (!window.messagesSubscription) {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "messages"
         },
         payload => {
 
-         const msg = payload.new;
+          const msg = payload.new;
 
-if (
-  (
-    msg.sender_id === currentUser.id &&
-    msg.receiver_id === currentChatUser
-  )
-  ||
-  (
-    msg.sender_id === currentChatUser &&
-    msg.receiver_id === currentUser.id
-  )
-) {
-
-  loadMessages();
-
-}
+          if (
+            (
+              msg.sender_id === currentUser.id &&
+              msg.receiver_id === currentChatUser
+            ) ||
+            (
+              msg.sender_id === currentChatUser &&
+              msg.receiver_id === currentUser.id
+            )
+          ) {
+            loadMessages();
+          }
 
         }
       )
       .subscribe();
 
 }
+
+window.addEventListener("beforeunload", async () => {
+
+  if (!currentUser) return;
+
+  await supabase
+    .from("profiles")
+    .update({
+      online: false,
+      last_seen: new Date()
+    })
+    .eq("id", currentUser.id);
+
+});
 
 
 </script>
