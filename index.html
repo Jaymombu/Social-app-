@@ -22,12 +22,12 @@ body {
 }
 
 /* 🔥 FULL SCREEN SCROLL */
-#posts {
-  min-height: 100vh;
-  overflow-y: auto;
-  padding-top: 20px;
-  padding-bottom: 120px;
-  box-sizing: border-box;
+#posts{
+    min-height:100vh;
+    overflow-y:auto;
+    padding-top:20px;
+    padding-bottom:20px;
+    box-sizing:border-box;
 }
 
 /* 📱 POST CARD */
@@ -106,85 +106,6 @@ body {
   pointer-events: none;
 }
 
-/* 🔝 TOP NAV */
-#topNav {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-
-  height: 60px;
-
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-
-  padding: 0 15px;
-  box-sizing: border-box;
-
-  background: #111;
-  border-bottom: 1px solid #222;
-
-  color: white;
-  z-index: 1000;
-}
-
-#topNav .active {
-  color: white;
-  border-bottom: 2px solid white;
-}
-
-/* 🔽 BOTTOM NAV */
-#bottomNav {
-  position: fixed;
-  bottom: 0;
-  width: 100%;
-  height: 60px;
-
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-
-  background: rgba(0,0,0,0.6);
-  color: white;
-  z-index: 1000;
-}
-
-/* ➕ PLUS BUTTON */
-#plusBtn {
-  background: white;
-  color: black;
-  font-size: 28px;
-  padding: 5px 15px;
-  border-radius: 12px;
-  position: relative;
-}
-
-#plusBtn::before {
-  content: "";
-  position: absolute;
-  left: -5px;
-  right: -5px;
-  top: 0;
-  bottom: 0;
-  background: linear-gradient(90deg, cyan, pink);
-  border-radius: 14px;
-  z-index: -1;
-}
-
-/* 📝 CREATE PANEL */
-#createPanel {
-  position: fixed;
-  bottom: 80px;
-  left: 10px;
-  right: 10px;
-  background: #111;
-  padding: 10px;
-  border-radius: 12px;
-  display: none;
-  z-index: 1000;
-}
-
 /* ❤️ LIKE ANIMATION */
 .like-btn.pop {
   transform: scale(1.2);
@@ -199,13 +120,6 @@ body {
   z-index: 1000;
 }
 
-#bottomNav {
-  z-index: 1000;
-}
-
-#createPanel {
-  z-index: 1001;
-}
 #commentsPanel {
   position: fixed;
   bottom: -100%;
@@ -845,8 +759,10 @@ transform:scale(.95);
 }
 
 #topBar{
-    position:sticky;
+    position:fixed;
     top:0;
+    left:0;
+    right:0;
     width:100%;
     height:60px;
 
@@ -860,8 +776,7 @@ transform:scale(.95);
     background:#111;
     border-bottom:1px solid #222;
 
-    z-index:9999;
-    flex-shrink:0;
+    z-index:999999;
 }
 
 #storiesWrapper{
@@ -1102,199 +1017,27 @@ transform:scale(.95);
 
 </div>
 
-<div
-  id="notificationsScreen"
-  style="
-    display:none;
-    position:fixed;
-    inset:0;
-    background:#000;
-    z-index:999999;
-    flex-direction:column;
-  "
->
-
-  <div style="
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:15px;
-  border-bottom:1px solid #222;
-  color:white;
-">
-
-  <div style="
-    display:flex;
-    align-items:center;
-  ">
-    <button onclick="
-      document.getElementById('notificationsScreen').style.display='none'
-    ">
-      ←
-    </button>
-
-    <div style="margin-left:10px;">
-      Notifications
-    </div>
-  </div>
-
-  <button
-    onclick="clearNotifications()"
-    style="
-      background:none;
-      border:none;
-      color:#1877f2;
-      font-weight:bold;
-      cursor:pointer;
-    "
-  >
-    Clear All
-  </button>
-  
-  <button
-  onclick="markAllNotificationsRead()"
-  style="
-    background:none;
-    border:none;
-    color:#1877f2;
-    font-weight:bold;
-    cursor:pointer;
-  ">
-  Mark all read
-</button>
-
-</div>
-
-<div id="notificationFilters" style="
-display:flex;
-gap:12px;
-overflow-x:auto;
-padding:10px 14px;
-">
-
-<button class="notifFilter active"
-onclick="setNotificationFilter(this,'all')">
-All
-</button>
-
-<button class="notifFilter"
-onclick="setNotificationFilter(this,'like')">
-Likes
-</button>
-
-<button class="notifFilter"
-onclick="setNotificationFilter(this,'comment')">
-Comments
-</button>
-
-<button class="notifFilter"
-onclick="setNotificationFilter(this,'follow')">
-Follows
-</button>
-
-<button class="notifFilter"
-onclick="setNotificationFilter(this,'message')">
-Messages
-</button>
-
-<button class="notifFilter"
-onclick="setNotificationFilter(this,'stories')">
-Stories
-</button>
-
-</div>
-
-<input
-  id="notificationSearch"
-  placeholder="Search notifications..."
-  oninput="loadNotifications()"
-  style="
-    width:calc(96% - 20px);
-    margin:10px;
-    padding:12px;
-    border:none;
-    border-radius:10px;
-    background:#1a1a1a;
-    color:white;
-    outline:none;
-  "
->
-
-<div
-  id="notificationsList"
-  style="
-    flex:1;
-    overflow:auto;
-  "
-></div>
-
-</div>
-
-<div id="searchScreen" style="
-position:fixed;
-inset:0;
-background:#0f0f0f;
-display:none;
-flex-direction:column;
-z-index:9000;
-">
-
-<div style="
-display:flex;
-align-items:center;
-padding:15px;
-border-bottom:1px solid #333;
-">
-
-<button onclick="closeSearch()">←</button>
-
-<input
-id="userSearchInput"
-placeholder="Search users..."
-oninput="searchUsers()"
-style="
-flex:1;
-margin-left:10px;
-padding:12px;
-border:none;
-border-radius:10px;
-background:#222;
-color:white;
-">
-</div>
-
-<div
-id="searchResults"
-style="
-flex:1;
-overflow:auto;
-">
-</div>
-
-</div>
-
 <div id="app">
   
   <div id="topBar" style="
-position:fixed;
-top:0;
-left:0;
-right:0;
-width:100%;
-height:60px;
-background:#111;
-display:flex;
-justify-content:space-between;
-align-items:center;
-padding:0 15px;
-border-bottom:1px solid #222;
-z-index:999999;
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  height:60px;
+  background:#18191a;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 15px;
+  border-bottom:1px solid #333;
+  z-index:999999;
 ">
 
   <div style="
-    color:white;
-    font-size:22px;
-    font-weight:bold;
+    color:#1877f2;
+    font-size:28px;
+    font-weight:900;
   ">
     SocialApp
   </div>
@@ -1306,59 +1049,31 @@ z-index:999999;
   ">
 
     <button
+      onclick="goHome()"
+      style="background:none;border:none;color:white;font-size:24px;cursor:pointer;"
+    >
+      🏠
+    </button>
+
+    <button
       onclick="openSearch()"
-      style="
-        background:none;
-        border:none;
-        color:white;
-        font-size:24px;
-      "
+      style="background:none;border:none;color:white;font-size:24px;cursor:pointer;"
     >
       🔍
     </button>
 
     <button
       onclick="openInbox()"
-      style="
-        background:none;
-        border:none;
-        color:white;
-        font-size:24px;
-      "
+      style="background:none;border:none;color:white;font-size:24px;cursor:pointer;"
     >
       💬
     </button>
 
     <button
       onclick="openNotifications()"
-      style="
-        position:relative;
-        background:none;
-        border:none;
-        color:white;
-        font-size:24px;
-      "
+      style="background:none;border:none;color:white;font-size:24px;cursor:pointer;"
     >
       🔔
-
-      <span
-        id="notifBadge"
-        style="
-          position:absolute;
-          top:-5px;
-          right:-5px;
-          min-width:18px;
-          height:18px;
-          border-radius:50%;
-          background:red;
-          color:white;
-          font-size:10px;
-          display:none;
-          justify-content:center;
-          align-items:center;
-        "
-      ></span>
-
     </button>
 
   </div>
@@ -1779,6 +1494,177 @@ z-index:999999;
 >
   ✕
 </button>
+
+</div>
+
+<div
+  id="notificationsScreen"
+  style="
+    display:none;
+    position:fixed;
+    inset:0;
+    background:#000;
+    z-index:999999;
+    flex-direction:column;
+  "
+>
+
+  <div style="
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:15px;
+  border-bottom:1px solid #222;
+  color:white;
+">
+
+  <div style="
+    display:flex;
+    align-items:center;
+  ">
+    <button onclick="
+      document.getElementById('notificationsScreen').style.display='none'
+    ">
+      ←
+    </button>
+
+    <div style="margin-left:10px;">
+      Notifications
+    </div>
+  </div>
+
+  <button
+    onclick="clearNotifications()"
+    style="
+      background:none;
+      border:none;
+      color:#1877f2;
+      font-weight:bold;
+      cursor:pointer;
+    "
+  >
+    Clear All
+  </button>
+  
+  <button
+  onclick="markAllNotificationsRead()"
+  style="
+    background:none;
+    border:none;
+    color:#1877f2;
+    font-weight:bold;
+    cursor:pointer;
+  ">
+  Mark all read
+</button>
+
+</div>
+
+<div id="notificationFilters" style="
+display:flex;
+gap:12px;
+overflow-x:auto;
+padding:10px 14px;
+">
+
+<button class="notifFilter active"
+onclick="setNotificationFilter(this,'all')">
+All
+</button>
+
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'like')">
+Likes
+</button>
+
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'comment')">
+Comments
+</button>
+
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'follow')">
+Follows
+</button>
+
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'message')">
+Messages
+</button>
+
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'stories')">
+Stories
+</button>
+
+</div>
+
+<input
+  id="notificationSearch"
+  placeholder="Search notifications..."
+  oninput="loadNotifications()"
+  style="
+    width:calc(96% - 20px);
+    margin:10px;
+    padding:12px;
+    border:none;
+    border-radius:10px;
+    background:#1a1a1a;
+    color:white;
+    outline:none;
+  "
+>
+
+<div
+  id="notificationsList"
+  style="
+    flex:1;
+    overflow:auto;
+  "
+></div>
+
+</div>
+
+<div id="searchScreen" style="
+position:fixed;
+inset:0;
+background:#0f0f0f;
+display:none;
+flex-direction:column;
+z-index:9000;
+">
+
+<div style="
+display:flex;
+align-items:center;
+padding:15px;
+border-bottom:1px solid #333;
+">
+
+<button onclick="closeSearch()">←</button>
+
+<input
+id="userSearchInput"
+placeholder="Search users..."
+oninput="searchUsers()"
+style="
+flex:1;
+margin-left:10px;
+padding:12px;
+border:none;
+border-radius:10px;
+background:#222;
+color:white;
+">
+</div>
+
+<div
+id="searchResults"
+style="
+flex:1;
+overflow:auto;
+">
+</div>
 
 </div>
 
@@ -5138,9 +5024,7 @@ window.closeSearch = function () {
 
 window.searchUsers = async function () {
 
-  const text =
-    document.getElementById("userSearchInput")
-      .value.trim();
+  const text = document.getElementById("userSearchInput").value.trim();
 
   if (!text) {
     document.getElementById("searchResults").innerHTML = "";
@@ -5150,7 +5034,7 @@ window.searchUsers = async function () {
   const { data, error } = await supabase
     .from("profiles")
     .select("id,name,avatar_url,online,last_seen")
-    .ilike("name", "%" + text + "%")
+    .ilike("name", `%${text}%`)
     .limit(20);
 
   if (error) {
@@ -5158,27 +5042,26 @@ window.searchUsers = async function () {
     return;
   }
 
-  document.getElementById("searchResults").innerHTML =
-    data.map(user => `
-      <div
-        onclick="closeSearch(); openProfile('${user.id}', '${user.name.replace(/'/g, "\\'")}')"
+  document.getElementById("searchResults").innerHTML = data.map(user => `
+    <div
+      onclick="openProfile('${user.id}')"
+      style="
+        display:flex;
+        align-items:center;
+        gap:10px;
+        padding:12px;
+        border-bottom:1px solid #222;
+        cursor:pointer;
+      ">
+      <img
+        src="${user.avatar_url || 'https://via.placeholder.com/40'}"
         style="
-          display:flex;
-          align-items:center;
-          gap:10px;
-          padding:12px;
-          border-bottom:1px solid #222;
-          cursor:pointer;
+          width:40px;
+          height:40px;
+          border-radius:50%;
+          object-fit:cover;
         ">
-        <img
-          src="${user.avatar_url || 'https://via.placeholder.com/40'}"
-          style="
-            width:40px;
-            height:40px;
-            border-radius:50%;
-            object-fit:cover;
-          ">
-       <div>
+      <div>
   <div style="color:white;font-weight:bold;">
     ${user.name}
   </div>
@@ -5194,8 +5077,8 @@ window.searchUsers = async function () {
     }
   </div>
 </div>
-      </div>
-    `).join("");
+    </div>
+  `).join("");
 };
 
 // =====================================================
@@ -7861,6 +7744,30 @@ function appendReplies(data) {
 
   box.insertAdjacentHTML("beforeend", html);
 }
+
+// ========================
+// GLOBAL HOME PAGE 
+// ========================
+
+window.goHome = function () {
+
+  // Close any open screens
+  document.getElementById("chatScreen").style.display = "none";
+  document.getElementById("inboxScreen").style.display = "none";
+  document.getElementById("notificationsScreen").style.display = "none";
+  document.getElementById("searchScreen").style.display = "none";
+  document.getElementById("storyViewer").style.display = "none";
+
+  // Return to the main feed
+  document.getElementById("app").style.display = "block";
+
+  // Scroll to the top like Facebook
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
+
+};
 
 // ========================
 // GLOBAL FUNCTIONS
