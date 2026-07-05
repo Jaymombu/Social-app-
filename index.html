@@ -5073,6 +5073,28 @@ async function startApp() {
 
   document.getElementById("app").innerHTML = `
     <div style="padding:10px;">
+    
+    <div id="topBar" style="
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:10px 0;
+margin-bottom:10px;
+">
+
+  <div style="display:flex;gap:15px;font-size:24px;">
+
+    <button onclick="goHome()" style="background:none;border:none;color:white;">🏠</button>
+
+    <button onclick="openSearch()" style="background:none;border:none;color:white;">🔍</button>
+
+    <button onclick="openInbox()" style="background:none;border:none;color:white;">💬</button>
+
+    <button onclick="openNotifications()" style="background:none;border:none;color:white;">🔔</button>
+
+  </div>
+
+</div>
 
       <div id="tabs" style="
         display:flex;
