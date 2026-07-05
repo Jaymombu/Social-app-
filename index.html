@@ -763,24 +763,19 @@ transform:scale(.95);
     top:0;
     left:0;
     right:0;
-    width:100%;
     height:60px;
-
     display:flex;
-    justify-content:space-between;
     align-items:center;
-
-    padding:0 15px;
+    justify-content:space-between;
+    padding:0 12px;
     box-sizing:border-box;
-
-    background:#111;
-    border-bottom:1px solid #222;
-
+    background:#18191a;
+    border-bottom:1px solid #333;
     z-index:999999;
 }
 
 #storiesWrapper{
-    margin-top:60px;
+    padding-top:70px;
 }
 
 </style>
@@ -1019,25 +1014,27 @@ transform:scale(.95);
 
 <div id="app">
   
-  <div id="topBar" style="
-  position:fixed;
-  top:0;
-  left:0;
-  right:0;
-  height:60px;
-  background:#18191a;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 15px;
-  border-bottom:1px solid #333;
-  z-index:999999;
+ <div id="topBar" style="
+position:fixed;
+top:0;
+left:0;
+right:0;
+height:60px;
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:0 12px;
+background:#18191a;
+border-bottom:1px solid #333;
+z-index:999999;
+box-sizing:border-box;
 ">
 
   <div style="
     color:#1877f2;
-    font-size:28px;
+    font-size:24px;
     font-weight:900;
+    flex-shrink:0;
   ">
     SocialApp
   </div>
@@ -1045,36 +1042,17 @@ transform:scale(.95);
   <div style="
     display:flex;
     align-items:center;
-    gap:18px;
+    gap:10px;
+    flex-shrink:0;
   ">
 
-    <button
-      onclick="goHome()"
-      style="background:none;border:none;color:white;font-size:24px;cursor:pointer;"
-    >
-      🏠
-    </button>
+    <button onclick="goHome()" style="background:none;border:none;color:white;font-size:22px;padding:4px;">🏠</button>
 
-    <button
-      onclick="openSearch()"
-      style="background:none;border:none;color:white;font-size:24px;cursor:pointer;"
-    >
-      🔍
-    </button>
+    <button onclick="openSearch()" style="background:none;border:none;color:white;font-size:22px;padding:4px;">🔍</button>
 
-    <button
-      onclick="openInbox()"
-      style="background:none;border:none;color:white;font-size:24px;cursor:pointer;"
-    >
-      💬
-    </button>
+    <button onclick="openInbox()" style="background:none;border:none;color:white;font-size:22px;padding:4px;">💬</button>
 
-    <button
-      onclick="openNotifications()"
-      style="background:none;border:none;color:white;font-size:24px;cursor:pointer;"
-    >
-      🔔
-    </button>
+    <button onclick="openNotifications()" style="background:none;border:none;color:white;font-size:22px;padding:4px;">🔔</button>
 
   </div>
 
