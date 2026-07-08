@@ -901,7 +901,7 @@ box-shadow:none;
   id="chatSearchBar"
   style="
     display:none;
-    padding:10px;
+    padding:4px 10px;
     background:#18191a;
   "
 >
@@ -912,12 +912,14 @@ box-shadow:none;
   oninput="searchMessages()"
   style="
     width:100%;
-    padding:12px;
+    height:36px;
+    padding:6px 12px;
     border:none;
-    border-radius:20px;
+    border-radius:18px;
     background:#2b2b2b;
     color:white;
-  "
+    font-size:14px;
+"
 >
 
 </div>
@@ -6712,12 +6714,22 @@ border-bottom:1px solid #333;
 
   setTimeout(() => {
 
-  document.onclick = () => {
+  document.onclick = (e) => {
 
-    document.getElementById("messageMenu")?.remove();
-    document.getElementById("emojiPicker")?.remove();
+    const menu = document.getElementById("messageMenu");
+    const picker = document.getElementById("emojiPicker");
 
-    document.onclick = null;
+    if (
+      menu &&
+      !menu.contains(e.target) &&
+      !picker?.contains(e.target)
+    ) {
+
+      menu.remove();
+      picker?.remove();
+
+      document.onclick = null;
+    }
 
   };
 
@@ -6761,6 +6773,8 @@ if (!window.chatRealtimeSubscription) {
 }
 
 window.showEmojiPicker = function(messageId) {
+
+  document.getElementById("emojiPicker")?.remove();
 
   document.getElementById("messageMenu")?.remove();
 
