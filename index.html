@@ -7012,7 +7012,7 @@ window.reactMessage = async function(messageId, emoji) {
 
 window.showReactionDetails = function(messageId, emoji) {
 
-  console.log("REACTION CLICKED", messageId, emoji);
+  alert("Clicked: " + emoji);
 
   loadReactionDetails(messageId, emoji);
 
@@ -7038,7 +7038,12 @@ window.loadReactionDetails = async function(messageId, emoji) {
     return;
   }
 
-  showReactionPopup(emoji, data || []);
+  alert(
+  "Loaded users: " + 
+  (data ? data.length : 0)
+);
+
+showReactionPopup(emoji, data || []);
 
 };
 
