@@ -7099,9 +7099,9 @@ ${r}
 
 window.allReactionUsers = users;
 
-renderReactionUsers(users);
+document.body.appendChild(popup);
 
-  document.body.appendChild(popup);
+renderReactionUsers(users);
 
   setTimeout(() => {
 
@@ -7122,10 +7122,15 @@ window.renderReactionUsers = function(users) {
   const list =
     document.getElementById("reactionUsers");
 
+  if (!list) {
+    alert("reactionUsers container missing");
+    return;
+  }
+
   list.innerHTML = users.map(u => `
 
 <div
-  onclick="openProfile('${u.profiles.id}','${u.profiles.name}')"
+  onclick="openProfile('${u.profiles?.id}','${u.profiles?.name || "User"}')"
   style="
     display:flex;
     align-items:center;
