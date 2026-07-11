@@ -909,7 +909,7 @@ box-shadow:none;
 <div style="
   display:flex;
   align-items:center;
-  gap:8px;
+  gap:6px;
 ">
 
 <input
@@ -918,24 +918,59 @@ box-shadow:none;
   oninput="searchMessages()"
   style="
     flex:1;
-    height:32px;
-    padding:4px 12px;
+    height:34px;
+    padding:0 12px;
     border:none;
-    border-radius:16px;
+    border-radius:18px;
     background:#2b2b2b;
     color:white;
     font-size:13px;
-    box-sizing:border-box;
+    outline:none;
   "
 >
 
 <button
+  onclick="previousSearchResult()"
+  style="
+    width:34px;
+    height:34px;
+    border:none;
+    border-radius:50%;
+    background:#2b2b2b;
+    color:white;
+    font-size:16px;
+    cursor:pointer;
+  "
+>
+▲
+</button>
+
+<button
+  onclick="nextSearchResult()"
+  style="
+    width:34px;
+    height:34px;
+    border:none;
+    border-radius:50%;
+    background:#2b2b2b;
+    color:white;
+    font-size:16px;
+    cursor:pointer;
+  "
+>
+▼
+</button>
+
+<button
   onclick="toggleChatSearch()"
   style="
-    background:none;
+    width:34px;
+    height:34px;
     border:none;
+    border-radius:50%;
+    background:#ff4d4d;
     color:white;
-    font-size:22px;
+    font-size:16px;
     cursor:pointer;
   "
 >
@@ -5491,6 +5526,9 @@ function snapToNearestPost() {
 // CHAT
 // =====================================================
 
+let searchResults = [];
+let currentSearchIndex = -1;
+
 let currentChatUser = null;
 
 window.openChat = async function(userId, name) {
@@ -6022,7 +6060,7 @@ chat.innerHTML +=`
         ? "flex-end"
         : "flex-start"
     };
-    margin-bottom:10px;
+    margin-bottom:22px;
   ">
 
 <div
@@ -6073,7 +6111,8 @@ chat.innerHTML +=`
 
     max-width:75%;
 
-    overflow:hidden;
+    overflow:visible;
+    position:relative;
   "
 >
 
@@ -6281,11 +6320,13 @@ ${
   msg.reactions && msg.reactions.length
     ? `
       <div style="
-        display:flex;
-        flex-wrap:wrap;
-        gap:6px;
-        margin-top:6px;
-      ">
+position:absolute;
+bottom:-10px;
+right:8px;
+display:flex;
+gap:4px;
+z-index:2;
+">
         ${Object.entries(
           msg.reactions.reduce((a, r) => {
             a[r.reaction] = (a[r.reaction] || 0) + 1;
@@ -7541,27 +7582,22 @@ if (window.messageSeenChannel) {
 
 window.toggleChatSearch = function () {
 
-  const bar =
-    document.getElementById("chatSearchBar");
+  const bar = document.getElementById("chatSearchBar");
 
   if (bar.style.display === "none") {
 
     bar.style.display = "block";
-
-    document
-      .getElementById("chatSearch")
-      .focus();
+    document.getElementById("chatSearch").focus();
 
   } else {
 
     bar.style.display = "none";
-
     document.getElementById("chatSearch").value = "";
 
-document.querySelectorAll(".chatMessage").forEach(msg=>{
-  msg.style.display = "flex";
-  msg.style.outline = "none";
-});
+    document.querySelectorAll(".chatMessage").forEach(msg => {
+      msg.style.display = "";
+      msg.style.outline = "none";
+    });
 
   }
 
@@ -7569,44 +7605,75 @@ document.querySelectorAll(".chatMessage").forEach(msg=>{
 
 window.searchMessages = function () {
 
-  const input =
-    document.getElementById("chatSearch");
+  const value = document
+    .getElementById("chatSearch")
+    .value
+    .toLowerCase()
+    .trim();
 
-  const value =
-    input.value.toLowerCase().trim();
+  searchResults = [];
+  currentSearchIndex = -1;
 
-  const messages =
-    document.querySelectorAll(".chatMessage");
+  document.querySelectorAll(".chatMessage").forEach(msg => {
 
+    msg.style.outline = "";
 
-  messages.forEach(msg => {
+    if (
+      value &&
+      (msg.dataset.message || "").includes(value)
+    ) {
+      searchResults.push(msg);
+    }
 
-  msg.style.outline = "none";
+  });
 
-  if (value === "") {
-
-    msg.style.display = "flex";
-    return;
-
+  if (searchResults.length) {
+    currentSearchIndex = 0;
+    highlightSearchResult();
   }
 
-  if (msg.dataset.message.includes(value)) {
+};
 
-    msg.style.display = "flex";
-    msg.style.outline = "2px solid #0084ff";
+function highlightSearchResult() {
 
-    msg.scrollIntoView({
-      behavior: "smooth",
-      block: "center"
-    });
+  document
+    .querySelectorAll(".chatMessage")
+    .forEach(m => m.style.outline = "");
 
-  } else {
+  const msg = searchResults[currentSearchIndex];
 
-    msg.style.display = "none";
+  if (!msg) return;
 
-  }
+  msg.style.outline = "2px solid #1d9bf0";
 
-});
+  msg.scrollIntoView({
+    behavior:"smooth",
+    block:"center"
+  });
+
+}
+
+window.nextSearchResult = function () {
+
+  if (!searchResults.length) return;
+
+  currentSearchIndex =
+    (currentSearchIndex + 1) %
+    searchResults.length;
+
+  highlightSearchResult();
+
+};
+
+window.previousSearchResult = function () {
+
+  if (!searchResults.length) return;
+
+  currentSearchIndex =
+    (currentSearchIndex - 1 + searchResults.length) %
+    searchResults.length;
+
+  highlightSearchResult();
 
 };
 
