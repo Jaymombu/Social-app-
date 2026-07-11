@@ -797,6 +797,126 @@ box-shadow:none;
 
 }
 
+@keyframes messagePop{
+
+0%{
+transform:scale(.8);
+opacity:0;
+}
+
+100%{
+transform:scale(1);
+opacity:1;
+}
+
+}
+
+.chat-selected{
+  outline:3px solid #1d9bf0;
+  background:#2d5cff !important;
+}
+
+.sending-message{
+  opacity:.6;
+  animation:sendingPulse 1s infinite;
+}
+
+@keyframes sendingPulse{
+  0%{
+    opacity:.4;
+  }
+  50%{
+    opacity:1;
+  }
+  100%{
+    opacity:.4;
+  }
+}
+
+.messageStatus{
+  display:inline-block;
+  margin-left:4px;
+  transition:all .25s ease;
+}
+
+.messageStatus.sent{
+  color:#bbb;
+}
+
+.messageStatus.delivered{
+  color:#ddd;
+  animation:statusPop .25s ease;
+}
+
+.messageStatus.seen{
+  color:#4fc3f7;
+  animation:statusPop .25s ease;
+}
+
+@keyframes statusPop{
+  0%{
+    transform:scale(.6);
+    opacity:0;
+  }
+  100%{
+    transform:scale(1);
+    opacity:1;
+  }
+}
+
+.message-enter{
+
+  animation:messageEnter .25s ease;
+
+}
+
+@keyframes messageEnter{
+
+from{
+  opacity:0;
+  transform:translateY(15px) scale(.95);
+}
+
+to{
+  opacity:1;
+  transform:translateY(0) scale(1);
+}
+
+}
+
+.typingDots span{
+
+  animation:typingBlink 1.4s infinite;
+
+  opacity:0;
+
+}
+
+.typingDots span:nth-child(1){
+  animation-delay:0s;
+}
+
+.typingDots span:nth-child(2){
+  animation-delay:.2s;
+}
+
+.typingDots span:nth-child(3){
+  animation-delay:.4s;
+}
+
+
+@keyframes typingBlink{
+
+  0%,60%,100%{
+    opacity:0;
+  }
+
+  30%{
+    opacity:1;
+  }
+
+}
+
 </style>
 </head>
 <body class="dark">
@@ -809,9 +929,88 @@ box-shadow:none;
   display:none;
   flex-direction:column;
 ">
+    
+    <div id="selectionBar" style="
+display:none;
+height:60px;
+background:#18191a;
+color:white;
+align-items:center;
+justify-content:space-between;
+padding:0 15px;
+border-bottom:1px solid #333;
+">
 
-  <!-- HEADER -->
-  <div style="
+<span id="selectedCount">0 selected</span>
+
+<div>
+  
+<button 
+onclick="selectAllMessages()"
+style="
+background:none;
+border:none;
+font-size:22px;
+color:white;
+cursor:pointer;
+">
+☑️
+</button>
+
+<button
+onclick="copySelectedMessages()"
+style="
+background:none;
+border:none;
+font-size:22px;
+color:white;
+cursor:pointer;
+">
+📋
+</button>
+
+<button
+onclick="forwardSelectedMessages()"
+style="
+background:none;
+border:none;
+font-size:22px;
+color:white;
+cursor:pointer;
+">
+📨
+</button>
+
+<button 
+onclick="deleteSelectedMessages()"
+style="
+background:none;
+border:none;
+font-size:22px;
+color:white;
+cursor:pointer;
+">
+🗑
+</button>
+
+<button
+onclick="cancelSelection()"
+style="
+background:none;
+border:none;
+font-size:22px;
+color:white;
+cursor:pointer;
+">
+✕
+</button>
+
+</div>
+
+</div>
+
+<!-- HEADER -->
+<div id="chatHeader" style="
     height:60px;
     display:flex;
     align-items:center;
@@ -874,15 +1073,19 @@ box-shadow:none;
   </div>
 
   <div
-    id="typingIndicator"
-    style="
-      color:#1d9bf0;
-      font-size:12px;
-      display:none;
-    "
-  >
-    ✍️ Typing...
-  </div>
+  id="typingIndicator"
+  style="
+    color:#1d9bf0;
+    font-size:12px;
+    display:none;
+  "
+>
+  Typing<span class="typingDots">
+    <span>.</span>
+    <span>.</span>
+    <span>.</span>
+  </span>
+</div>
 </div>
 
 <span
@@ -1722,6 +1925,25 @@ background:transparent;
 color:white;
 outline:none;
 ">
+
+<button
+onclick="
+document.getElementById('userSearchInput').value='';
+document.getElementById('searchResults').innerHTML='';
+document.getElementById('userSearchInput').focus();
+"
+style="
+background:none;
+border:none;
+color:white;
+font-size:22px;
+cursor:pointer;
+">
+✕
+</button>
+
+</div>
+
 </div>
 
 <div
@@ -4578,8 +4800,23 @@ async function loadComments(postId) {
 `).join("");
 }
 
-window.goHome = () => {
-  startApp(); // ✅ NOT reload
+window.goHome = async () => {
+
+  alert("A");
+
+  try {
+
+    await startApp();
+
+    alert("B");
+
+  } catch (e) {
+
+    alert("ERROR");
+    console.error(e);
+
+  }
+
 };
 
 // =====================================================
@@ -4620,7 +4857,7 @@ const { count: followingCount } = await supabase
 
     <button id="themeToggle">🌙 Theme</button>
 
-    <button onclick="goHome()">← Back</button>
+    <button onclick="alert('clicked'); goHome();">← Back</button>
 
     ${
       String(session?.user?.id) === String(userId)
@@ -5110,45 +5347,130 @@ window.searchUsers = async function () {
     console.log(error);
     return;
   }
+  
+  if (!data || data.length === 0) {
+
+  document.getElementById("searchResults").innerHTML = `
+    <div style="
+      color:#888;
+      text-align:center;
+      padding:20px;
+    ">
+      No users found
+    </div>
+  `;
+
+  return;
+}
 
   document.getElementById("searchResults").innerHTML = data.map(user => `
+<div
+  onclick="openProfile('${user.id}','${escapeHtml(user.name)}')"
+  style="
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:12px;
+    border-bottom:1px solid #222;
+    cursor:pointer;
+  "
+>
+
+  <img
+    src="${user.avatar_url || 'https://via.placeholder.com/40'}"
+    style="
+      width:40px;
+      height:40px;
+      border-radius:50%;
+      object-fit:cover;
+    "
+  >
+
+  <div style="flex:1">
+
+    <div style="color:white;font-weight:bold;">
+      ${escapeHtml(user.name)}
+    </div>
+
     <div
-      onclick="openProfile('${user.id}')"
-      style="
-        display:flex;
-        align-items:center;
-        gap:10px;
-        padding:12px;
-        border-bottom:1px solid #222;
-        cursor:pointer;
-      ">
-      <img
-        src="${user.avatar_url || 'https://via.placeholder.com/40'}"
-        style="
-          width:40px;
-          height:40px;
-          border-radius:50%;
-          object-fit:cover;
-        ">
-      <div>
-  <div style="color:white;font-weight:bold;">
-    ${user.name}
+      id="search-status-${user.id}"
+      style="color:#888;font-size:12px;"
+    >
+      ${
+        user.online
+          ? "🟢 Online"
+          : user.last_seen
+            ? "Last seen " + formatLastSeen(user.last_seen)
+            : "Offline"
+      }
+    </div>
+
   </div>
 
-  <div style="color:#888;font-size:12px;">
-    ${
-      user.online
-        ? "🟢 Online"
-        : "Last seen: " +
-          (user.last_seen
-            ? new Date(user.last_seen).toLocaleString()
-            : "Unknown")
-    }
-  </div>
+  <button
+    onclick="
+      event.stopPropagation();
+      openChat('${user.id}','${escapeHtml(user.name)}');
+    "
+    style="
+      background:#0084ff;
+      border:none;
+      color:white;
+      padding:8px 14px;
+      border-radius:18px;
+      cursor:pointer;
+    "
+  >
+    Message
+  </button>
+
 </div>
-    </div>
-  `).join("");
+`).join("");
+
+listenSearchStatus();
 };
+
+let searchStatusChannel = null;
+
+function listenSearchStatus(){
+
+  if(searchStatusChannel){
+    supabase.removeChannel(searchStatusChannel);
+  }
+
+  searchStatusChannel =
+    supabase
+    .channel("search_profiles_status")
+    .on(
+      "postgres_changes",
+      {
+        event:"UPDATE",
+        schema:"public",
+        table:"profiles"
+      },
+      payload=>{
+
+        const user = payload.new;
+
+        const status =
+          document.getElementById(
+            "search-status-" + user.id
+          );
+
+        if(!status) return;
+
+        status.innerText =
+          user.online
+            ? "🟢 Online"
+            : user.last_seen
+              ? "Last seen " + formatLastSeen(user.last_seen)
+              : "Offline";
+
+      }
+    )
+    .subscribe();
+
+}
 
 // =====================================================
 // APPLICATION STARTUP
@@ -5367,14 +5689,26 @@ setupScrollSnap();
 adjustStoryBar();
 
 if (session && currentUser) {
+
+    await updateOnlineStatus(true);
+
     await registerPush();
+
     await loadUnreadCount();
+
     await loadUnreadMessages();
+
 }
 setTimeout(attachEvents, 0);
 
 setActiveTopButton("homeBtn");
 }
+
+window.addEventListener("beforeunload",()=>{
+
+  updateOnlineStatus(false);
+
+});
 
 async function createPost() {
 
@@ -5526,8 +5860,15 @@ function snapToNearestPost() {
 // CHAT
 // =====================================================
 
+let swipeStartX = 0;
+let swipeStartY = 0;
+let moveX = 0;
+
 let searchResults = [];
 let currentSearchIndex = -1;
+
+let selectedMessages = [];
+let selectionMode = false;
 
 let currentChatUser = null;
 
@@ -5559,12 +5900,18 @@ window.openChat = async function(userId, name) {
     encodeURIComponent(name);
 
   // ✅ SHOW ONLINE STATUS
-  document.getElementById("chatStatus").innerText =
+ const status = document.getElementById("chatStatus");
+
+if(status){
+
+  status.innerText =
     profile?.online
       ? "🟢 Online"
       : profile?.last_seen
-        ? `Last seen ${formatTime(profile.last_seen)}`
+        ? `Last seen ${formatLastSeen(profile.last_seen)}`
         : "Offline";
+
+}
         
         await supabase
   .from("messages")
@@ -5605,18 +5952,22 @@ function listenToChatStatus(userId) {
         table: "profiles",
         filter: `id=eq.${userId}`
       },
-      (payload) => {
+     (payload) => {
 
-        const profile = payload.new;
+  const profile = payload.new;
 
-        document.getElementById("chatStatus").innerText =
-          profile.online
-            ? "🟢 Online"
-            : profile.last_seen
-              ? `Last seen ${formatTime(profile.last_seen)}`
-              : "Offline";
+  const status = document.getElementById("chatStatus");
 
-      }
+  if(!status || !profile) return;
+
+  status.innerText =
+    profile.online
+      ? "🟢 Online"
+      : profile.last_seen
+        ? `Last seen ${formatLastSeen(profile.last_seen)}`
+        : "Offline";
+
+}
     )
     .subscribe();
 
@@ -5779,16 +6130,18 @@ window.openInbox = async function () {
     div.onclick = async () => {
 
   // Forwarding mode
-  if (window.forwardingMessage) {
+  if (window.forwardingMessages) {
+
+  for (const msg of window.forwardingMessages) {
 
     const { error } = await supabase
       .from("messages")
       .insert({
         sender_id: userId,
         receiver_id: otherUser,
-        content: window.forwardingMessage.content,
-        media_url: window.forwardingMessage.media_url,
-        media_type: window.forwardingMessage.media_type,
+        content: msg.content,
+        media_url: msg.media_url,
+        media_type: msg.media_type,
         forwarded: true
       });
 
@@ -5797,14 +6150,43 @@ window.openInbox = async function () {
       return;
     }
 
-    window.forwardingMessage = null;
+  }
 
-    alert("Message forwarded");
+  window.forwardingMessages = null;
 
-    openInbox();
+  alert("Messages forwarded");
 
+  openInbox();
+
+  return;
+
+} else if (window.forwardingMessage) {
+
+  const { error } = await supabase
+    .from("messages")
+    .insert({
+      sender_id: userId,
+      receiver_id: otherUser,
+      content: window.forwardingMessage.content,
+      media_url: window.forwardingMessage.media_url,
+      media_type: window.forwardingMessage.media_type,
+      forwarded: true
+    });
+
+  if (error) {
+    alert(error.message);
     return;
   }
+
+  window.forwardingMessage = null;
+
+  alert("Message forwarded");
+
+  openInbox();
+
+  return;
+
+}
 
   // Normal chat
   openChat(
@@ -5964,6 +6346,8 @@ async function loadMessages() {
     );
 
   chat.innerHTML = "";
+  
+  window.unreadDividerShown = false;
 
   if (error) {
 
@@ -5998,7 +6382,9 @@ async function loadMessages() {
   
   let lastDate = "";
 
-  data.forEach(msg => {
+  window.unreadDividerShown = false;
+
+data.forEach(msg => {
     
     const mine =
   msg.sender_id === myId;
@@ -6052,6 +6438,47 @@ if (dateKey !== lastDate) {
 
 }
 
+if (
+  !mine &&
+  !msg.seen &&
+  !window.unreadDividerShown
+) {
+
+  chat.innerHTML += `
+<div style="
+display:flex;
+align-items:center;
+margin:15px 0;
+">
+
+<div style="
+flex:1;
+height:1px;
+background:#4fc3f7;
+"></div>
+
+<div style="
+padding:0 10px;
+color:#4fc3f7;
+font-size:12px;
+font-weight:bold;
+">
+New messages
+</div>
+
+<div style="
+flex:1;
+height:1px;
+background:#4fc3f7;
+"></div>
+
+</div>
+`;
+
+  window.unreadDividerShown = true;
+
+}
+
 chat.innerHTML +=`
   <div style="
     display:flex;
@@ -6067,28 +6494,80 @@ chat.innerHTML +=`
 
   id="${msg.id}"
 
-  class="chatMessage"
+  class="chatMessage ${mine && !msg.delivered ? 'sending-message' : ''} message-enter"
 
   data-message="${escapeHtml(msg.content || "").toLowerCase()}"
+  
+  onclick="
+if(selectionMode){
+  toggleMessageSelection('${msg.id}');
+}
+"
 
-  oncontextmenu="
-    event.preventDefault();
-    messageOptions('${msg.id}')
-  "
+oncontextmenu="
+  event.preventDefault();
+  toggleMessageSelection('${msg.id}')
+"
 
-  ontouchstart="
-    window.pressTimer = setTimeout(function(){
-      messageOptions('${msg.id}')
-    }, 700)
-  "
+ontouchstart="
+swipeStartX = event.changedTouches[0].clientX;
+swipeStartY = event.changedTouches[0].clientY;
 
-  ontouchend="
-    clearTimeout(window.pressTimer)
-  "
+window.pressTimer = setTimeout(function(){
 
-  ontouchmove="
-    clearTimeout(window.pressTimer)
-  "
+if(selectionMode){
+  toggleMessageSelection('${msg.id}');
+}else{
+  messageOptions('${msg.id}');
+}
+
+},700)
+"
+
+ontouchmove="
+clearTimeout(window.pressTimer);
+
+if(selectionMode) return;
+
+moveX = event.changedTouches[0].clientX - swipeStartX;
+
+if(moveX>0 && moveX<80){
+
+  this.style.transform='translateX('+moveX+'px)';
+
+  const t=this.querySelector('.messageTime');
+
+  if(t) t.style.display='block';
+
+}
+"
+
+ontouchend="
+clearTimeout(window.pressTimer);
+
+moveX = event.changedTouches[0].clientX - swipeStartX;
+
+this.style.transform='';
+
+const t = this.querySelector('.messageTime');
+if(t) t.style.display='none';
+
+if(moveX>70 && !selectionMode){
+
+  this.style.transform='translateX(40px)';
+
+  setTimeout(()=>{
+
+    this.style.transform='';
+
+    if(t) t.style.display='none';
+
+  },150);
+
+  replyToMessage('${msg.id}');
+
+}
+"
 
   style="
     background:${
@@ -6113,8 +6592,30 @@ chat.innerHTML +=`
 
     overflow:visible;
     position:relative;
+    transition:transform .2s ease;
   "
 >
+
+<div
+class="messageCheck"
+style="
+display:none;
+position:absolute;
+top:-8px;
+left:-8px;
+width:24px;
+height:24px;
+border-radius:50%;
+background:#1d9bf0;
+color:white;
+font-size:15px;
+font-weight:bold;
+align-items:center;
+justify-content:center;
+z-index:5;
+">
+✓
+</div>
 
    <div style="
   display:flex;
@@ -6181,28 +6682,33 @@ ${
   msg.media_type === "image"
       ? `
         <img
-          src="${msg.media_url}"
+  src="${msg.media_url}"
 
-          onclick="
-            openMedia(
-              '${msg.media_url}',
-              'image'
-            )
-          "
+  onclick="
+if(selectionMode){
+  toggleMessageSelection('${msg.id}');
+  return;
+}
 
-          style="
-            max-width:100%;
-            width:auto;
-            height:auto;
-            max-height:320px;
-            object-fit:contain;
-            display:block;
-            margin:auto;
-            border-radius:16px;
-            margin-bottom:6px;
-            cursor:pointer;
-          "
-        />
+openMedia(
+  '${msg.media_url}',
+  'image'
+)
+"
+
+  style="
+    max-width:100%;
+    width:auto;
+    height:auto;
+    max-height:320px;
+    object-fit:contain;
+    display:block;
+    margin:auto;
+    border-radius:16px;
+    margin-bottom:6px;
+    cursor:pointer;
+  "
+/>
       `
       : ""
   }
@@ -6210,27 +6716,34 @@ ${
         ${
           msg.media_type === "video"
             ? `
-              <video
-                src="${msg.media_url}"
-                controls
+             <video
+  src="${msg.media_url}"
 
-                onclick="
-                  openMedia(
-                    '${msg.media_url}',
-                    'video'
-                  )
-                "
+  ${selectionMode ? "" : "controls"}
 
-                style="
-                  width:100%;
-                  max-width:260px;
-                  max-height:320px;
-                  object-fit:cover;
-                  border-radius:16px;
-                  margin-bottom:6px;
-                  background:black;
-                "
-              ></video>
+  onclick="
+if(selectionMode){
+  toggleMessageSelection('${msg.id}');
+  return;
+}
+
+openMedia(
+  '${msg.media_url}',
+  'video'
+)
+"
+
+  style="
+    width:100%;
+    max-width:260px;
+    max-height:320px;
+    object-fit:cover;
+    border-radius:16px;
+    margin-bottom:6px;
+    background:black;
+    cursor:pointer;
+  "
+></video>
             `
             : ""
         }
@@ -6286,14 +6799,17 @@ ${
 
       </div>
       
-    <div style="
-  display:flex;
-  justify-content:flex-end;
-  align-items:center;
-  gap:4px;
-  margin-top:6px;
-  font-size:11px;
-  color:rgba(255,255,255,.75);
+   <div
+class="messageTime"
+style="
+display:none;
+position:absolute;
+left:-65px;
+top:50%;
+transform:translateY(-50%);
+font-size:11px;
+color:#999;
+white-space:nowrap;
 ">
 
   ${
@@ -6304,15 +6820,15 @@ ${
 
   ${time}
 
-  ${
-    mine
-      ? msg.seen
-        ? `<span style="color:#4fc3f7;"> ✓✓ Seen</span>`
-        : msg.delivered
-          ? `<span> ✓✓</span>`
-          : `<span> ✓</span>`
+ ${
+  mine
+    ? msg.seen
+      ? `<span class="messageStatus seen">✓✓</span>`
+      : msg.delivered
+        ? `<span class="messageStatus delivered">✓✓</span>`
+        : `<span class="messageStatus sent">✓</span>`
       : ""
-  }
+}
 
 </div>
 
@@ -6356,8 +6872,12 @@ z-index:2;
 `;
   });
 
-  chat.scrollTop =
-    chat.scrollHeight;
+  const shouldScroll =
+chat.scrollHeight - chat.scrollTop - chat.clientHeight < 120;
+
+if(shouldScroll){
+  chat.scrollTop = chat.scrollHeight;
+}
     
 }
 
@@ -7674,6 +8194,227 @@ window.previousSearchResult = function () {
     searchResults.length;
 
   highlightSearchResult();
+
+};
+
+window.toggleMessageSelection = function(id){
+
+  selectionMode = true;
+
+  const el = document.getElementById(id);
+
+  if(!el) return;
+
+  if(selectedMessages.includes(id)){
+
+    selectedMessages =
+      selectedMessages.filter(x => x !== id);
+
+    el.classList.remove("chat-selected");
+    const check = el.querySelector(".messageCheck");
+if(check){
+  check.style.display = "none";
+}
+
+  }else{
+
+    selectedMessages.push(id);
+
+    el.classList.add("chat-selected");
+    const check = el.querySelector(".messageCheck");
+if(check){
+  check.style.display = "flex";
+}
+
+  }
+
+  if (selectedMessages.length > 0) {
+
+    document.getElementById("chatHeader").style.display = "none";
+
+    document.getElementById("selectionBar").style.display = "flex";
+
+    document.getElementById("selectedCount").innerText =
+      selectedMessages.length + " selected";
+
+  } else {
+
+    cancelSelection();
+
+  }
+
+};
+
+window.cancelSelection = function(){
+
+  selectionMode = false;
+
+  selectedMessages = [];
+
+  document.getElementById("selectionBar").style.display = "none";
+
+  document.getElementById("chatHeader").style.display = "flex";
+
+  document.querySelectorAll(".chatMessage").forEach(msg=>{
+
+    msg.classList.remove("chat-selected");
+    msg.style.outline = "";
+
+  });
+
+  document.querySelectorAll(".messageCheck").forEach(check=>{
+
+    check.style.display = "none";
+
+  });
+
+};
+
+window.selectAllMessages = function(){
+
+  selectionMode = true;
+
+  selectedMessages = [];
+
+  document.querySelectorAll(".chatMessage").forEach(msg=>{
+
+    selectedMessages.push(msg.id);
+
+    msg.classList.add("chat-selected");
+
+    const check = msg.querySelector(".messageCheck");
+    if(check){
+      check.style.display = "flex";
+    }
+
+  });
+
+  document.getElementById("chatHeader").style.display = "none";
+
+  document.getElementById("selectionBar").style.display = "flex";
+
+  document.getElementById("selectedCount").innerText =
+    selectedMessages.length + " selected";
+
+};
+
+window.copySelectedMessages = function(){
+
+  if(selectedMessages.length===0) return;
+
+  const text = selectedMessages.map(id=>{
+
+    const el = document.getElementById(id);
+
+    return el ? el.innerText : "";
+
+  }).join("\n\n");
+
+  navigator.clipboard.writeText(text);
+
+  alert("Copied " + selectedMessages.length + " messages");
+
+  cancelSelection();
+
+};
+
+window.deleteSelectedMessages = async function(){
+
+  if(selectedMessages.length===0) return;
+
+  if(!confirm("Delete selected messages?")) return;
+
+  const { error } = await supabase
+    .from("messages")
+    .delete()
+    .in("id", selectedMessages);
+
+  if(error){
+
+    alert(error.message);
+    return;
+
+  }
+
+  cancelSelection();
+
+  loadMessages();
+
+};
+
+window.forwardSelectedMessages = async function(){
+
+  if(selectedMessages.length===0) return;
+
+  const { data } = await supabase
+    .from("messages")
+    .select("*")
+    .in("id", selectedMessages);
+
+  if(!data || data.length===0) return;
+
+  window.forwardingMessages = data;
+
+  cancelSelection();
+
+  openInbox();
+
+};
+
+window.formatLastSeen = function(date){
+
+  if(!date) return "Offline";
+
+  const now = new Date();
+
+  const last = new Date(date);
+
+  const diff =
+    Math.floor(
+      (now-last)/1000
+    );
+
+
+  if(diff < 60){
+
+    return "just now";
+
+  }
+
+
+  if(diff < 3600){
+
+    return Math.floor(diff/60)+" min ago";
+
+  }
+
+
+  if(diff < 86400){
+
+    return Math.floor(diff/3600)+" hours ago";
+
+  }
+
+
+  return last.toLocaleDateString();
+
+};
+
+window.updateOnlineStatus = async function(status){
+
+  const {
+    data:{session}
+  } = await supabase.auth.getSession();
+
+  if(!session) return;
+
+  await supabase
+    .from("profiles")
+    .update({
+      online: status,
+      last_seen: new Date()
+    })
+    .eq("id", session.user.id);
 
 };
 
