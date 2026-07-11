@@ -6077,7 +6077,10 @@ chat.innerHTML +=`
   "
 >
 
-    <div>
+   <div style="
+  display:flex;
+  flex-direction:column;
+">
     
     ${
   msg.forwarded
@@ -6210,21 +6213,32 @@ ${
           margin-top:4px;
           word-break:break-word;
         ">
-          ${escapeHtml(msg.content)}
+        <div style="
+  display:flex;
+  flex-direction:column;
+">
 
-          ${
-            msg.edited
-              ? `
-                <span style="
-                  font-size:11px;
-                  opacity:.7;
-                  margin-left:6px;
-                ">
-                  (edited)
-                </span>
-              `
-              : ""
-          }
+  <div style="
+  word-break:break-word;
+">
+    ${escapeHtml(msg.content)}
+
+    ${
+      msg.edited
+        ? `
+        <span style="
+          font-size:11px;
+          opacity:.7;
+        ">
+          (edited)
+        </span>
+        `
+        : ""
+    }
+
+  </div>
+
+</div>
 
         </div>
       `
@@ -6233,11 +6247,14 @@ ${
 
       </div>
       
-     <div style="
-  margin-top:5px;
+    <div style="
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+  gap:4px;
+  margin-top:6px;
   font-size:11px;
-  opacity:0.7;
-  text-align:right;
+  color:rgba(255,255,255,.75);
 ">
 
   ${
@@ -7564,26 +7581,32 @@ window.searchMessages = function () {
 
   messages.forEach(msg => {
 
+  msg.style.outline = "none";
+
+  if (value === "") {
+
     msg.style.display = "flex";
+    return;
 
-    msg.style.outline = "none";
+  }
 
-    if (
-      value &&
-      msg.dataset.message.includes(value)
-    ) {
+  if (msg.dataset.message.includes(value)) {
 
-      msg.style.outline =
-        "2px solid #0084ff";
+    msg.style.display = "flex";
+    msg.style.outline = "2px solid #0084ff";
 
-      msg.scrollIntoView({
-        behavior:"smooth",
-        block:"center"
-      });
+    msg.scrollIntoView({
+      behavior: "smooth",
+      block: "center"
+    });
 
-    }
+  } else {
 
-  });
+    msg.style.display = "none";
+
+  }
+
+});
 
 };
 
@@ -9059,9 +9082,11 @@ if (!window.messagesSubscription) {
           schema: "public",
           table: "messages"
         },
-        payload => {
+      async payload => {
 
   const msg = payload.new;
+
+if (!msg) return;
 
   // Update unread badge
   loadUnreadMessages();
@@ -9087,7 +9112,7 @@ if (!window.messagesSubscription) {
     // Mark received messages as delivered
     if (msg.receiver_id === currentUser.id) {
 
-  supabase
+  await supabase
     .from("messages")
     .update({
       delivered: true,
@@ -9098,7 +9123,14 @@ if (!window.messagesSubscription) {
 
 }
 
-    loadMessages();
+await loadUnreadMessages();
+await loadMessages();
+
+if (
+  document.getElementById("inboxScreen")?.style.display === "flex"
+) {
+  openInbox();
+}
 
   }
 
