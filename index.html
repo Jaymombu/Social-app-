@@ -5542,12 +5542,14 @@ window.openChat = async function(userId, name) {
 await loadUnreadMessages();   // ← ADD THIS
 
 loadMessages();
-  
-  listenToChatStatus(userId);
-  
-  listenTyping(userId);
 
-};  
+listenToChatStatus(userId);
+
+listenTyping(userId);
+
+listenForSeenMessages(userId);
+
+};
 
 function listenToChatStatus(userId) {
 
@@ -5955,6 +5957,8 @@ async function loadMessages() {
     `;
     return;
   }
+  
+  let lastDate = "";
 
   data.forEach(msg => {
     
@@ -5967,6 +5971,48 @@ async function loadMessages() {
       hour: '2-digit',
       minute: '2-digit'
     });
+    
+    const messageDate = new Date(msg.created_at);
+
+const dateKey = messageDate.toDateString();
+
+let dateLabel;
+
+const today = new Date();
+
+const yesterday = new Date();
+yesterday.setDate(today.getDate() - 1);
+
+if (dateKey === today.toDateString()) {
+
+  dateLabel = "Today";
+
+} else if (dateKey === yesterday.toDateString()) {
+
+  dateLabel = "Yesterday";
+
+} else {
+
+  dateLabel = messageDate.toLocaleDateString();
+
+}
+
+if (dateKey !== lastDate) {
+
+  chat.innerHTML += `
+    <div style="
+      text-align:center;
+      color:#aaa;
+      font-size:12px;
+      margin:15px 0;
+    ">
+      ─── ${dateLabel} ───
+    </div>
+  `;
+
+  lastDate = dateKey;
+
+}
 
 chat.innerHTML +=`
   <div style="
@@ -6655,6 +6701,53 @@ function listenTyping(userId) {
 
 }
 
+function listenForSeenMessages(userId) {
+
+  if (window.messageSeenChannel) {
+    supabase.removeChannel(window.messageSeenChannel);
+  }
+
+  window.messageSeenChannel = supabase
+    .channel("seen_" + userId)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "messages",
+        filter: `receiver_id=eq.${session.user.id}`
+      },
+      async (payload) => {
+
+        const msg = payload.new;
+
+        if (msg.sender_id !== userId) return;
+
+        await supabase
+          .from("messages")
+          .update({
+            seen: true,
+            seen_at: new Date(),
+            delivered: true
+          })
+          .eq("id", msg.id);
+
+        await loadUnreadMessages();
+
+        loadMessages();
+
+        if (
+          document.getElementById("inboxScreen")?.style.display === "flex"
+        ) {
+          openInbox();
+        }
+
+      }
+    )
+    .subscribe();
+
+}
+
 window.messageOptions = async function(messageId) {
 
   const old = document.getElementById("messageMenu");
@@ -6682,7 +6775,7 @@ document.getElementById("emojiPicker")?.remove();
   animation:slideUp .25s ease;
 `;
 
-  menu.innerHTML = `
+menu.innerHTML = `
 
 <div style="
 display:flex;
@@ -6692,43 +6785,116 @@ padding:12px 0 18px;
 border-bottom:1px solid #333;
 ">
 
-<span onclick="reactMessage('${messageId}','👍')" style="font-size:30px;">👍</span>
-
-<span onclick="reactMessage('${messageId}','❤️')" style="font-size:30px;">❤️</span>
-
-<span onclick="reactMessage('${messageId}','😂')" style="font-size:30px;">😂</span>
-
-<span onclick="reactMessage('${messageId}','😮')" style="font-size:30px;">😮</span>
-
-<span onclick="reactMessage('${messageId}','😢')" style="font-size:30px;">😢</span>
-
-<span onclick="reactMessage('${messageId}','🙏')" style="font-size:30px;">🙏</span>
+<span onclick="reactMessage('${messageId}','👍')" style="font-size:30px;cursor:pointer;">👍</span>
+<span onclick="reactMessage('${messageId}','❤️')" style="font-size:30px;cursor:pointer;">❤️</span>
+<span onclick="reactMessage('${messageId}','😂')" style="font-size:30px;cursor:pointer;">😂</span>
+<span onclick="reactMessage('${messageId}','😮')" style="font-size:30px;cursor:pointer;">😮</span>
+<span onclick="reactMessage('${messageId}','😢')" style="font-size:30px;cursor:pointer;">😢</span>
+<span onclick="reactMessage('${messageId}','🙏')" style="font-size:30px;cursor:pointer;">🙏</span>
 
 <span
-  onclick="showEmojiPicker('${messageId}')"
-  style="font-size:30px;cursor:pointer;">
-  ➕
+onclick="showEmojiPicker('${messageId}')"
+style="font-size:30px;cursor:pointer;">
+➕
 </span>
 
 </div>
 
-<div onclick="replyToMessage('${messageId}')">↩ Reply</div>
+<div onclick="replyToMessage('${messageId}')" style="
+padding:14px 16px;
+margin:8px 0;
+background:#242526;
+border-radius:12px;
+color:white;
+font-size:16px;
+cursor:pointer;
+">
+↩ Reply
+</div>
 
-<div onclick="pinMessage('${messageId}')">📌 Pin Message</div>
+<div onclick="pinMessage('${messageId}')" style="
+padding:14px 16px;
+margin:8px 0;
+background:#242526;
+border-radius:12px;
+color:white;
+font-size:16px;
+cursor:pointer;
+">
+📌 Pin Message
+</div>
 
-<div onclick="editMessage('${messageId}')">✏️ Edit</div>
+<div onclick="editMessage('${messageId}')" style="
+padding:14px 16px;
+margin:8px 0;
+background:#242526;
+border-radius:12px;
+color:white;
+font-size:16px;
+cursor:pointer;
+">
+✏️ Edit
+</div>
 
-<div onclick="copyMessage('${messageId}')">📋 Copy</div>
+<div onclick="copyMessage('${messageId}')" style="
+padding:14px 16px;
+margin:8px 0;
+background:#242526;
+border-radius:12px;
+color:white;
+font-size:16px;
+cursor:pointer;
+">
+📋 Copy
+</div>
 
-<div onclick="shareMessage('${messageId}')">📤 Share</div>
+<div onclick="shareMessage('${messageId}')" style="
+padding:14px 16px;
+margin:8px 0;
+background:#242526;
+border-radius:12px;
+color:white;
+font-size:16px;
+cursor:pointer;
+">
+📤 Share
+</div>
 
-<div onclick="forwardMessage('${messageId}')">
+<div onclick="forwardMessage('${messageId}')" style="
+padding:14px 16px;
+margin:8px 0;
+background:#242526;
+border-radius:12px;
+color:white;
+font-size:16px;
+cursor:pointer;
+">
 📨 Forward
 </div>
 
-<div onclick="deleteForEveryone('${messageId}')">🚫 Delete for Everyone</div>
+<div onclick="deleteForEveryone('${messageId}')" style="
+padding:14px 16px;
+margin:8px 0;
+background:#242526;
+border-radius:12px;
+color:#ff5c5c;
+font-size:16px;
+cursor:pointer;
+">
+🚫 Delete for Everyone
+</div>
 
-<div onclick="deleteMessage('${messageId}')">🗑 Delete</div>
+<div onclick="deleteMessage('${messageId}')" style="
+padding:14px 16px;
+margin:8px 0;
+background:#242526;
+border-radius:12px;
+color:#ff5c5c;
+font-size:16px;
+cursor:pointer;
+">
+🗑 Delete
+</div>
 
 `;
 
@@ -7012,8 +7178,6 @@ window.reactMessage = async function(messageId, emoji) {
 
 window.showReactionDetails = function(messageId, emoji) {
 
-  alert("Clicked: " + emoji);
-
   loadReactionDetails(messageId, emoji);
 
 };
@@ -7037,11 +7201,6 @@ window.loadReactionDetails = async function(messageId, emoji) {
     alert(error.message);
     return;
   }
-
-  alert(
-  "Loaded users: " + 
-  (data ? data.length : 0)
-);
 
 showReactionPopup(emoji, data || []);
 
@@ -7121,11 +7280,6 @@ window.renderReactionUsers = function(users) {
 
   const list =
     document.getElementById("reactionUsers");
-
-  if (!list) {
-    alert("reactionUsers container missing");
-    return;
-  }
 
   list.innerHTML = users.map(u => `
 
