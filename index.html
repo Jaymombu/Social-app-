@@ -917,6 +917,22 @@ to{
 
 }
 
+html, body {
+  -webkit-user-select: none;
+  user-select: none;
+
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+img,
+button,
+div,
+span {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 </style>
 </head>
 <body class="dark">
@@ -1199,14 +1215,11 @@ cursor:pointer;
 
 <!-- INPUT -->
 <div style="
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:10px;
-  background:#111;
-  border-top:1px solid #222;
+background:#111;
+border-top:1px solid #222;
+padding:8px;
 ">
-  
+
   <div id="replyPreview"
   style="
     display:none;
@@ -1214,65 +1227,86 @@ cursor:pointer;
     color:white;
     padding:10px;
     border-left:4px solid #0084ff;
-    margin-bottom:6px;
-    border-radius:8px;
+    margin-bottom:8px;
+    border-radius:10px;
+  ">
+    <div id="replyText"></div>
+
+    <button
+      onclick="cancelReply()"
+      style="
+        float:right;
+        background:none;
+        border:none;
+        color:#ff4d4d;
+        cursor:pointer;
+      ">
+      ✕
+    </button>
+  </div>
+
+  <div style="
+    display:flex;
+    align-items:center;
+    gap:8px;
   ">
 
-  <div id="replyText"></div>
-
-  <button
-    onclick="cancelReply()"
+    <label for="chatMedia"
     style="
-      background:none;
-      border:none;
-      color:#ff4d4d;
-      float:right;
+      width:42px;
+      height:42px;
+      border-radius:50%;
+      background:#1f1f1f;
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      font-size:22px;
       cursor:pointer;
+      color:white;
     ">
-    ✕
-  </button>
+      📎
+    </label>
 
-</div>
+    <input
+      type="file"
+      id="chatMedia"
+      accept="image/*,video/*"
+      style="display:none;"
+    >
 
-  <input
-    id="chatInput"
-    placeholder="Message..."
-    style="
-      flex:1;
-      background:#222;
-      border:none;
-      color:white;
-      padding:12px;
-      border-radius:25px;
-      outline:none;
-    "
-  />
-
-  <input
-    type="file"
-    id="chatMedia"
-    accept="image/*,video/*"
-    style="
-      color:white;
-      width:90px;
-    "
-  />
-
-  <button
-    onclick="sendMessage()"
+    <input
+      id="chatInput"
+      placeholder="Type a message..."
       style="
-        background:#0084ff;
+        flex:1;
+        height:44px;
+        background:#1f1f1f;
         border:none;
+        border-radius:25px;
         color:white;
-        padding:10px 18px;
-        border-radius:20px;
-        font-weight:bold;
+        padding:0 15px;
+        outline:none;
       "
     >
-      Send
+
+    <button
+      onclick="sendMessage()"
+      style="
+        width:50px;
+        height:50px;
+        border:none;
+        border-radius:50%;
+        background:#0084ff;
+        color:white;
+        font-size:20px;
+        cursor:pointer;
+      ">
+      ➤
     </button>
 
   </div>
+
+</div>
 
 </div>
 
@@ -4224,9 +4258,15 @@ function escapeHtml(text) {
 
   function renderPostElement(post) {
     
+    console.log("renderPostElement started", post.id);
+    
+    console.log("Rendering:", post.id);
+    
     if (!window.renderedPosts) window.renderedPosts = new Set();
 
-if (window.renderedPosts.has(post.id)) return;
+if (window.renderedPosts.has(post.id)) {
+    return null;
+}
 window.renderedPosts.add(post.id);
     
     console.log(post);
@@ -4457,8 +4497,28 @@ if (
   console.log("RENDERING POST:", post.id);
   
   console.log("APPENDING TO:", postsDiv);
+  
+  console.log("Returning post:", post.id);
+  
+  console.log("renderPostElement finished", post.id);
 
 return div;
+}
+
+function renderFeed(posts) {
+  const postsDiv = document.getElementById("posts");
+  if (!postsDiv) return;
+
+  postsDiv.replaceChildren();
+
+  window.renderedPosts = new Set();
+
+  posts.forEach(post => {
+    const el = renderPostElement(post);
+    if (el) {
+      postsDiv.appendChild(el);
+    }
+  });
 }
 
 // ✅ 3. DEFINE loadPosts
@@ -4526,38 +4586,6 @@ window.loadPosts = async function () {
   error = response.error;
 }
 
-window.createPost = async function () {
-  const input = document.getElementById("postInput");
-  if (!input || !input.value.trim()) return;
-
-  const { error } = await supabase.from("posts").insert({
-    content: input.value,
-    user_id: session?.user?.id || null,
-    name: session?.user?.email || "Guest"
-  });
-
-  if (error) {
-    console.log("POST ERROR:", error);
-    return;
-  }
-
-  input.value = "";
-  loadPosts();
-};
-
-function renderFeed(posts) {
-  const postsDiv = document.getElementById("posts");
-  if (!postsDiv) return;
-
-  postsDiv.replaceChildren();
-
-  posts.forEach(post => {
-    const el = renderPostElement(post);
-    postsDiv.appendChild(el);
-  });
-}
-
-window.renderedPosts = new Set();
   postsDiv.replaceChildren();
 
   if (error) {
@@ -4585,6 +4613,10 @@ console.log(
   document.querySelectorAll("#posts").length
 );
 window.postsState = posts || [];
+
+// Clear previously rendered posts
+window.renderedPosts = new Set();
+
 renderFeed(window.postsState);
 
 console.log(
@@ -4605,7 +4637,7 @@ window.likePost = async (id) => {
     return;
   }
 
-  const postDiv = document.getElementById(id);
+  const postDiv = document.getElementById(`post-${id}`);
   const btn =
   postDiv?.querySelector(".like-btn");
 
@@ -4642,15 +4674,14 @@ window.likePost = async (id) => {
   }
 
   // 🔥 save to database
-  const { data: updatedPost } = await supabase
+  await supabase
   .from("posts")
   .update({
     likes: newLikes,
     liked_by: updatedLikedBy
   })
-  .eq("id", id)
-  .select("user_id")
-  .single();
+  .eq("id", id);
+  
   
   // Create or update like notification
 if (!isLiked) {
@@ -4857,7 +4888,7 @@ const { count: followingCount } = await supabase
 
     <button id="themeToggle">🌙 Theme</button>
 
-    <button onclick="alert('clicked'); goHome();">← Back</button>
+    <button onclick="window.startApp()">← Back</button>
 
     ${
       String(session?.user?.id) === String(userId)
@@ -5699,6 +5730,7 @@ if (session && currentUser) {
     await loadUnreadMessages();
 
 }
+
 setTimeout(attachEvents, 0);
 
 setActiveTopButton("homeBtn");
@@ -6513,15 +6545,11 @@ ontouchstart="
 swipeStartX = event.changedTouches[0].clientX;
 swipeStartY = event.changedTouches[0].clientY;
 
-window.pressTimer = setTimeout(function(){
+window.pressTimer = setTimeout(() => {
 
-if(selectionMode){
-  toggleMessageSelection('${msg.id}');
-}else{
-  messageOptions('${msg.id}');
-}
+    messageOptions('${msg.id}');
 
-},700)
+},700);
 "
 
 ontouchmove="
@@ -6590,10 +6618,15 @@ if(moveX>70 && !selectionMode){
 
     max-width:75%;
 
-    overflow:visible;
+    display:flex;
+    flex-direction:column;
+    gap:0;
+
     position:relative;
+    overflow:visible;
+
     transition:transform .2s ease;
-  "
+"
 >
 
 <div
@@ -6773,24 +6806,24 @@ openMedia(
   <div style="
   word-break:break-word;
 ">
-    ${escapeHtml(msg.content)}
+  ${escapeHtml(msg.content)}
 
-    ${
-      msg.edited
-        ? `
-        <span style="
-          font-size:11px;
-          opacity:.7;
-        ">
-          (edited)
-        </span>
-        `
-        : ""
-    }
-
-  </div>
-
+  ${
+    msg.edited
+      ? `
+      <span style="
+        font-size:11px;
+        opacity:.7;
+      ">
+        (edited)
+      </span>
+      `
+      : ""
+  }
 </div>
+
+ </div>
+
 
         </div>
       `
@@ -6798,6 +6831,46 @@ openMedia(
 }
 
       </div>
+      
+      ${
+  msg.reactions && msg.reactions.length
+    ? `
+    <div style="
+  display:flex;
+  justify-content:flex-start;
+  gap:4px;
+  margin-top:4px;
+  margin-bottom:-2px;
+  padding-left:4px;
+  flex-wrap:wrap;
+">
+      ${
+        Object.entries(
+          msg.reactions.reduce((a,r)=>{
+            a[r.reaction]=(a[r.reaction]||0)+1;
+            return a;
+          },{})
+        )
+        .map(([emoji,count])=>`
+          <div
+            onclick="event.stopPropagation(); showReactionDetails('${msg.id}','${emoji}')"
+            style="
+              background:#2b2b2b;
+              border-radius:20px;
+              padding:3px 10px;
+              font-size:14px;
+              cursor:pointer;
+              display:flex;
+              align-items:center;
+            ">
+            ${emoji} ${count}
+          </div>
+        `).join("")
+      }
+    </div>
+    `
+    : ""
+}
       
    <div
 class="messageTime"
@@ -6831,40 +6904,6 @@ white-space:nowrap;
 }
 
 </div>
-
-${
-  msg.reactions && msg.reactions.length
-    ? `
-      <div style="
-position:absolute;
-bottom:-10px;
-right:8px;
-display:flex;
-gap:4px;
-z-index:2;
-">
-        ${Object.entries(
-          msg.reactions.reduce((a, r) => {
-            a[r.reaction] = (a[r.reaction] || 0) + 1;
-            return a;
-          }, {})
-        ).map(([emoji, count]) => `
-         <div
-  onclick="showReactionDetails('${msg.id}','${emoji}')"
-  style="
-    background:#2b2b2b;
-    border-radius:20px;
-    padding:3px 10px;
-    font-size:14px;
-    cursor:pointer;
-  ">
-  ${emoji} ${count}
-</div>
-        `).join("")}
-      </div>
-    `
-    : ""
-}
 
     </div>
 
@@ -7388,6 +7427,21 @@ font-size:16px;
 cursor:pointer;
 ">
 ↩ Reply
+</div>
+
+<div onclick="
+document.getElementById('messageMenu')?.remove();
+toggleMessageSelection('${messageId}');
+" style="
+padding:14px 16px;
+margin:8px 0;
+background:#242526;
+border-radius:12px;
+color:white;
+font-size:16px;
+cursor:pointer;
+">
+✅ Select
 </div>
 
 <div onclick="pinMessage('${messageId}')" style="
@@ -9787,6 +9841,7 @@ window.openComments = openComments;
 window.openChat = openChat;
 window.sendMessage = sendMessage;
 window.deleteMessage = deleteMessage;
+window.startApp = startApp;
 
 // ========================
 // VIDEO AUTOPLAY
@@ -9988,6 +10043,18 @@ window.addEventListener("beforeunload", async () => {
 
 });
 
+document.addEventListener("contextmenu", function(e) {
+  e.preventDefault();
+});
+
+document.addEventListener("selectstart", function(e) {
+  if (
+    e.target.tagName !== "INPUT" &&
+    e.target.tagName !== "TEXTAREA"
+  ) {
+    e.preventDefault();
+  }
+});
 
 </script>
 
