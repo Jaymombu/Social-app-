@@ -933,6 +933,220 @@ span {
   user-select: none;
 }
 
+.gallery-image{
+    position:absolute;
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    transition:transform .28s ease, opacity .28s ease;
+    will-change:transform;
+}
+
+.profile-tab{
+    flex:1;
+    padding:12px;
+    background:none;
+    border:none;
+    color:#888;
+    font-size:15px;
+    cursor:pointer;
+    transition:color .25s ease;
+}
+
+.profile-tab:hover{
+    color:#fff;
+}
+
+#profileTabs{
+    position:relative;
+    display:flex;
+    border-bottom:1px solid #333;
+}
+
+#profileTabIndicator{
+    position:absolute;
+    bottom:-1px;
+    left:0;
+    height:3px;
+    background:#1d9bf0;
+    border-radius:3px 3px 0 0;
+    transition:left .25s ease,width .25s ease;
+}
+
+#profileVideoFeed{
+height:100vh;
+overflow-y:auto;
+scroll-snap-type:y mandatory;
+scroll-behavior:smooth;
+}
+
+.profile-video-item{
+position:relative;
+height:100vh;
+scroll-snap-align:start;
+background:black;
+display:flex;
+align-items:center;
+justify-content:center;
+}
+
+.profile-video-item video{
+width:100%;
+height:100%;
+object-fit:cover;
+}
+
+.profile-video-info{
+position:absolute;
+left:15px;
+bottom:30px;
+right:90px;
+color:white;
+z-index:2;
+}
+
+.profile-video-actions{
+position:absolute;
+right:15px;
+bottom:90px;
+display:flex;
+flex-direction:column;
+gap:15px;
+z-index:2;
+}
+
+.profile-video-actions button{
+width:50px;
+height:50px;
+border:none;
+border-radius:50%;
+background:rgba(0,0,0,.5);
+color:white;
+font-size:22px;
+cursor:pointer;
+}
+
+.video-avatar{
+width:50px;
+height:50px;
+border-radius:50%;
+object-fit:cover;
+border:2px solid white;
+cursor:pointer;
+}
+
+.video-wrapper{
+    position:relative;
+    width:100%;
+    height:100%;
+}
+
+.video-wrapper video{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+}
+
+.heart-animation{
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%) scale(0);
+    font-size:90px;
+    opacity:0;
+    pointer-events:none;
+}
+
+.heart-animation.show{
+    animation:heartPop .7s ease;
+}
+
+@keyframes heartPop{
+
+0%{
+transform:translate(-50%,-50%) scale(.3);
+opacity:0;
+}
+
+30%{
+transform:translate(-50%,-50%) scale(1.2);
+opacity:1;
+}
+
+70%{
+transform:translate(-50%,-50%) scale(1);
+opacity:1;
+}
+
+100%{
+transform:translate(-50%,-50%) scale(1.8);
+opacity:0;
+}
+
+}
+
+.play-overlay{
+    position:absolute;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    font-size:90px;
+    color:white;
+    opacity:0;
+    pointer-events:none;
+    transition:.25s;
+    text-shadow:0 0 20px black;
+}
+
+.play-overlay.show{
+    opacity:1;
+}
+
+.video-progress{
+position:absolute;
+left:0;
+bottom:0;
+width:100%;
+height:4px;
+background:rgba(255,255,255,.25);
+z-index:6;
+}
+
+.video-progress-fill{
+height:100%;
+width:0%;
+background:#1d9bf0;
+transition:width .1s linear;
+}
+
+.video-mute-btn{
+
+position:absolute;
+
+top:15px;
+
+right:15px;
+
+width:42px;
+
+height:42px;
+
+border:none;
+
+border-radius:50%;
+
+background:rgba(0,0,0,.5);
+
+color:white;
+
+font-size:20px;
+
+cursor:pointer;
+
+z-index:20;
+
+}
+
 </style>
 </head>
 <body class="dark">
@@ -4256,23 +4470,161 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+async function createPost() {
+
+  const input =
+    document.getElementById("postInput");
+
+  const mediaInput =
+    document.getElementById("mediaInput");
+
+  const content =
+    input.value.trim();
+
+  const file =
+    mediaInput.files[0];
+
+  let mediaUrl = null;
+  let mediaType = null;
+  
+  if (!session?.user) {
+  alert("Please login first");
+  return;
+}
+
+  if (file) {
+
+    const fileName =
+  `${session.user.id}_${Date.now()}_${file.name}`;
+
+    const { error: uploadError } =
+      await supabase.storage
+  .from("posts_media")
+  .upload(fileName, file);
+
+    if (uploadError) {
+      console.log(uploadError);
+      alert("Upload failed");
+      return;
+    }
+
+    const { data } =
+      supabase.storage
+  .from("posts_media")
+  .getPublicUrl(fileName);
+
+    mediaUrl = data.publicUrl;
+
+    if (file.type.startsWith("image")) {
+      mediaType = "image";
+    }
+
+    if (file.type.startsWith("video")) {
+      mediaType = "video";
+    }
+  }
+
+  const { data: profile } =
+    await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+  const { error } =
+  await supabase
+  .from("posts")
+  .insert([{
+    content,
+    file_url: mediaUrl,
+    media_type: mediaType,
+    user_id: session.user.id,
+    name: profile?.name || session.user.email,
+    avatar_url: profile?.avatar_url || null,
+    verified: profile?.verified || false
+  }]);
+
+if (error) {
+
+  console.log(error);
+  alert("Post failed");
+  return;
+
+}
+
+  input.value = "";
+  mediaInput.value = "";
+
+  loadPosts();
+}
+
+// ========================
+// AUTO SNAP
+// ========================
+
+function setupScrollSnap() {
+
+  if (!postsEl) return;
+
+  postsEl.addEventListener("scroll", () => {
+
+    clearTimeout(scrollTimeout);
+
+    scrollTimeout = setTimeout(() => {
+      snapToNearestPost();
+    }, 120);
+
+  });
+
+}
+
+function snapToNearestPost() {
+
+  const posts =
+    document.querySelectorAll(".post-card");
+
+  if (!posts.length) return;
+
+  const scrollTop = postsEl.scrollTop;
+
+  let closest = null;
+  let minDistance = Infinity;
+
+  posts.forEach((post) => {
+
+    const offset = post.offsetTop;
+
+    const distance =
+      Math.abs(offset - scrollTop);
+
+    if (distance < minDistance) {
+      minDistance = distance;
+      closest = post;
+    }
+
+  });
+
+  if (closest) {
+
+    postsEl.scrollTo({
+      top: closest.offsetTop,
+      behavior: "smooth"
+    });
+
+  }
+}
+
   function renderPostElement(post) {
     
     console.log("renderPostElement started", post.id);
     
     console.log("Rendering:", post.id);
     
-    if (!window.renderedPosts) window.renderedPosts = new Set();
-
-if (window.renderedPosts.has(post.id)) {
-    return null;
+    if (!window.renderedPosts) {
+  window.renderedPosts = new Set();
 }
-window.renderedPosts.add(post.id);
     
     console.log(post);
-
-  const postsDiv =
-    document.getElementById("posts");
 
   const time =
     new Date(post.created_at)
@@ -4407,7 +4759,17 @@ if (
     text-overflow:ellipsis;
   "
 >
-          ${post.name}
+${escapeHtml(post.name)}
+
+${post.verified ? `
+<span style="
+color:#1d9bf0;
+font-size:14px;
+margin-left:4px;
+">
+✔️
+</span>
+` : ""}
         </div>
 
         <div style="
@@ -4469,7 +4831,20 @@ if (
       💬 Comment
     </button>
     
-    
+ <button
+  onclick="toggleSavePost('${post.id}')"
+  style="
+    margin-top:5px;
+    margin-left:6px;
+    background:#444;
+    color:white;
+    border:none;
+    padding:5px 10px;
+    border-radius:5px;
+  "
+>
+${post.saved ? "✅ Saved" : "🔖 Save"}
+</button>
 
     ${
       isOwner
@@ -4491,12 +4866,8 @@ if (
         : ""
     }
   `;
-
-  if (!postsDiv) return;
   
   console.log("RENDERING POST:", post.id);
-  
-  console.log("APPENDING TO:", postsDiv);
   
   console.log("Returning post:", post.id);
   
@@ -4551,6 +4922,24 @@ window.loadPosts = async function () {
 
     posts = response.data;
     error = response.error;
+    
+    if (session?.user && posts?.length) {
+
+  const { data: savedPosts } = await supabase
+    .from("saved_posts")
+    .select("post_id")
+    .eq("user_id", session.user.id);
+
+  const savedIds = new Set(
+    (savedPosts || []).map(s => String(s.post_id))
+  );
+
+  posts = posts.map(post => ({
+    ...post,
+    saved: savedIds.has(String(post.id))
+  }));
+
+}
 
   }
 
@@ -4584,6 +4973,24 @@ window.loadPosts = async function () {
 
   posts = response.data;
   error = response.error;
+  
+  if (session?.user && posts?.length) {
+
+  const { data: savedPosts } = await supabase
+    .from("saved_posts")
+    .select("post_id")
+    .eq("user_id", session.user.id);
+
+  const savedIds = new Set(
+    (savedPosts || []).map(s => String(s.post_id))
+  );
+
+  posts = posts.map(post => ({
+    ...post,
+    saved: savedIds.has(String(post.id))
+  }));
+
+}
 }
 
   postsDiv.replaceChildren();
@@ -4605,6 +5012,20 @@ window.loadPosts = async function () {
     return;
 
   }
+  
+  let savedIds = [];
+
+if (session?.user) {
+
+  const { data } = await supabase
+    .from("saved_posts")
+    .select("post_id")
+    .eq("user_id", session.user.id);
+
+  savedIds = (data || []).map(item => item.post_id);
+
+}
+  
   console.log("POST COUNT:", posts?.length);
 console.log("POST IDS:", posts?.map(p => p.id));
 
@@ -4612,6 +5033,12 @@ console.log(
   "POST CONTAINERS:",
   document.querySelectorAll("#posts").length
 );
+
+posts = posts.map(post => ({
+  ...post,
+  saved: savedIds.includes(post.id)
+}));
+
 window.postsState = posts || [];
 
 // Clear previously rendered posts
@@ -4628,6 +5055,53 @@ console.log(
 
 };
 
+window.toggleSavePost = async function(postId){
+
+  if(!session?.user){
+    alert("Login first");
+    return;
+  }
+
+  const post = window.postsState.find(p => p.id === postId);
+
+  if(!post) return;
+
+  const { data: existing } = await supabase
+    .from("saved_posts")
+    .select("id")
+    .eq("user_id", session.user.id)
+    .eq("post_id", postId)
+    .maybeSingle();
+
+  if(existing){
+
+    await supabase
+      .from("saved_posts")
+      .delete()
+      .eq("id", existing.id);
+
+    post.saved = false;
+
+  }else{
+
+    await supabase
+      .from("saved_posts")
+      .insert({
+        user_id: session.user.id,
+        post_id: postId
+      });
+
+    post.saved = true;
+
+  }
+
+  if(document.getElementById("posts")){
+ renderFeed(window.postsState);
+}else{
+ loadPosts();
+}
+
+};
 
 window.likePost = async (id) => {
   const userId = session?.user?.id;
@@ -4780,6 +5254,119 @@ window.deletePost = async (id) => {
 
 let currentPostId = null;
 
+window.togglePinnedPost = async function(postId) {
+
+  if (!session?.user) return;
+
+  // Get the selected post
+  const { data: post, error } = await supabase
+    .from("posts")
+    .select("id, pinned")
+    .eq("id", postId)
+    .single();
+
+  if (error) {
+    console.log(error);
+    return;
+  }
+
+  // If it's not already pinned, unpin all of your posts first
+  if (!post.pinned) {
+    await supabase
+      .from("posts")
+      .update({ pinned: false })
+      .eq("user_id", session.user.id);
+  }
+
+  // Toggle this post
+  const { error: updateError } = await supabase
+    .from("posts")
+    .update({
+      pinned: !post.pinned
+    })
+    .eq("id", postId);
+
+  if (updateError) {
+    console.log(updateError);
+    return;
+  }
+
+  // Refresh profile
+  openProfile(session.user.id);
+};
+
+window.openSavedPosts = async function(){
+  
+  setActiveTopButton("savedBtn");
+
+  if(!session?.user){
+    alert("Login first");
+    return;
+  }
+
+  document.getElementById("app").innerHTML = `
+    <div style="padding:15px;color:white;">
+     <button onclick="openProfile(session.user.id, session.user.email)">
+     ← Back
+    </button>
+
+      <h2>🔖 Saved Posts</h2>
+
+      <div id="savedPostsList">
+        Loading...
+      </div>
+    </div>
+  `;
+
+const { data: saved, error } = await supabase
+    .from("saved_posts")
+    .select(`
+      posts (*)
+    `)
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending:false });
+
+  const container =
+    document.getElementById("savedPostsList");
+
+  if(error){
+    container.innerHTML = "Error loading saved posts";
+    return;
+  }
+
+  if(!saved || saved.length === 0){
+    container.innerHTML = "No saved posts.";
+    return;
+  }
+  
+  posts.forEach(post => {
+
+  post.name = post.profiles?.name || "User";
+  post.avatar_url = post.profiles?.avatar_url;
+  post.verified = post.profiles?.verified;
+
+});
+
+  container.replaceChildren();
+
+  window.renderedPosts = new Set();
+
+  saved.forEach(item=>{
+
+    const post = item.posts;
+
+    if(!post) return;
+    
+    post.saved=true;
+
+    const el = renderPostElement(post);
+    if(el){
+      container.appendChild(el);
+    }
+  });
+
+};
+
 // =====================================================
 // COMMENTS
 // =====================================================
@@ -4854,6 +5441,21 @@ window.goHome = async () => {
 // PROFILE
 // =====================================================
 
+window.profileGallery = [];
+window.profileGalleryIndex = 0;
+
+let galleryTouchStartX = 0;
+let galleryTouchEndX = 0;
+let lastPhotoTap = 0;
+
+let photoX = 0;
+let photoY = 0;
+
+let dragStartX = 0;
+let dragStartY = 0;
+
+let draggingPhoto = false;
+
 window.openProfile = async (userId, name) => {
   console.log("Logged in:", session?.user?.id);
 console.log("Profile opened:", userId);
@@ -4878,17 +5480,54 @@ console.log("Profile opened:", userId);
   .select("*", { count: "exact", head: true })
   .eq("following_id", userId);
 
-const { count: followingCount } = await supabase
+   const { count: followingCount } = await supabase
   .from("follows")
   .select("*", { count: "exact", head: true })
   .eq("follower_id", userId);
+  
+  const { count: postsCount } = await supabase
+  .from("posts")
+  .select("*", { count: "exact", head: true })
+  .eq("user_id", userId);
 
- document.getElementById("app").innerHTML = `
-   <div style="padding:15px; color:white;">
+document.getElementById("app").innerHTML = `
+<div style="color:white;">
 
-    <button id="themeToggle">🌙 Theme</button>
+<div
+style="
+height:200px;
+background:${
+  profile?.cover_url
+    ? `url('${profile.cover_url}') center/cover`
+    : "#333"
+};
+position:relative;
+">
 
-    <button onclick="window.startApp()">← Back</button>
+<button id="themeToggle"
+style="
+position:absolute;
+top:15px;
+left:15px;
+z-index:2;
+">
+🌙 Theme
+</button>
+
+<button
+onclick="window.startApp()"
+style="
+position:absolute;
+top:15px;
+left:110px;
+z-index:2;
+">
+← Back
+</button>
+
+</div>
+
+<div style="padding:15px;">
 
     ${
       String(session?.user?.id) === String(userId)
@@ -4921,17 +5560,142 @@ src="${avatarUrl}"
 
   <div>
 
-    <h2>
-      ${profile?.name || name}
-    </h2>
+   <h2 style="
+display:flex;
+align-items:center;
+gap:6px;
+margin:0;
+">
+  ${escapeHtml(profile?.name || name)}
 
-    <div style="margin-top:5px;color:#aaa;">
-      ${followersCount || 0} followers ·
-      ${followingCount || 0} following
-    </div>
+  ${profile?.verified ? `
+  <span style="
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:20px;
+    height:20px;
+    border-radius:50%;
+    background:#1d9bf0;
+    color:white;
+    font-size:12px;
+    font-weight:bold;
+  ">
+    ✓
+  </span>
+  ` : ""}
+</h2>
 
-    <!-- FOLLOW BUTTON GOES HERE -->
-    <div id="followContainer"></div>
+   <div style="
+margin-top:5px;
+color:#aaa;
+display:flex;
+gap:12px;
+flex-wrap:wrap;
+">
+
+<span><b>${postsCount || 0}</b> Posts</span>
+
+<span><b>${followersCount || 0}</b> Followers</span>
+
+<span><b>${followingCount || 0}</b> Following</span>
+
+</div>
+
+${profile?.created_at ? `
+<div style="
+margin-top:8px;
+color:#888;
+font-size:13px;
+">
+📅 Joined ${new Date(profile.created_at).toLocaleDateString(undefined,{
+  year:"numeric",
+  month:"long"
+})}
+</div>
+` : ""}
+
+${profile?.username ? `
+<div style="
+margin-top:8px;
+color:#1d9bf0;
+font-size:15px;
+font-weight:bold;
+">
+@${escapeHtml(profile.username)}
+</div>
+` : ""}
+
+${profile?.bio ? `
+<div style="
+margin-top:10px;
+color:#ddd;
+font-size:15px;
+line-height:1.4;
+white-space:pre-wrap;
+">
+${escapeHtml(profile.bio)}
+</div>
+` : ""}
+
+${profile?.website ? `
+<div style="
+margin-top:10px;
+font-size:14px;
+">
+🌐
+<a
+href="${profile.website}"
+target="_blank"
+style="
+color:#1d9bf0;
+text-decoration:none;
+word-break:break-all;
+">
+${escapeHtml(profile.website)}
+</a>
+</div>
+` : ""}
+
+${profile?.location ? `
+<div style="
+margin-top:8px;
+color:#aaa;
+font-size:14px;
+">
+📍 ${escapeHtml(profile.location)}
+</div>
+` : ""}
+
+<div style="
+display:flex;
+gap:10px;
+margin-top:12px;
+flex-wrap:wrap;
+">
+
+<div id="followContainer"></div>
+
+${
+  String(session?.user?.id) !== String(userId)
+    ? `
+<button
+onclick="openChat('${userId}','${escapeHtml(profile?.name || name)}')"
+style="
+padding:8px 16px;
+border:none;
+border-radius:8px;
+background:#1d9bf0;
+color:white;
+cursor:pointer;
+">
+💬 Message
+</button>
+`
+    : ""
+}
+
+</div>
 
   </div>
 
@@ -4939,44 +5703,207 @@ src="${avatarUrl}"
 
       ${
         String(session?.user?.id) === String(userId)
-          ? `<button onclick="openEditProfile()">Edit</button>`
+          ? `<div style="
+display:flex;
+gap:10px;
+margin-top:10px;
+">
+
+<button onclick="openEditProfile()">
+✏️ Edit Profile
+</button>
+
+<button onclick="openProfileSettings()">
+⚙️ Settings
+</button>
+
+</div>`
           : ""
       }
 
-      <div id="profilePosts"></div>
-    </div>
-  `;
+<div
+id="profileTabs"
+style="
+position:relative;
+display:flex;
+margin-top:20px;
+border-bottom:1px solid #333;
+"
+>
+
+<button
+id="profilePostsTab"
+class="profile-tab"
+style="
+flex:1;
+padding:12px;
+background:none;
+border:none;
+color:white;
+font-weight:bold;
+"
+>
+Posts
+</button>
+
+<button
+id="profilePhotosTab"
+class="profile-tab"
+style="
+flex:1;
+padding:12px;
+background:none;
+border:none;
+color:#888;
+"
+>
+Photos
+</button>
+
+<button
+id="profileVideosTab"
+class="profile-tab"
+style="
+flex:1;
+padding:12px;
+background:none;
+border:none;
+color:#888;
+"
+>
+Videos
+</button>
+
+${
+String(session?.user?.id) === String(userId)
+? `
+<button
+id="profileSavedTab"
+class="profile-tab"
+style="
+flex:1;
+padding:12px;
+background:none;
+border:none;
+color:#888;
+"
+>
+Saved
+</button>
+`
+: ""
+}
+
+<div
+id="profileTabIndicator"
+style="
+position:absolute;
+bottom:-1px;
+left:0;
+height:2px;
+width:25%;
+background:#1d9bf0;
+transition:left .25s ease, width .25s ease;
+">
+</div>
+
+</div>
+
+<div
+id="profilePosts"
+style="margin-top:15px;"
+></div>
+   </div>
+</div>
+`;
 
 attachEvents();
 
-  // ✅ THEN load posts
-  const { data: posts, error } = await supabase
-    .from("posts")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+loadProfilePosts(userId);
 
-  const container = document.getElementById("profilePosts");
+const postsTab = document.getElementById("profilePostsTab");
+const photosTab = document.getElementById("profilePhotosTab");
+const videosTab = document.getElementById("profileVideosTab");
+const savedTab = document.getElementById("profileSavedTab");
 
-  if (error) {
-    container.innerHTML = "Error loading posts";
-    return;
+const indicator = document.getElementById("profileTabIndicator");
+
+setTimeout(() => {
+  setProfileTab(postsTab, 0);
+}, 0);
+
+if (indicator) {
+  indicator.style.width = savedTab ? "25%" : "33.333%";
+}
+
+function setProfileTab(active,index){
+
+  [postsTab, photosTab, videosTab, savedTab]
+  .forEach(tab=>{
+
+    if(!tab) return;
+
+    tab.style.color="#888";
+
+  });
+
+
+  active.style.color="white";
+
+
+  const indicator =
+  document.getElementById("profileTabIndicator");
+
+
+  if(indicator){
+
+    const step = savedTab ? 25 : 33.333;
+
+indicator.style.left = `${index * step}%`;
+
   }
 
-  if (!posts || posts.length === 0) {
-    container.innerHTML = "No posts yet";
-    return;
-  }
+}
 
-  container.innerHTML = posts.map(post => `
-    <div style="border-bottom:1px solid #333; padding:10px 0;">
-     <div>${escapeHtml(post.content)}</div>
-      <div style="font-size:12px;color:#aaa;">
-        ${new Date(post.created_at).toLocaleString()}
-      </div>
-    </div>
-  `).join("");
 
+postsTab.onclick = () => {
+
+  setProfileTab(postsTab,0);
+
+  loadProfilePosts(userId);
+
+};
+
+
+photosTab.onclick = () => {
+
+  setProfileTab(photosTab,1);
+
+  loadProfilePhotos(userId);
+
+};
+
+
+videosTab.onclick = () => {
+
+  setProfileTab(videosTab,2);
+
+  loadProfileVideos(userId);
+
+};
+
+
+if(savedTab){
+
+savedTab.onclick = () => {
+
+  setProfileTab(savedTab,3);
+
+  loadProfileSaved();
+
+};
+
+}
 
 const followContainer =
   document.getElementById("followContainer");
@@ -5026,6 +5953,51 @@ if (
           .eq("following_id", userId);
 
       } else {
+        
+        const { data: targetProfile } = await supabase
+  .from("profiles")
+  .select("allow_followers")
+  .eq("id", userId)
+  .single();
+
+if (targetProfile?.allow_followers === "nobody") {
+  alert("This user is not accepting followers.");
+  return;
+}
+
+if (targetProfile?.allow_followers === "approved") {
+
+  await supabase
+    .from("follow_requests")
+    .upsert({
+      sender_id: session.user.id,
+      receiver_id: userId,
+      status: "pending"
+    });
+
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("name, avatar_url")
+    .eq("id", session.user.id)
+    .single();
+
+  await supabase
+    .from("notifications")
+    .insert({
+      user_id: userId,
+      sender_id: session.user.id,
+      username: me.name,
+      avatar_url: me.avatar_url,
+      type: "follow_request",
+      message: "sent you a follow request",
+      read: false,
+      created_at: new Date()
+    });
+
+  alert("Follow request sent.");
+
+  return;
+}
 
         const { error } = await supabase
   .from("follows")
@@ -5091,6 +6063,325 @@ if (
 }
 };
 
+async function loadProfilePosts(userId) {
+
+  const container = document.getElementById("profilePosts");
+
+  container.innerHTML = "Loading...";
+
+const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("user_id", userId)
+    .order("pinned", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    container.innerHTML = "Error loading posts";
+    return;
+  }
+
+  if (!posts || posts.length === 0) {
+    container.innerHTML = "No posts yet";
+    return;
+  }
+
+container.replaceChildren();
+
+window.renderedPosts = new Set();
+
+posts.forEach(post => {
+
+  const el = renderPostElement(post);
+
+  if(el){
+    container.appendChild(el);
+  }
+
+});
+
+}
+
+async function loadProfilePhotos(userId) {
+
+  const container =
+    document.getElementById("profilePosts");
+
+  container.innerHTML = "Loading photos...";
+
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("media_type", "image")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    container.innerHTML = "Error loading photos";
+    return;
+  }
+
+  if (!posts || posts.length === 0) {
+    container.innerHTML = "No photos yet";
+    return;
+  }
+  
+  window.profileGallery = posts;
+
+  container.innerHTML = `
+    <div style="
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:4px;
+    ">
+      ${posts.map((post, index) => `
+        <img
+          src="${post.file_url}"
+          onclick="openPhotoGallery(${index}, '${userId}')"
+          style="
+            width:100%;
+            aspect-ratio:1;
+            object-fit:cover;
+            border-radius:8px;
+            cursor:pointer;
+          "
+        >
+      `).join("")}
+    </div>
+  `;
+
+}
+
+async function loadProfileVideos(userId) {
+
+  const container = document.getElementById("profilePosts");
+
+  container.innerHTML = "Loading videos...";
+
+  const { data: posts, error } = await supabase
+    .from("posts")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("media_type", "video")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    container.innerHTML = "Error loading videos";
+    return;
+  }
+
+  if (!posts || posts.length === 0) {
+    container.innerHTML = "No videos yet";
+    return;
+  }
+
+  window.profileVideos = posts;
+
+  container.innerHTML = `
+    <div id="profileVideoFeed">
+      ${posts.map((post, index) => `
+        <div class="profile-video-item">
+
+<div class="video-wrapper">
+
+  <video
+    src="${post.file_url}"
+    controls
+    playsinline
+    preload="metadata"
+    onclick="toggleVideoPlayback(this)"
+    ondblclick="doubleTapLike('${post.id}', this)"
+  ></video>
+  
+  <button
+class="video-mute-btn"
+onclick="toggleVideoMute(this)">
+🔊
+</button>
+  
+  <div class="video-progress">
+  <div class="video-progress-fill"></div>
+</div>
+
+  <div class="play-overlay">▶</div>
+
+  <div class="heart-animation">❤️</div>
+
+</div>
+
+         <div class="profile-video-info">
+
+  <div style="font-weight:bold;margin-bottom:8px;">
+    ${escapeHtml(post.content || "")}
+  </div>
+
+</div>
+
+<div class="profile-video-actions">
+
+  <button onclick="likePost('${post.id}')">
+    ❤️
+  </button>
+
+  <button onclick="openComments('${post.id}')">
+    💬
+  </button>
+
+  <button onclick="sharePost('${post.id}')">
+    🔁
+  </button>
+
+  <button onclick="savePost('${post.id}')">
+    🔖
+  </button>
+
+  <img
+    src="${avatarUrl}"
+    class="video-avatar"
+    onclick="openProfile('${userId}', '${escapeHtml(profile?.name || name)}')"
+>
+
+</div>
+
+        </div>
+      `).join("")}
+    </div>
+  `;
+  
+  const muted =
+localStorage.getItem("videoMuted") === "true";
+
+document
+.querySelectorAll("#profileVideoFeed video")
+.forEach(video => {
+
+  video.muted = muted;
+
+});
+
+document
+.querySelectorAll(".video-mute-btn")
+.forEach(btn => {
+
+  btn.textContent = muted ? "🔇" : "🔊";
+
+});
+  
+const videos = document.querySelectorAll("#profileVideoFeed video");
+
+// Disconnect the previous observer if it exists
+if (window.profileVideoObserver) {
+    window.profileVideoObserver.disconnect();
+}
+
+// Create a new observer
+window.profileVideoObserver = new IntersectionObserver((entries) => {
+
+    entries.forEach(entry => {
+
+        const video = entry.target;
+
+        if (entry.isIntersecting) {
+
+            videos.forEach(v => {
+                if (v !== video) {
+                    v.pause();
+                    v.currentTime = 0;
+                }
+            });
+
+            video.play().catch(() => {});
+
+        } else {
+
+            video.pause();
+
+        }
+
+    });
+
+}, {
+    threshold: 0.7
+});
+
+// Observe all videos
+videos.forEach(video => {
+    window.profileVideoObserver.observe(video);
+});
+}
+window.doubleTapLike = async function(postId, video){
+
+    const heart =
+        video.parentElement.querySelector(".heart-animation");
+
+    heart.classList.add("show");
+
+    setTimeout(()=>{
+        heart.classList.remove("show");
+    },700);
+
+    await likePost(postId);
+};
+
+window.toggleVideoPlayback = function(video){
+
+    const icon =
+        video.parentElement.querySelector(".play-overlay");
+
+    if(video.paused){
+
+        video.play();
+
+        icon.innerHTML = "▶";
+
+    }else{
+
+        video.pause();
+
+        icon.innerHTML = "⏸";
+
+    }
+
+    icon.classList.add("show");
+
+    setTimeout(()=>{
+        icon.classList.remove("show");
+    },600);
+
+};
+
+document.addEventListener("timeupdate", function(e){
+
+  if(e.target.tagName !== "VIDEO") return;
+
+  const fill = e.target.parentElement.querySelector(".video-progress-fill");
+
+  if(!fill) return;
+
+  if (!e.target.duration) return;
+
+fill.style.width =
+    (e.target.currentTime / e.target.duration) * 100 + "%";
+
+}, true);
+
+window.toggleVideoMute = function(button){
+
+  const video =
+    button.parentElement.querySelector("video");
+
+  video.muted = !video.muted;
+
+  button.textContent =
+    video.muted ? "🔇" : "🔊";
+
+  localStorage.setItem(
+    "videoMuted",
+    video.muted
+  );
+
+};
+
   window.openEditProfile = async () => {
   alert("EDIT FUNCTION RUNNING");
 
@@ -5118,12 +6409,47 @@ if (
 
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
-      <button onclick="goHome()">← Back</button>
+      <button onclick="
+        goHome();
+        openSearch();
+         ">
+        ← Back
+      </button>
 
       <h2>Edit Profile</h2>
 
       <input id="editName" placeholder="Name" value="${data?.name || ""}" />
+      
+      <input
+id="editUsername"
+placeholder="Username"
+value="${data?.username || ""}"
+/>
+
+<input
+id="editWebsite"
+placeholder="Website"
+value="${data?.website || ""}"
+/>
+
+<input
+id="editLocation"
+placeholder="Location"
+value="${data?.location || ""}"
+/>
+      
       <input type="file" id="avatarFile" accept="image/*" />
+      
+      <label style="display:block;margin-top:10px;">
+  Cover Photo
+</label>
+
+<input
+  type="file"
+  id="coverFile"
+  accept="image/*"
+/>
+      
       <textarea id="editBio" placeholder="Bio">${data?.bio || ""}</textarea>
 
       <button id="saveProfile">Save</button>
@@ -5137,13 +6463,44 @@ if (
   return;
 }
     
-  const name = document.getElementById("editName").value;
-  const bio = document.getElementById("editBio").value;
+  const name =
+document.getElementById("editName").value.trim();
+
+const username =
+document.getElementById("editUsername")
+.value
+.trim()
+.toLowerCase()
+.replace(/\s+/g, "");
+
+if (
+  username &&
+  !/^[a-z0-9_.]{3,20}$/.test(username)
+) {
+  alert(
+    "Username must be 3-20 characters and use only letters, numbers, _ or ."
+  );
+  return;
+}
+
+const website =
+document.getElementById("editWebsite").value.trim();
+
+const location =
+document.getElementById("editLocation").value.trim();
+
+const bio =
+document.getElementById("editBio").value.trim();
 
   const fileInput = document.getElementById("avatarFile");
   const file = fileInput.files[0];
 
   let avatarUrl = null;
+  
+  const coverInput = document.getElementById("coverFile");
+  const coverFile = coverInput.files[0];
+
+  let coverUrl = null;
 
   if (file) {
     const originalFile = file;
@@ -5175,17 +6532,67 @@ console.log("UPLOAD ERROR:", uploadError);
   }
 
   const { data: oldProfile } = await supabase
+  .from("profiles")
+  .select("avatar_url, cover_url")
+  .eq("id", session.user.id)
+  .single();
+  
+  if (coverFile) {
+
+  const coverName =
+    `${session.user.id}-cover-${Date.now()}-${coverFile.name}`;
+
+  const { error: coverError } =
+    await supabase.storage
+      .from("avatars")
+      .upload(coverName, coverFile, {
+        cacheControl: "3600",
+        upsert: true
+      });
+
+  if (coverError) {
+    alert("Cover upload failed");
+    console.log(coverError);
+    return;
+  }
+
+  const { data: coverPublic } =
+    supabase.storage
+      .from("avatars")
+      .getPublicUrl(coverName);
+
+  coverUrl =
+    coverPublic.publicUrl + "?t=" + Date.now();
+}
+
+if (username) {
+
+  const { data: existing } = await supabase
     .from("profiles")
-    .select("avatar_url")
-    .eq("id", session.user.id)
-    .single();
+    .select("id")
+    .ilike("username", username)
+    .neq("id", session.user.id)
+    .maybeSingle();
+
+  if (existing) {
+    alert("That username is already taken.");
+    return;
+  }
+
+}
 
   const { error } = await supabase.from("profiles").upsert({
-    id: session.user.id,
-    name,
-    avatar_url: avatarUrl || oldProfile?.avatar_url,
-    bio
-  });
+
+id: session.user.id,
+name,
+username,
+website,
+location,
+avatar_url: avatarUrl || oldProfile?.avatar_url,
+cover_url: coverUrl || oldProfile?.cover_url,
+bio
+
+});
 
   if (error) {
     alert("Save failed");
@@ -5197,6 +6604,806 @@ console.log("UPLOAD ERROR:", uploadError);
 };
 };
 
+window.openProfileSettings = function(){
+
+document.getElementById("app").innerHTML = `
+<div style="
+padding:15px;
+color:white;
+">
+
+<button
+onclick="openProfile(session.user.id, session.user.email)"
+style="
+margin-bottom:20px;
+padding:10px 16px;
+background:#181818;
+color:white;
+border:1px solid #333;
+border-radius:10px;
+cursor:pointer;
+"
+>
+← Back
+</button>
+
+<h2 style="
+margin-bottom:20px;
+font-size:26px;
+">
+⚙️ Settings
+</h2>
+
+<div id="settingsList" style="
+display:flex;
+flex-direction:column;
+gap:12px;
+">
+
+<button
+onclick="openEditProfile()"
+style="
+width:100%;
+padding:16px;
+background:#181818;
+color:white;
+border:1px solid #333;
+border-radius:12px;
+font-size:16px;
+font-weight:600;
+text-align:left;
+cursor:pointer;
+"
+>
+✏️ Edit Profile
+</button>
+
+<button
+onclick="toggleTheme()"
+style="
+width:100%;
+padding:16px;
+background:#181818;
+color:white;
+border:1px solid #333;
+border-radius:12px;
+font-size:16px;
+font-weight:600;
+text-align:left;
+cursor:pointer;
+"
+>
+🌙 Theme
+</button>
+
+<button
+onclick="openPrivacySettings()"
+style="
+width:100%;
+padding:16px;
+background:#181818;
+color:white;
+border:1px solid #333;
+border-radius:12px;
+font-size:16px;
+font-weight:600;
+text-align:left;
+cursor:pointer;
+"
+>
+🔒 Privacy
+</button>
+
+<button onclick="openFollowRequests()"
+style="
+width:100%;
+padding:16px;
+background:#181818;
+color:white;
+border:1px solid #333;
+border-radius:12px;
+font-size:16px;
+font-weight:600;
+text-align:left;
+cursor:pointer;
+"
+>
+👥 Follow Requests
+</button>
+
+<button
+onclick="openSavedPosts()"
+style="
+width:100%;
+padding:16px;
+background:#181818;
+color:white;
+border:1px solid #333;
+border-radius:12px;
+font-size:16px;
+font-weight:600;
+text-align:left;
+cursor:pointer;
+"
+>
+🔖 Saved Posts
+</button>
+
+<button
+onclick="logout()"
+style="
+width:100%;
+padding:16px;
+background:#c62828;
+color:white;
+border:none;
+border-radius:12px;
+font-size:16px;
+font-weight:600;
+text-align:left;
+cursor:pointer;
+"
+>
+🚪 Logout
+</button>
+
+</div>
+
+</div>
+`;
+
+};
+
+window.openFollowRequests = async function(){
+
+  if(!session?.user){
+    alert("Login first");
+    return;
+  }
+
+  document.getElementById("app").innerHTML = `
+  <div style="padding:15px;color:white;">
+
+    <button onclick="openProfileSettings()">
+      ← Back
+    </button>
+
+    <h2>👥 Follow Requests</h2>
+
+    <div id="followRequestsList">
+      Loading...
+    </div>
+
+  </div>
+  `;
+
+  const { data: requests, error } = await supabase
+    .from("follow_requests")
+    .select(`
+      id,
+      sender_id,
+      profiles:sender_id(
+        id,
+        name,
+        avatar_url,
+        verified
+      )
+    `)
+    .eq("receiver_id", session.user.id)
+    .eq("status", "pending");
+
+  const container =
+    document.getElementById("followRequestsList");
+
+  if(error){
+    container.innerHTML = "Failed to load requests";
+    return;
+  }
+
+  if(!requests || requests.length === 0){
+    container.innerHTML = "No follow requests.";
+    return;
+  }
+
+  container.innerHTML = requests.map(req => `
+    <div style="
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:12px;
+      border-bottom:1px solid #333;
+    ">
+
+      <img
+        src="${req.profiles?.avatar_url || "https://via.placeholder.com/50"}"
+        style="
+          width:50px;
+          height:50px;
+          border-radius:50%;
+          object-fit:cover;
+        "
+      >
+
+      <div style="flex:1;">
+
+        <b>${escapeHtml(req.profiles?.name || "User")}</b>
+
+        ${req.profiles.verified ? " ✔️" : ""}
+
+      </div>
+
+      <button
+        onclick="acceptFollowRequest(${req.id}, '${req.sender_id}')">
+        ✅ Accept
+      </button>
+
+      <button
+        onclick="declineFollowRequest(${req.id})">
+        ❌ Decline
+      </button>
+
+    </div>
+  `).join("");
+
+};
+
+window.acceptFollowRequest = async function(requestId, senderId){
+
+  if(!session?.user) return;
+
+  // Add the follower
+  const { error } = await supabase
+    .from("follows")
+    .insert({
+      follower_id: senderId,
+      following_id: session.user.id
+    });
+
+  if(error){
+    console.log(error);
+    alert("Failed to accept request.");
+    return;
+  }
+
+  // Delete the request
+await supabase
+    .from("follow_requests")
+    .delete()
+    .eq("id", requestId);
+    
+    await supabase
+.from("notifications")
+.insert({
+ user_id: senderId,
+ sender_id: session.user.id,
+ type:"follow_accept",
+ message:"accepted your follow request",
+ read:false,
+ created_at:new Date()
+});
+
+
+// Notify requester
+const { data: me } = await supabase
+.from("profiles")
+.select("name, avatar_url")
+.eq("id", session.user.id)
+.single();
+
+
+await supabase
+.from("notifications")
+.insert({
+  user_id: senderId,
+  sender_id: session.user.id,
+  username: me?.name || "User",
+  avatar_url: me?.avatar_url,
+  type: "follow",
+  message: "accepted your follow request",
+  read:false,
+  created_at:new Date(),
+  last_time:new Date()
+});
+
+
+alert("Follow request accepted.");
+
+  openFollowRequests();
+
+};
+
+window.declineFollowRequest = async function(requestId){
+
+  await supabase
+    .from("follow_requests")
+    .delete()
+    .eq("id", requestId);
+
+  alert("Follow request declined.");
+
+  openFollowRequests();
+
+};
+
+window.openPrivacySettings = async function(){
+
+  if(!session?.user){
+    alert("Login first");
+    return;
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select(`
+      private_account,
+      show_online,
+      show_last_seen,
+      allow_messages,
+      allow_followers
+    `)
+    .eq("id", session.user.id)
+    .single();
+
+  document.getElementById("app").innerHTML = `
+  <div style="padding:15px;color:white;">
+
+    <button onclick="openProfileSettings()">
+      ← Back
+    </button>
+
+    <h2>🔒 Privacy</h2>
+
+    <label style="display:block;margin:15px 0;">
+      <input
+        type="checkbox"
+        id="privateAccount"
+        ${profile?.private_account ? "checked" : ""}
+      >
+      Private Account
+    </label>
+
+    <label style="display:block;margin:15px 0;">
+      <input
+        type="checkbox"
+        id="showOnline"
+        ${profile?.show_online ? "checked" : ""}
+      >
+      Show Online Status
+    </label>
+
+    <label style="display:block;margin:15px 0;">
+      <input
+        type="checkbox"
+        id="showLastSeen"
+        ${profile?.show_last_seen ? "checked" : ""}
+      >
+      Show Last Seen
+    </label>
+    
+    <label style="display:block;margin:15px 0;">
+Who can message me?
+
+<select
+id="allowMessages"
+style="
+width:100%;
+margin-top:8px;
+padding:12px;
+background:#222;
+color:white;
+border:1px solid #444;
+border-radius:8px;
+">
+
+<option value="everyone"
+${profile?.allow_messages==="everyone"?"selected":""}>
+Everyone
+</option>
+
+<option value="followers"
+${profile?.allow_messages==="followers"?"selected":""}>
+Followers Only
+</option>
+
+<option value="nobody"
+${profile?.allow_messages==="nobody"?"selected":""}>
+Nobody
+</option>
+
+</select>
+</label>
+
+<label style="display:block;margin:15px 0;">
+Who can follow me?
+
+<select
+id="allowFollowers"
+style="
+width:100%;
+margin-top:8px;
+padding:12px;
+background:#222;
+color:white;
+border:1px solid #444;
+border-radius:8px;
+">
+
+<option value="everyone"
+${profile?.allow_followers==="everyone"?"selected":""}>
+Everyone
+</option>
+
+<option value="approved"
+${profile?.allow_followers==="approved"?"selected":""}>
+Approval Required
+</option>
+
+<option value="nobody"
+${profile?.allow_followers==="nobody"?"selected":""}>
+Nobody
+</option>
+
+</select>
+</label>
+
+    <button
+      onclick="savePrivacySettings()"
+      style="
+      width:100%;
+      margin-top:20px;
+      padding:14px;
+      background:#1d9bf0;
+      color:white;
+      border:none;
+      border-radius:10px;
+      ">
+      Save
+    </button>
+
+  </div>
+  `;
+};
+
+window.savePrivacySettings = async function(){
+
+  const {error}=await supabase
+.from("profiles")
+.update({
+
+  private_account:
+    document.getElementById("privateAccount").checked,
+
+  show_online:
+    document.getElementById("showOnline").checked,
+
+  show_last_seen:
+    document.getElementById("showLastSeen").checked,
+
+  allow_messages:
+    document.getElementById("allowMessages").value,
+
+  allow_followers:
+    document.getElementById("allowFollowers").value
+
+})
+    .eq("id", session.user.id);
+    
+    if(error){
+ console.log(error);
+ alert("Failed saving settings");
+ return;
+}
+
+  alert("Privacy settings saved.");
+  openProfileSettings();
+
+};
+
+window.openPhotoGallery = function(index, userId){
+
+  window.profileGalleryIndex = index;
+
+  const overlay = document.createElement("div");
+
+  overlay.id = "photoGallery";
+
+  overlay.style = `
+    position:fixed;
+    inset:0;
+    background:black;
+    z-index:999999;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  `;
+
+  document.body.appendChild(overlay);
+
+  renderPhotoGallery();
+
+};
+
+function renderPhotoGallery(){
+
+  const overlay =
+    document.getElementById("photoGallery");
+
+  if(!overlay) return;
+
+  const post =
+    window.profileGallery[window.profileGalleryIndex];
+
+  overlay.innerHTML = `
+
+<button
+onclick="closePhotoGallery()"
+style="
+position:absolute;
+top:20px;
+right:20px;
+background:none;
+border:none;
+color:white;
+font-size:32px;
+cursor:pointer;
+z-index:2;
+">
+✕
+</button>
+
+<button
+onclick="previousPhoto()"
+style="
+position:absolute;
+left:10px;
+top:50%;
+transform:translateY(-50%);
+font-size:40px;
+background:none;
+border:none;
+color:white;
+cursor:pointer;
+z-index:2;
+">
+❮
+</button>
+
+<img
+id="galleryPhoto"
+class="gallery-image"
+draggable="false"
+src="${post.file_url}"
+style="
+transform:translateX(0);
+"
+>
+
+<button
+onclick="nextPhoto()"
+style="
+position:absolute;
+right:10px;
+top:50%;
+transform:translateY(-50%);
+font-size:40px;
+background:none;
+border:none;
+color:white;
+cursor:pointer;
+z-index:2;
+">
+❯
+</button>
+
+<div
+style="
+position:absolute;
+bottom:20px;
+left:50%;
+transform:translateX(-50%);
+color:white;
+font-size:15px;
+">
+${window.profileGalleryIndex+1} /
+${window.profileGallery.length}
+</div>
+
+`;
+
+overlay.ontouchstart = (e) => {
+  galleryTouchStartX = e.touches[0].clientX;
+};
+
+overlay.ontouchmove = (e) => {
+  galleryTouchEndX = e.touches[0].clientX;
+};
+
+overlay.ontouchend = () => {
+
+  const diff = galleryTouchStartX - galleryTouchEndX;
+
+  if (Math.abs(diff) < 50) return;
+
+  if (diff > 0) {
+    nextPhoto();
+  } else {
+    previousPhoto();
+  }
+
+};
+
+const img = document.getElementById("galleryPhoto");
+
+let zoomed = false;
+
+img.ondblclick = () => {
+
+  zoomed = !zoomed;
+
+  if (zoomed) {
+
+  img.style.transform =
+    `translate(${photoX}px, ${photoY}px) scale(2)`;
+
+} else {
+
+  photoX = 0;
+  photoY = 0;
+
+  img.style.transform = "scale(1)";
+}
+
+};
+
+img.ontouchstart = (e) => {
+
+  if (!zoomed) return;
+
+  draggingPhoto = true;
+
+  dragStartX = e.touches[0].clientX - photoX;
+  dragStartY = e.touches[0].clientY - photoY;
+
+};
+
+img.ontouchmove = (e) => {
+
+  if (!draggingPhoto || !zoomed) return;
+
+  photoX = e.touches[0].clientX - dragStartX;
+  photoY = e.touches[0].clientY - dragStartY;
+
+  img.style.transform =
+    `translate(${photoX}px, ${photoY}px) scale(2)`;
+
+};
+
+img.ontouchend = () => {
+
+ draggingPhoto = false;
+
+ const now = Date.now();
+
+ if(now-lastPhotoTap < 300){
+
+ zoomed=!zoomed;
+
+ if(zoomed){
+
+ img.style.transform =
+ `translate(${photoX}px,${photoY}px) scale(2)`;
+
+ }else{
+
+ photoX=0;
+ photoY=0;
+
+ img.style.transform="scale(1)";
+
+ }
+
+ }
+
+ lastPhotoTap=now;
+
+};
+preloadGalleryImages();
+
+}
+
+function preloadGalleryImages(){
+
+  if(!window.profileGallery.length) return;
+
+  const next =
+    window.profileGallery[
+      (window.profileGalleryIndex + 1) %
+      window.profileGallery.length
+    ];
+
+  const prev =
+    window.profileGallery[
+      (window.profileGalleryIndex - 1 + window.profileGallery.length) %
+      window.profileGallery.length
+    ];
+
+  if(next){
+    const img = new Image();
+    img.src = next.file_url;
+  }
+
+  if(prev){
+    const img = new Image();
+    img.src = prev.file_url;
+  }
+
+}
+
+window.previousPhoto = function(){
+  
+  photoX = 0;
+  photoY = 0;
+  draggingPhoto = false;
+
+  const img =
+    document.getElementById("galleryPhoto");
+
+  img.style.transform = "translateX(100%)";
+  img.style.opacity = "0";
+
+  setTimeout(()=>{
+
+    if(window.profileGalleryIndex>0){
+      window.profileGalleryIndex--;
+    }else{
+      window.profileGalleryIndex =
+        window.profileGallery.length-1;
+    }
+
+    renderPhotoGallery();
+
+  },250);
+
+};
+
+window.nextPhoto = function(){
+  
+   photoX = 0;
+   photoY = 0;
+   draggingPhoto = false;
+
+  const img =
+    document.getElementById("galleryPhoto");
+
+  img.style.transform = "translateX(-100%)";
+  img.style.opacity = "0";
+
+  setTimeout(()=>{
+
+    if(window.profileGalleryIndex <
+       window.profileGallery.length-1){
+      window.profileGalleryIndex++;
+    }else{
+      window.profileGalleryIndex = 0;
+    }
+
+    renderPhotoGallery();
+
+  },250);
+
+};
+
+window.closePhotoGallery = function(){
+
+  const gallery =
+    document.getElementById("photoGallery");
+
+  if(gallery){
+    gallery.remove();
+  }
+
+};
 
 function attachEvents() {
 
@@ -5348,31 +7555,243 @@ loadComments(currentPostId);
 }
 
 window.openSearch = function () {
-  
+
   setActiveTopButton("searchBtn");
-  
+
   document.getElementById("searchScreen").style.display = "flex";
-  document.getElementById("userSearchInput").focus();
+
+  const input = document.getElementById("userSearchInput");
+
+  const lastSearch =
+    localStorage.getItem("lastUserSearch") || "";
+
+  input.value = lastSearch;
+  input.focus();
+
+  // Always refresh the search screen
+  searchUsers();
+
 };
 
 window.closeSearch = function () {
   document.getElementById("searchScreen").style.display = "none";
 };
 
+window.saveRecentSearch = function (
+  id,
+  name,
+  avatar,
+  online,
+  last_seen,
+  verified
+) {
+
+  let recent = JSON.parse(
+    localStorage.getItem("recentSearches") || "[]"
+  );
+
+  recent = recent.filter(user => user.id !== id);
+
+  recent.unshift({
+  id,
+  name,
+  avatar,
+  online,
+  last_seen,
+  verified,
+  searched_at: new Date().toISOString()
+});
+
+  recent = recent.slice(0, 10);
+
+  localStorage.setItem(
+    "recentSearches",
+    JSON.stringify(recent)
+  );
+};
+
 window.searchUsers = async function () {
 
   const text = document.getElementById("userSearchInput").value.trim();
+  
+  localStorage.setItem("lastUserSearch", text);
 
-  if (!text) {
-    document.getElementById("searchResults").innerHTML = "";
+if (!text) {
+
+  const recent = JSON.parse(
+    localStorage.getItem("recentSearches") || "[]"
+  );
+  
+  const pinned = JSON.parse(
+  localStorage.getItem("pinnedSearches") || "[]"
+);
+
+recent.sort((a,b)=>{
+  return (
+    pinned.includes(b.id) -
+    pinned.includes(a.id)
+  );
+});
+  
+  const container = document.getElementById("searchResults");
+
+container.innerHTML = `
+<div style="
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:12px;
+color:white;
+font-weight:bold;
+border-bottom:1px solid #222;
+">
+Recent Searches
+
+<button
+onclick="clearRecentSearches()"
+style="
+background:none;
+border:none;
+color:#1d9bf0;
+font-size:14px;
+cursor:pointer;
+">
+Clear All
+</button>
+</div>
+`;
+
+  if (recent.length === 0) {
+    document.getElementById("searchResults").innerHTML = `
+      <div style="
+        color:#888;
+        text-align:center;
+        padding:20px;
+      ">
+        No recent searches
+      </div>
+    `;
     return;
   }
 
+  container.innerHTML +=
+    recent.map(user => `
+      <div
+        onclick="
+          closeSearch();
+          openProfile(
+       '${user.id}',
+       '${escapeHtml(user.name)}'
+         );
+        "
+        style="
+          display:flex;
+          align-items:center;
+          gap:10px;
+          padding:12px;
+          border-bottom:1px solid #222;
+          cursor:pointer;
+        "
+      >
+
+        <img
+          src="${user.avatar || 'https://via.placeholder.com/40'}"
+          style="
+            width:40px;
+            height:40px;
+            border-radius:50%;
+            object-fit:cover;
+          "
+        >
+
+       <div style="flex:1">
+
+  <div style="
+display:flex;
+align-items:center;
+gap:4px;
+color:white;
+font-weight:bold;
+">
+
+${user.name}
+
+${user.verified ? `
+<span style="
+color:#1d9bf0;
+font-size:14px;
+">
+✔️
+</span>
+` : ""}
+
+</div>
+
+  <div style="color:#888;font-size:12px;">
+    ${
+      user.online
+        ? "🟢 Online"
+        : user.last_seen
+          ? "Last seen " + formatLastSeen(user.last_seen)
+          : "Offline"
+    }
+  </div>
+  
+  <div style="
+color:#666;
+font-size:11px;
+margin-top:2px;
+">
+${formatSearchTime(user.searched_at)}
+</div>
+
+</div>
+
+<button
+onclick="
+event.stopPropagation();
+togglePinnedSearch('${user.id}');
+"
+style="
+background:none;
+border:none;
+font-size:18px;
+cursor:pointer;
+margin-right:6px;
+">
+${isPinned(user.id) ? "📌" : "📍"}
+</button>
+
+<button
+onclick="
+event.stopPropagation();
+removeRecentSearch('${user.id}');
+"
+style="
+background:none;
+border:none;
+color:#888;
+font-size:18px;
+cursor:pointer;
+">
+✕
+</button>
+
+      </div>
+    `).join("");
+
+  return;
+}
+
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,name,avatar_url,online,last_seen")
+    .select("id,name,avatar_url,online,last_seen,verified")
     .ilike("name", `%${text}%`)
     .limit(20);
+    
+    const recent = JSON.parse(
+  localStorage.getItem("recentSearches") || "[]"
+  );
 
   if (error) {
     console.log(error);
@@ -5394,9 +7813,51 @@ window.searchUsers = async function () {
   return;
 }
 
-  document.getElementById("searchResults").innerHTML = data.map(user => `
+const recentMatches = recent.filter(user =>
+  user.name.toLowerCase().includes(text.toLowerCase())
+);
+
+recentMatches.sort((a, b) => {
+  if (isPinned(a.id) !== isPinned(b.id)) {
+    return isPinned(b.id) - isPinned(a.id);
+  }
+
+  return new Date(b.searched_at) - new Date(a.searched_at);
+});
+
+const serverResults = (data || []).filter(user =>
+  !recentMatches.some(r => r.id === user.id)
+);
+
+serverResults.sort((a, b) => {
+
+  if ((b.verified || false) !== (a.verified || false)) {
+    return (b.verified || false) - (a.verified || false);
+  }
+
+  return a.name.localeCompare(b.name);
+
+});
+
+const results = [
+  ...recentMatches,
+  ...serverResults
+];
+
+  document.getElementById("searchResults").innerHTML = results.map(user => `
 <div
-  onclick="openProfile('${user.id}','${escapeHtml(user.name)}')"
+  onclick="
+    saveRecentSearch(
+  '${user.id}',
+  '${escapeHtml(user.name)}',
+  '${user.avatar_url || user.avatar || ""}'
+   ${user.online},
+  '${user.last_seen || ""}',
+   ${user.verified}
+     );
+    closeSearch();
+    openProfile('${user.id}','${escapeHtml(user.name)}');
+  "
   style="
     display:flex;
     align-items:center;
@@ -5408,7 +7869,7 @@ window.searchUsers = async function () {
 >
 
   <img
-    src="${user.avatar_url || 'https://via.placeholder.com/40'}"
+    src="${user.avatar_url || user.avatar || 'https://via.placeholder.com/40'}"
     style="
       width:40px;
       height:40px;
@@ -5416,33 +7877,93 @@ window.searchUsers = async function () {
       object-fit:cover;
     "
   >
-
+  
   <div style="flex:1">
 
-    <div style="color:white;font-weight:bold;">
-      ${escapeHtml(user.name)}
-    </div>
+<div style="
+display:flex;
+align-items:center;
+gap:4px;
+color:white;
+font-weight:bold;
+">
 
-    <div
-      id="search-status-${user.id}"
-      style="color:#888;font-size:12px;"
-    >
-      ${
-        user.online
-          ? "🟢 Online"
-          : user.last_seen
-            ? "Last seen " + formatLastSeen(user.last_seen)
-            : "Offline"
-      }
-    </div>
+${escapeHtml(user.name).replace(
+  new RegExp(text, "ig"),
+  match => `<span style="color:#1d9bf0">${match}</span>`
+)}
 
+${user.verified ? `
+<span style="
+color:#1d9bf0;
+font-size:14px;
+">
+✔️
+</span>
+` : ""}
+
+</div>
+
+  <div
+    id="search-status-${user.id}"
+    style="color:#888;font-size:12px;"
+  >
+    ${
+      user.online
+        ? "🟢 Online"
+        : user.last_seen
+          ? "Last seen " + formatLastSeen(user.last_seen)
+          : "Offline"
+    }
   </div>
 
+  ${
+    user.searched_at
+      ? `
+      <div style="
+        color:#666;
+        font-size:11px;
+        margin-top:2px;
+      ">
+        ${formatSearchTime(user.searched_at)}
+      </div>
+      `
+      : ""
+  }
+
+</div>
+
+<button
+onclick="
+event.stopPropagation();
+togglePinnedSearch('${user.id}');
+"
+style="
+background:none;
+border:none;
+font-size:18px;
+cursor:pointer;
+margin-right:6px;
+">
+${isPinned(user.id) ? "📌" : "📍"}
+</button>
+
   <button
-    onclick="
-      event.stopPropagation();
-      openChat('${user.id}','${escapeHtml(user.name)}');
-    "
+       onclick="
+  event.stopPropagation();
+
+  saveRecentSearch(
+  '${user.id}',
+  '${escapeHtml(user.name)}',
+  '${user.avatar_url || user.avatar || ""}',
+   ${user.online},
+  '${user.last_seen || ""}',
+   ${user.verified}
+     );
+
+    closeSearch();
+    openChat('${user.id}','${escapeHtml(user.name)}');
+      "
     style="
       background:#0084ff;
       border:none;
@@ -5483,23 +8004,143 @@ function listenSearchStatus(){
 
         const user = payload.new;
 
-        const status =
-          document.getElementById(
-            "search-status-" + user.id
-          );
+// Update visible search result
+const status = document.getElementById(
+  "search-status-" + user.id
+);
 
-        if(!status) return;
+if (status) {
+  status.innerText =
+    user.online
+      ? "🟢 Online"
+      : user.last_seen
+        ? "Last seen " + formatLastSeen(user.last_seen)
+        : "Offline";
+}
 
-        status.innerText =
-          user.online
-            ? "🟢 Online"
-            : user.last_seen
-              ? "Last seen " + formatLastSeen(user.last_seen)
-              : "Offline";
+// Update saved recent searches
+let recent = JSON.parse(
+  localStorage.getItem("recentSearches") || "[]"
+);
+
+let changed = false;
+
+recent = recent.map(item => {
+
+  if (item.id === user.id) {
+
+    changed = true;
+
+    return {
+  ...item,
+  online: user.online,
+  last_seen: user.last_seen,
+  verified: user.verified
+   };
+
+  }
+
+  return item;
+
+});
+
+if (changed) {
+  localStorage.setItem(
+    "recentSearches",
+    JSON.stringify(recent)
+  );
+}
+
+const searchScreen = document.getElementById("searchScreen");
+
+if (
+  searchScreen &&
+  searchScreen.style.display === "flex"
+) {
+  searchUsers();
+}
 
       }
     )
     .subscribe();
+
+}
+
+window.removeRecentSearch = function(id) {
+
+  let recent = JSON.parse(
+    localStorage.getItem("recentSearches") || "[]"
+  );
+
+  recent = recent.filter(user => user.id !== id);
+
+  localStorage.setItem(
+    "recentSearches",
+    JSON.stringify(recent)
+  );
+
+  searchUsers();
+};
+
+window.clearRecentSearches = function () {
+
+  localStorage.removeItem("recentSearches");
+
+  searchUsers();
+
+};
+
+window.togglePinnedSearch = function(id){
+
+  let pinned = JSON.parse(
+    localStorage.getItem("pinnedSearches") || "[]"
+  );
+
+  if(pinned.includes(id)){
+    pinned = pinned.filter(x => x !== id);
+  }else{
+    pinned.unshift(id);
+  }
+
+  localStorage.setItem(
+    "pinnedSearches",
+    JSON.stringify(pinned)
+  );
+
+  searchUsers();
+};
+
+function isPinned(id){
+
+  const pinned = JSON.parse(
+    localStorage.getItem("pinnedSearches") || "[]"
+  );
+
+  return pinned.includes(id);
+
+}
+
+function formatSearchTime(date) {
+
+  if (!date) return "";
+
+  const diff = Date.now() - new Date(date).getTime();
+
+  const mins = Math.floor(diff / 60000);
+
+  if (mins < 1) return "Just now";
+
+  if (mins < 60) return `${mins} min ago`;
+
+  const hrs = Math.floor(mins / 60);
+
+  if (hrs < 24) return `${hrs} hr ago`;
+
+  const days = Math.floor(hrs / 24);
+
+  if (days === 1) return "Yesterday";
+
+  return `${days} days ago`;
 
 }
 
@@ -5616,6 +8257,20 @@ box-sizing:border-box;
 ">
 0
 </span>
+</button>
+
+<button
+  id="savedBtn"
+  onclick="openSavedPosts()"
+  style="
+    background:none;
+    border:none;
+    color:white;
+    font-size:22px;
+    cursor:pointer;
+  "
+>
+  🔖
 </button>
 
 </div>
@@ -5742,152 +8397,6 @@ window.addEventListener("beforeunload",()=>{
 
 });
 
-async function createPost() {
-
-  const input =
-    document.getElementById("postInput");
-
-  const mediaInput =
-    document.getElementById("mediaInput");
-
-  const content =
-    input.value.trim();
-
-  const file =
-    mediaInput.files[0];
-
-  let mediaUrl = null;
-  let mediaType = null;
-  
-  if (!session?.user) {
-  alert("Please login first");
-  return;
-}
-
-  if (file) {
-
-    const fileName =
-  `${session.user.id}_${Date.now()}_${file.name}`;
-
-    const { error: uploadError } =
-      await supabase.storage
-  .from("posts_media")
-  .upload(fileName, file);
-
-    if (uploadError) {
-      console.log(uploadError);
-      alert("Upload failed");
-      return;
-    }
-
-    const { data } =
-      supabase.storage
-  .from("posts_media")
-  .getPublicUrl(fileName);
-
-    mediaUrl = data.publicUrl;
-
-    if (file.type.startsWith("image")) {
-      mediaType = "image";
-    }
-
-    if (file.type.startsWith("video")) {
-      mediaType = "video";
-    }
-  }
-
-  const { data: profile } =
-    await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.user.id)
-      .maybeSingle();
-
-  const { error } =
-  await supabase
-    .from("posts")
-    .insert([{
-      content,
-      file_url: mediaUrl,
-      media_type: mediaType,
-      user_id: session.user.id,
-      name:
-        profile?.name ||
-        session.user.email,
-      avatar_url:
-        profile?.avatar_url || null
-    }]);
-
-if (error) {
-
-  console.log(error);
-  alert("Post failed");
-  return;
-
-}
-
-  input.value = "";
-  mediaInput.value = "";
-
-  loadPosts();
-}
-
-// ========================
-// AUTO SNAP
-// ========================
-
-function setupScrollSnap() {
-
-  if (!postsEl) return;
-
-  postsEl.addEventListener("scroll", () => {
-
-    clearTimeout(scrollTimeout);
-
-    scrollTimeout = setTimeout(() => {
-      snapToNearestPost();
-    }, 120);
-
-  });
-
-}
-
-function snapToNearestPost() {
-
-  const posts =
-    document.querySelectorAll(".post-card");
-
-  if (!posts.length) return;
-
-  const scrollTop = postsEl.scrollTop;
-
-  let closest = null;
-  let minDistance = Infinity;
-
-  posts.forEach((post) => {
-
-    const offset = post.offsetTop;
-
-    const distance =
-      Math.abs(offset - scrollTop);
-
-    if (distance < minDistance) {
-      minDistance = distance;
-      closest = post;
-    }
-
-  });
-
-  if (closest) {
-
-    postsEl.scrollTo({
-      top: closest.offsetTop,
-      behavior: "smooth"
-    });
-
-  }
-}
-
 // =====================================================
 // CHAT
 // =====================================================
@@ -5910,8 +8419,35 @@ window.openChat = async function(userId, name) {
     alert("Please login first");
     return;
   }
+  
+  const { data: targetProfile } = await supabase
+  .from("profiles")
+  .select("allow_messages")
+  .eq("id", userId)
+  .single();
+  
+  if (targetProfile?.allow_messages === "nobody") {
+  alert("This user is not accepting messages.");
+  return;
+}
 
-  currentChatUser = userId;
+if (targetProfile?.allow_messages === "followers") {
+
+  const { data: follows } = await supabase
+    .from("follows")
+    .select("id")
+    .eq("follower_id", session.user.id)
+    .eq("following_id", userId)
+    .maybeSingle();
+
+  if (!follows) {
+    alert("Only followers can message this user.");
+    return;
+  }
+
+}
+
+currentChatUser = userId;
 
   document.getElementById("app").style.display = "none";
   document.getElementById("chatScreen").style.display = "flex";
@@ -8121,6 +10657,9 @@ window.closeChat = async function () {
     "app"
   ).style.display = "block";
   
+  document.getElementById("searchScreen").style.display = "flex";
+  document.getElementById("userSearchInput").focus();
+  
   requestAnimationFrame(() => {
   loadPosts();
 });
@@ -9240,6 +11779,13 @@ if (data.type === "story_reaction") {
 
   return;
 }
+
+if (data.type === "follow_request") {
+
+  openFollowRequests();
+
+  return;
+}
 renderNotifications();
 };
 
@@ -9644,6 +12190,7 @@ if (n.type === "story_reaction") icon = "😍";
 if (n.type === "like") icon = "❤️";
 if (n.type === "comment") icon = "📝";
 if (n.type === "follow") icon = "👤";
+if (n.type === "follow_request") icon = "👥";
 if (n.type === "message") icon = "📩";
 
     const rawTime = n.last_time || n.created_at || new Date().toISOString();
@@ -9690,7 +12237,7 @@ return `
         <img src="${avatar}" style="width:48px;height:48px;border-radius:50%;" />
 
         <div style="flex:1;">
-          <b>${username}</b> ${text}
+         <b>${icon} ${username}</b> ${text}
           <div style="color:#888;font-size:12px;">${time}</div>
         </div>
 
