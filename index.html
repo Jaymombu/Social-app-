@@ -116,31 +116,86 @@ body {
   z-index: 1;
 }
 
-#topNav {
-  z-index: 1000;
+#topBar{
+    z-index:999999;
 }
 
-#commentsPanel {
-  position: fixed;
-  bottom: -100%;
-  left: 0;
-  width: 100%;
-  height: 60%;
-  background: var(--card);
-color: var(--text);
-  transition: bottom 0.3s ease;
-  z-index: 2000;
-  border-top-left-radius: 15px;
-  border-top-right-radius: 15px;
+.menu-item{
+padding:18px;
+text-align:center;
+font-size:17px;
+border-bottom:1px solid rgba(255,255,255,.08);
+cursor:pointer;
 }
 
-#commentsPanel.active {
-  bottom: 0;
+/* =======================================
+   NEW COMMENT SCREEN
+======================================= */
+
+#commentsScreen{
+    position:fixed;
+    inset:0;
+    display:none;
+    flex-direction:column;
+    background:#000;
+    z-index:1000001;
 }
 
-.comments-content {
-  padding: 15px;
+#commentsScreen.active{
+    display:flex;
 }
+
+#commentMedia{
+    position:relative;
+    min-height:40vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    background:#000;
+}
+
+#commentMediaContent img,
+#commentMediaContent video{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+    display:block;
+}
+
+#commentsScreen{
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+}
+
+#panelComments{
+    padding:12px;
+    overflow:visible;
+}
+
+#commentsScreen > div:last-child{
+    flex:none;
+    display:flex;
+    flex-direction:column;
+}
+
+#panelInput{
+    font-size:16px;
+}
+
+#panelPostBtn{
+    font-weight:bold;
+    cursor:pointer;
+}
+
+#closeComments{
+    transition:.2s;
+}
+
+#closeComments:active{
+    transform:scale(.92);
+}
+
 :root {
   --bg: #ffffff;
   --text: #111111;
@@ -974,20 +1029,24 @@ span {
 }
 
 #profileVideoFeed{
-height:100vh;
+position:absolute;
+inset:0;
 overflow-y:auto;
 scroll-snap-type:y mandatory;
 scroll-behavior:smooth;
+-webkit-overflow-scrolling:touch;
 }
 
 .profile-video-item{
 position:relative;
-height:100vh;
+height:100dvh;
 scroll-snap-align:start;
+scroll-snap-stop:always;
 background:black;
 display:flex;
 align-items:center;
 justify-content:center;
+overflow:hidden;
 }
 
 .profile-video-item video{
@@ -1144,6 +1203,157 @@ font-size:20px;
 cursor:pointer;
 
 z-index:20;
+
+}
+
+@keyframes heartPop{
+
+0%{
+transform:translate(-50%,-50%) scale(.2);
+opacity:0;
+}
+
+40%{
+transform:translate(-50%,-50%) scale(1.3);
+opacity:1;
+}
+
+100%{
+transform:translate(-50%,-50%) scale(1);
+opacity:0;
+}
+
+}
+
+@keyframes spin {
+
+    from {
+        transform: translate(-50%, -50%) rotate(0deg);
+    }
+
+    to {
+        transform: translate(-50%, -50%) rotate(360deg);
+    }
+
+}
+
+#profileVideoFeed{
+    width:100%;
+    height:100%;
+    overflow-y:auto;
+    scroll-snap-type:y mandatory;
+    scroll-behavior:smooth;
+}
+
+.profile-video-item{
+    position:relative;
+    width:100%;
+    height:100vh;
+    scroll-snap-align:start;
+    overflow:hidden;
+    background:black;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+#profileVideoFeed{
+    -webkit-overflow-scrolling:touch;
+}
+
+#profileVideoFeed::-webkit-scrollbar{
+    display:none;
+}
+
+#profileVideoFeed{
+    scrollbar-width:none;
+}
+
+.video-music{
+margin-top:12px;
+white-space:nowrap;
+overflow:hidden;
+font-size:14px;
+color:white;
+}
+
+.video-music::after{
+content:attr(data-text);
+display:inline-block;
+padding-left:60px;
+animation:marquee 8s linear infinite;
+}
+
+@keyframes marquee{
+0%{transform:translateX(100%);}
+100%{transform:translateX(-100%);}
+}
+
+.voice-message{
+display:flex;
+align-items:center;
+gap:10px;
+margin-top:8px;
+}
+
+.voicePlayBtn{
+width:38px;
+height:38px;
+border:none;
+border-radius:50%;
+background:#0095f6;
+color:white;
+font-size:16px;
+cursor:pointer;
+}
+
+#voiceBtn{
+-webkit-user-select:none;
+user-select:none;
+-webkit-touch-callout:none;
+touch-action:manipulation;
+}
+
+.voiceProgress{
+flex:1;
+height:6px;
+background:#333;
+border-radius:10px;
+overflow:hidden;
+}
+
+.voiceProgressBar{
+height:100%;
+width:0%;
+background:#00d26a;
+transition:.1s;
+}
+
+.voiceTime{
+font-size:12px;
+color:#999;
+min-width:38px;
+text-align:right;
+}
+
+#voiceBtn.recording{
+background:#ff3040;
+animation:recordPulse 1s infinite;
+}
+
+@keyframes recordPulse{
+
+0%{
+transform:scale(1);
+}
+
+50%{
+transform:scale(1.12);
+}
+
+100%{
+transform:scale(1);
+}
 
 }
 
@@ -1502,6 +1712,15 @@ padding:8px;
         outline:none;
       "
     >
+    
+    <button id="voiceBtn" style="
+background:none;
+border:none;
+font-size:24px;
+cursor:pointer;
+">
+🎤
+</button>
 
     <button
       onclick="sendMessage()"
@@ -4690,7 +4909,7 @@ if (
   post.file_url
 ) {
 
-  mediaHTML = `
+ mediaHTML = `
     <video
       src="${post.file_url}"
       controls
@@ -5145,7 +5364,15 @@ window.likePost = async (id) => {
   if (btn) {
     btn.innerHTML = `${!isLiked ? "❤️ Liked" : "🤍 Like"} (${newLikes})`;
     btn.style.background = !isLiked ? "#ff4d6d" : "#222";
-  }
+
+    btn.animate([
+        { transform: "scale(1)" },
+        { transform: "scale(1.4)" },
+        { transform: "scale(1)" }
+    ], {
+        duration: 250
+    });
+}
 
   // 🔥 save to database
   await supabase
@@ -5211,7 +5438,6 @@ if (!isLiked) {
           last_time: new Date(),
           read: false
         });
-
     }
 
   }
@@ -5371,52 +5597,1190 @@ const { data: saved, error } = await supabase
 // COMMENTS
 // =====================================================
 
-window.openComments = (postId) => {
-  
-  if (!session?.user) {
-  alert("Please log in first.");
-  return;
-}
+let reactionPickerListenerAdded = false;
+let replyingToComment = null;
+let replyingToUserId = null;
+window.replyingToComment = null;
+let commentsChannel = null;
+let expandedReplies = new Set();
+let commentsPage = 0;
+const COMMENTS_PER_PAGE = 20;
+let loadingComments = false;
+let hasMoreComments = true;
+let reactionCommentId = null;
+
+window.openComments = async (postId) => {
   
   console.log("💬 opening comments for:", postId);
 
   currentPostId = postId;
 
-  const panel = document.getElementById("commentsPanel");
-  panel.style.display = "flex";
+const panel = document.getElementById("commentsScreen");
 
-  loadComments(postId);
+panel.classList.add("active");
+
+document.body.style.overflow = "hidden";
+
+document.getElementById("panelInput").value = "";
+document.getElementById("panelInput").placeholder = "Add a comment...";
+
+const container = document.getElementById("panelComments");
+
+if (container) {
+    container.innerHTML = "";
+}
+
+replyingToComment = null;
+replyingToUserId = null;
+window.replyingToComment = null;
+
+loadingComments = false;
+commentsPage = 0;
+hasMoreComments = true;
+
+expandedReplies.clear();
+reactionCommentId = null;
+selectedCommentId = null;
+selectedCommentUserId = null;
+
+document.querySelectorAll("video").forEach(v => {
+    if (!v.closest("#commentsScreen")) {
+        v.pause();
+    }
+});
+
+if (window.currentVideo) {
+    window.currentVideo.pause();
+}
+
+// Load the post media
+const { data: post } = await supabase
+.from("posts")
+.select("media_url, media_type, content")
+.eq("id", postId)
+.single();
+
+const media = document.getElementById("commentMediaContent");
+
+if (post) {
+
+    if (post.media_type === "image") {
+
+    media.innerHTML = `
+        <img
+        src="${post.media_url}"
+        style="
+        width:100%;
+        height:100%;
+        object-fit:contain;
+        ">
+    `;
+
+} else if (post.media_type === "video") {
+
+    media.innerHTML = `
+        <video
+        src="${post.media_url}"
+        autoplay
+        loop
+        controls
+        style="
+        width:100%;
+        height:100%;
+        object-fit:contain;
+        ">
+        </video>
+    `;
+
+} else {
+
+    media.innerHTML = `
+        <div style="
+        width:100%;
+        height:100%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:30px;
+        box-sizing:border-box;
+        color:white;
+        font-size:22px;
+        font-weight:500;
+        text-align:center;
+        line-height:1.5;
+        ">
+            ${escapeHtml(post.content || "")}
+        </div>
+    `;
+
+  }
+
+}
+
+loadComments(postId);
+
+if (commentsChannel) {
+    supabase.removeChannel(commentsChannel);
+}
+
+commentsChannel = supabase
+.channel("comments-" + postId)
+.on(
+    "postgres_changes",
+    {
+        event: "*",
+        schema: "public",
+        table: "comments",
+        filter: `post_id=eq.${postId}`
+    },
+async () => {
+
+    if (loadingComments) return;
+
+    commentsPage = 0;
+    hasMoreComments = true;
+
+    await loadComments(postId);
+
+}
+)
+.subscribe();
+
+const screen = document.getElementById("commentsScreen");
+
+screen.onscroll = () => {
+
+    if (
+        hasMoreComments &&
+        !loadingComments &&
+        screen.scrollTop + screen.clientHeight >= screen.scrollHeight - 200
+    ) {
+        loadMoreComments();
+    }
+
+};
+
 };
 
 async function loadComments(postId) {
+  
+  if (loadingComments) return;
+
+loadingComments = true;
+  
+  const {
+  data: { session }
+} = await supabase.auth.getSession();
+  
   console.log("📥 loading comments for:", postId);
 
   const { data, error } = await supabase
-    .from("comments")
-    .select("*")
-    .eq("post_id", postId)
-    .order("created_at", { ascending: true });
+  .from("comments")
+  .select(`
+    *,
+    profiles:profiles!comments_user_id_fkey (
+  id,
+  name,
+  avatar_url,
+  verified
+),
+    parent:comments (
+      id,
+      profiles (
+    name
+    )
+   ),
+   reply_user:profiles!comments_reply_to_user_id_fkey (
+     id,
+    name
+   ),
+    comment_likes (
+      id,
+      user_id
+    ),
+    comment_reactions (
+    user_id,
+    emoji
+    )
+  `)
+  .eq("post_id", postId)
+  .order("likes_count", { ascending: false })
+  .order("created_at", { ascending: true })
+  .range(
+    commentsPage * COMMENTS_PER_PAGE,
+    (commentsPage + 1) * COMMENTS_PER_PAGE - 1
+  );
+  
+const container = document.getElementById("panelComments");
 
-  const container = document.getElementById("panelComments");
-
-  if (error) {
-  console.log("❌ profile fetch error:", error);
+if (error) {
+    console.log("❌ profile fetch error:", error);
 }
 
-// ✅ DO NOT RETURN — continue anyway
+// Check if there are more comments to load
+if (!data || data.length === 0) {
 
-  if (!data || data.length === 0) {
-    container.innerHTML = "No comments yet";
+    if (commentsPage === 0) {
+        container.innerHTML = "No comments yet";
+    }
+
+    hasMoreComments = false;
+    loadingComments = false;
     return;
-  }
-
- container.innerHTML = data.map(c => `
-  <div style="margin-bottom:5px;">
-    <b>${escapeHtml(c.name)}</b>:
-    ${escapeHtml(c.content)}
-  </div>
-`).join("");
 }
+
+hasMoreComments = data.length === COMMENTS_PER_PAGE;
+  
+  const myId = session?.user?.id || null;
+
+ const html = renderCommentsList(data, myId);
+
+if (commentsPage === 0) {
+
+    container.innerHTML = html;
+
+} else {
+
+    container.innerHTML += html;
+
+}
+
+expandedReplies.forEach(id => {
+
+    const replies = document.getElementById(`replies-${id}`);
+    const button = replies?.previousElementSibling;
+
+    if (replies) {
+        replies.style.display = "block";
+    }
+
+    if (button) {
+        button.textContent = "Hide replies";
+    }
+
+});
+
+const oldLoadMore = document.getElementById("loadMoreCommentsBtn");
+
+if (oldLoadMore) {
+    oldLoadMore.remove();
+}
+
+if (data.length === COMMENTS_PER_PAGE) {
+
+    container.innerHTML += `
+        <div
+        id="loadMoreCommentsBtn"
+        onclick="loadMoreComments()"
+        style="
+        text-align:center;
+        padding:15px;
+        color:#0095f6;
+        font-weight:bold;
+        cursor:pointer;
+        ">
+            View more comments
+        </div>
+    `;
+
+  }
+  loadingComments = false;
+}
+
+function renderCommentsList(data, myId) {
+
+    const parents = data.filter(c => !c.parent_id);
+    const replies = data.filter(c => c.parent_id);
+
+    return parents.map(comment => {
+
+        const childReplies = replies.filter(
+            r => r.parent_id === comment.id
+        );
+
+        return `
+            ${renderComment(comment, myId)}
+
+            <div style="
+                margin-left:52px;
+                border-left:2px solid rgba(255,255,255,.08);
+                padding-left:12px;
+            ">
+                ${
+                childReplies.length
+                ? `
+                <div
+                onclick="toggleReplies(${comment.id})"
+                style="
+                margin:8px 0;
+                font-size:13px;
+                color:#0095f6;
+                cursor:pointer;
+                font-weight:600;
+                ">
+                View ${childReplies.length} repl${childReplies.length === 1 ? "y" : "ies"}
+                </div>
+
+                <div
+                id="replies-${comment.id}"
+                style="display:none;"
+                >
+                ${childReplies.map(renderReply).join("")}
+                </div>
+                `
+                : ""
+                }
+            </div>
+        `;
+
+    }).join("");
+
+}
+
+function formatCommentText(text) {
+
+    return escapeHtml(text).replace(
+        /@([a-zA-Z0-9_.]+)/g,
+        '<span style="color:#0095f6;font-weight:600;">@$1</span>'
+    );
+
+}
+
+function renderComment(c, myId) {
+
+    const liked = c.comment_likes?.some(
+        l => l.user_id === myId
+    );
+
+    return `
+
+<div
+oncontextmenu="event.preventDefault();openCommentMenu(${c.id}, '${c.user_id}')"
+ontouchstart="commentPressStart(event, ${c.id}, '${c.user_id}')"
+ontouchend="commentPressEnd()"
+ontouchcancel="commentPressEnd()"
+style="
+display:flex;
+gap:12px;
+padding:12px 16px;
+border-bottom:1px solid rgba(255,255,255,.08);
+"
+>
+
+        <img
+        src="${c.profiles?.avatar_url || 'https://via.placeholder.com/40'}"
+        style="
+        width:40px;
+        height:40px;
+        border-radius:50%;
+        object-fit:cover;
+        ">
+
+        <div style="flex:1;">
+
+            <b>
+                ${escapeHtml(c.profiles?.name || "Unknown User")}
+            </b>
+
+            ${c.profiles?.verified ? "✔️" : ""}
+            
+  <div style="
+font-size:12px;
+color:#888;
+margin-top:2px;
+">
+${formatCommentTime(c.created_at)}
+</div>          
+
+<div
+data-comment="${c.id}"
+style="margin-top:5px;"
+>
+
+${
+c.reply_user
+? `
+<div style="
+font-size:12px;
+color:#0095f6;
+font-weight:600;
+margin-bottom:3px;
+">
+Replying to @${escapeHtml(c.reply_user.name)}
+</div>
+`
+: ""
+}
+
+${
+c.media_type === "voice"
+? `
+<div class="voice-message">
+
+<button
+onclick="toggleVoice('${c.id}')"
+id="voiceBtn-${c.id}"
+class="voicePlayBtn">
+▶
+</button>
+
+<div class="voiceProgress">
+
+<div
+id="voiceProgress-${c.id}"
+class="voiceProgressBar">
+</div>
+
+</div>
+
+<span
+id="voiceTime-${c.id}"
+class="voiceTime">
+0:00
+</span>
+
+<audio
+id="voiceAudio-${c.id}"
+src="${c.media_url}">
+</audio>
+
+</div>
+`
+: formatCommentText(c.content || "")
+}
+
+</div>
+
+            <div style="
+                margin-top:8px;
+                display:flex;
+                gap:16px;
+                font-size:13px;
+                color:#999;
+            ">
+
+<span
+onclick="likeComment(${c.id})"
+style="
+cursor:pointer;
+color:${liked ? "#ff3040" : "#999"};
+">
+❤️ ${c.comment_likes?.length || 0}
+</span>
+
+<span onclick="replyToComment(${c.id}, '${escapeHtml(c.profiles?.name || "Unknown User")}', '${c.user_id}')"
+>
+💬 Reply
+</span>
+
+  </div>
+  
+  <div style="
+margin-top:8px;
+display:flex;
+gap:6px;
+flex-wrap:wrap;
+">
+${renderCommentReactions(c)}
+</div>
+
+        </div>
+
+    </div>
+    `;
+}
+
+function renderReply(c) {
+
+    return `
+    <div style="
+        display:flex;
+        gap:10px;
+        margin:10px 0;
+    ">
+
+        <img
+        src="${c.profiles?.avatar_url || 'https://via.placeholder.com/32'}"
+        style="
+        width:32px;
+        height:32px;
+        border-radius:50%;
+        object-fit:cover;
+        ">
+
+        <div>
+
+            <b>
+                ${escapeHtml(c.profiles?.name || "Unknown User")}
+            </b>
+
+            ${c.profiles?.verified ? "✔️" : ""}
+            
+  <div style="
+font-size:12px;
+color:#888;
+margin-top:2px;
+">
+${formatCommentTime(c.created_at)}
+</div>          
+
+   ${
+    c.reply_user
+    ? `<div
+         onclick="openProfile('${c.reply_user.id}', '${escapeHtml(c.reply_user.name)}')"
+         style="
+         font-size:12px;
+         color:#0095f6;
+         cursor:pointer;
+         font-weight:600;
+         ">
+         Replying to @${escapeHtml(c.reply_user.name)}
+       </div>`
+    : ""
+}
+
+${
+c.media_type === "voice"
+? `
+<div class="voice-message">
+
+<button
+onclick="toggleVoice('${c.id}')"
+id="voiceBtn-${c.id}"
+class="voicePlayBtn">
+▶
+</button>
+
+<div class="voiceProgress">
+
+<div
+id="voiceProgress-${c.id}"
+class="voiceProgressBar">
+</div>
+
+</div>
+
+<span
+id="voiceTime-${c.id}"
+class="voiceTime">
+0:00
+</span>
+
+<audio
+id="voiceAudio-${c.id}"
+src="${c.media_url}">
+</audio>
+
+</div>
+`
+: `
+<div style="margin-top:3px;">
+${formatCommentText(c.content || "")}
+</div>
+`
+}
+
+        </div>
+
+    </div>
+    `;
+}
+
+window.loadMoreComments = function () {
+
+    if (!hasMoreComments || loadingComments) return;
+
+    commentsPage++;
+
+    loadComments(currentPostId);
+
+};
+
+function toggleReplies(commentId) {
+
+    const replies = document.getElementById(`replies-${commentId}`);
+    if (!replies) return;
+
+    const button = replies.previousElementSibling;
+
+    if (replies.style.display === "none") {
+
+        replies.style.display = "block";
+        expandedReplies.add(commentId);
+
+        if (button) {
+            button.textContent = "Hide replies";
+        }
+
+    } else {
+
+        replies.style.display = "none";
+        expandedReplies.delete(commentId);
+
+        if (button) {
+            const count = replies.children.length;
+            button.textContent =
+                `View ${count} ${count === 1 ? "reply" : "replies"}`;
+        }
+
+    }
+
+}
+
+function replyToComment(commentId, name, userId) {
+
+    replyingToComment = commentId;
+    window.replyingToComment = commentId;
+    replyingToUserId = userId;
+
+    const input = document.getElementById("panelInput");
+
+    input.value = `@${name} `;
+    input.placeholder = `Reply to ${name}...`;
+
+    input.focus();
+
+    input.setSelectionRange(
+        input.value.length,
+        input.value.length
+    );
+
+}
+
+window.likeComment = async function(commentId) {
+
+    const {
+        data: { session }
+    } = await supabase.auth.getSession();
+
+    if (!session) return;
+
+    const userId = session.user.id;
+
+    const { data: existing } = await supabase
+        .from("comment_likes")
+        .select("id")
+        .eq("comment_id", commentId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+    if (existing) {
+
+    await supabase
+        .from("comment_likes")
+        .delete()
+        .eq("id", existing.id);
+
+    await supabase.rpc("decrement_comment_likes", {
+        comment_id_input: commentId
+    });
+
+} else {
+
+    await supabase
+        .from("comment_likes")
+        .insert({
+            comment_id: commentId,
+            user_id: userId
+        });
+
+    await supabase.rpc("increment_comment_likes", {
+        comment_id_input: commentId
+    });
+
+}
+
+    commentsPage = 0;
+hasMoreComments = true;
+loadingComments = false;
+
+loadComments(currentPostId);
+
+};
+
+let commentPressTimer;
+
+function commentPressStart(event, commentId, userId) {
+  
+  event.preventDefault();
+
+    commentPressTimer = setTimeout(() => {
+
+        openCommentMenu(commentId, userId);
+
+    }, 500);
+
+}
+
+function commentPressEnd() {
+
+    clearTimeout(commentPressTimer);
+
+}
+
+let selectedCommentId = null;
+let selectedCommentUserId = null;
+
+async function openCommentMenu(commentId, userId) {
+
+    const {
+        data: { session }
+    } = await supabase.auth.getSession();
+
+    selectedCommentId = commentId;
+    selectedCommentUserId = userId;
+
+    const isMine = session && session.user.id === userId;
+
+    const menu = document.getElementById("commentMenu");
+
+    document.getElementById("commentCopyBtn").style.display = "block";
+    document.getElementById("commentEditBtn").style.display = isMine ? "block" : "none";
+    document.getElementById("commentDeleteBtn").style.display = isMine ? "block" : "none";
+
+    menu.style.transform = "translateY(0)";
+}
+
+async function editComment(commentId) {
+
+    const { data: comment } = await supabase
+        .from("comments")
+        .select("content")
+        .eq("id", commentId)
+        .single();
+
+    if (!comment) return;
+
+    const text = prompt("Edit comment", comment.content);
+
+    if (text === null) return;
+    if (!text.trim()) return;
+
+    const { error } = await supabase
+        .from("comments")
+        .update({
+            content: text.trim()
+        })
+        .eq("id", commentId);
+
+    if (error) {
+        console.log(error);
+        return;
+    }
+
+    commentsPage = 0;
+loadingComments = false;
+hasMoreComments = true;
+
+loadComments(currentPostId);
+
+}
+
+async function deleteComment(commentId) {
+
+    const ok = confirm("Delete this comment?");
+
+    if (!ok) return;
+
+    const { error } = await supabase
+        .from("comments")
+        .delete()
+        .eq("id", commentId);
+
+    if (error) {
+        console.log(error);
+        return;
+    }
+
+    commentsPage = 0;
+loadingComments = false;
+hasMoreComments = true;
+
+loadComments(currentPostId);
+
+}
+
+function formatCommentTime(date) {
+
+    const seconds = Math.floor(
+        (Date.now() - new Date(date).getTime()) / 1000
+    );
+
+    if (seconds < 60) return "now";
+
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return minutes + "m";
+
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours + "h";
+
+    const days = Math.floor(hours / 24);
+    if (days < 7) return days + "d";
+
+    const weeks = Math.floor(days / 7);
+    if (weeks < 4) return weeks + "w";
+
+    const months = Math.floor(days / 30);
+    if (months < 12) return months + "mo";
+
+    return Math.floor(days / 365) + "y";
+}
+
+let mediaRecorder;
+let audioChunks = [];
+let recording = false;
+
+async function startVoiceRecording(){
+
+if(recording) return;
+
+recording = true;
+
+const voiceBtn = document.getElementById("voiceBtn");
+
+if (voiceBtn) {
+    voiceBtn.innerHTML = "🔴";
+}
+
+try {
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true
+    });
+
+    mediaRecorder = new MediaRecorder(stream);
+
+    audioChunks = [];
+
+    mediaRecorder.ondataavailable = e => {
+        audioChunks.push(e.data);
+    };
+
+    mediaRecorder.start();
+
+} catch (err) {
+
+    console.log(err);
+
+    recording = false;
+
+    if (voiceBtn) {
+        voiceBtn.innerHTML = "🎤";
+    }
+
+}
+
+}
+
+async function stopVoiceRecording(){
+  
+const voiceBtn = document.getElementById("voiceBtn");
+
+if(!recording) return;
+
+recording=false;
+
+if (voiceBtn) {
+    voiceBtn.innerHTML = "🎤";
+}
+
+if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.stop();
+}
+
+if (mediaRecorder?.stream) {
+    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+}
+
+if (!mediaRecorder) return;
+
+mediaRecorder.onstop = async () => {
+
+    const audioBlob = new Blob(audioChunks, {
+        type: "audio/webm"
+    });
+
+    await uploadVoiceComment(audioBlob);
+
+  };
+}
+
+async function uploadVoiceComment(blob){
+  if (!blob || blob.size === 0) return;
+
+const {
+data:{
+session
+}
+}=await supabase.auth.getSession();
+
+
+if(!session) return;
+
+
+const fileName =
+`voice_${Date.now()}.webm`;
+
+
+const {error:uploadError}=await supabase
+.storage
+.from("voice-notes")
+.upload(fileName, blob, {
+    upsert: false,
+    contentType: "audio/webm"
+});
+
+if (uploadError) {
+
+    console.log(uploadError);
+
+    const input = document.getElementById("panelInput");
+    if (input) {
+        input.placeholder = "Add a comment...";
+    }
+
+    return;
+}
+
+const {data:urlData}=supabase
+.storage
+.from("voice-notes")
+.getPublicUrl(fileName);
+
+
+await supabase
+.from("comments")
+.insert({
+
+post_id:currentPostId,
+user_id:session.user.id,
+media_url:urlData.publicUrl,
+media_type:"voice",
+parent_id:window.replyingToComment,
+reply_to_user_id:replyingToUserId
+
+});
+
+
+replyingToComment=null;
+replyingToUserId=null;
+window.replyingToComment=null;
+
+commentsPage = 0;
+hasMoreComments = true;
+loadingComments = false;
+
+loadComments(currentPostId);
+
+const input = document.getElementById("panelInput");
+
+if (input) {
+    input.value = "";
+    input.placeholder = "Add a comment...";
+}
+
+}
+
+function toggleVoice(id){
+
+const audio=document.getElementById("voiceAudio-"+id);
+const btn=document.getElementById("voiceBtn-"+id);
+
+if (!audio || !btn) return;
+
+if(audio.paused){
+
+document.querySelectorAll("audio").forEach(a=>{
+
+if(a!==audio){
+a.pause();
+a.currentTime = 0;
+
+const otherBtn = document.getElementById(
+    "voiceBtn-" + a.id.replace("voiceAudio-", "")
+);
+
+if (otherBtn) {
+    otherBtn.innerHTML = "▶";
+}
+}
+
+});
+
+audio.play();
+btn.innerHTML="⏸";
+
+}else{
+
+audio.pause();
+btn.innerHTML="▶";
+
+}
+
+audio.onended=()=>{
+
+btn.innerHTML="▶";
+
+};
+
+audio.ontimeupdate=()=>{
+
+const percent =
+audio.duration
+? (audio.currentTime / audio.duration) * 100
+: 0;
+
+document.getElementById(
+"voiceProgress-"+id
+).style.width=percent+"%";
+
+document.getElementById(
+"voiceTime-"+id
+).textContent=
+formatVoiceTime(audio.currentTime);
+
+};
+
+}
+
+function formatVoiceTime(seconds){
+
+if(isNaN(seconds)) return "0:00";
+
+const m=Math.floor(seconds/60);
+const s=Math.floor(seconds%60);
+
+return `${m}:${String(s).padStart(2,"0")}`;
+
+}
+
+function renderCommentReactions(comment){
+
+    if(!comment.comment_reactions?.length) return "";
+
+    const grouped = {};
+
+    comment.comment_reactions.forEach(r => {
+        grouped[r.emoji] = (grouped[r.emoji] || 0) + 1;
+    });
+
+    return Object.entries(grouped).map(([emoji, count]) => `
+        <span
+        style="
+        background:#2a2a2a;
+        padding:3px 8px;
+        border-radius:20px;
+        font-size:14px;
+        display:inline-flex;
+        align-items:center;
+        gap:4px;
+        ">
+        ${emoji} ${count}
+        </span>
+    `).join("");
+
+}
+
+function openReactionPicker(commentId){
+
+    reactionCommentId = commentId;
+
+    const picker = document.getElementById("reactionPicker");
+if (!picker) return;
+
+picker.style.transform = "translateX(-50%) scale(1)";
+
+}
+
+async function selectCommentReaction(emoji){
+
+    const picker = document.getElementById("reactionPicker");
+
+if (picker) {
+    picker.style.transform = "translateX(-50%) scale(0)";
+}
+
+    const {
+        data:{session}
+    } = await supabase.auth.getSession();
+
+    if(!session) return;
+
+    const userId = session.user.id;
+
+    const {data:existing} = await supabase
+    .from("comment_reactions")
+    .select("id")
+    .eq("comment_id", reactionCommentId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+    if(existing){
+
+        await supabase
+        .from("comment_reactions")
+        .update({
+            emoji
+        })
+        .eq("id", existing.id);
+
+    }else{
+
+        await supabase
+        .from("comment_reactions")
+        .insert({
+            comment_id: reactionCommentId,
+            user_id: userId,
+            emoji
+        });
+
+    }
+
+    commentsPage = 0;
+hasMoreComments = true;
+loadingComments = false;
+
+loadComments(currentPostId);
+
+}
+
+function closeComments() {
+
+    // Stop the comment video
+    const video = document.querySelector("#commentMediaContent video");
+
+    if (video) {
+        video.pause();
+        video.currentTime = 0;
+    }
+    
+    document.body.style.overflow = "";
+
+    document.getElementById("commentsScreen").classList.remove("active");
+
+    document.getElementById("commentMediaContent").innerHTML = "";
+
+    document.getElementById("panelComments").innerHTML = "";
+
+    document.getElementById("panelInput").value = "";
+    document.getElementById("panelInput").placeholder = "Add a comment...";
+
+    replyingToComment = null;
+    replyingToUserId = null;
+    window.replyingToComment = null;
+
+    if (commentsChannel) {
+        supabase.removeChannel(commentsChannel);
+        commentsChannel = null;
+    }
+
+   document.querySelectorAll("#posts video").forEach(v=>{
+    v.play().catch(()=>{});
+});
+
+    currentPostId = null;
+}
+
 
 window.goHome = async () => {
 
@@ -6152,11 +7516,833 @@ async function loadProfilePhotos(userId) {
 
 }
 
+function createVideoPage(post, index){
+
+    const page = document.createElement("div");
+    
+    page.dataset.index = index;
+
+    page.className = "profile-video-item";
+
+page.style.cssText = `
+height:100vh;
+width:100%;
+position:relative;
+display:flex;
+justify-content:center;
+align-items:center;
+scroll-snap-align:start;
+overflow:hidden;
+background:black;
+`;
+
+    page.style.transform = "translateY(0)";
+
+    // VIDEO
+    const video = document.createElement("video");
+    
+video.onended = () => {
+
+    const next = page.nextElementSibling;
+
+    if (!next) return;
+
+    next.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
+
+    setTimeout(() => {
+
+        const nextVideo = next.querySelector("video");
+
+        if (nextVideo) {
+
+            nextVideo.currentTime = 0;
+
+            nextVideo.play().catch(() => {});
+
+        }
+
+    }, 250);
+
+};
+
+    video.src = post.file_url;
+    
+    video.onloadedmetadata = () => {
+
+    const ratio = video.videoWidth / video.videoHeight;
+
+    if (ratio > 1) {
+
+        // Landscape video
+        video.style.objectFit = "contain";
+
+    } else {
+
+        // Portrait video
+        video.style.objectFit = "cover";
+
+    }
+
+};
+    
+// Preload next video
+if (window.profileVideos[index + 1]) {
+
+    const preloadNext = document.createElement("video");
+
+    preloadNext.preload = "auto";
+
+    preloadNext.src = window.profileVideos[index + 1].file_url;
+
+    preloadNext.load();
+
+}
+
+// Preload previous video
+if (window.profileVideos[index - 1]) {
+
+    const preloadPrev = document.createElement("video");
+
+    preloadPrev.src = window.profileVideos[index - 1].file_url;
+
+    preloadPrev.preload = "auto";
+    
+    preloadPrev.load();
+
+}
+    
+    video.autoplay = true;
+    video.loop = false;
+    video.muted = true;
+    video.playsInline = true;
+    video.controls = false;
+    video.preload = "auto";
+    video.setAttribute("playsinline", "");
+    video.setAttribute("webkit-playsinline", "");
+    video.disablePictureInPicture = true;
+    video.controlsList = "nodownload";
+
+video.style.cssText = `
+width:100%;
+height:100%;
+object-fit:cover;
+background:black;
+opacity:1;
+transition:opacity .25s ease;
+`;
+
+    page.appendChild(video);
+    
+    // Gradient overlay
+const gradient = document.createElement("div");
+
+gradient.style.cssText = `
+position:absolute;
+left:0;
+right:0;
+bottom:0;
+height:45%;
+background:linear-gradient(
+to top,
+rgba(0,0,0,.85),
+rgba(0,0,0,.4),
+transparent
+);
+pointer-events:none;
+z-index:1;
+`;
+
+page.appendChild(gradient);
+    
+    // Loading spinner
+const loader = document.createElement("div");
+
+loader.innerHTML = "⏳";
+
+loader.style.cssText = `
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+font-size:40px;
+color:white;
+z-index:50;
+animation:spin 1s linear infinite;
+`;
+
+page.appendChild(loader);
+    
+    let lastTap = 0;
+let tapTimer = null;
+
+video.addEventListener("pointerdown", handlePointerDown);
+video.addEventListener("pointerup", handlePointerUp);
+
+let pressTimer;
+let fastForward = false;
+
+function handlePointerDown(e) {
+
+    // Only hold on right side = 2× speed
+if (e.clientX > page.clientWidth * 0.65) {
+
+        pressTimer = setTimeout(() => {
+
+            fastForward = true;
+
+            video.playbackRate = 2;
+
+            const speed = document.createElement("div");
+
+            speed.className = "speedIndicator";
+
+            speed.innerHTML = "⏩ 2×";
+
+            speed.style.cssText = `
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+padding:12px 22px;
+background:rgba(0,0,0,.6);
+color:white;
+border-radius:30px;
+font-size:22px;
+font-weight:bold;
+z-index:999;
+`;
+
+            page.appendChild(speed);
+
+        }, 250);
+
+    }
+
+}
+
+function handlePointerUp() {
+
+    clearTimeout(pressTimer);
+
+    if (fastForward) {
+
+        fastForward = false;
+
+        video.playbackRate = 1;
+
+        page.querySelector(".speedIndicator")?.remove();
+
+        return;
+    }
+
+    // Normal single/double tap continues below
+}
+
+video.addEventListener("click", (event) => {
+
+    const now = Date.now();
+
+    if (now - lastTap < 300) {
+
+        clearTimeout(tapTimer);
+
+        const x = event.clientX;
+        const width = page.clientWidth;
+
+        // Left = rewind 10s
+        if (x < width / 3) {
+
+            video.currentTime = Math.max(0, video.currentTime - 10);
+            return;
+
+        }
+
+        // Right = forward 10s
+        if (x > width * 2 / 3) {
+
+            video.currentTime = Math.min(
+                video.duration,
+                video.currentTime + 10
+            );
+            return;
+
+        }
+
+        // Middle = Like
+        showUI();
+
+        likePost(post.id);
+
+        const heart = document.createElement("div");
+
+        heart.className = "heart-animation";
+        heart.innerHTML = "❤️";
+
+        page.appendChild(heart);
+
+        requestAnimationFrame(() => heart.classList.add("show"));
+
+        setTimeout(() => heart.remove(), 700);
+
+        return;
+    }
+
+    lastTap = now;
+
+    tapTimer = setTimeout(() => {
+
+        showUI();
+
+        if (video.paused) {
+            video.play();
+        } else {
+            video.pause();
+        }
+
+    }, 300);
+
+});
+
+    // INFO
+    const info = document.createElement("div");
+
+    info.className = "profile-video-info";
+    
+    info.style.zIndex = "2";
+
+    info.innerHTML = `
+        <div style="font-size:18px;font-weight:bold;">
+            ${post.name || ""}
+            ${post.verified ? " ✔️" : ""}
+        </div>
+
+        <div style="margin-top:8px;">
+            ${post.content || ""}
+        </div>
+
+        <div style="margin-top:10px;">
+            ❤️ <span>${post.likes || 0}</span>
+        </div>
+    `;
+
+const music = document.createElement("div");
+
+music.className = "video-music";
+
+music.innerHTML =
+`🎵 ${post.music_name || "Original audio"}`;
+
+info.appendChild(music);
+
+    page.appendChild(info);
+
+    // ACTIONS
+    const actions = document.createElement("div");
+
+    actions.className = "profile-video-actions";
+    
+    actions.style.zIndex = "2";
+    
+    const avatar = document.createElement("img");
+
+avatar.src =
+    post.avatar_url || "https://via.placeholder.com/60";
+
+avatar.style.cssText = `
+width:50px;
+height:50px;
+border-radius:50%;
+border:2px solid white;
+margin-bottom:18px;
+object-fit:cover;
+`;
+
+const follow = document.createElement("div");
+
+follow.innerHTML = "+";
+
+follow.style.cssText = `
+position:absolute;
+bottom:-5px;
+left:50%;
+transform:translateX(-50%);
+width:22px;
+height:22px;
+background:#ff0050;
+color:white;
+border-radius:50%;
+display:flex;
+justify-content:center;
+align-items:center;
+font-weight:bold;
+font-size:18px;
+cursor:pointer;
+border:2px solid black;
+z-index:10;
+`;
+
+follow.onclick = () => {
+    followUser(post.user_id);
+};
+
+    actions.innerHTML = `
+<div onclick="likePost('${post.id}')">
+❤️
+<div>${post.likes || 0}</div>
+</div>
+
+<div onclick="openComments('${post.id}')">
+💬
+<div>${post.comments || 0}</div>
+</div>
+
+<div onclick="savePost('${post.id}')">
+🔖
+</div>
+
+<div onclick="sharePost('${post.id}')">
+📤
+</div>
+`;
+
+const avatarWrap = document.createElement("div");
+
+avatarWrap.style.cssText = `
+position:relative;
+width:50px;
+height:50px;
+margin-bottom:18px;
+`;
+
+avatarWrap.appendChild(avatar);
+avatarWrap.appendChild(follow);
+
+actions.prepend(avatarWrap);
+
+    page.appendChild(actions);
+
+    // MUTE BUTTON
+    const mute = document.createElement("button");
+
+    mute.className = "video-mute-btn";
+
+    mute.innerHTML = "🔇";
+
+    mute.onclick = () => {
+
+        video.muted = !video.muted;
+
+        mute.innerHTML = video.muted ? "🔇" : "🔊";
+
+    };
+
+    page.appendChild(mute);
+
+    // PROGRESS BAR
+    const progress = document.createElement("div");
+
+    progress.className = "video-progress";
+
+    const fill = document.createElement("div");
+
+    fill.className = "video-progress-fill";
+
+    progress.appendChild(fill);
+
+    page.appendChild(progress);
+    
+    let touchStartX = 0;
+let touchEndX = 0;
+
+page.addEventListener("touchstart", e => {
+
+    touchStartX = e.changedTouches[0].screenX;
+
+}, { passive: true });
+
+page.addEventListener("touchend", e => {
+
+    touchEndX = e.changedTouches[0].screenX;
+
+    const diff = touchStartX - touchEndX;
+
+    // Swipe left
+    if (diff > 80) {
+
+        video.pause();
+
+window.currentVideo = video;
+
+openComments(post.id);
+
+    }
+
+}, { passive: true });
+    
+    progress.addEventListener("click", e => {
+
+    const rect = progress.getBoundingClientRect();
+
+    const percent =
+        (e.clientX - rect.left) / rect.width;
+
+    video.currentTime =
+        percent * video.duration;
+
+});
+    
+    let uiVisible = true;
+
+function showUI() {
+
+    info.style.opacity = "1";
+    actions.style.opacity = "1";
+    mute.style.opacity = "1";
+    progress.style.opacity = "1";
+
+    uiVisible = true;
+
+}
+
+function hideUI() {
+
+    info.style.opacity = "0";
+    actions.style.opacity = "0";
+    mute.style.opacity = "0";
+    progress.style.opacity = "0";
+
+    uiVisible = false;
+
+}
+
+    video.ontimeupdate = () => {
+
+        if(video.duration){
+
+            fill.style.width =
+            (video.currentTime/video.duration)*100 + "%";
+
+        }
+
+    };
+    
+video.oncanplay = () => {
+
+    loader.remove();
+
+    video.style.opacity = "1";
+
+    const nextPage = page.nextElementSibling;
+
+    if (nextPage) {
+
+        const nextVideo = nextPage.querySelector("video");
+
+        if (nextVideo) {
+            nextVideo.preload = "auto";
+        }
+
+    }
+
+};
+
+let hideTimer;
+
+video.onplay = () => {
+
+    clearTimeout(hideTimer);
+
+    showUI();
+
+    hideTimer = setTimeout(() => {
+
+        hideUI();
+
+    }, 2500);
+
+};
+
+video.onpause = () => {
+
+    clearTimeout(hideTimer);
+
+    showUI();
+
+};
+
+    return page;
+
+}
+
+function observeProfileVideos(container){
+  
+  container.style.scrollSnapType = "y mandatory";
+container.style.scrollBehavior = "smooth";
+
+
+    const observer = new IntersectionObserver(entries => {
+
+        entries.forEach(entry => {
+
+            const video = entry.target.querySelector("video");
+            if (!video) return;
+
+            if (entry.isIntersecting && entry.intersectionRatio > 0.75) {
+
+  // Pause all other videos
+container.querySelectorAll("video").forEach(v => {
+
+    if (v !== video) {
+
+        v.pause();
+
+    }
+
+});
+
+const currentIndex = Number(entry.target.dataset.index);
+
+window.profileVideoIndex = currentIndex;
+
+video.style.opacity = "1";
+
+video.currentTime = 0;
+
+video.play().catch(() => {});
+
+// Buffer nearby videos
+const nextPage = entry.target.nextElementSibling;
+
+if (nextPage) {
+
+    const nextVideo = nextPage.querySelector("video");
+
+    if (nextVideo) {
+
+        nextVideo.preload = "auto";
+        nextVideo.load();
+
+    }
+
+}
+
+const prevPage = entry.target.previousElementSibling;
+
+if (prevPage) {
+
+    const prevVideo = prevPage.querySelector("video");
+
+    if (prevVideo) {
+
+        prevVideo.preload = "auto";
+        prevVideo.load();
+
+    }
+
+}
+
+window.profileVideoIndex = currentIndex;
+
+
+} else {
+
+    video.pause();
+    video.currentTime = 0;
+
+}
+
+        });
+
+    }, {
+        threshold: 0.75
+    });
+
+    container.querySelectorAll(".profile-video-item")
+        .forEach(page => observer.observe(page));
+        
+}
+
+window.openProfileVideo = function(index){
+
+    window.profileVideoIndex = index;
+
+    const viewer = document.getElementById("mediaViewer");
+
+    viewer.innerHTML = "";
+
+    viewer.style.cssText = `
+        position:fixed;
+        inset:0;
+        display:flex;
+        background:#000;
+        z-index:999999;
+        overflow:hidden;
+    `;
+
+    // Close button
+    const close = document.createElement("div");
+
+    close.innerHTML = "✕";
+
+    close.style.cssText = `
+        position:absolute;
+        top:20px;
+        left:20px;
+        color:white;
+        font-size:34px;
+        z-index:999;
+        cursor:pointer;
+    `;
+
+close.onclick = () => {
+
+    viewer.querySelectorAll("video").forEach(v => {
+
+        v.pause();
+        v.currentTime = 0;
+        v.removeAttribute("src");
+        v.load();
+
+    });
+
+    viewer.innerHTML = "";
+
+    viewer.style.display = "none";
+
+};
+
+    viewer.appendChild(close);
+
+    // Feed
+    const feed = document.createElement("div");
+
+    feed.id = "profileVideoFeed";
+
+feed.style.cssText = `
+width:100%;
+height:100%;
+overflow-y:auto;
+overflow-x:hidden;
+scroll-snap-type:y mandatory;
+scroll-behavior:smooth;
+-webkit-overflow-scrolling:touch;
+overscroll-behavior-y:contain;
+background:black;
+`;
+
+    viewer.appendChild(feed);
+    
+let startY = 0;
+let currentY = 0;
+let dragging = false;
+
+feed.addEventListener("touchstart", e => {
+
+    startY = e.touches[0].clientY;
+    dragging = true;
+
+}, { passive: true });
+
+feed.addEventListener("touchmove", e => {
+
+    if (!dragging) return;
+
+    currentY = e.touches[0].clientY;
+
+    const diff = currentY - startY;
+
+    // Only drag downward
+    if (diff > 0) {
+
+        viewer.style.transform = `translateY(${diff}px)`;
+
+        viewer.style.opacity =
+            1 - Math.min(diff / 400, 0.8);
+
+    }
+
+}, { passive: true });
+
+feed.addEventListener("touchend", () => {
+
+    dragging = false;
+
+    const diff = currentY - startY;
+
+    if (diff > 150) {
+
+        close.onclick();
+
+    } else {
+
+        viewer.style.transition = "transform .25s, opacity .25s";
+
+        viewer.style.transform = "translateY(0)";
+
+        viewer.style.opacity = "1";
+
+        setTimeout(() => {
+
+            viewer.style.transition = "";
+
+        }, 250);
+
+    }
+
+});
+
+feed.innerHTML = "";
+
+window.profileVideos.forEach((post, i) => {
+
+    feed.appendChild(createVideoPage(post, i));
+
+});
+
+observeProfileVideos(feed);
+
+setTimeout(() => {
+
+    const currentPage =
+        feed.querySelector(`[data-index="${index}"]`);
+
+    if (!currentPage) return;
+
+    currentPage.scrollIntoView({
+        behavior: "auto",
+        block: "start"
+    });
+
+    const video = currentPage.querySelector("video");
+
+    if (video) {
+
+        video.currentTime = 0;
+
+        video.play().catch(() => {});
+
+    }
+
+}, 100);
+};
+
 async function loadProfileVideos(userId) {
 
   const container = document.getElementById("profilePosts");
 
   container.innerHTML = "Loading videos...";
+  
+  const { data: profile } = await supabase
+  .from("profiles")
+  .select("name, avatar_url")
+  .eq("id", userId)
+  .single();
+
+const avatarUrl =
+  profile?.avatar_url || "https://via.placeholder.com/50";
 
   const { data: posts, error } = await supabase
     .from("posts")
@@ -6177,210 +8363,67 @@ async function loadProfileVideos(userId) {
 
   window.profileVideos = posts;
 
-  container.innerHTML = `
-    <div id="profileVideoFeed">
-      ${posts.map((post, index) => `
-        <div class="profile-video-item">
+container.innerHTML = `
+<div style="
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:4px;
+">
+${posts.map((post,index)=>`
+<div
+onclick="openProfileVideoViewer(${index})"
+style="
+position:relative;
+aspect-ratio:1;
+overflow:hidden;
+border-radius:8px;
+cursor:pointer;
+">
 
-<div class="video-wrapper">
+<video
+src="${post.file_url}"
+muted
+preload="metadata"
+style="
+width:100%;
+height:100%;
+object-fit:cover;
+pointer-events:none;
+">
+</video>
 
-  <video
-    src="${post.file_url}"
-    controls
-    playsinline
-    preload="metadata"
-    onclick="toggleVideoPlayback(this)"
-    ondblclick="doubleTapLike('${post.id}', this)"
-  ></video>
-  
-  <button
-class="video-mute-btn"
-onclick="toggleVideoMute(this)">
-🔊
-</button>
-  
-  <div class="video-progress">
-  <div class="video-progress-fill"></div>
+<div style="
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+color:white;
+font-size:28px;
+text-shadow:0 0 10px black;
+">
+▶
 </div>
 
-  <div class="play-overlay">▶</div>
-
-  <div class="heart-animation">❤️</div>
-
 </div>
-
-         <div class="profile-video-info">
-
-  <div style="font-weight:bold;margin-bottom:8px;">
-    ${escapeHtml(post.content || "")}
-  </div>
-
+`).join("")}
 </div>
-
-<div class="profile-video-actions">
-
-  <button onclick="likePost('${post.id}')">
-    ❤️
-  </button>
-
-  <button onclick="openComments('${post.id}')">
-    💬
-  </button>
-
-  <button onclick="sharePost('${post.id}')">
-    🔁
-  </button>
-
-  <button onclick="savePost('${post.id}')">
-    🔖
-  </button>
-
-  <img
-    src="${avatarUrl}"
-    class="video-avatar"
-    onclick="openProfile('${userId}', '${escapeHtml(profile?.name || name)}')"
->
-
-</div>
-
-        </div>
-      `).join("")}
-    </div>
-  `;
-  
-  const muted =
-localStorage.getItem("videoMuted") === "true";
-
-document
-.querySelectorAll("#profileVideoFeed video")
-.forEach(video => {
-
-  video.muted = muted;
-
-});
-
-document
-.querySelectorAll(".video-mute-btn")
-.forEach(btn => {
-
-  btn.textContent = muted ? "🔇" : "🔊";
-
-});
-  
-const videos = document.querySelectorAll("#profileVideoFeed video");
-
-// Disconnect the previous observer if it exists
-if (window.profileVideoObserver) {
-    window.profileVideoObserver.disconnect();
-}
-
-// Create a new observer
-window.profileVideoObserver = new IntersectionObserver((entries) => {
-
-    entries.forEach(entry => {
-
-        const video = entry.target;
-
-        if (entry.isIntersecting) {
-
-            videos.forEach(v => {
-                if (v !== video) {
-                    v.pause();
-                    v.currentTime = 0;
-                }
-            });
-
-            video.play().catch(() => {});
-
-        } else {
-
-            video.pause();
-
-        }
-
-    });
-
-}, {
-    threshold: 0.7
-});
-
-// Observe all videos
-videos.forEach(video => {
-    window.profileVideoObserver.observe(video);
-});
-}
-window.doubleTapLike = async function(postId, video){
-
-    const heart =
-        video.parentElement.querySelector(".heart-animation");
-
-    heart.classList.add("show");
-
-    setTimeout(()=>{
-        heart.classList.remove("show");
-    },700);
-
-    await likePost(postId);
+`;
 };
+window.profileVideoIndex = 0;
 
-window.toggleVideoPlayback = function(video){
+window.openProfileVideoViewer = function(index){
 
-    const icon =
-        video.parentElement.querySelector(".play-overlay");
+    window.profileVideoIndex = index;
 
-    if(video.paused){
+    const post = window.profileVideos[index];
 
-        video.play();
+    if (!post) return;
 
-        icon.innerHTML = "▶";
-
-    }else{
-
-        video.pause();
-
-        icon.innerHTML = "⏸";
-
-    }
-
-    icon.classList.add("show");
-
-    setTimeout(()=>{
-        icon.classList.remove("show");
-    },600);
+    openProfileVideo(index);
 
 };
 
-document.addEventListener("timeupdate", function(e){
 
-  if(e.target.tagName !== "VIDEO") return;
-
-  const fill = e.target.parentElement.querySelector(".video-progress-fill");
-
-  if(!fill) return;
-
-  if (!e.target.duration) return;
-
-fill.style.width =
-    (e.target.currentTime / e.target.duration) * 100 + "%";
-
-}, true);
-
-window.toggleVideoMute = function(button){
-
-  const video =
-    button.parentElement.querySelector("video");
-
-  video.muted = !video.muted;
-
-  button.textContent =
-    video.muted ? "🔇" : "🔊";
-
-  localStorage.setItem(
-    "videoMuted",
-    video.muted
-  );
-
-};
 
   window.openEditProfile = async () => {
   alert("EDIT FUNCTION RUNNING");
@@ -7462,21 +9505,58 @@ function attachEvents() {
   if (storyInput) {
     storyInput.onchange = addStory;
   }
+  
+  const voiceBtn = document.getElementById("voiceBtn");
+
+  if (voiceBtn) {
+
+  voiceBtn.onmousedown = startVoiceRecording;
+
+  voiceBtn.onmouseup = stopVoiceRecording;
+
+  voiceBtn.ontouchstart = startVoiceRecording;
+  voiceBtn.ontouchend = stopVoiceRecording;
+  voiceBtn.ontouchcancel = stopVoiceRecording;
+
+  }
 
   const panelBtn = document.getElementById("panelPostBtn");
   if (panelBtn) {
     panelBtn.onclick = async () => {
       const input = document.getElementById("panelInput");
-      if (!input.value) return;
+     const text = input.value.trim();
+
+if (!text) return;
+
+panelBtn.disabled = true;
+      
+      const {
+    data: { session }
+} = await supabase.auth.getSession();
+
+if (!session) {
+    panelBtn.disabled = false;
+    return;
+}
 
       const { error } = await supabase
   .from("comments")
   .insert({
-    post_id: currentPostId,
-    content: input.value,
-    user_id: session.user.id,
-    name: session.user.email || "Guest"
-  });
+  post_id: currentPostId,
+  content: text,
+  user_id: session.user.id,
+  name: session.user.email || "Guest",
+  parent_id: window.replyingToComment,
+  reply_to_user_id: replyingToUserId,
+  media_url: null,
+  media_type: null
+});
+
+if (error) {
+    console.log(error);
+    panelBtn.disabled = false;
+    return;
+}
   
   // Notify post owner
 const { data: post } = await supabase
@@ -7535,24 +9615,193 @@ if (post && post.user_id !== session.user.id) {
   }
 }
 
-if (error) {
-  console.log(error);
-  return;
-}
+if (
+    replyingToUserId &&
+    replyingToUserId !== session.user.id
+) {
 
+    const { data: profile } = await supabase
+        .from("profiles")
+        .select("name, avatar_url")
+        .eq("id", session.user.id)
+        .single();
+
+    await supabase
+        .from("notifications")
+        .insert({
+            user_id: replyingToUserId,
+            sender_id: session.user.id,
+            username: profile.name,
+            avatar_url: profile.avatar_url,
+            type: "comment_reply",
+            post_id: currentPostId,
+            message: "replied to your comment",
+            read: false,
+            created_at: new Date()
+        });
+
+}
 
 input.value = "";
+
+// Reset reply mode
+replyingToComment = null;
+replyingToUserId = null;
+window.replyingToComment = null;
+input.placeholder = "Add a comment...";
+
+// Reload from the first page
+commentsPage = 0;
+hasMoreComments = true;
+loadingComments = false;
+
 loadComments(currentPostId);
+
+panelBtn.disabled = false;
     };
   }
 
-  const closeBtn = document.getElementById("closeComments");
-  if (closeBtn) {
+const closeBtn = document.getElementById("closeComments");
+
+if (closeBtn) {
+
     closeBtn.onclick = () => {
-      document.getElementById("commentsPanel").style.display = "none";
+
+        const panel = document.getElementById("commentsScreen");
+
+        panel.classList.remove("active");
+document.body.style.overflow = "";
+
+        if (commentsChannel) {
+            supabase.removeChannel(commentsChannel);
+            commentsChannel = null;
+        }
+
+        document.querySelectorAll("audio").forEach(audio => {
+            audio.pause();
+            audio.currentTime = 0;
+        });
+
+        if (window.currentVideo) {
+            window.currentVideo.play().catch(() => {});
+            window.currentVideo = null;
+        }
+
+        const media = document.getElementById("commentMediaContent");
+        if (media) {
+            media.innerHTML = "";
+        }
+
+        const comments = document.getElementById("panelComments");
+        if (comments) {
+            comments.innerHTML = "";
+        }
+        expandedReplies.clear();
+        reactionCommentId = null;
+        selectedCommentId = null;
+        selectedCommentUserId = null;
+
+        replyingToComment = null;
+        replyingToUserId = null;
+        window.replyingToComment = null;
+
+        commentsPage = 0;
+        hasMoreComments = true;
+        loadingComments = false;
+
+        const input = document.getElementById("panelInput");
+        if (input) {
+            input.value = "";
+            input.placeholder = "Add a comment...";
+        }
+
     };
+
+}
+
+const commentMenu = document.getElementById("commentMenu");
+
+const commentCancelBtn = document.getElementById("commentCancelBtn");
+const commentCopyBtn = document.getElementById("commentCopyBtn");
+const commentEditBtn = document.getElementById("commentEditBtn");
+const commentDeleteBtn = document.getElementById("commentDeleteBtn");
+const commentReactionBtn =
+    document.getElementById("commentReactionBtn");
+
+if (commentCancelBtn) {
+    commentCancelBtn.onclick = () => {
+        commentMenu.style.transform = "translateY(100%)";
+    };
+}
+
+if (commentCopyBtn) {
+    commentCopyBtn.onclick = () => {
+
+        const comment = document.querySelector(
+            `[data-comment="${selectedCommentId}"]`
+        );
+
+        if (comment) {
+            if (navigator.clipboard) {
+    navigator.clipboard.writeText(comment.innerText);
   }
 }
+        commentMenu.style.transform = "translateY(100%)";
+    };
+}
+
+if (commentEditBtn) {
+    commentEditBtn.onclick = () => {
+
+        commentMenu.style.transform = "translateY(100%)";
+
+        editComment(selectedCommentId);
+    };
+}
+
+if (commentDeleteBtn) {
+    commentDeleteBtn.onclick = () => {
+
+        commentMenu.style.transform = "translateY(100%)";
+
+        deleteComment(selectedCommentId);
+    };
+  }
+  
+  if (commentReactionBtn) {
+
+    commentReactionBtn.onclick = () => {
+
+        commentMenu.style.transform = "translateY(100%)";
+
+        openReactionPicker(selectedCommentId);
+
+    };
+
+}
+  
+  if (!reactionPickerListenerAdded) {
+
+    reactionPickerListenerAdded = true;
+
+    document.addEventListener("click", (e) => {
+
+        const picker = document.getElementById("reactionPicker");
+
+        if (!picker) return;
+
+        if (
+            !picker.contains(e.target) &&
+            !e.target.closest("#commentReactionBtn")
+        ) {
+            picker.style.transform = "translateX(-50%) scale(0)";
+        }
+
+    });
+
+}
+}
+
 
 window.openSearch = function () {
 
@@ -8263,11 +10512,16 @@ box-sizing:border-box;
   id="savedBtn"
   onclick="openSavedPosts()"
   style="
-    background:none;
-    border:none;
-    color:white;
-    font-size:22px;
-    cursor:pointer;
+background:none;
+width:44px;
+height:44px;
+border:none;
+color:white;
+font-size:26px;
+position:relative;
+display:flex;
+align-items:center;
+justify-content:center;
   "
 >
   🔖
@@ -8340,45 +10594,215 @@ box-sizing:border-box;
 
     </div>
 
-    <div id="commentsPanel" style="
-      position:fixed;
-      bottom:0;
-      left:0;
-      right:0;
-      height:60%;
-      background:#111;
-      color:white;
-      display:none;
-      flex-direction:column;
-      padding:10px;
-      z-index:1000;
-    ">
-      <span id="closeComments">✖</span>
+<div id="commentsScreen" style="
+position:fixed;
+inset:0;
+display:none;
+flex-direction:column;
+background:#000;
+z-index:999999;
+overflow-y:auto;
+-webkit-overflow-scrolling:touch;
+">
 
-      <div id="panelComments"></div>
+    <!-- Top Media -->
+   <div id="commentMedia" style="
+min-height:40vh;
+background:#000;
+display:flex;
+align-items:center;
+justify-content:center;
+overflow:hidden;
+">
 
-      <input id="panelInput" />
+       <div
+id="closeComments"
+onclick="closeComments()"
+style="
+position:absolute;
+top:15px;
+left:15px;
+width:40px;
+height:40px;
+border-radius:50%;
+background:rgba(0,0,0,.5);
+display:flex;
+align-items:center;
+justify-content:center;
+color:#fff;
+font-size:24px;
+cursor:pointer;
+z-index:10;
+">
+←
+</div>
 
-      <button id="panelPostBtn">
-        Post
-      </button>
+       <div id="commentMediaContent" style="
+width:100%;
+height:100%;
+display:flex;
+align-items:center;
+justify-content:center;
+overflow:hidden;
+"></div>
 
     </div>
+
+    <!-- Bottom Comments -->
+  <div id="commentsBody" style="
+background:var(--card);
+">
+
+        <div style="
+        padding:15px;
+        text-align:center;
+        font-weight:bold;
+        border-bottom:1px solid rgba(255,255,255,.08);
+        ">
+        Comments
+        </div>
+
+<div id="panelComments" style="
+padding:12px;
+overflow:visible;
+"></div>
+
+        <div style="
+        display:flex;
+        gap:10px;
+        padding:12px;
+        border-top:1px solid rgba(255,255,255,.08);
+        ">
+
+            <input
+            id="panelInput"
+            placeholder="Add a comment..."
+            style="
+            flex:1;
+            background:#222;
+            color:white;
+            border:none;
+            outline:none;
+            padding:12px;
+            border-radius:25px;
+            ">
+
+            <button
+            id="voiceBtn"
+            type="button"
+            style="
+            width:45px;
+            height:45px;
+            border:none;
+            border-radius:50%;
+            background:#222;
+            color:white;
+            ">
+            🎤
+            </button>
+
+            <button
+            id="panelPostBtn"
+            style="
+            padding:0 20px;
+            border:none;
+            border-radius:25px;
+            background:#0095f6;
+            color:white;
+            ">
+            Post
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div id="commentMenu" style="
+position:fixed;
+left:0;
+right:0;
+bottom:0;
+background:var(--card);
+color:var(--text);
+border-top-left-radius:18px;
+border-top-right-radius:18px;
+transform:translateY(100%);
+transition:transform .25s ease;
+z-index:1000000;
+">
+
+<div id="commentReactionBtn" class="menu-item">
+😀 React
+</div>
+
+<div id="commentCopyBtn" class="menu-item">
+📋 Copy
+</div>
+
+<div id="commentEditBtn" class="menu-item">
+✏️ Edit
+</div>
+
+<div id="commentDeleteBtn" class="menu-item" style="color:#ff3b30;">
+🗑 Delete
+</div>
+
+<div id="commentCancelBtn" class="menu-item">
+Cancel
+</div>
+
+<div id="reactionPicker" style="
+position:fixed;
+left:50%;
+bottom:90px;
+transform:translateX(-50%) scale(0);
+transition:.2s;
+background:#222;
+padding:10px;
+border-radius:30px;
+display:flex;
+gap:8px;
+z-index:1000001;
+box-shadow:0 4px 20px rgba(0,0,0,.4);
+">
+
+<span onclick="selectCommentReaction('😀')" style="font-size:26px;cursor:pointer;">😀</span>
+<span onclick="selectCommentReaction('❤️')" style="font-size:26px;cursor:pointer;">❤️</span>
+<span onclick="selectCommentReaction('😂')" style="font-size:26px;cursor:pointer;">😂</span>
+<span onclick="selectCommentReaction('😮')" style="font-size:26px;cursor:pointer;">😮</span>
+<span onclick="selectCommentReaction('😢')" style="font-size:26px;cursor:pointer;">😢</span>
+<span onclick="selectCommentReaction('😡')" style="font-size:26px;cursor:pointer;">😡</span>
+<span onclick="selectCommentReaction('🔥')" style="font-size:26px;cursor:pointer;">🔥</span>
+<span onclick="selectCommentReaction('👍')" style="font-size:26px;cursor:pointer;">👍</span>
+
+</div>
+
+</div>
   `;
 
   postsEl = document.getElementById("posts");
 
-loadPosts();
-loadStories();
+await loadPosts();
+await loadStories();
 setupScrollSnap();
 
 adjustStoryBar();
 
 if (session && currentUser) {
 
+    try {
     await updateOnlineStatus(true);
+} catch (err) {
+    console.log(err);
+}
 
+    try {
     await registerPush();
+} catch (err) {
+    console.log("Push registration failed:", err);
+}
 
     await loadUnreadCount();
 
@@ -8391,10 +10815,12 @@ setTimeout(attachEvents, 0);
 setActiveTopButton("homeBtn");
 }
 
-window.addEventListener("beforeunload",()=>{
-
-  updateOnlineStatus(false);
-
+window.addEventListener("beforeunload", () => {
+    try {
+        updateOnlineStatus(false);
+    } catch (err) {
+        console.log(err);
+    }
 });
 
 // =====================================================
@@ -11113,6 +13539,7 @@ container.style.cssText = `
   justify-content:center;
   overflow:hidden;
   position:relative;
+  z-index:1;
 `;
 
   // IMAGE
@@ -11406,32 +13833,15 @@ video.muted = window.storyMuted ?? true;
   // VARIABLES
   // =========================
 
- startX = 0;
+let startX = 0;
+let startY = 0;
 
-moved = false;
+let moved = false;
 
-brightness = 1;
+let brightness = 1;
+let startBrightness = 1;
 
-startBrightness = 1;
-startVolume = video.volume;
-
-  // =========================
-  // TOUCH START
-  // =========================
-
-  video.addEventListener("touchstart", e => {
-
-    if (e.touches.length !== 1) return;
-
-    moved = false;
-
-    startY = e.touches[0].clientY;
-    startX = e.touches[0].clientX;
-
-    startBrightness = brightness;
-    startVolume = video.volume;
-
-  }, { passive:false });
+let startVolume = 1;
 
   // =========================
   // TOUCH MOVE
@@ -11496,19 +13906,30 @@ startVolume = video.volume;
 
   }, { passive:false });
 
-  // =========================
-  // TOUCH END
-  // =========================
+// =========================
+// TOUCH START
+// =========================
+video.addEventListener("touchstart", e => {
 
-  video.addEventListener("touchend", () => {
+    if (e.touches.length !== 1) return;
+
+    moved = false;
+
+    startY = e.touches[0].clientY;
+    startX = e.touches[0].clientX;
+
+    startBrightness = brightness;
+    startVolume = video.volume;
+
+}, { passive:false });
+
+video.addEventListener("touchend", () => {
 
     setTimeout(() => {
-
-      gestureOverlay.style.opacity = "0";
-
+        gestureOverlay.style.opacity = "0";
     }, 500);
 
-  });
+});
 
   // =========================
   // TAP PLAY / PAUSE
@@ -11997,29 +14418,6 @@ if (!window.postsSubscription) {
         upsertPost(payload.new);
 
         loadPosts();
-
-      }
-    )
-    .subscribe();
-
-}
-
-if (!window.commentsSubscription) {
-
-  window.commentsSubscription = supabase
-    .channel("comments_realtime")
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "comments"
-      },
-      (payload) => {
-
-        if (payload.new.post_id === currentPostId) {
-          loadComments(currentPostId);
-        }
 
       }
     )
