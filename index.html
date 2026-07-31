@@ -5692,7 +5692,9 @@ const { data: saved, error } = await supabase
 let reactionPickerListenerAdded = false;
 let replyingToComment = null;
 let replyingToUserId = null;
+
 window.replyingToComment = null;
+window.replyingToUserId = null;
 let commentsChannel = null;
 let expandedReplies = new Set();
 let commentsPage = 0;
@@ -5710,6 +5712,8 @@ window.replyDepth = "parent";
 const replyPages = {};
 const REPLIES_PER_PAGE = 20;
 let selectedCommentMedia = null;
+window.expandedReplies = new Set();
+window.replyPages = {};
 
 
 window.openComments = async (postId) => {
@@ -5717,6 +5721,10 @@ window.openComments = async (postId) => {
   console.log("💬 opening comments for:", postId);
 
   currentPostId = postId;
+  
+  commentDebug("COMMENTS OPENED", {
+    currentPostId: currentPostId
+});
 
 const panel = document.getElementById("commentsScreen");
 
@@ -6294,8 +6302,8 @@ function renderComment(c, myId) {
 <div
 id="comment-${c.id}"
 class="commentItem"
-onclick="commentDoubleTap(${c.id})"
-oncontextmenu="event.preventDefault();openCommentMenu(${c.id}, '${c.user_id}')"
+onclick="commentDoubleTap('${c.id}')"
+oncontextmenu="event.preventDefault();openCommentMenu('${c.id}', '${c.user_id}')"
 
 ontouchstart="
 commentPressStart(event, ${c.id}, '${c.user_id}');
@@ -6510,7 +6518,7 @@ gap:12px;
 
 <span
 id="commentLike-${c.id}"
-onclick="likeComment(${c.id})"
+onclick="event.stopPropagation(); likeComment('${c.id}')"
 style="
 display:flex;
 align-items:center;
@@ -6534,7 +6542,7 @@ ${c.comment_likes?.length || 0}
 </span>
 
 <span
-onclick="replyToComment(${c.id}, '${escapeHtml(c.profiles?.name || "Unknown User")}', '${c.user_id}')"
+onclick="event.stopPropagation(); replyToComment('${c.id}', ${JSON.stringify(c.profiles?.name || "Unknown User")}, '${c.user_id}')"
 style="
 display:flex;
 align-items:center;
@@ -6573,265 +6581,677 @@ ${renderCommentReads(c)}
 `;
 }
 
-function renderReply(c) {
+function renderReply(comment) {
 
-    return `
-    <div
-class="commentItem"
-style="
-display:flex;
-gap:10px;
-margin:10px 0;
-">
+    if (!comment) return "";
 
-        <img
-        src="${c.profiles?.avatar_url || 'https://via.placeholder.com/32'}"
-        style="
-        width:32px;
-        height:32px;
-        border-radius:50%;
-        object-fit:cover;
-        ">
+    const profile = comment.profiles || {};
 
-        <div>
+    const userId = comment.user_id || "";
+    const name = profile.name || comment.name || "User";
+    const avatar = profile.avatar_url || "";
 
-            <b>
-                ${escapeHtml(c.profiles?.name || "Unknown User")}
-            </b>
+    const content = comment.content || "";
 
-            ${c.profiles?.verified ? "✔️" : ""}
-            
-  <div style="
-font-size:12px;
-color:#888;
-margin-top:2px;
-">
-${formatCommentTime(c.created_at)}
-${c.edited ? " • Edited" : ""}
-</div>
+    const safeName = escapeHtml(name);
+    const safeContent = escapeHtml(content);
 
-   ${
-    c.reply_user
-    ? `<div
-         onclick="openProfile('${c.reply_user.id}', '${escapeHtml(c.reply_user.name)}')"
-         style="
-         font-size:12px;
-         color:#0095f6;
-         cursor:pointer;
-         font-weight:600;
-         ">
-         Replying to @${escapeHtml(c.reply_user.name)}
-       </div>`
-    : ""
-}
+    const createdAt = formatCommentTime(comment.created_at);
 
-${
-c.media_type === "voice"
-? `
-<div class="voice-message">
+    const isEdited = comment.edited === true;
 
-<button
-onclick="toggleVoice('${c.id}')"
-id="voiceBtn-${c.id}"
-class="voicePlayBtn">
-▶
-</button>
+    const isPinned = comment.pinned === true;
 
-<div class="voiceProgress">
-    <div
-    id="voiceProgress-${c.id}"
-    class="voiceProgressBar">
-    </div>
-</div>
+    const likeCount =
+        Array.isArray(comment.comment_likes)
+            ? comment.comment_likes.length
+            : 0;
 
-<span
-id="voiceTime-${c.id}"
-class="voiceTime">
-0:00
-</span>
+    const reactionHtml =
+        renderCommentReactions(comment);
 
-<audio
-id="voiceAudio-${c.id}"
-src="${c.media_url}">
-</audio>
+    const readsHtml =
+        renderCommentReads(comment);
 
-</div>
-`
-: `
-<div style="margin-top:3px;">
-    ${formatCommentText(c.content || "")}
+    /*
+     * ------------------------------------------------
+     * MEDIA
+     * ------------------------------------------------
+     */
 
-    ${c.media_type === "image" && c.media_url ? `
-    <img
-    src="${c.media_url}"
-    onclick="openMediaViewer('${c.media_url}','image')"
-    style="
-    width:180px;
-    border-radius:12px;
-    margin-top:8px;
-    ">
-    ` : ""}
+    let mediaHtml = "";
 
+    if (
+        comment.media_url &&
+        comment.media_type === "image"
+    ) {
 
-    ${c.media_type === "video" && c.media_url ? `
-    <video
-    src="${c.media_url}"
-    controls
-    style="
-    width:180px;
-    border-radius:12px;
-    margin-top:8px;
-    ">
-    </video>
-    ` : ""}
+        mediaHtml = `
+            <div
+                class="commentMedia"
+                style="
+                    margin-top:8px;
+                    max-width:240px;
+                "
+            >
+                <img
+                    src="${escapeHtml(comment.media_url)}"
+                    alt="Comment image"
+                    style="
+                        width:100%;
+                        max-height:300px;
+                        object-fit:cover;
+                        border-radius:12px;
+                        cursor:pointer;
+                    "
+                    onclick="
+                        window.open(
+                            '${escapeHtml(comment.media_url)}',
+                            '_blank'
+                        )
+                    "
+                >
+            </div>
+        `;
 
-    ${
-        shouldShowTranslate(c.language_code)
-        ? `
-        <div
-        id="translateBtn-${c.id}"
-        onclick="translateComment(${c.id})"
-        style="
-            margin-top:6px;
-            font-size:13px;
-            color:#0095f6;
-            cursor:pointer;
-            font-weight:600;
-        ">
-            🌐 See translation
-        </div>
-
-        <div
-        id="translation-${c.id}"
-        style="
-            display:none;
-            margin-top:8px;
-            color:#d0d0d0;
-            font-size:14px;
-            line-height:1.5;
-        ">
-        </div>
-        `
-        : ""
     }
 
-</div>
-`
-}
+    else if (
+        comment.media_url &&
+        comment.media_type === "video"
+    ) {
 
-${renderCommentReads(c)}
+        mediaHtml = `
+            <div
+                class="commentMedia"
+                style="
+                    margin-top:8px;
+                    max-width:260px;
+                "
+            >
+                <video
+                    src="${escapeHtml(comment.media_url)}"
+                    controls
+                    playsinline
+                    preload="metadata"
+                    style="
+                        width:100%;
+                        max-height:320px;
+                        border-radius:12px;
+                        display:block;
+                    "
+                ></video>
+            </div>
+        `;
 
-<div class="commentReactions">
-    ${renderCommentReactions(c)}
-</div>
+    }
 
-<div style="
-margin-top:8px;
-display:flex;
-gap:10px;
-">
+    /*
+     * ------------------------------------------------
+     * VOICE COMMENT
+     * ------------------------------------------------
+     */
 
-<span
-onclick="likeComment(${c.id})"
-style="
-cursor:pointer;
-color:#ff3040;
-font-size:13px;
-">
-❤️ ${c.comment_likes?.length || 0}
-</span>
+    else if (
+        comment.media_url &&
+        comment.media_type === "voice"
+    ) {
 
-<span
-onclick="replyToComment(
-${c.id},
-'${escapeHtml(c.profiles?.name || "Unknown User")}',
-'${c.user_id}'
-)"
-style="
-cursor:pointer;
-color:#0095f6;
-font-size:13px;
-">
-Reply
-</span>
+        mediaHtml = `
+            <div
+                class="commentVoice"
+                style="
+                    margin-top:8px;
+                    display:flex;
+                    align-items:center;
+                    gap:10px;
+                    background:#202020;
+                    padding:9px 12px;
+                    border-radius:18px;
+                    width:220px;
+                "
+            >
 
-</div>
+                <button
+                    id="voiceBtn-${comment.id}"
+                    onclick="toggleVoice('${comment.id}')"
+                    style="
+                        width:36px;
+                        height:36px;
+                        border:0;
+                        border-radius:50%;
+                        background:#333;
+                        color:white;
+                        font-size:16px;
+                        cursor:pointer;
+                    "
+                >
+                    ▶
+                </button>
 
-        </div>
+                <div
+                    style="
+                        flex:1;
+                        min-width:0;
+                    "
+                >
 
-    </div>
-    `;
-}
+                    <div
+                        style="
+                            height:4px;
+                            background:#444;
+                            border-radius:4px;
+                            overflow:hidden;
+                        "
+                    >
+                        <div
+                            id="voiceProgress-${comment.id}"
+                            style="
+                                width:0%;
+                                height:100%;
+                                background:#fff;
+                            "
+                        ></div>
+                    </div>
 
-function renderReplyTree(reply, allReplies) {
+                    <div
+                        id="voiceTime-${comment.id}"
+                        style="
+                            font-size:11px;
+                            color:#aaa;
+                            margin-top:4px;
+                        "
+                    >
+                        0:00
+                    </div>
 
-    const children = allReplies.filter(
-        r => r.parent_id === reply.id
-    );
+                </div>
 
-    return `
-        ${renderReply(reply)}
-
-        ${
-            children.length
-            ? `
-            <div style="
-                margin-left:28px;
-                border-left:2px solid rgba(255,255,255,.08);
-                padding-left:12px;
-            ">
-               <div
-id="thread-${reply.id}"
-style="display:none;"
->
-${children.map(c => renderReplyTree(c, allReplies)).join("")}
-</div>
-
-${children.length ? `
-<div
-onclick="toggleThread(${reply.id})"
-id="threadBtn-${reply.id}"
-style="
-margin:8px 0;
-color:#0095f6;
-font-size:13px;
-cursor:pointer;
-font-weight:600;
-">
-View ${children.length} ${children.length===1?"reply":"replies"}
-</div>
-` : ""}
+                <audio
+                    id="voiceAudio-${comment.id}"
+                    src="${escapeHtml(comment.media_url)}"
+                    preload="metadata"
+                    style="display:none;"
+                ></audio>
 
             </div>
+        `;
+
+    }
+
+    /*
+     * ------------------------------------------------
+     * TRANSLATION
+     * ------------------------------------------------
+     */
+
+    let translationHtml = "";
+
+    if (
+        comment.translated_text &&
+        comment.translation_status === "completed"
+    ) {
+
+        translationHtml = `
+            <div
+                id="translation-${comment.id}"
+                style="
+                    display:none;
+                    margin-top:7px;
+                    padding:8px 10px;
+                    background:#252525;
+                    border-radius:10px;
+                    font-size:14px;
+                    color:#ddd;
+                "
+            >
+                ${escapeHtml(comment.translated_text)}
+            </div>
+
+            <button
+                id="translateBtn-${comment.id}"
+                onclick="translateComment('${comment.id}')"
+                style="
+                    border:0;
+                    background:none;
+                    color:#8e8e8e;
+                    padding:4px 0;
+                    font-size:12px;
+                    cursor:pointer;
+                "
+            >
+                🌐 See translation
+            </button>
+        `;
+
+    }
+
+    else if (
+        comment.content &&
+        shouldShowTranslate(comment.language_code)
+    ) {
+
+        translationHtml = `
+            <div
+                id="translation-${comment.id}"
+                style="
+                    display:none;
+                    margin-top:7px;
+                    padding:8px 10px;
+                    background:#252525;
+                    border-radius:10px;
+                    font-size:14px;
+                    color:#ddd;
+                "
+            ></div>
+
+            <button
+                id="translateBtn-${comment.id}"
+                onclick="translateComment('${comment.id}')"
+                style="
+                    border:0;
+                    background:none;
+                    color:#8e8e8e;
+                    padding:4px 0;
+                    font-size:12px;
+                    cursor:pointer;
+                "
+            >
+                🌐 See translation
+            </button>
+        `;
+
+    }
+
+    /*
+     * ------------------------------------------------
+     * REPLY TO USER
+     * ------------------------------------------------
+     */
+
+    let replyToHtml = "";
+
+    if (
+        comment.reply_to_user_id &&
+        comment.reply_to_user
+    ) {
+
+        const replyName =
+            comment.reply_to_user.name || "User";
+
+        replyToHtml = `
+            <div
+                style="
+                    font-size:12px;
+                    color:#888;
+                    margin-bottom:4px;
+                "
+            >
+                Replying to
+                <b style="color:#aaa;">
+                    @${escapeHtml(replyName)}
+                </b>
+            </div>
+        `;
+
+    }
+
+    /*
+     * ------------------------------------------------
+     * VERIFIED BADGE
+     * ------------------------------------------------
+     */
+
+    const verifiedHtml =
+        profile.verified
+            ? `
+                <span
+                    style="
+                        color:#3897f0;
+                        font-size:12px;
+                        margin-left:3px;
+                    "
+                >
+                    ✓
+                </span>
             `
-            : ""
-        }
+            : "";
+
+    /*
+     * ------------------------------------------------
+     * AVATAR
+     * ------------------------------------------------
+     */
+
+    const avatarHtml = avatar
+        ? `
+            <img
+                src="${escapeHtml(avatar)}"
+                alt="${safeName}"
+                style="
+                    width:34px;
+                    height:34px;
+                    border-radius:50%;
+                    object-fit:cover;
+                    flex-shrink:0;
+                    cursor:pointer;
+                "
+                onclick="
+                    openProfile(
+                        '${userId}',
+                        '${safeName.replace(/'/g, "\\'")}'
+                    )
+                "
+            >
+        `
+        : `
+            <div
+                style="
+                    width:34px;
+                    height:34px;
+                    border-radius:50%;
+                    background:#333;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    font-weight:bold;
+                    flex-shrink:0;
+                "
+            >
+                ${escapeHtml(name.charAt(0).toUpperCase())}
+            </div>
+        `;
+
+    /*
+     * ------------------------------------------------
+     * NESTED REPLY CONTAINER
+     * ------------------------------------------------
+     */
+
+    const nestedRepliesId =
+        "replies-" + comment.id;
+
+    /*
+     * ------------------------------------------------
+     * MAIN HTML
+     * ------------------------------------------------
+     */
+
+    return `
+        <div
+            id="comment-${comment.id}"
+            data-comment="${comment.id}"
+            class="commentCard replyCard"
+            data-parent-id="${comment.parent_id || ""}"
+            data-user-id="${userId}"
+            ontouchstart="
+                commentSwipeStart(
+                    event,
+                    '${comment.id}',
+                    '${safeName.replace(/'/g, "\\'")}',
+                    '${userId}'
+                )
+            "
+            ontouchmove="commentSwipeMove(event)"
+            ontouchend="commentSwipeEnd()"
+            onmousedown="
+                commentPressStart(
+                    event,
+                    '${comment.id}',
+                    '${userId}'
+                )
+            "
+            onmouseup="commentPressEnd()"
+            onmouseleave="commentPressEnd()"
+            oncontextmenu="
+                commentPressStart(
+                    event,
+                    '${comment.id}',
+                    '${userId}'
+                )
+            "
+            ondblclick="
+                commentDoubleTap('${comment.id}')
+            "
+            style="
+                position:relative;
+                display:flex;
+                gap:9px;
+                padding:9px 0 9px 38px;
+                transition:transform .2s ease;
+            "
+        >
+
+            ${avatarHtml}
+
+            <div
+                style="
+                    flex:1;
+                    min-width:0;
+                "
+            >
+
+                <div
+                    style="
+                        display:flex;
+                        align-items:center;
+                        gap:4px;
+                        flex-wrap:wrap;
+                    "
+                >
+
+                    <b
+                        style="
+                            font-size:14px;
+                            cursor:pointer;
+                        "
+                        onclick="
+                            openProfile(
+                                '${userId}',
+                                '${safeName.replace(/'/g, "\\'")}'
+                            )
+                        "
+                    >
+                        ${safeName}
+                    </b>
+
+                    ${verifiedHtml}
+
+                    ${
+                        isPinned
+                            ? `
+                                <span
+                                    style="
+                                        font-size:11px;
+                                        color:#aaa;
+                                    "
+                                >
+                                    📌 Pinned
+                                </span>
+                            `
+                            : ""
+                    }
+
+                    <span
+                        style="
+                            color:#777;
+                            font-size:11px;
+                        "
+                    >
+                        ${createdAt}
+                    </span>
+
+                    ${
+                        isEdited
+                            ? `
+                                <span
+                                    style="
+                                        color:#777;
+                                        font-size:11px;
+                                    "
+                                >
+                                    · edited
+                                </span>
+                            `
+                            : ""
+                    }
+
+                </div>
+
+                ${replyToHtml}
+
+                ${
+                    content
+                        ? `
+                            <div
+                                data-comment="${comment.id}"
+                                style="
+                                    margin-top:3px;
+                                    font-size:14px;
+                                    line-height:1.4;
+                                    word-break:break-word;
+                                "
+                            >
+                                ${safeContent}
+                            </div>
+                        `
+                        : ""
+                }
+
+                ${mediaHtml}
+
+                ${translationHtml}
+
+                <div
+                    style="
+                        display:flex;
+                        align-items:center;
+                        gap:7px;
+                        margin-top:6px;
+                        flex-wrap:wrap;
+                    "
+                >
+
+                    <button
+                        id="commentLike-${comment.id}"
+                        onclick="
+                            event.stopPropagation();
+                            likeComment('${comment.id}')
+                        "
+                        style="
+                            border:0;
+                            background:#232323;
+                            color:white;
+                            border-radius:15px;
+                            padding:4px 8px;
+                            cursor:pointer;
+                            font-size:12px;
+                        "
+                    >
+                        ❤️
+                        <span
+                            id="commentLikeCount-${comment.id}"
+                        >
+                            ${likeCount}
+                        </span>
+                    </button>
+
+                    <button
+                        onclick="
+                            event.stopPropagation();
+                            replyToComment(
+                                '${comment.id}',
+                                '${safeName.replace(/'/g, "\\'")}',
+                                '${userId}'
+                            )
+                        "
+                        style="
+                            border:0;
+                            background:none;
+                            color:#999;
+                            font-size:12px;
+                            cursor:pointer;
+                        "
+                    >
+                        Reply
+                    </button>
+
+                </div>
+
+                ${
+                    reactionHtml
+                        ? `
+                            <div
+                                class="commentReactions"
+                                style="
+                                    display:flex;
+                                    gap:5px;
+                                    flex-wrap:wrap;
+                                    margin-top:5px;
+                                "
+                            >
+                                ${reactionHtml}
+                            </div>
+                        `
+                        : `
+                            <div
+                                class="commentReactions"
+                                style="
+                                    display:flex;
+                                    gap:5px;
+                                    flex-wrap:wrap;
+                                    margin-top:5px;
+                                "
+                            ></div>
+                        `
+                }
+
+                ${readsHtml}
+
+               <div
+    class="replyThreadControls"
+    style="
+        margin-top:3px;
+    "
+>
+
+    <button
+        id="threadBtn-${comment.id}"
+        onclick="
+            event.stopPropagation();
+            toggleReplies('${comment.id}');
+        "
+        style="
+            display:none;
+            border:0;
+            background:none;
+            color:#8e8e8e;
+            font-size:12px;
+            padding:4px 0;
+            cursor:pointer;
+        "
+    >
+        View replies
+    </button>
+
+</div>
+
+<div
+    id="replies-${comment.id}"
+    class="nestedReplies"
+    style="
+        display:none;
+        margin-left:8px;
+        margin-top:3px;
+        border-left:1px solid #292929;
+        padding-left:8px;
+    "
+></div>
+
+            </div>
+
+        </div>
     `;
-}
-
-function toggleThread(replyId){
-
-const box=document.getElementById("thread-"+replyId);
-const btn=document.getElementById("threadBtn-"+replyId);
-
-if(!box||!btn) return;
-
-if(box.style.display==="none"){
-
-box.style.display="block";
-btn.textContent="Hide replies";
-
-}else{
-
-const count=box.children.length;
-
-box.style.display="none";
-
-btn.textContent=
-`View ${count} ${count===1?"reply":"replies"}`;
-
-}
-
 }
 
 window.loadMoreComments = function () {
@@ -6846,34 +7266,108 @@ window.loadMoreComments = function () {
 
 async function loadReplies(parentId) {
 
-    const container = document.getElementById("replies-" + parentId);
+    const container =
+        document.getElementById("replies-" + parentId);
 
     if (!container) return;
 
-    if (!replyPages[parentId]) {
-        replyPages[parentId] = 0;
-        container.innerHTML = "";
+    if (typeof replyPages === "undefined") {
+        window.replyPages = {};
     }
+
+    if (typeof replyPages[parentId] === "undefined") {
+        replyPages[parentId] = 0;
+    }
+
+    const page = replyPages[parentId];
+
+    const from =
+        page * REPLIES_PER_PAGE;
+
+    const to =
+        from + REPLIES_PER_PAGE - 1;
+
+    /*
+     * -----------------------------------------
+     * LOADING INDICATOR
+     * -----------------------------------------
+     */
+
+    let loading =
+        document.getElementById(
+            "loadingReplies-" + parentId
+        );
+
+    if (!loading) {
+
+        loading =
+            document.createElement("div");
+
+        loading.id =
+            "loadingReplies-" + parentId;
+
+        loading.textContent =
+            "Loading replies...";
+
+        loading.style.cssText = `
+            color:#888;
+            font-size:12px;
+            padding:8px 0;
+        `;
+
+        container.appendChild(loading);
+    }
+
+    /*
+     * -----------------------------------------
+     * CURRENT USER
+     * -----------------------------------------
+     */
 
     const {
         data: { session }
     } = await supabase.auth.getSession();
 
-    const myId = session?.user?.id;
+    const myId =
+        session?.user?.id || null;
 
-    const from = replyPages[parentId] * REPLIES_PER_PAGE;
-    const to = from + REPLIES_PER_PAGE - 1;
+    /*
+     * -----------------------------------------
+     * LOAD REPLIES
+     * -----------------------------------------
+     */
 
-    const { data, error } = await supabase
+    const {
+        data,
+        error
+    } = await supabase
         .from("comments")
         .select(`
             *,
-            profiles(*),
-            comment_likes(user_id),
-            comment_reactions(user_id, emoji),
+
+            profiles(
+                id,
+                name,
+                avatar_url,
+                verified
+            ),
+
+            comment_likes(
+                user_id
+            ),
+
+            comment_reactions(
+                user_id,
+                emoji
+            ),
+
             comment_reads(
                 user_id,
-                profiles(id,name)
+
+                profiles(
+                    id,
+                    name
+                )
             )
         `)
         .eq("parent_id", parentId)
@@ -6882,46 +7376,440 @@ async function loadReplies(parentId) {
         })
         .range(from, to);
 
-    if (error) return;
+    loading?.remove();
 
-    data.forEach(comment => {
+    if (error) {
 
-        container.insertAdjacentHTML(
-            "beforeend",
-            renderComment(comment, myId)
+        console.error(
+            "loadReplies error:",
+            error
         );
 
-    });
-
-    container.style.display = "block";
-
-    replyPages[parentId]++;
-
-    if (data.length === REPLIES_PER_PAGE) {
-
-        let more = document.getElementById(
-            "moreReplies-" + parentId
+        showToast(
+            "Couldn't load replies."
         );
 
-        if (!more) {
+        return;
+    }
 
-            more = document.createElement("button");
+    /*
+     * -----------------------------------------
+     * NO REPLIES
+     * -----------------------------------------
+     */
 
-            more.id = "moreReplies-" + parentId;
+    if (!data || data.length === 0) {
 
-            more.textContent = "Load more replies";
+        if (page === 0) {
 
-            more.onclick = () => loadReplies(parentId);
-
-            container.appendChild(more);
+            container.insertAdjacentHTML(
+                "beforeend",
+                `
+                <div
+                    class="noReplies"
+                    style="
+                        color:#777;
+                        font-size:12px;
+                        padding:8px 0 8px 10px;
+                    "
+                >
+                    No replies yet.
+                </div>
+                `
+            );
 
         }
 
+        return;
+    }
+
+    /*
+     * Remove old load-more button
+     */
+
+    document
+        .getElementById(
+            "moreReplies-" + parentId
+        )
+        ?.remove();
+
+    /*
+     * Remove "No replies yet"
+     */
+
+    container
+        .querySelector(".noReplies")
+        ?.remove();
+
+    /*
+     * -----------------------------------------
+     * INSERT REPLIES
+     * -----------------------------------------
+     */
+
+    for (const reply of data) {
+
+        /*
+         * Prevent duplicates
+         */
+
+        if (
+            document.getElementById(
+                "comment-" + reply.id
+            )
+        ) {
+            continue;
+        }
+
+        /*
+         * -------------------------------------
+         * RENDER
+         * -------------------------------------
+         */
+
+        const html =
+            renderReply(reply);
+
+        /*
+         * Insert into thread
+         */
+
+        const moreButton =
+            document.getElementById(
+                "moreReplies-" + parentId
+            );
+
+        if (moreButton) {
+
+            moreButton.insertAdjacentHTML(
+                "beforebegin",
+                html
+            );
+
+        } else {
+
+            container.insertAdjacentHTML(
+                "beforeend",
+                html
+            );
+
+        }
+
+        /*
+         * -------------------------------------
+         * MARK REPLY AS SEEN
+         * -------------------------------------
+         */
+
+        if (
+            myId &&
+            !reply.comment_reads?.some(
+                r => r.user_id === myId
+            )
+        ) {
+
+            await supabase
+                .from("comment_reads")
+                .upsert(
+                    {
+                        comment_id: reply.id,
+                        user_id: myId
+                    },
+                    {
+                        onConflict:
+                            "comment_id,user_id"
+                    }
+                );
+
+        }
+
+        /*
+         * -------------------------------------
+         * CHECK FOR NESTED REPLIES
+         * -------------------------------------
+         */
+
+        await loadNestedReplyButton(
+            reply.id
+        );
+
+    }
+
+    /*
+     * -----------------------------------------
+     * ADVANCE PAGE
+     * -----------------------------------------
+     */
+
+    replyPages[parentId]++;
+
+    /*
+     * -----------------------------------------
+     * SHOW THREAD
+     * -----------------------------------------
+     */
+
+    container.style.display = "block";
+
+    if (
+        typeof expandedReplies !== "undefined"
+    ) {
+
+        expandedReplies.add(
+            parentId
+        );
+
+    }
+
+    /*
+     * -----------------------------------------
+     * MAIN THREAD BUTTON
+     * -----------------------------------------
+     */
+
+    const threadButton =
+        document.getElementById(
+            "threadBtn-" + parentId
+        );
+
+    if (threadButton) {
+
+        threadButton.style.display =
+            "block";
+
+        threadButton.textContent =
+            "Hide replies";
+
+    }
+
+    /*
+     * -----------------------------------------
+     * LOAD MORE
+     * -----------------------------------------
+     */
+
+    if (
+        data.length === REPLIES_PER_PAGE
+    ) {
+
+        let moreButton =
+            document.getElementById(
+                "moreReplies-" + parentId
+            );
+
+        if (!moreButton) {
+
+            moreButton =
+                document.createElement("button");
+
+            moreButton.id =
+                "moreReplies-" + parentId;
+
+            moreButton.textContent =
+                "Load more replies";
+
+            moreButton.style.cssText = `
+                display:block;
+                border:0;
+                background:none;
+                color:#8e8e8e;
+                font-size:12px;
+                padding:8px 0 8px 10px;
+                cursor:pointer;
+            `;
+
+            moreButton.onclick = async () => {
+
+                moreButton.disabled = true;
+
+                try {
+
+                    await loadReplies(
+                        parentId
+                    );
+
+                } finally {
+
+                    if (
+                        document.body.contains(
+                            moreButton
+                        )
+                    ) {
+
+                        moreButton.disabled =
+                            false;
+
+                    }
+
+                }
+
+            };
+
+            container.appendChild(
+                moreButton
+            );
+
+        }
+
+    }
+
+}
+
+
+/* =====================================================
+   CHECK FOR NESTED REPLIES
+===================================================== */
+
+async function loadNestedReplyButton(parentId) {
+
+    /*
+     * Find the actual reply card
+     */
+
+    const card =
+        document.getElementById(
+            "comment-" + parentId
+        );
+
+    if (!card) return;
+
+
+    /*
+     * Find its nested replies container
+     */
+
+    const replies =
+        document.getElementById(
+            "replies-" + parentId
+        );
+
+    if (!replies) return;
+
+
+    /*
+     * Count direct children
+     */
+
+    const {
+        count,
+        error
+    } = await supabase
+        .from("comments")
+        .select("*", {
+            count: "exact",
+            head: true
+        })
+        .eq(
+            "parent_id",
+            parentId
+        );
+
+
+    if (error) {
+
+        console.error(
+            "Nested reply count:",
+            error
+        );
+
+        return;
+    }
+
+
+    /*
+     * Find thread button
+     */
+
+    let button =
+        document.getElementById(
+            "threadBtn-" + parentId
+        );
+
+
+    /*
+     * No children
+     */
+
+    if (!count || count <= 0) {
+
+        if (button) {
+            button.remove();
+        }
+
+        return;
+    }
+
+
+    /*
+     * Create button if missing
+     */
+
+    if (!button) {
+
+        button =
+            document.createElement(
+                "button"
+            );
+
+        button.id =
+            "threadBtn-" + parentId;
+
+        button.style.cssText = `
+            border:0;
+            background:none;
+            color:#8e8e8e;
+            font-size:12px;
+            padding:4px 0;
+            cursor:pointer;
+            display:block;
+        `;
+
+        button.onclick =
+            async function(e) {
+
+                e.stopPropagation();
+
+                await toggleReplies(
+                    parentId
+                );
+
+            };
+
+
+        /*
+         * Put button immediately
+         * before nested replies.
+         */
+
+        replies.parentNode.insertBefore(
+            button,
+            replies
+        );
+
+    }
+
+
+    /*
+     * Update button text
+     */
+
+    if (
+        expandedReplies.has(
+            parentId
+        )
+    ) {
+
+        button.textContent =
+            "Hide replies";
+
     } else {
 
-        document
-            .getElementById("moreReplies-" + parentId)
-            ?.remove();
+        button.textContent =
+            `View ${count} ${
+                count === 1
+                    ? "reply"
+                    : "replies"
+            }`;
 
     }
 
@@ -6933,70 +7821,192 @@ async function insertComment(commentId) {
         data: { session }
     } = await supabase.auth.getSession();
 
-    const myId = session?.user?.id || null;
+    const myId =
+        session?.user?.id || null;
 
-    const { data: comment, error } = await supabase
+    const {
+        data: comment,
+        error
+    } = await supabase
         .from("comments")
         .select(`
             *,
-            profiles(*),
-            comment_likes(user_id),
-            comment_reactions(user_id, emoji),
+
+            profiles(
+                id,
+                name,
+                avatar_url,
+                verified
+            ),
+
+            comment_likes(
+                user_id
+            ),
+
+            comment_reactions(
+                user_id,
+                emoji
+            ),
+
             comment_reads(
                 user_id,
-                profiles(id, name)
+
+                profiles(
+                    id,
+                    name
+                )
             )
         `)
         .eq("id", commentId)
         .single();
 
-    if (error || !comment) return;
+    if (error || !comment) {
+        console.error(
+            "insertComment error:",
+            error
+        );
+        return;
+    }
 
-    const html = renderComment(comment, myId);
+    if (
+        document.getElementById(
+            "comment-" + comment.id
+        )
+    ) {
+        return;
+    }
 
-// Don't insert duplicates
-if (document.getElementById("comment-" + comment.id)) return;
+    if (!comment.parent_id) {
 
-// Reply
-if (comment.parent_id) {
+        const container =
+            document.getElementById(
+                "panelComments"
+            );
 
-    const replies = document.getElementById(
-        "replies-" + comment.parent_id
-    );
+        if (!container) return;
 
-    if (replies) {
-
-        replies.insertAdjacentHTML(
-            "beforeend",
-            html
+        container.insertAdjacentHTML(
+            "afterbegin",
+            renderComment(
+                comment,
+                myId
+            )
         );
 
-        replies.style.display = "block";
-
-        expandedReplies.add(comment.parent_id);
-
-        const btn = replies.previousElementSibling;
-
-        if (btn) {
-            btn.textContent = "Hide replies";
-        }
+        await loadNestedReplyButton(
+            comment.id
+        );
 
         return;
     }
 
-}
+    let parentReplies =
+        document.getElementById(
+            "replies-" + comment.parent_id
+        );
 
-// Top-level comment
-const container = document.getElementById("panelComments");
+    if (!parentReplies) {
 
-if (container) {
+        const parentCard =
+            document.getElementById(
+                "comment-" +
+                comment.parent_id
+            );
 
-    container.insertAdjacentHTML(
-        "afterbegin",
-        html
+        if (!parentCard) {
+
+            return;
+        }
+
+        parentReplies =
+            document.createElement(
+                "div"
+            );
+
+        parentReplies.id =
+            "replies-" +
+            comment.parent_id;
+
+        parentReplies.className =
+            "nestedReplies";
+
+        parentReplies.style.cssText = `
+            display:block;
+            margin-top:3px;
+        `;
+
+        parentCard.appendChild(
+            parentReplies
+        );
+
+    }
+
+    parentReplies.insertAdjacentHTML(
+        "beforeend",
+        renderReply(comment)
     );
 
-}
+    parentReplies.style.display =
+        "block";
+
+
+    if (
+        typeof expandedReplies !==
+        "undefined"
+    ) {
+
+        expandedReplies.add(
+            comment.parent_id
+        );
+
+    }
+
+    const threadButton =
+        document.getElementById(
+            "threadBtn-" +
+            comment.parent_id
+        );
+
+    if (threadButton) {
+
+        threadButton.style.display =
+            "block";
+
+        threadButton.textContent =
+            "Hide replies";
+
+    }
+
+    if (
+        myId &&
+        !comment.comment_reads?.some(
+            read =>
+                read.user_id === myId
+        )
+    ) {
+
+        await supabase
+            .from("comment_reads")
+            .upsert(
+                {
+                    comment_id:
+                        comment.id,
+
+                    user_id:
+                        myId
+                },
+                {
+                    onConflict:
+                        "comment_id,user_id"
+                }
+            );
+
+    }
+
+    await loadNestedReplyButton(
+        comment.id
+    );
+
 }
 
 async function updateReplyCount(parentId) {
@@ -7132,33 +8142,100 @@ async function translateText(text, source, target) {
 
 }
 
-function toggleReplies(commentId) {
+async function toggleReplies(parentId) {
 
-    const replies = document.getElementById(`replies-${commentId}`);
-    if (!replies) return;
+    const container =
+        document.getElementById("replies-" + parentId);
 
-    const button = replies.previousElementSibling;
+    const button =
+        document.getElementById("threadBtn-" + parentId);
 
-    if (replies.style.display === "none") {
+    if (!container || !button) return;
 
-        replies.style.display = "block";
-        expandedReplies.add(commentId);
+    if (
+        typeof expandedReplies === "undefined"
+    ) {
+        window.expandedReplies = new Set();
+    }
 
-        if (button) {
-            button.textContent = "Hide replies";
-        }
+    /*
+     * -----------------------------------------
+     * HIDE THREAD
+     * -----------------------------------------
+     */
 
-    } else {
+    if (expandedReplies.has(parentId)) {
 
-        replies.style.display = "none";
-        expandedReplies.delete(commentId);
+        expandedReplies.delete(parentId);
 
-        if (button) {
-            const count = replies.children.length;
-            button.textContent =
-                `View ${count} ${count === 1 ? "reply" : "replies"}`;
-        }
+        container.style.display = "none";
 
+        const {
+            count
+        } = await supabase
+            .from("comments")
+            .select("*", {
+                count: "exact",
+                head: true
+            })
+            .eq("parent_id", parentId);
+
+        button.textContent =
+            `View ${count || 0} ${
+                count === 1
+                    ? "reply"
+                    : "replies"
+            }`;
+
+        return;
+    }
+
+    /*
+     * -----------------------------------------
+     * SHOW THREAD
+     * -----------------------------------------
+     */
+
+    expandedReplies.add(parentId);
+
+    container.style.display = "block";
+
+    button.textContent = "Hide replies";
+
+    /*
+     * -----------------------------------------
+     * INITIALIZE PAGINATION
+     * -----------------------------------------
+     */
+
+    if (typeof replyPages === "undefined") {
+        window.replyPages = {};
+    }
+
+    if (
+        typeof replyPages[parentId] === "undefined"
+    ) {
+        replyPages[parentId] = 0;
+    }
+
+    /*
+     * -----------------------------------------
+     * LOAD REPLIES
+     * -----------------------------------------
+     */
+
+    await loadReplies(parentId);
+
+    /*
+     * -----------------------------------------
+     * KEEP BUTTON STATE
+     * -----------------------------------------
+     */
+
+    if (
+        expandedReplies.has(parentId)
+    ) {
+        button.textContent = "Hide replies";
     }
 
 }
@@ -7167,24 +8244,28 @@ function replyToComment(commentId, name, userId) {
 
     replyingToComment = commentId;
     window.replyingToComment = commentId;
+
     replyingToUserId = userId;
+
     window.replyDepth = "thread";
 
     const input = document.getElementById("panelInput");
 
+    if (!input) return;
+
     input.value = `@${name} `;
     input.placeholder = `Reply to ${name}...`;
-    
+
     const preview = document.getElementById("replyPreview");
     const previewText = document.getElementById("replyPreviewText");
 
     if (preview) {
-    preview.style.display = "block";
-}
+        preview.style.display = "block";
+    }
 
-if (previewText) {
-    previewText.textContent = name;
-}
+    if (previewText) {
+        previewText.textContent = name;
+    }
 
     input.focus();
 
@@ -7195,23 +8276,30 @@ if (previewText) {
 
 }
 
-function cancelReply(){
+window.cancelReply = function() {
 
-replyingToComment = null;
-replyingToUserId = null;
-window.replyingToComment = null;
+    replyingToComment = null;
+    replyingToUserId = null;
 
-const input = document.getElementById("panelInput");
-input.value = "";
-input.placeholder = "Add a comment...";
+    window.replyingToComment = null;
+    window.replyingToUserId = null;
 
-const preview = document.getElementById("replyPreview");
+    const input = document.getElementById("panelInput");
 
-if (preview) {
-    preview.style.display = "none";
-}
+    if (input) {
 
-}
+        input.value = "";
+        input.placeholder = "Add a comment...";
+
+    }
+
+    const preview = document.getElementById("replyPreview");
+
+    if (preview) {
+        preview.style.display = "none";
+    }
+
+};
 
 window.likeComment = async function(commentId) {
 
@@ -7222,125 +8310,363 @@ window.likeComment = async function(commentId) {
     if (!session) return;
 
     const userId = session.user.id;
-    
-    const button = document.getElementById("commentLike-" + commentId);
-const count = document.getElementById("commentLikeCount-" + commentId);
 
-    const { data: existing } = await supabase
+    const button =
+        document.getElementById(
+            "commentLike-" + commentId
+        );
+
+    const count =
+        document.getElementById(
+            "commentLikeCount-" + commentId
+        );
+
+    /*
+     * -----------------------------------------
+     * CHECK EXISTING LIKE
+     * -----------------------------------------
+     */
+
+    const {
+        data: existing,
+        error: existingError
+    } = await supabase
         .from("comment_likes")
         .select("id")
         .eq("comment_id", commentId)
         .eq("user_id", userId)
         .maybeSingle();
 
+    if (existingError) {
+
+        console.error(
+            "Check comment like:",
+            existingError
+        );
+
+        return;
+    }
+
+    /*
+     * -----------------------------------------
+     * UNLIKE
+     * -----------------------------------------
+     */
+
     if (existing) {
-      
-      if (button) button.style.background = "#232323";
 
-if (count) {
+        const { error } = await supabase
+            .from("comment_likes")
+            .delete()
+            .eq("id", existing.id);
 
-    count.textContent =
-        Math.max(0, Number(count.textContent) - 1);
+        if (error) {
 
-}
+            console.error(
+                "Unlike comment:",
+                error
+            );
 
-    await supabase
-        .from("comment_likes")
-        .delete()
-        .eq("id", existing.id);
+            return;
+        }
 
-    await supabase.rpc("decrement_comment_likes", {
-        comment_id_input: commentId
-    });
+        if (button) {
+            button.style.background =
+                "#232323";
+        }
 
-  
+        if (count) {
 
-} else {
-  
-  if (button) button.style.background = "#ff3040";
+            count.textContent =
+                Math.max(
+                    0,
+                    Number(count.textContent || 0) - 1
+                );
 
-if (count) {
+        }
 
-    count.textContent =
-        Number(count.textContent) + 1;
+        await supabase.rpc(
+            "decrement_comment_likes",
+            {
+                comment_id_input: commentId
+            }
+        );
 
-}
+        await updateSingleComment(
+            commentId
+        );
 
-    await supabase
-        .from("comment_likes")
-        .insert({
-            comment_id: commentId,
-            user_id: userId
-        });
+        return;
+    }
 
-    await supabase.rpc("increment_comment_likes", {
-        comment_id_input: commentId
-    });
-    
-     const { data: comment } = await supabase
-    .from("comments")
-    .select("user_id, post_id")
-    .eq("id", commentId)
-    .single();
+    /*
+     * -----------------------------------------
+     * LIKE
+     * -----------------------------------------
+     */
 
-if (comment && comment.user_id !== userId) {
-
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("name, avatar_url")
-        .eq("id", userId)
-        .single();
-
-    const { data: existingNotif } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", comment.user_id)
-        .eq("sender_id", userId)
-        .eq("type", "comment_like")
-        .eq("comment_id", commentId)
-        .maybeSingle();
-
-    if (existingNotif) {
-
+    const { error: insertError } =
         await supabase
-            .from("notifications")
-            .update({
-                count: (existingNotif.count || 1) + 1,
-                username: profile.name,
-                avatar_url: profile.avatar_url,
-                message: "liked your comment",
-                last_time: new Date(),
-                read: false
-            })
-            .eq("id", existingNotif.id);
-
-    } else {
-
-        await supabase
-            .from("notifications")
+            .from("comment_likes")
             .insert({
-                user_id: comment.user_id,
-                sender_id: userId,
-                username: profile.name,
-                avatar_url: profile.avatar_url,
-                type: "comment_like",
                 comment_id: commentId,
-                post_id: comment.post_id,
-                message: "liked your comment",
-                count: 1,
-                created_at: new Date(),
-                last_time: new Date(),
-                read: false
+                user_id: userId
             });
+
+    if (insertError) {
+
+        console.error(
+            "Like comment:",
+            insertError
+        );
+
+        return;
+    }
+
+    if (button) {
+        button.style.background =
+            "#ff3040";
+    }
+
+    if (count) {
+
+        count.textContent =
+            Number(count.textContent || 0) + 1;
 
     }
 
-}
+    await supabase.rpc(
+        "increment_comment_likes",
+        {
+            comment_id_input: commentId
+        }
+    );
 
-}
+    /*
+     * -----------------------------------------
+     * GET COMMENT OWNER
+     * -----------------------------------------
+     */
 
+    const {
+        data: comment,
+        error: commentError
+    } = await supabase
+        .from("comments")
+        .select("user_id, post_id")
+        .eq("id", commentId)
+        .single();
+
+    if (commentError || !comment) {
+
+        console.error(
+            "Get comment owner:",
+            commentError
+        );
+
+        await updateSingleComment(
+            commentId
+        );
+
+        return;
+    }
+
+    /*
+     * Don't notify yourself
+     */
+
+    if (comment.user_id === userId) {
+
+        await updateSingleComment(
+            commentId
+        );
+
+        return;
+    }
+
+    /*
+     * -----------------------------------------
+     * GET SENDER PROFILE
+     * -----------------------------------------
+     */
+
+    const { data: profile } =
+        await supabase
+            .from("profiles")
+            .select(
+                "name, avatar_url"
+            )
+            .eq("id", userId)
+            .single();
+
+    /*
+     * -----------------------------------------
+     * COMMENT LIKE NOTIFICATION
+     * -----------------------------------------
+     */
+
+    if (profile) {
+
+        const {
+            data: existingNotif
+        } = await supabase
+            .from("notifications")
+            .select("*")
+            .eq(
+                "user_id",
+                comment.user_id
+            )
+            .eq(
+                "sender_id",
+                userId
+            )
+            .eq(
+                "type",
+                "comment_like"
+            )
+            .eq(
+                "comment_id",
+                commentId
+            )
+            .maybeSingle();
+
+        if (existingNotif) {
+
+            await supabase
+                .from("notifications")
+                .update({
+                    count:
+                        (existingNotif.count || 1) + 1,
+
+                    username:
+                        profile.name,
+
+                    avatar_url:
+                        profile.avatar_url,
+
+                    message:
+                        "liked your comment",
+
+                    last_time:
+                        new Date(),
+
+                    read: false
+                })
+                .eq(
+                    "id",
+                    existingNotif.id
+                );
+
+        } else {
+
+            await supabase
+                .from("notifications")
+                .insert({
+                    user_id:
+                        comment.user_id,
+
+                    sender_id:
+                        userId,
+
+                    username:
+                        profile.name,
+
+                    avatar_url:
+                        profile.avatar_url,
+
+                    type:
+                        "comment_like",
+
+                    comment_id:
+                        commentId,
+
+                    post_id:
+                        comment.post_id,
+
+                    message:
+                        "liked your comment",
+
+                    count: 1,
+
+                    created_at:
+                        new Date(),
+
+                    last_time:
+                        new Date(),
+
+                    read: false
+                });
+
+        }
+
+    }
+
+    /*
+     * -----------------------------------------
+     * REFRESH COMMENT
+     * -----------------------------------------
+     */
+
+    await updateSingleComment(
+        commentId
+    );
 
 };
+
+function commentDebug(message, data = null) {
+
+    let box = document.getElementById("commentDebugBox");
+
+    if (!box) {
+
+        box = document.createElement("div");
+
+        box.id = "commentDebugBox";
+
+        box.style.cssText = `
+            position:fixed;
+            left:10px;
+            right:10px;
+            bottom:20px;
+            z-index:999999;
+            background:#111;
+            color:#fff;
+            padding:15px;
+            border-radius:14px;
+            font-size:13px;
+            font-family:monospace;
+            box-shadow:0 8px 30px rgba(0,0,0,.6);
+            max-height:45vh;
+            overflow:auto;
+            white-space:pre-wrap;
+        `;
+
+        document.body.appendChild(box);
+    }
+
+    box.innerHTML = `
+        <b style="color:#ff3040;">COMMENT DEBUG</b><br><br>
+        ${message}
+        ${
+            data
+            ? `<br><br>${JSON.stringify(data, null, 2)}`
+            : ""
+        }
+        <br><br>
+        <button
+            onclick="document.getElementById('commentDebugBox')?.remove()"
+            style="
+                background:#ff3040;
+                color:white;
+                border:0;
+                padding:8px 14px;
+                border-radius:8px;
+            "
+        >
+            Close
+        </button>
+    `;
+}
 
 let commentPressTimer;
 
@@ -7508,16 +8834,60 @@ reactionCommentId = commentId;
 
     const menu = document.getElementById("commentMenu");
 
-    document.getElementById("commentCopyBtn").style.display = "block";
-document.getElementById("commentEditBtn").style.display = isMine ? "block" : "none";
-document.getElementById("commentDeleteBtn").style.display = isMine ? "block" : "none";
-document.getElementById("commentPinBtn").style.display = isPostOwner ? "block" : "none";
-document.getElementById("commentHideBtn").style.display =
-    isPostOwner ? "block" : "none";
-document.getElementById("commentReportBtn").style.display =
-    (!isMine && !isPostOwner) ? "block" : "none";    
+    const copyBtn =
+    document.getElementById("commentCopyBtn");
 
-    menu.style.transform = "translateY(0)";
+const editBtn =
+    document.getElementById("commentEditBtn");
+
+const deleteBtn =
+    document.getElementById("commentDeleteBtn");
+
+const pinBtn =
+    document.getElementById("commentPinBtn");
+
+const hideBtn =
+    document.getElementById("commentHideBtn");
+
+const reportBtn =
+    document.getElementById("commentReportBtn");
+
+if (copyBtn) {
+    copyBtn.style.display = "block";
+}
+
+if (editBtn) {
+    editBtn.style.display =
+        isMine ? "block" : "none";
+}
+
+if (deleteBtn) {
+    deleteBtn.style.display =
+        isMine ? "block" : "none";
+}
+
+if (pinBtn) {
+    pinBtn.style.display =
+        isPostOwner ? "block" : "none";
+}
+
+if (hideBtn) {
+    hideBtn.style.display =
+        isPostOwner ? "block" : "none";
+}
+
+if (reportBtn) {
+    reportBtn.style.display =
+        (!isMine && !isPostOwner)
+            ? "block"
+            : "none";
+}
+
+if (menu) {
+    menu.style.transform =
+        "translateY(0)";
+  }
+  
 }
 
 async function copySelectedComment() {
@@ -8133,31 +9503,6 @@ updateSingleComment(reactionCommentId);
 closeCommentMenu();
 }
 
-document.addEventListener("click", function(e){
-
-    const picker = document.getElementById("reactionPicker");
-    const reactBtn = document.getElementById("commentReactionBtn");
-
-    if (!picker) return;
-
-    // Ignore clicks on the React button
-    if (reactBtn && reactBtn.contains(e.target)) return;
-
-    // Ignore clicks inside the picker
-    if (picker.contains(e.target)) return;
-
-    if (picker.style.display === "flex") {
-
-        picker.style.transform = "translateX(-50%) scale(0)";
-
-        setTimeout(() => {
-            picker.style.display = "none";
-        }, 200);
-
-    }
-
-});
-
 async function updateSingleComment(commentId) {
 
     const {
@@ -8169,63 +9514,135 @@ async function updateSingleComment(commentId) {
     const { data: comment, error } = await supabase
         .from("comments")
         .select(`
+            *,
             comment_likes(
                 user_id
             ),
-            comment_reactions (
+            comment_reactions(
                 user_id,
-                 emoji
+                emoji
             ),
-
-            comment_reads (
+            comment_reads(
                 user_id,
-                profiles (
-                 id,
-                name
+                profiles(
+                    id,
+                    name
+                )
             )
-          )
         `)
         .eq("id", commentId)
         .single();
 
-    if (error || !comment) return;
-
-    // Update like count
-    const count = document.getElementById("commentLikeCount-" + commentId);
-
-    if (count) {
-        count.textContent = comment.comment_likes.length;
+    if (error) {
+        console.error("updateSingleComment:", error);
+        return;
     }
 
-    // Update like button color
-    const button = document.getElementById("commentLike-" + commentId);
+    if (!comment) return;
 
-    if (button) {
+    /*
+     * -----------------------------------------
+     * LIKE COUNT
+     * -----------------------------------------
+     */
 
-        const liked = comment.comment_likes.some(
-            l => l.user_id === myId
+    const likeCount =
+        document.getElementById(
+            "commentLikeCount-" + commentId
         );
 
-        button.style.background = liked ? "#ff3040" : "#232323";
+    if (likeCount) {
+
+        likeCount.textContent =
+            comment.comment_likes?.length || 0;
+
     }
 
-    // Update reactions only
-    const reactions = document.querySelector(
-        "#comment-" + commentId + " .commentReactions"
-    );
+    /*
+     * -----------------------------------------
+     * LIKE BUTTON
+     * -----------------------------------------
+     */
 
-    if (reactions) {
-        reactions.innerHTML = renderCommentReactions(comment);
+    const likeButton =
+        document.getElementById(
+            "commentLike-" + commentId
+        );
+
+    if (likeButton) {
+
+        const liked =
+            comment.comment_likes?.some(
+                like => like.user_id === myId
+            );
+
+        likeButton.style.background =
+            liked
+                ? "#ff3040"
+                : "#232323";
+
     }
-    
-    const reads =
-document.querySelector(
-"#comment-" + commentId + " .commentReads"
-);
 
-if (reads) {
-    reads.outerHTML = renderCommentReads(comment);
-}
+    /*
+     * -----------------------------------------
+     * REACTIONS
+     * -----------------------------------------
+     */
+
+    const card =
+        document.getElementById(
+            "comment-" + commentId
+        );
+
+    if (!card) return;
+
+    const reactionContainer =
+        card.querySelector(
+            ".commentReactions"
+        );
+
+    if (reactionContainer) {
+
+        reactionContainer.innerHTML =
+            renderCommentReactions(comment);
+
+    }
+
+    /*
+     * -----------------------------------------
+     * SEEN BY
+     * -----------------------------------------
+     */
+
+    const oldReads =
+        card.querySelector(
+            ".commentReads"
+        );
+
+    const newReads =
+        renderCommentReads(comment);
+
+    if (oldReads) {
+
+        if (newReads) {
+
+            oldReads.outerHTML =
+                newReads;
+
+        } else {
+
+            oldReads.remove();
+
+        }
+
+    } else if (newReads) {
+
+        card.insertAdjacentHTML(
+            "beforeend",
+            newReads
+        );
+
+    }
 
 }
 
@@ -8784,6 +10201,15 @@ if (commentsTypingChannel) {
     commentsTypingChannel = null;
 
 }
+
+if (typeof replyPages !== "undefined") {
+    replyPages = {};
+}
+
+if (typeof expandedReplies !== "undefined") {
+    expandedReplies.clear();
+}
+
 currentPostId = null;
 }
 
@@ -11579,6 +13005,12 @@ window.closePhotoGallery = function(){
 
 function attachEvents() {
 
+    if (window.commentEventsAttached) {
+        return;
+    }
+
+    window.commentEventsAttached = true;
+
   const exploreTab = document.getElementById("tab-explore");
   const followingTab = document.getElementById("tab-following");
 
@@ -11635,19 +13067,37 @@ function attachEvents() {
     storyInput.onchange = addStory;
   }
   
-  const voiceBtn = document.getElementById("voiceBtn");
+  const voiceBtn =
+    document.getElementById("voiceBtn");
 
-  if (voiceBtn) {
+if (voiceBtn) {
 
-  voiceBtn.onmousedown = startVoiceRecording;
+    voiceBtn.onpointerdown =
+        async (e) => {
 
-  voiceBtn.onmouseup = stopVoiceRecording;
+            e.preventDefault();
 
-  voiceBtn.ontouchstart = startVoiceRecording;
-  voiceBtn.ontouchend = stopVoiceRecording;
-  voiceBtn.ontouchcancel = stopVoiceRecording;
+            await startVoiceRecording();
 
-  }
+        };
+
+    voiceBtn.onpointerup =
+        async (e) => {
+
+            e.preventDefault();
+
+            await stopVoiceRecording();
+
+        };
+
+    voiceBtn.onpointercancel =
+        async () => {
+
+            await stopVoiceRecording();
+
+        };
+
+}
   
   const panelInput = document.getElementById("panelInput");
 
@@ -11655,7 +13105,7 @@ if (panelInput) {
 
 let typingTimeout;
 
-panelInput.addEventListener("input", async () => {
+panelInput.oninput = async () => {
 
 const {
     data: { session }
@@ -11685,7 +13135,7 @@ await supabase
 
 }, 1500);
 
-});
+};
 
 }
 
@@ -11720,7 +13170,19 @@ if (commentSearch) {
 
         const search = commentSearch.value.toLowerCase().trim();
         
-        const regex = new RegExp(`(${search})`, "ig");
+        const escapedSearch =
+    search.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+    );
+
+const regex =
+    search
+        ? new RegExp(
+            `(${escapedSearch})`,
+            "ig"
+        )
+        : null;
 
         if (clearBtn) {
             clearBtn.style.display = search ? "block" : "none";
@@ -11743,16 +13205,19 @@ const text = `${username} ${body} ${mentions}`;
 
     comment.style.display = visible ? "" : "none";
 
-    if (!search) return;
+    if (!search || !regex) return;
 
-    comment.querySelectorAll("[data-comment]").forEach(el => {
+comment.querySelectorAll(
+    "[data-comment]"
+).forEach(el => {
 
-        el.innerHTML = el.innerHTML.replace(
+    el.innerHTML =
+        el.innerHTML.replace(
             regex,
             `<mark style="background:#ffd54f;color:#000;border-radius:4px;padding:0 2px;">$1</mark>`
-          );
+        );
 
-       });
+});
 
     });
 
@@ -11869,16 +13334,34 @@ if (removeCommentMedia) {
 
   const panelBtn = document.getElementById("panelPostBtn");
   
+  commentDebug("COMMENT BUTTON FOUND", {
+    exists: !!panelBtn
+});
+  
   if (panelBtn) {
     panelBtn.onclick = async () => {
-      const input = document.getElementById("panelInput");
-     const text = input.value.trim();
 
-if (!text) return;
+        const input = document.getElementById("panelInput");
+        const text = input.value.trim();
 
-const detected = await detectLanguage(text);
+        commentDebug("COMMENT BUTTON PRESSED", {
+            currentPostId: currentPostId,
+            text: text,
+            selectedCommentMedia: selectedCommentMedia
+                ? selectedCommentMedia.name
+                : null
+        });
+
+if (!text && !selectedCommentMedia) {
+    return;
+}
 
 panelBtn.disabled = true;
+
+const detected =
+    text
+        ? await detectLanguage(text)
+        : "unknown";
       
       const {
     data: { session }
@@ -11895,37 +13378,6 @@ const { data: profile } = await supabase
     .eq("id", session.user.id)
     .single();
     
-    const tempId = "temp_" + Date.now();
-
-const comments = document.getElementById("panelComments");
-
-if (comments) {
-    comments.insertAdjacentHTML(
-        "afterbegin",
-        renderComment({
-    id: tempId,
-    user_id: session.user.id,
-    profiles: {
-        name: profile.name,
-        avatar_url: profile.avatar_url,
-        verified: profile.verified
-    },
-    content: text,
-    media_url: selectedCommentMedia
-        ? URL.createObjectURL(selectedCommentMedia)
-        : null,
-    media_type: selectedCommentMedia
-        ? (selectedCommentMedia.type.startsWith("image")
-            ? "image"
-            : "video")
-        : null,
-    created_at: new Date().toISOString(),
-    comment_likes: [],
-    comment_reactions: [],
-    comment_reads: []
-}, session.user.id)
-    );
-}
 
 let mediaUrl = null;
 let mediaType = null;
@@ -11958,62 +13410,113 @@ if (selectedCommentMedia) {
         : "video";
 }
 
+const parentCommentId =
+    window.replyingToComment || null;
+
+const parentReplyUserId =
+    replyingToUserId || null;
+
+commentDebug("TRYING TO INSERT COMMENT", {
+    currentPostId: currentPostId,
+    text: text,
+    userId: session.user.id,
+    parentCommentId: parentCommentId,
+    parentReplyUserId: parentReplyUserId,
+    mediaType: mediaType
+});
+
 const { data: insertedComment, error } = await supabase
-.from("comments")
-.insert({
-    post_id: currentPostId,
-    content: text,
-    user_id: session.user.id,
-    name: session.user.email || "Guest",
+    .from("comments")
+    .insert({
+        post_id: currentPostId,
+        content: text,
+        user_id: session.user.id,
+        name: profile?.name || "Guest",
 
-    language_code: detected,
-    translation_status: "pending",
+        language_code: detected,
+        translation_status: "pending",
 
-    parent_id: window.replyingToComment,
-    reply_to_user_id: replyingToUserId,
-    media_url: mediaUrl,
-    media_type: mediaType
-})
-.select(`
-    *,
-    profiles (
-        id,
-        name,
-        avatar_url,
-        verified
-    ),
-    comment_likes (
-        user_id
-    ),
-    comment_reactions (
-        user_id,
-        emoji
-    ),
-    comment_reads (
-        user_id,
+        parent_id: parentCommentId,
+        reply_to_user_id: parentReplyUserId,
+        media_url: mediaUrl,
+        media_type: mediaType
+    })
+    .select(`
+        *,
         profiles (
             id,
-            name
+            name,
+            avatar_url,
+            verified
+        ),
+        comment_likes (
+            user_id
+        ),
+        comment_reactions (
+            user_id,
+            emoji
+        ),
+        comment_reads (
+            user_id,
+            profiles (
+                id,
+                name
+            )
         )
-    )
-`)
-.single();
+    `)
+    .single();
 
 if (error) {
-    console.log(error);
 
-    document.getElementById("comment-" + tempId)?.remove();
+    commentDebug("❌ COMMENT INSERT FAILED", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+    });
+
+    console.error("Comment insert error:", error);
+
+    showToast("Couldn't post comment.");
 
     panelBtn.disabled = false;
+
+    return;
+}
+
+commentDebug("✅ COMMENT INSERTED", {
+    id: insertedComment?.id,
+    post_id: insertedComment?.post_id,
+    content: insertedComment?.content
+});
+
+try {
+
+    await insertComment(insertedComment.id);
+
+} catch (err) {
+
+    commentDebug("❌ insertComment() FAILED", {
+        message: err?.message || String(err),
+        stack: err?.stack || null
+    });
+
+    panelBtn.disabled = false;
+
     return;
 }
 
 await supabase
 .from("comment_reads")
-.insert({
-    comment_id: insertedComment.id,
-    user_id: session.user.id
-});
+.upsert(
+    {
+        comment_id: insertedComment.id,
+        user_id: session.user.id
+    },
+    {
+        onConflict: "comment_id,user_id"
+    }
+);
 
 const userLanguage =
     (navigator.language || "en")
@@ -12096,17 +13599,17 @@ if (post && post.user_id !== session.user.id) {
 }
 
 if (
-    replyingToUserId &&
-    replyingToUserId !== session.user.id
+    parentReplyUserId &&
+    parentReplyUserId !== session.user.id
 ) {
 
     const { data: existingNotif } = await supabase
         .from("notifications")
         .select("*")
-        .eq("user_id", replyingToUserId)
+        .eq("user_id", parentReplyUserId)
         .eq("sender_id", session.user.id)
         .eq("type", "comment_reply")
-        .eq("comment_id", window.replyingToComment)
+        .eq("comment_id", parentCommentId)
         .maybeSingle();
 
     if (existingNotif) {
@@ -12128,12 +13631,12 @@ if (
         await supabase
             .from("notifications")
             .insert({
-                user_id: replyingToUserId,
+                user_id: parentReplyUserId,
                 sender_id: session.user.id,
                 username: profile.name,
                 avatar_url: profile.avatar_url,
                 type: "comment_reply",
-                comment_id: window.replyingToComment,
+                comment_id: parentCommentId,
                 post_id: currentPostId,
                 message: "replied to your comment",
                 count: 1,
@@ -12184,39 +13687,7 @@ if (preview) {
     preview.style.display = "none";
 }
 
-if (comments) {
 
-    const { data: fullComment } = await supabase
-        .from("comments")
-        .select(`
-            *,
-            profiles(
-                id,
-                name,
-                avatar_url,
-                verified
-            ),
-            comment_likes(user_id),
-            comment_reactions(user_id, emoji),
-            comment_reads(
-                user_id,
-                profiles(
-                    id,
-                    name
-                )
-            )
-        `)
-        .eq("id", insertedComment.id)
-        .single();
-
-    if (fullComment) {
-        comments.insertAdjacentHTML(
-            "afterbegin",
-            renderComment(fullComment, session.user.id)
-        );
-    }
-
-}
 
 panelBtn.disabled = false;
     };
