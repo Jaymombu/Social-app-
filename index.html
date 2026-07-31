@@ -9146,6 +9146,18 @@ const {data:urlData}=supabase
 .from("voice-notes")
 .getPublicUrl(fileName);
 
+const parentId =
+    window.replyingToComment &&
+    String(window.replyingToComment).trim() !== ""
+        ? window.replyingToComment
+        : null;
+
+const replyUserId =
+    replyingToUserId &&
+    String(replyingToUserId).trim() !== ""
+        ? replyingToUserId
+        : null;
+
 const { data: insertedComment, error } = await supabase
     .from("comments")
     .insert({
@@ -9153,11 +9165,24 @@ const { data: insertedComment, error } = await supabase
         user_id: session.user.id,
         media_url: urlData.publicUrl,
         media_type: "voice",
-        parent_id: window.replyingToComment,
-        reply_to_user_id: replyingToUserId
+        parent_id: parentId,
+        reply_to_user_id: replyUserId
     })
     .select()
     .single();
+
+if (error) {
+    console.error("VOICE COMMENT INSERT ERROR:", error);
+    console.error("Values used:", {
+        post_id: currentPostId,
+        user_id: session.user.id,
+        parent_id: parentId,
+        reply_to_user_id: replyUserId
+    });
+
+    showToast("Couldn't upload voice comment.");
+    return;
+}
 
 if (error) {
     console.log(error);
@@ -9167,6 +9192,7 @@ if (error) {
 replyingToComment=null;
 replyingToUserId=null;
 window.replyingToComment=null;
+window.replyingToUserId = null;
 
 const comments = document.getElementById("panelComments");
 
@@ -13415,6 +13441,13 @@ const parentCommentId =
 
 const parentReplyUserId =
     replyingToUserId || null;
+    
+    console.log("COMMENT FK CHECK:", {
+    post_id: currentPostId,
+    user_id: session.user.id,
+    parent_id: parentCommentId,
+    reply_to_user_id: parentReplyUserId
+});
 
 commentDebug("TRYING TO INSERT COMMENT", {
     currentPostId: currentPostId,
@@ -13441,29 +13474,29 @@ const { data: insertedComment, error } = await supabase
         media_url: mediaUrl,
         media_type: mediaType
     })
-    .select(`
-        *,
+   .select(`
+    *,
+    profiles!comments_user_id_fkey (
+        id,
+        name,
+        avatar_url,
+        verified
+    ),
+    comment_likes (
+        user_id
+    ),
+    comment_reactions (
+        user_id,
+        emoji
+    ),
+    comment_reads (
+        user_id,
         profiles (
             id,
-            name,
-            avatar_url,
-            verified
-        ),
-        comment_likes (
-            user_id
-        ),
-        comment_reactions (
-            user_id,
-            emoji
-        ),
-        comment_reads (
-            user_id,
-            profiles (
-                id,
-                name
-            )
+            name
         )
-    `)
+    )
+`)
     .single();
 
 if (error) {
