@@ -5994,52 +5994,18 @@ loadingComments = true;
   console.log("📥 loading comments for:", postId);
 
   let query = supabase
-.from("comments")
-.select(`
-  *,
-  language_code,
-  translated_text,
-  translation_status,
-
-  profiles:profiles!comments_user_id_fkey (
-    id,
-    name,
-    avatar_url,
-    verified
-  ),
-
-  parent:comments (
-    id,
-    profiles:profiles!comments_user_id_fkey (
-      name
-    )
-  ),
-
-  reply_user:profiles!comments_reply_to_user_id_fkey (
-    id,
-    name
-  ),
-
-  comment_likes (
-    id,
-    user_id
-  ),
-
-  comment_reactions (
-    user_id,
-    emoji
-  ),
-
-  comment_reads (
-    user_id,
-    profiles (
-      id,
-      name
-    )
-  )
-`)
-.eq("post_id", postId)
-.eq("hidden", false);
+    .from("comments")
+    .select(`
+        *,
+        profiles:profiles!comments_user_id_fkey (
+            id,
+            name,
+            avatar_url,
+            verified
+        )
+    `)
+    .eq("post_id", postId)
+    .eq("hidden", false);
 
 if (commentSort === "top") {
 
@@ -6066,6 +6032,12 @@ const { data, error } = await query.range(
     commentsPage * COMMENTS_PER_PAGE,
     (commentsPage + 1) * COMMENTS_PER_PAGE - 1
 );
+
+console.log("🔥 POST ID:", postId);
+console.log("🔥 COMMENTS DATA:", data);
+console.log("🔥 COMMENTS ERROR:", error);
+console.log("🔥 COMMENTS PAGE:", commentsPage);
+console.log("🔥 COMMENTS CONTAINER:", document.getElementById("panelComments"));
   
   console.log("Comments:", data);
 console.log("Error:", error);
@@ -6073,7 +6045,24 @@ console.log("Error:", error);
 const container = document.getElementById("panelComments");
 
 if (error) {
-    console.log("❌ profile fetch error:", error);
+
+    console.error("❌ LOAD COMMENTS FAILED:", error);
+
+    loadingComments = false;
+
+    if (container) {
+        container.innerHTML = `
+            <div style="
+                padding:20px;
+                text-align:center;
+                color:#ff6b6b;
+            ">
+                Failed to load comments
+            </div>
+        `;
+    }
+
+    return;
 }
 
 // Check if there are more comments to load
@@ -6208,56 +6197,60 @@ if (data.length === COMMENTS_PER_PAGE) {
 function renderCommentsList(data, myId) {
 
     const parents = data.filter(c => !c.parent_id);
-    const replies = data.filter(c => c.parent_id);
 
     return parents.map(comment => {
 
-        const childReplies = replies.filter(
-    r => r.parent_id === comment.id
-);
-
-const rootReplies = childReplies.filter(
-    r => !replies.some(x => x.id === r.parent_id)
-);
+        const replyCount =
+            Number(comment.replies_count || 0);
 
         return `
             ${renderComment(comment, myId)}
 
-            <div style="
-                margin-left:52px;
-                border-left:2px solid rgba(255,255,255,.08);
-                padding-left:12px;
-            ">
+            <div
+                style="
+                    margin-left:52px;
+                    padding-left:12px;
+                "
+            >
+
                 ${
-                childReplies.length
-                ? `
-               <div
-id="replyToggle-${comment.id}"
-onclick="loadReplies('${comment.id}')"
-style="
-margin:8px 0;
-font-size:13px;
-color:#0095f6;
-cursor:pointer;
-font-weight:600;
-">
-💬 View ${comment.replies_count || childReplies.length} ${((comment.replies_count || childReplies.length) === 1) ? "reply" : "replies"}
-</div>
+                    replyCount > 0
+                    ? `
+                        <div
+                            id="replyToggle-${comment.id}"
+                            onclick="
+                                event.stopPropagation();
+                                toggleReplies('${comment.id}');
+                            "
+                            style="
+                                margin:8px 0;
+                                font-size:13px;
+                                color:#0095f6;
+                                cursor:pointer;
+                                font-weight:600;
+                            "
+                        >
+                            💬 View ${replyCount}
+                            ${replyCount === 1 ? "reply" : "replies"}
+                        </div>
+                    `
+                    : ""
+                }
 
                 <div
-                id="replies-${comment.id}"
-                style="display:none;"
-                >
-               ${rootReplies.map(r => renderReplyTree(r, replies)).join("")}
-                </div>
-                `
-                : ""
-                }
+                    id="replies-${comment.id}"
+                    class="nestedReplies"
+                    style="
+                        display:none;
+                        margin-top:3px;
+                        border-left:1px solid #292929;
+                        padding-left:8px;
+                    "
+                ></div>
+
             </div>
         `;
-
     }).join("");
-
 }
 
 async function getMentionId(username) {
@@ -6291,7 +6284,7 @@ function formatCommentText(text) {
 
 }
 
-function renderComment(c, myId) {
+window.renderComment = function(c, myId) {
 
     const liked = c.comment_likes?.some(
         l => l.user_id === myId
@@ -6581,11 +6574,12 @@ ${renderCommentReads(c)}
 `;
 }
 
-function renderReply(comment) {
+window.renderReply = function(comment) {
 
     if (!comment) return "";
 
-    const profile = comment.profiles || {};
+    const profile =
+    comment.comment_user || {};
 
     const userId = comment.user_id || "";
     const name = profile.name || comment.name || "User";
@@ -7264,22 +7258,26 @@ window.loadMoreComments = function () {
 
 };
 
-async function loadReplies(parentId) {
+window.loadReplies = async function(parentId) {
 
     const container =
         document.getElementById("replies-" + parentId);
 
     if (!container) return;
 
-    if (typeof replyPages === "undefined") {
-        window.replyPages = {};
-    }
+  if (!window.replyPages) {
+    window.replyPages = {};
+}
 
-    if (typeof replyPages[parentId] === "undefined") {
-        replyPages[parentId] = 0;
-    }
+if (
+    typeof window.replyPages[parentId] ===
+    "undefined"
+) {
+    window.replyPages[parentId] = 0;
+}
 
-    const page = replyPages[parentId];
+const page =
+    window.replyPages[parentId];
 
     const from =
         page * REPLIES_PER_PAGE;
@@ -7331,66 +7329,62 @@ async function loadReplies(parentId) {
     const myId =
         session?.user?.id || null;
 
-    /*
-     * -----------------------------------------
-     * LOAD REPLIES
-     * -----------------------------------------
-     */
+/*
+ * -----------------------------------------
+ * LOAD REPLIES
+ * -----------------------------------------
+ */
 
-    const {
-        data,
-        error
-    } = await supabase
-        .from("comments")
-        .select(`
-            *,
+const {
+    data,
+    error
+} = await supabase
+    .from("comments")
+    .select(`
+        *,
 
-            profiles(
-                id,
-                name,
-                avatar_url,
-                verified
-            ),
+        comment_user:profiles!comments_user_id_fkey(
+            id,
+            name,
+            avatar_url,
+            verified
+        ),
 
-            comment_likes(
-                user_id
-            ),
+        reply_to_user:profiles!comments_reply_to_user_id_fkey(
+            id,
+            name
+        ),
 
-            comment_reactions(
-                user_id,
-                emoji
-            ),
+        comment_likes(
+            user_id
+        ),
 
-            comment_reads(
-                user_id,
+        comment_reactions(
+            user_id,
+            emoji
+        ),
 
-                profiles(
-                    id,
-                    name
-                )
-            )
-        `)
-        .eq("parent_id", parentId)
-        .order("created_at", {
-            ascending: true
-        })
-        .range(from, to);
+        comment_reads(
+            user_id
+        )
+    `)
+    .eq("parent_id", parentId)
+    .order("created_at", {
+        ascending: true
+    })
+    .range(from, to);
 
     loading?.remove();
 
     if (error) {
 
-        console.error(
-            "loadReplies error:",
-            error
-        );
+    console.error(
+        "❌ loadReplies error:",
+        error
+    );
 
-        showToast(
-            "Couldn't load replies."
-        );
-
-        return;
-    }
+    return;
+}
 
     /*
      * -----------------------------------------
@@ -7541,7 +7535,7 @@ async function loadReplies(parentId) {
      * -----------------------------------------
      */
 
-    replyPages[parentId]++;
+    window.replyPages[parentId]++;
 
     /*
      * -----------------------------------------
@@ -7660,7 +7654,7 @@ async function loadReplies(parentId) {
    CHECK FOR NESTED REPLIES
 ===================================================== */
 
-async function loadNestedReplyButton(parentId) {
+window.loadNestedReplyButton = async function(parentId) {
 
     /*
      * Find the actual reply card
@@ -8142,26 +8136,34 @@ async function translateText(text, source, target) {
 
 }
 
-async function toggleReplies(parentId) {
+window.toggleReplies = async function(parentId) {
 
     const container =
-        document.getElementById("replies-" + parentId);
+        document.getElementById(
+            "replies-" + parentId
+        );
 
     const button =
-        document.getElementById("threadBtn-" + parentId);
+        document.getElementById(
+            "replyToggle-" + parentId
+        );
 
-    if (!container || !button) return;
+    if (!container) {
+        console.error(
+            "❌ Reply container not found:",
+            parentId
+        );
+        return;
+    }
 
     if (
-        typeof expandedReplies === "undefined"
+        typeof window.expandedReplies === "undefined"
     ) {
         window.expandedReplies = new Set();
     }
 
     /*
-     * -----------------------------------------
-     * HIDE THREAD
-     * -----------------------------------------
+     * HIDE
      */
 
     if (expandedReplies.has(parentId)) {
@@ -8178,86 +8180,100 @@ async function toggleReplies(parentId) {
                 count: "exact",
                 head: true
             })
-            .eq("parent_id", parentId);
+            .eq(
+                "parent_id",
+                parentId
+            );
 
-        button.textContent =
-            `View ${count || 0} ${
-                count === 1
-                    ? "reply"
-                    : "replies"
-            }`;
+        if (button) {
+
+            button.textContent =
+                `💬 View ${count || 0} ${
+                    count === 1
+                        ? "reply"
+                        : "replies"
+                }`;
+
+        }
 
         return;
     }
 
     /*
-     * -----------------------------------------
-     * SHOW THREAD
-     * -----------------------------------------
+     * SHOW
      */
 
     expandedReplies.add(parentId);
 
     container.style.display = "block";
 
-    button.textContent = "Hide replies";
+    if (button) {
+        button.textContent = "💬 Hide replies";
+    }
 
     /*
-     * -----------------------------------------
-     * INITIALIZE PAGINATION
-     * -----------------------------------------
+     * INITIALIZE PAGE
      */
 
-    if (typeof replyPages === "undefined") {
+    if (
+        typeof window.replyPages === "undefined"
+    ) {
         window.replyPages = {};
     }
+
+    /*
+     * IMPORTANT:
+     * Only start from page 0 if this
+     * thread has never been loaded.
+     */
 
     if (
         typeof replyPages[parentId] === "undefined"
     ) {
+
         replyPages[parentId] = 0;
+
+        await loadReplies(parentId);
+
+    } else {
+
+        /*
+         * Already loaded.
+         * Just show it.
+         */
+
+        container.style.display = "block";
+
     }
 
-    /*
-     * -----------------------------------------
-     * LOAD REPLIES
-     * -----------------------------------------
-     */
+};
 
-    await loadReplies(parentId);
-
-    /*
-     * -----------------------------------------
-     * KEEP BUTTON STATE
-     * -----------------------------------------
-     */
-
-    if (
-        expandedReplies.has(parentId)
-    ) {
-        button.textContent = "Hide replies";
-    }
-
-}
-
-function replyToComment(commentId, name, userId) {
+window.replyToComment = function(commentId, name, userId) {
 
     replyingToComment = commentId;
     window.replyingToComment = commentId;
 
     replyingToUserId = userId;
+    window.replyingToUserId = userId;
 
     window.replyDepth = "thread";
 
-    const input = document.getElementById("panelInput");
+    const input =
+        document.getElementById("panelInput");
 
-    if (!input) return;
+    if (!input) {
+        console.error("❌ panelInput not found");
+        return;
+    }
 
     input.value = `@${name} `;
     input.placeholder = `Reply to ${name}...`;
 
-    const preview = document.getElementById("replyPreview");
-    const previewText = document.getElementById("replyPreviewText");
+    const preview =
+        document.getElementById("replyPreview");
+
+    const previewText =
+        document.getElementById("replyPreviewText");
 
     if (preview) {
         preview.style.display = "block";
@@ -8273,8 +8289,7 @@ function replyToComment(commentId, name, userId) {
         input.value.length,
         input.value.length
     );
-
-}
+};
 
 window.cancelReply = function() {
 
