@@ -5690,30 +5690,45 @@ const { data: saved, error } = await supabase
 // =====================================================
 
 let reactionPickerListenerAdded = false;
+
 let replyingToComment = null;
 let replyingToUserId = null;
 
 window.replyingToComment = null;
 window.replyingToUserId = null;
+
 let commentsChannel = null;
-let expandedReplies = new Set();
+
+window.expandedReplies =
+    window.expandedReplies || new Set();
+
+window.replyPages =
+    window.replyPages || {};
+
 let commentsPage = 0;
+
 const COMMENTS_PER_PAGE = 20;
+
+const REPLIES_PER_PAGE = 10;
+
 let loadingComments = false;
 let hasMoreComments = true;
+
 let reactionCommentId = null;
+
 let commentSwipeStartX = 0;
 let commentSwipeTarget = null;
 let lastCommentTap = 0;
+
 let commentsTypingChannel = null;
+
 let commentSort = "top";
 let commentFilter = "all";
+
 window.replyDepth = "parent";
-const replyPages = {};
-const REPLIES_PER_PAGE = 20;
+
 let selectedCommentMedia = null;
-window.expandedReplies = new Set();
-window.replyPages = {};
+
 
 
 window.openComments = async (postId) => {
@@ -7549,9 +7564,7 @@ const {
         typeof expandedReplies !== "undefined"
     ) {
 
-        expandedReplies.add(
-            parentId
-        );
+        window.expandedReplies.add(parentId);
 
     }
 
@@ -7656,83 +7669,55 @@ const {
 
 window.loadNestedReplyButton = async function(parentId) {
 
-    /*
-     * Find the actual reply card
-     */
+    const repliesContainer =
+        document.getElementById("replies-" + parentId);
 
-    const card =
-        document.getElementById(
-            "comment-" + parentId
+    if (!repliesContainer) {
+        console.warn(
+            "No replies container for:",
+            parentId
         );
-
-    if (!card) return;
-
-
-    /*
-     * Find its nested replies container
-     */
-
-    const replies =
-        document.getElementById(
-            "replies-" + parentId
-        );
-
-    if (!replies) return;
-
-
-    /*
-     * Count direct children
-     */
+        return;
+    }
 
     const {
         count,
         error
     } = await supabase
         .from("comments")
-        .select("*", {
+        .select("id", {
             count: "exact",
             head: true
         })
-        .eq(
-            "parent_id",
-            parentId
-        );
-
+        .eq("parent_id", parentId);
 
     if (error) {
 
         console.error(
-            "Nested reply count:",
+            "loadNestedReplyButton error:",
             error
         );
 
         return;
     }
 
-
-    /*
-     * Find thread button
-     */
-
     let button =
         document.getElementById(
             "threadBtn-" + parentId
         );
 
-
     /*
-     * No children
+     * No nested replies
      */
 
-    if (!count || count <= 0) {
+    if (!count || count === 0) {
 
         if (button) {
-            button.remove();
+            button.style.display = "none";
         }
 
         return;
     }
-
 
     /*
      * Create button if missing
@@ -7741,73 +7726,65 @@ window.loadNestedReplyButton = async function(parentId) {
     if (!button) {
 
         button =
-            document.createElement(
-                "button"
-            );
+            document.createElement("button");
 
         button.id =
             "threadBtn-" + parentId;
 
+        button.type = "button";
+
         button.style.cssText = `
+            display:block;
             border:0;
             background:none;
             color:#8e8e8e;
             font-size:12px;
-            padding:4px 0;
+            padding:5px 0;
             cursor:pointer;
-            display:block;
         `;
 
-        button.onclick =
-            async function(e) {
+        button.onclick = async function(event) {
 
-                e.stopPropagation();
+            event.preventDefault();
+            event.stopPropagation();
 
-                await toggleReplies(
-                    parentId
-                );
+            await window.toggleReplies(
+                parentId
+            );
 
-            };
+        };
 
-
-        /*
-         * Put button immediately
-         * before nested replies.
-         */
-
-        replies.parentNode.insertBefore(
+        repliesContainer.parentNode.insertBefore(
             button,
-            replies
+            repliesContainer
         );
 
     }
 
-
     /*
-     * Update button text
+     * Make sure button is visible
      */
 
-    if (
-        expandedReplies.has(
-            parentId
-        )
-    ) {
+    button.style.display = "block";
 
-        button.textContent =
-            "Hide replies";
+    /*
+     * Update text
+     */
 
-    } else {
+    const isOpen =
+        window.expandedReplies &&
+        window.expandedReplies.has(parentId);
 
-        button.textContent =
-            `View ${count} ${
+    button.textContent =
+        isOpen
+            ? "Hide replies"
+            : `View ${count} ${
                 count === 1
                     ? "reply"
                     : "replies"
             }`;
 
-    }
-
-}
+};
 
 async function insertComment(commentId) {
 
@@ -8143,52 +8120,72 @@ window.toggleReplies = async function(parentId) {
             "replies-" + parentId
         );
 
-    const button =
-        document.getElementById(
-            "replyToggle-" + parentId
-        );
-
     if (!container) {
+
         console.error(
-            "❌ Reply container not found:",
+            "toggleReplies: container not found:",
             parentId
         );
+
         return;
     }
 
-    if (
-        typeof window.expandedReplies === "undefined"
-    ) {
-        window.expandedReplies = new Set();
-    }
-
     /*
-     * HIDE
+     * Initialize state
      */
 
-    if (expandedReplies.has(parentId)) {
+    if (
+        !(window.expandedReplies instanceof Set)
+    ) {
+        window.expandedReplies =
+            new Set();
+    }
 
-        expandedReplies.delete(parentId);
+    if (
+        !window.replyPages
+    ) {
+        window.replyPages = {};
+    }
 
-        container.style.display = "none";
+    const button =
+        document.getElementById(
+            "threadBtn-" + parentId
+        );
 
-        const {
-            count
-        } = await supabase
-            .from("comments")
-            .select("*", {
-                count: "exact",
-                head: true
-            })
-            .eq(
-                "parent_id",
-                parentId
-            );
+    /*
+     * -----------------------------------------
+     * HIDE
+     * -----------------------------------------
+     */
+
+    if (
+        window.expandedReplies.has(parentId)
+    ) {
+
+        window.expandedReplies.delete(
+            parentId
+        );
+
+        container.style.display =
+            "none";
 
         if (button) {
 
+            const {
+                count
+            } = await supabase
+                .from("comments")
+                .select("id", {
+                    count: "exact",
+                    head: true
+                })
+                .eq(
+                    "parent_id",
+                    parentId
+                );
+
             button.textContent =
-                `💬 View ${count || 0} ${
+                `View ${count || 0} ${
                     count === 1
                         ? "reply"
                         : "replies"
@@ -8200,50 +8197,52 @@ window.toggleReplies = async function(parentId) {
     }
 
     /*
+     * -----------------------------------------
      * SHOW
+     * -----------------------------------------
      */
 
-    expandedReplies.add(parentId);
+    window.expandedReplies.add(
+        parentId
+    );
 
-    container.style.display = "block";
+    container.style.display =
+        "block";
+
+    if (
+        typeof window.replyPages[parentId]
+        === "undefined"
+    ) {
+        window.replyPages[parentId] = 0;
+    }
 
     if (button) {
-        button.textContent = "💬 Hide replies";
+        button.textContent =
+            "Hide replies";
     }
 
     /*
-     * INITIALIZE PAGE
+     * -----------------------------------------
+     * LOAD CHILDREN
+     * -----------------------------------------
      */
 
-    if (
-        typeof window.replyPages === "undefined"
-    ) {
-        window.replyPages = {};
-    }
+    await window.loadReplies(
+        parentId
+    );
 
     /*
-     * IMPORTANT:
-     * Only start from page 0 if this
-     * thread has never been loaded.
+     * -----------------------------------------
+     * KEEP OPEN
+     * -----------------------------------------
      */
 
-    if (
-        typeof replyPages[parentId] === "undefined"
-    ) {
+    container.style.display =
+        "block";
 
-        replyPages[parentId] = 0;
-
-        await loadReplies(parentId);
-
-    } else {
-
-        /*
-         * Already loaded.
-         * Just show it.
-         */
-
-        container.style.display = "block";
-
+    if (button) {
+        button.textContent =
+            "Hide replies";
     }
 
 };
