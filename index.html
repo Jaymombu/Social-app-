@@ -5716,8 +5716,6 @@ let hasMoreComments = true;
 
 let reactionCommentId = null;
 
-let commentSwipeStartX = 0;
-let commentSwipeTarget = null;
 let lastCommentTap = 0;
 
 let commentsTypingChannel = null;
@@ -6301,34 +6299,25 @@ function formatCommentText(text) {
 
 window.renderComment = function(c, myId) {
 
-    const liked = c.comment_likes?.some(
-        l => l.user_id === myId
-    );
+    const commentName =
+        c.profiles?.name || "Unknown User";
+
+    const liked =
+        c.comment_likes?.some(
+            l => l.user_id === myId
+        );
 
     return `
 
 <div
 id="comment-${c.id}"
 class="commentItem"
+data-comment-id="${c.id}"
+data-user-id="${c.user_id}"
+data-user-name="${escapeHtml(commentName)}"
 onclick="commentDoubleTap('${c.id}')"
 oncontextmenu="event.preventDefault();openCommentMenu('${c.id}', '${c.user_id}')"
 
-ontouchstart="
-commentPressStart(event, ${c.id}, '${c.user_id}');
-commentSwipeStart(event, ${c.id}, '${escapeHtml(c.profiles?.name || "Unknown User")}', '${c.user_id}');
-"
-
-ontouchmove="commentSwipeMove(event)"
-
-ontouchend="
-commentPressEnd();
-commentSwipeEnd();
-"
-
-ontouchcancel="
-commentPressEnd();
-commentSwipeEnd();
-"
 style="
 display:flex;
 gap:14px;
@@ -6338,7 +6327,8 @@ background:#171717;
 border:1px solid rgba(255,255,255,.05);
 border-radius:20px;
 box-shadow:0 8px 24px rgba(0,0,0,.35);
-transition:.25s;
+transition:transform .2s ease;
+touch-action:pan-y;
 "
 >
 
@@ -6550,7 +6540,15 @@ ${c.comment_likes?.length || 0}
 </span>
 
 <span
-onclick="event.stopPropagation(); replyToComment('${c.id}', ${JSON.stringify(c.profiles?.name || "Unknown User")}, '${c.user_id}')"
+onclick="
+    event.stopPropagation();
+
+    replyToComment(
+    '${c.id}',
+    ${JSON.stringify(commentName)},
+    '${c.user_id}'
+);
+"
 style="
 display:flex;
 align-items:center;
@@ -6604,6 +6602,9 @@ window.renderReply = function(comment) {
 
     const safeName = escapeHtml(name);
     const safeContent = escapeHtml(content);
+
+    const safeReplyName =
+    JSON.stringify(name);
 
     const createdAt = formatCommentTime(comment.created_at);
 
@@ -6973,63 +6974,51 @@ window.renderReply = function(comment) {
 
     /*
      * ------------------------------------------------
-     * NESTED REPLY CONTAINER
-     * ------------------------------------------------
-     */
-
-    const nestedRepliesId =
-        "replies-" + comment.id;
-
-    /*
-     * ------------------------------------------------
      * MAIN HTML
      * ------------------------------------------------
      */
 
     return `
-        <div
-            id="comment-${comment.id}"
-            data-comment="${comment.id}"
-            class="commentCard replyCard"
-            data-parent-id="${comment.parent_id || ""}"
-            data-user-id="${userId}"
-            ontouchstart="
-                commentSwipeStart(
-                    event,
-                    '${comment.id}',
-                    '${safeName.replace(/'/g, "\\'")}',
-                    '${userId}'
-                )
-            "
-            ontouchmove="commentSwipeMove(event)"
-            ontouchend="commentSwipeEnd()"
-            onmousedown="
-                commentPressStart(
-                    event,
-                    '${comment.id}',
-                    '${userId}'
-                )
-            "
-            onmouseup="commentPressEnd()"
-            onmouseleave="commentPressEnd()"
-            oncontextmenu="
-                commentPressStart(
-                    event,
-                    '${comment.id}',
-                    '${userId}'
-                )
-            "
-            ondblclick="
-                commentDoubleTap('${comment.id}')
-            "
-            style="
-                position:relative;
-                display:flex;
-                gap:9px;
-                padding:9px 0 9px 38px;
-                transition:transform .2s ease;
-            "
-        >
+    <div
+        id="comment-${comment.id}"
+        data-comment="${comment.id}"
+        class="commentCard replyCard"
+        data-parent-id="${comment.parent_id || ""}"
+        data-user-id="${userId}"
+        data-user-name="${safeName}"
+
+        onmousedown="
+            commentPressStart(
+                event,
+                '${comment.id}',
+                '${userId}'
+            )
+        "
+
+        onmouseup="commentPressEnd()"
+
+        onmouseleave="commentPressEnd()"
+
+        oncontextmenu="
+            commentPressStart(
+                event,
+                '${comment.id}',
+                '${userId}'
+            )
+        "
+
+        ondblclick="
+            commentDoubleTap('${comment.id}')
+        "
+
+        style="
+            position:relative;
+            display:flex;
+            gap:9px;
+            padding:9px 0 9px 38px;
+            transition:transform .2s ease;
+        "
+    >
 
             ${avatarHtml}
 
@@ -7165,25 +7154,30 @@ window.renderReply = function(comment) {
                         </span>
                     </button>
 
-                    <button
-                        onclick="
-                            event.stopPropagation();
-                            replyToComment(
-                                '${comment.id}',
-                                '${safeName.replace(/'/g, "\\'")}',
-                                '${userId}'
-                            )
-                        "
-                        style="
-                            border:0;
-                            background:none;
-                            color:#999;
-                            font-size:12px;
-                            cursor:pointer;
-                        "
-                    >
-                        Reply
-                    </button>
+<button
+    type="button"
+    onclick="
+        event.preventDefault();
+        event.stopPropagation();
+
+        replyToComment(
+            '${comment.id}',
+            ${safeReplyName},
+            '${userId}'
+        );
+
+        return false;
+    "
+    style="
+        border:0;
+        background:none;
+        color:#999;
+        font-size:12px;
+        cursor:pointer;
+    "
+>
+    Reply
+</button>
 
                 </div>
 
@@ -7263,6 +7257,7 @@ window.renderReply = function(comment) {
     `;
 }
 
+
 window.loadMoreComments = function () {
 
     if (!hasMoreComments || loadingComments) return;
@@ -7275,24 +7270,37 @@ window.loadMoreComments = function () {
 
 window.loadReplies = async function(parentId) {
 
+    console.log("📥 Loading replies for parent:", parentId);
+
     const container =
         document.getElementById("replies-" + parentId);
 
-    if (!container) return;
+    if (!container) {
+        console.warn(
+            "❌ No replies container for:",
+            parentId
+        );
+        return;
+    }
 
-  if (!window.replyPages) {
-    window.replyPages = {};
-}
+    /*
+     * -----------------------------------------
+     * INITIALIZE PAGINATION
+     * -----------------------------------------
+     */
 
-if (
-    typeof window.replyPages[parentId] ===
-    "undefined"
-) {
-    window.replyPages[parentId] = 0;
-}
+    window.replyPages =
+        window.replyPages || {};
 
-const page =
-    window.replyPages[parentId];
+    if (
+        typeof window.replyPages[parentId] ===
+        "undefined"
+    ) {
+        window.replyPages[parentId] = 0;
+    }
+
+    const page =
+        window.replyPages[parentId];
 
     const from =
         page * REPLIES_PER_PAGE;
@@ -7302,7 +7310,7 @@ const page =
 
     /*
      * -----------------------------------------
-     * LOADING INDICATOR
+     * LOADING
      * -----------------------------------------
      */
 
@@ -7344,62 +7352,83 @@ const page =
     const myId =
         session?.user?.id || null;
 
-/*
- * -----------------------------------------
- * LOAD REPLIES
- * -----------------------------------------
- */
+    /*
+     * -----------------------------------------
+     * LOAD ONLY CHILDREN OF THIS EXACT COMMENT
+     * -----------------------------------------
+     */
 
-const {
-    data,
-    error
-} = await supabase
-    .from("comments")
-    .select(`
-        *,
+    const {
+        data,
+        error
+    } = await supabase
+        .from("comments")
+        .select(`
+            *,
 
-        comment_user:profiles!comments_user_id_fkey(
-            id,
-            name,
-            avatar_url,
-            verified
-        ),
+            comment_user:profiles!comments_user_id_fkey(
+                id,
+                name,
+                avatar_url,
+                verified
+            ),
 
-        reply_to_user:profiles!comments_reply_to_user_id_fkey(
-            id,
-            name
-        ),
+            reply_to_user:profiles!comments_reply_to_user_id_fkey(
+                id,
+                name
+            ),
 
-        comment_likes(
-            user_id
-        ),
+            comment_likes(
+                user_id
+            ),
 
-        comment_reactions(
-            user_id,
-            emoji
-        ),
+            comment_reactions(
+                user_id,
+                emoji
+            ),
 
-        comment_reads(
-            user_id
+            comment_reads(
+                user_id
+            )
+        `)
+        .eq(
+            "parent_id",
+            parentId
         )
-    `)
-    .eq("parent_id", parentId)
-    .order("created_at", {
-        ascending: true
-    })
-    .range(from, to);
+        .order(
+            "created_at",
+            {
+                ascending: true
+            }
+        )
+        .range(
+            from,
+            to
+        );
 
     loading?.remove();
 
+    /*
+     * -----------------------------------------
+     * ERROR
+     * -----------------------------------------
+     */
+
     if (error) {
 
-    console.error(
-        "❌ loadReplies error:",
-        error
-    );
+        console.error(
+            "❌ loadReplies error:",
+            error
+        );
 
-    return;
-}
+        return;
+    }
+
+    console.log(
+        "✅ Replies found:",
+        parentId,
+        data
+    );
 
     /*
      * -----------------------------------------
@@ -7407,25 +7436,36 @@ const {
      * -----------------------------------------
      */
 
-    if (!data || data.length === 0) {
+    if (
+        !data ||
+        data.length === 0
+    ) {
 
         if (page === 0) {
 
-            container.insertAdjacentHTML(
-                "beforeend",
-                `
-                <div
-                    class="noReplies"
-                    style="
-                        color:#777;
-                        font-size:12px;
-                        padding:8px 0 8px 10px;
-                    "
-                >
-                    No replies yet.
-                </div>
-                `
-            );
+            if (
+                !container.querySelector(
+                    ".noReplies"
+                )
+            ) {
+
+                container.insertAdjacentHTML(
+                    "beforeend",
+                    `
+                    <div
+                        class="noReplies"
+                        style="
+                            color:#777;
+                            font-size:12px;
+                            padding:8px 0 8px 10px;
+                        "
+                    >
+                        No replies yet.
+                    </div>
+                    `
+                );
+
+            }
 
         }
 
@@ -7433,7 +7473,19 @@ const {
     }
 
     /*
-     * Remove old load-more button
+     * -----------------------------------------
+     * REMOVE EMPTY MESSAGE
+     * -----------------------------------------
+     */
+
+    container
+        .querySelector(".noReplies")
+        ?.remove();
+
+    /*
+     * -----------------------------------------
+     * REMOVE OLD LOAD MORE BUTTON
+     * -----------------------------------------
      */
 
     document
@@ -7443,23 +7495,28 @@ const {
         ?.remove();
 
     /*
-     * Remove "No replies yet"
-     */
-
-    container
-        .querySelector(".noReplies")
-        ?.remove();
-
-    /*
      * -----------------------------------------
-     * INSERT REPLIES
+     * RENDER EACH REPLY
      * -----------------------------------------
      */
 
-    for (const reply of data) {
+    for (
+        const reply of data
+    ) {
+
+        console.log(
+            "🧩 Rendering reply:",
+            {
+                id: reply.id,
+                parent_id: reply.parent_id,
+                user_id: reply.user_id,
+                reply_to_user_id:
+                    reply.reply_to_user_id
+            }
+        );
 
         /*
-         * Prevent duplicates
+         * Prevent duplicate DOM nodes
          */
 
         if (
@@ -7471,49 +7528,32 @@ const {
         }
 
         /*
-         * -------------------------------------
-         * RENDER
-         * -------------------------------------
+         * Render THIS exact reply
          */
 
         const html =
             renderReply(reply);
 
         /*
-         * Insert into thread
+         * Add it to THIS parent's container
          */
 
-        const moreButton =
-            document.getElementById(
-                "moreReplies-" + parentId
-            );
-
-        if (moreButton) {
-
-            moreButton.insertAdjacentHTML(
-                "beforebegin",
-                html
-            );
-
-        } else {
-
-            container.insertAdjacentHTML(
-                "beforeend",
-                html
-            );
-
-        }
+        container.insertAdjacentHTML(
+            "beforeend",
+            html
+        );
 
         /*
          * -------------------------------------
-         * MARK REPLY AS SEEN
+         * MARK AS READ
          * -------------------------------------
          */
 
         if (
             myId &&
             !reply.comment_reads?.some(
-                r => r.user_id === myId
+                r =>
+                    r.user_id === myId
             )
         ) {
 
@@ -7521,27 +7561,39 @@ const {
                 .from("comment_reads")
                 .upsert(
                     {
-                        comment_id: reply.id,
-                        user_id: myId
+                        comment_id:
+                            reply.id,
+
+                        user_id:
+                            myId
                     },
                     {
                         onConflict:
                             "comment_id,user_id"
                     }
                 );
-
         }
 
         /*
          * -------------------------------------
-         * CHECK FOR NESTED REPLIES
+         * CHECK THIS REPLY FOR ITS OWN REPLIES
          * -------------------------------------
+         *
+         * Example:
+         *
+         * parentId = 52
+         * reply.id = 54
+         *
+         * We now check:
+         *
+         * parent_id = 54
+         *
+         * NOT parent_id = 52
          */
 
         await loadNestedReplyButton(
             reply.id
         );
-
     }
 
     /*
@@ -7554,23 +7606,23 @@ const {
 
     /*
      * -----------------------------------------
-     * SHOW THREAD
+     * MARK THIS THREAD OPEN
      * -----------------------------------------
      */
 
-    container.style.display = "block";
+    window.expandedReplies =
+        window.expandedReplies || new Set();
 
-    if (
-        typeof expandedReplies !== "undefined"
-    ) {
+    window.expandedReplies.add(
+        parentId
+    );
 
-        window.expandedReplies.add(parentId);
-
-    }
+    container.style.display =
+        "block";
 
     /*
      * -----------------------------------------
-     * MAIN THREAD BUTTON
+     * UPDATE THIS PARENT'S BUTTON
      * -----------------------------------------
      */
 
@@ -7586,7 +7638,6 @@ const {
 
         threadButton.textContent =
             "Hide replies";
-
     }
 
     /*
@@ -7596,7 +7647,8 @@ const {
      */
 
     if (
-        data.length === REPLIES_PER_PAGE
+        data.length ===
+        REPLIES_PER_PAGE
     ) {
 
         let moreButton =
@@ -7607,10 +7659,13 @@ const {
         if (!moreButton) {
 
             moreButton =
-                document.createElement("button");
+                document.createElement(
+                    "button"
+                );
 
             moreButton.id =
-                "moreReplies-" + parentId;
+                "moreReplies-" +
+                parentId;
 
             moreButton.textContent =
                 "Load more replies";
@@ -7625,42 +7680,38 @@ const {
                 cursor:pointer;
             `;
 
-            moreButton.onclick = async () => {
+            moreButton.onclick =
+                async function() {
 
-                moreButton.disabled = true;
+                    moreButton.disabled =
+                        true;
 
-                try {
+                    try {
 
-                    await loadReplies(
-                        parentId
-                    );
+                        await loadReplies(
+                            parentId
+                        );
 
-                } finally {
+                    } finally {
 
-                    if (
-                        document.body.contains(
-                            moreButton
-                        )
-                    ) {
+                        if (
+                            document.body.contains(
+                                moreButton
+                            )
+                        ) {
 
-                        moreButton.disabled =
-                            false;
-
+                            moreButton.disabled =
+                                false;
+                        }
                     }
-
-                }
-
-            };
+                };
 
             container.appendChild(
                 moreButton
             );
-
         }
-
     }
-
-}
+};
 
 
 /* =====================================================
@@ -7796,40 +7847,43 @@ async function insertComment(commentId) {
         session?.user?.id || null;
 
     const {
-        data: comment,
-        error
-    } = await supabase
-        .from("comments")
-        .select(`
-            *,
+    data: comment,
+    error
+} = await supabase
+    .from("comments")
+    .select(`
+        *,
 
-            profiles(
-                id,
-                name,
-                avatar_url,
-                verified
-            ),
+        comment_user:profiles!comments_user_id_fkey(
+            id,
+            name,
+            avatar_url,
+            verified
+        ),
 
-            comment_likes(
-                user_id
-            ),
+        reply_to_user:profiles!comments_reply_to_user_id_fkey(
+            id,
+            name
+        ),
 
-            comment_reactions(
-                user_id,
-                emoji
-            ),
+        comment_likes(
+            user_id
+        ),
 
-            comment_reads(
-                user_id,
+        comment_reactions(
+            user_id,
+            emoji
+        ),
 
-                profiles(
-                    id,
-                    name
-                )
-            )
-        `)
-        .eq("id", commentId)
-        .single();
+        comment_reads(
+            user_id
+        )
+    `)
+    .eq(
+        "id",
+        commentId
+    )
+    .single();
 
     if (error || !comment) {
         console.error(
@@ -8249,21 +8303,26 @@ window.toggleReplies = async function(parentId) {
 
 window.replyToComment = function(commentId, name, userId) {
 
-    replyingToComment = commentId;
-    window.replyingToComment = commentId;
+    const exactCommentId = String(commentId);
 
-    replyingToUserId = userId;
-    window.replyingToUserId = userId;
+    console.log("🎯 EXACT REPLY TARGET:", {
+        commentId: exactCommentId,
+        name: name,
+        userId: userId
+    });
+
+    // ONLY this exact comment becomes the parent
+    window.replyingToComment = exactCommentId;
+
+    // Only the owner of that exact comment
+    window.replyingToUserId = userId || null;
 
     window.replyDepth = "thread";
 
     const input =
         document.getElementById("panelInput");
 
-    if (!input) {
-        console.error("❌ panelInput not found");
-        return;
-    }
+    if (!input) return;
 
     input.value = `@${name} `;
     input.placeholder = `Reply to ${name}...`;
@@ -8279,7 +8338,7 @@ window.replyToComment = function(commentId, name, userId) {
     }
 
     if (previewText) {
-        previewText.textContent = name;
+        previewText.textContent = `@${name}`;
     }
 
     input.focus();
@@ -8292,27 +8351,24 @@ window.replyToComment = function(commentId, name, userId) {
 
 window.cancelReply = function() {
 
-    replyingToComment = null;
-    replyingToUserId = null;
-
     window.replyingToComment = null;
     window.replyingToUserId = null;
+    window.replyDepth = "parent";
 
-    const input = document.getElementById("panelInput");
+    const input =
+        document.getElementById("panelInput");
 
     if (input) {
-
         input.value = "";
         input.placeholder = "Add a comment...";
-
     }
 
-    const preview = document.getElementById("replyPreview");
+    const preview =
+        document.getElementById("replyPreview");
 
     if (preview) {
         preview.style.display = "none";
     }
-
 };
 
 window.likeComment = async function(commentId) {
@@ -8718,18 +8774,6 @@ function commentDoubleTap(commentId) {
 
 window.commentDoubleTap = commentDoubleTap;
 
-function commentSwipeStart(e, commentId, name, userId) {
-
-    commentSwipeStartX = e.touches[0].clientX;
-
-    commentSwipeTarget = {
-        commentId,
-        name,
-        userId
-    };
-
-}
-
 function showCommentHeart(commentId) {
 
     const card = document.getElementById("comment-" + commentId);
@@ -8772,59 +8816,201 @@ function showCommentHeart(commentId) {
 
 window.showCommentHeart = showCommentHeart;
 
-function commentSwipeMove(e) {
+let commentSwipeStartX = 0;
+let commentSwipeStartY = 0;
+let commentSwipeTarget = null;
+let commentSwipeActive = false;
 
-    if (!commentSwipeTarget) return;
+function commentSwipeStart(e, commentId, name, userId) {
 
-    const diff = e.touches[0].clientX - commentSwipeStartX;
-
-    const card = document.getElementById(
-        "comment-" + commentSwipeTarget.commentId
-    );
-
-    if (!card) return;
-
-    if (diff > 0) {
-
-        card.style.transform =
-            `translateX(${Math.min(diff,80)}px)`;
-
+    if (!e.touches || !e.touches.length) {
+        return;
     }
 
+    const touch = e.touches[0];
+
+    commentSwipeStartX = touch.clientX;
+    commentSwipeStartY = touch.clientY;
+
+    commentSwipeTarget = {
+        commentId: String(commentId),
+        name: String(name || "User"),
+        userId: String(userId || "")
+    };
+
+    commentSwipeActive = false;
 }
 
-function commentSwipeEnd() {
 
-    if (!commentSwipeTarget) return;
+function commentSwipeMove(e) {
+
+    if (
+        !commentSwipeTarget ||
+        !e.touches ||
+        !e.touches.length
+    ) {
+        return;
+    }
+
+    const touch = e.touches[0];
+
+    const diffX =
+        touch.clientX - commentSwipeStartX;
+
+    const diffY =
+        touch.clientY - commentSwipeStartY;
+
+    // Ignore normal vertical scrolling
+    if (Math.abs(diffY) > Math.abs(diffX)) {
+        return;
+    }
+
+    // Only allow right swipe
+    if (diffX <= 0) {
+        return;
+    }
 
     const card = document.getElementById(
         "comment-" + commentSwipeTarget.commentId
     );
+
+    if (!card) {
+        return;
+    }
+
+    commentSwipeActive = true;
+
+    e.preventDefault();
+
+    const distance = Math.min(diffX, 80);
+
+    card.style.transform =
+        `translateX(${distance}px)`;
+}
+
+
+function commentSwipeEnd(e) {
+
+    if (!commentSwipeTarget) {
+        return;
+    }
+
+    const target = {
+        commentId: commentSwipeTarget.commentId,
+        name: commentSwipeTarget.name,
+        userId: commentSwipeTarget.userId
+    };
+
+    const card = document.getElementById(
+        "comment-" + target.commentId
+    );
+
+    let moved = 0;
 
     if (card) {
 
-        const moved =
-            parseFloat(
-                card.style.transform.replace(/[^\d.]/g, "")
-            ) || 0;
+        const transform =
+            card.style.transform || "";
 
-        card.style.transform = "";
-
-        if (moved > 60) {
-
-            replyToComment(
-                commentSwipeTarget.commentId,
-                commentSwipeTarget.name,
-                commentSwipeTarget.userId
+        const match =
+            transform.match(
+                /translateX\(([-\d.]+)px\)/
             );
 
+        if (match) {
+            moved = parseFloat(match[1]) || 0;
         }
 
+        card.style.transform = "";
     }
 
     commentSwipeTarget = null;
+    commentSwipeActive = false;
 
+    if (moved >= 60) {
+
+        console.log(
+            "🎯 SWIPE REPLY EXACT COMMENT:",
+            target.commentId
+        );
+
+        replyToComment(
+            target.commentId,
+            target.name,
+            target.userId
+        );
+    }
 }
+
+document.addEventListener("touchstart", function(e) {
+
+    const card =
+        e.target.closest(".commentItem, .replyCard");
+
+    if (!card) {
+        return;
+    }
+
+    const commentId =
+        card.dataset.commentId ||
+        card.dataset.comment ||
+        card.id.replace("comment-", "");
+
+    const userId =
+        card.dataset.userId || "";
+
+    const name =
+        card.dataset.userName || "User";
+
+    commentPressStart(
+        e,
+        commentId,
+        userId
+    );
+
+    commentSwipeStart(
+        e,
+        commentId,
+        name,
+        userId
+    );
+
+}, { passive: true });
+
+
+document.addEventListener("touchmove", function(e) {
+
+    if (!commentSwipeTarget) {
+        return;
+    }
+
+    commentSwipeMove(e);
+
+}, { passive: false });
+
+
+document.addEventListener("touchend", function(e) {
+
+    if (!commentSwipeTarget) {
+        return;
+    }
+
+    commentPressEnd();
+    commentSwipeEnd(e);
+
+}, { passive: true });
+
+
+document.addEventListener("touchcancel", function(e) {
+
+    if (!commentSwipeTarget) {
+        return;
+    }
+
+    commentPressEnd();
+    commentSwipeEnd(e);
+
+}, { passive: true });
 
 let selectedCommentId = null;
 let selectedCommentUserId = null;
@@ -13228,38 +13414,44 @@ const regex =
             clearBtn.style.display = search ? "block" : "none";
         }
 
-       document.querySelectorAll("[id^='comment-']").forEach(comment => {
+       document.querySelectorAll(".commentCard").forEach(comment => {
 
     const username =
-    comment.querySelector("b")?.innerText.toLowerCase() || "";
+        comment.querySelector("b")?.innerText.toLowerCase() || "";
 
-const body =
-    comment.querySelector("[data-comment]")?.innerText.toLowerCase() || "";
+    const body =
+        comment.querySelector("[data-comment]")?.innerText.toLowerCase() || "";
 
-const mentions = body.match(/@\w+/g)?.join(" ") || "";
+    const mentions =
+        body.match(/@\w+/g)?.join(" ") || "";
 
-const text = `${username} ${body} ${mentions}`;
+    const text =
+        `${username} ${body} ${mentions}`;
 
     const visible =
-    search === "" || text.includes(search);
+        search === "" || text.includes(search);
 
-    comment.style.display = visible ? "" : "none";
+    comment.style.display =
+        visible ? "" : "none";
 
     if (!search || !regex) return;
 
-comment.querySelectorAll(
-    "[data-comment]"
-).forEach(el => {
+    comment.querySelectorAll("[data-comment]").forEach(el => {
 
-    el.innerHTML =
-        el.innerHTML.replace(
-            regex,
-            `<mark style="background:#ffd54f;color:#000;border-radius:4px;padding:0 2px;">$1</mark>`
-        );
-
-});
+        el.innerHTML =
+            el.innerHTML.replace(
+                regex,
+                `<mark style="
+                    background:#ffd54f;
+                    color:#000;
+                    border-radius:4px;
+                    padding:0 2px;
+                ">$1</mark>`
+            );
 
     });
+
+});
 
   };
 
@@ -13278,10 +13470,17 @@ filterButtons.forEach(btn => {
         commentFilter = btn.dataset.filter;
 
         commentsPage = 0;
-        hasMoreComments = true;
-        loadingComments = false;
+hasMoreComments = true;
+loadingComments = false;
 
-        loadComments(currentPostId);
+const panelComments =
+    document.getElementById("panelComments");
+
+if (panelComments) {
+    panelComments.innerHTML = "";
+}
+
+loadComments(currentPostId);
 
     };
 
@@ -13451,10 +13650,12 @@ if (selectedCommentMedia) {
 }
 
 const parentCommentId =
-    window.replyingToComment || null;
+    window.replyingToComment
+        ? String(window.replyingToComment)
+        : null;
 
 const parentReplyUserId =
-    replyingToUserId || null;
+    window.replyingToUserId || null;
     
     console.log("COMMENT FK CHECK:", {
     post_id: currentPostId,
@@ -13722,9 +13923,10 @@ if (previewContent) {
 }
 
 // Reset reply mode
-replyingToComment = null;
-replyingToUserId = null;
 window.replyingToComment = null;
+window.replyingToUserId = null;
+window.replyDepth = "parent";
+
 input.placeholder = "Add a comment...";
 
 // Hide reply preview
