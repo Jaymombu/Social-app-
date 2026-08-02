@@ -8421,162 +8421,325 @@ window.cancelReply = function() {
 
 window.likeComment = async function(commentId) {
 
-    commentDebug(
-        "❤️ LIKE STARTED",
-        {
-            commentId: commentId
-        }
-    );
-
-    if (!commentId) {
-
-        commentDebug("❌ No commentId received");
-
-        return;
-    }
+    if (!commentId) return;
 
     const {
         data: { session },
         error: sessionError
     } = await supabase.auth.getSession();
 
-    if (sessionError) {
-
+    if (sessionError || !session) {
         commentDebug(
-            "❌ SESSION ERROR",
-            sessionError
+            "❌ NO ACTIVE SESSION",
+            sessionError || null
         );
-
-        return;
-    }
-
-    if (!session) {
-
-        commentDebug(
-            "❌ NO ACTIVE SESSION"
-        );
-
         return;
     }
 
     const userId = session.user.id;
 
-    commentDebug(
-        "✅ SESSION FOUND",
-        {
-            userId: userId,
-            email: session.user.email || "hidden"
-        }
-    );
-
-    /*
-     * CHECK EXISTING LIKE
-     */
-
-    const {
-        data: existing,
-        error: existingError
-    } = await supabase
-        .from("comment_likes")
-        .select("id")
-        .eq("comment_id", commentId)
-        .eq("user_id", userId)
-        .maybeSingle();
-
-    if (existingError) {
-
-        commentDebug(
-            "❌ CHECK EXISTING LIKE FAILED",
-            existingError
+    const button =
+        document.getElementById(
+            "commentLike-" + commentId
         );
 
+    const count =
+        document.getElementById(
+            "commentLikeCount-" + commentId
+        );
+
+    /*
+     * =========================================
+     * PREVENT DOUBLE TAP
+     * =========================================
+     */
+
+    if (
+        button &&
+        button.dataset.liking === "true"
+    ) {
         return;
     }
 
-    commentDebug(
-        "✅ EXISTING LIKE CHECK COMPLETE",
-        {
-            existing: existing
-        }
-    );
+    if (button) {
+        button.dataset.liking = "true";
+    }
 
-    /*
-     * UNLIKE
-     */
+    try {
 
-    if (existing) {
+        /*
+         * =========================================
+         * CHECK DATABASE
+         * =========================================
+         */
 
         const {
-            error: deleteError
+            data: existing,
+            error: existingError
         } = await supabase
             .from("comment_likes")
-            .delete()
-            .eq("id", existing.id);
+            .select("id")
+            .eq("comment_id", commentId)
+            .eq("user_id", userId)
+            .maybeSingle();
 
-        if (deleteError) {
+        if (existingError) {
 
             commentDebug(
-                "❌ UNLIKE FAILED",
-                deleteError
+                "❌ CHECK LIKE FAILED",
+                {
+                    message: existingError.message,
+                    code: existingError.code
+                }
             );
 
             return;
         }
 
-        commentDebug(
-            "✅ LIKE REMOVED",
+
+        /*
+         * =========================================
+         * UNLIKE
+         * =========================================
+         */
+
+        if (existing) {
+
+            /*
+             * UPDATE UI IMMEDIATELY
+             */
+
+            if (button) {
+                button.style.background = "#232323";
+            }
+
+            if (count) {
+
+                const current =
+                    Number(count.textContent) || 0;
+
+                count.textContent =
+                    Math.max(0, current - 1);
+            }
+
+
+            /*
+             * DELETE FROM DATABASE
+             */
+
+            const {
+                error: deleteError
+            } = await supabase
+                .from("comment_likes")
+                .delete()
+                .eq("id", existing.id);
+
+
+            if (deleteError) {
+
+                /*
+                 * ROLLBACK UI
+                 */
+
+                if (button) {
+                    button.style.background =
+                        "#ff3040";
+                }
+
+                if (count) {
+
+                    const current =
+                        Number(count.textContent) || 0;
+
+                    count.textContent =
+                        current + 1;
+                }
+
+                commentDebug(
+                    "❌ UNLIKE FAILED — UI ROLLED BACK",
+                    {
+                        message:
+                            deleteError.message,
+
+                        code:
+                            deleteError.code
+                    }
+                );
+
+                return;
+            }
+
+
+            /*
+             * UPDATE STORED COUNT
+             */
+
+            const {
+                error: rpcError
+            } = await supabase.rpc(
+                "decrement_comment_likes",
+                {
+                    comment_id_input:
+                        commentId
+                }
+            );
+
+
+            if (rpcError) {
+
+                commentDebug(
+                    "⚠️ LIKE REMOVED BUT COUNT RPC FAILED",
+                    rpcError
+                );
+            }
+
+
+            commentDebug(
+                "✅ UNLIKED",
+                {
+                    commentId: commentId
+                }
+            );
+
+            return;
+        }
+
+
+        /*
+         * =========================================
+         * LIKE
+         * =========================================
+         */
+
+        /*
+         * UPDATE UI IMMEDIATELY
+         */
+
+        if (button) {
+            button.style.background = "#ff3040";
+        }
+
+        if (count) {
+
+            const current =
+                Number(count.textContent) || 0;
+
+            count.textContent =
+                current + 1;
+        }
+
+
+        /*
+         * INSERT INTO DATABASE
+         */
+
+        const {
+            error: insertError
+        } = await supabase
+            .from("comment_likes")
+            .insert({
+                comment_id: commentId,
+                user_id: userId
+            });
+
+
+        if (insertError) {
+
+            /*
+             * ROLLBACK UI
+             */
+
+            if (button) {
+                button.style.background =
+                    "#232323";
+            }
+
+            if (count) {
+
+                const current =
+                    Number(count.textContent) || 0;
+
+                count.textContent =
+                    Math.max(0, current - 1);
+            }
+
+            commentDebug(
+                "❌ LIKE FAILED — UI ROLLED BACK",
+                {
+                    message:
+                        insertError.message,
+
+                    details:
+                        insertError.details,
+
+                    hint:
+                        insertError.hint,
+
+                    code:
+                        insertError.code
+                }
+            );
+
+            return;
+        }
+
+
+        /*
+         * =========================================
+         * UPDATE STORED COMMENTS COUNT
+         * =========================================
+         */
+
+        const {
+            error: rpcError
+        } = await supabase.rpc(
+            "increment_comment_likes",
             {
-                likeId: existing.id,
+                comment_id_input:
+                    commentId
+            }
+        );
+
+
+        if (rpcError) {
+
+            commentDebug(
+                "⚠️ LIKE SAVED BUT COUNT RPC FAILED",
+                rpcError
+            );
+
+        }
+
+
+        commentDebug(
+            "❤️ LIKED",
+            {
                 commentId: commentId
             }
         );
 
-        return;
-    }
 
-    /*
-     * INSERT LIKE
-     */
-
-    commentDebug(
-        "⏳ INSERTING LIKE",
-        {
-            comment_id: commentId,
-            user_id: userId
-        }
-    );
-
-    const {
-        data: insertedLike,
-        error: insertError
-    } = await supabase
-        .from("comment_likes")
-        .insert({
-            comment_id: commentId,
-            user_id: userId
-        })
-        .select()
-        .single();
-
-    if (insertError) {
+    } catch (error) {
 
         commentDebug(
-            "❌ LIKE INSERT FAILED",
+            "💥 LIKE ERROR",
             {
-                message: insertError.message,
-                details: insertError.details,
-                hint: insertError.hint,
-                code: insertError.code
+                message:
+                    error?.message,
+
+                stack:
+                    error?.stack || null
             }
         );
 
-        return;
+    } finally {
+
+        if (button) {
+            button.dataset.liking = "false";
+        }
+
     }
 
-    commentDebug(
-        "🎉 LIKE INSERTED SUCCESSFULLY",
-        insertedLike
-    );
 };
 
 function commentDebug(message, data = null) {
