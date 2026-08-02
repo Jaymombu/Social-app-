@@ -6009,13 +6009,29 @@ loadingComments = true;
   let query = supabase
     .from("comments")
     .select(`
-        *,
-        profiles:profiles!comments_user_id_fkey (
+    *,
+    profiles:profiles!comments_user_id_fkey (
+        id,
+        name,
+        avatar_url,
+        verified
+    ),
+    comment_likes (
+        id,
+        user_id
+    ),
+    comment_reactions (
+        id,
+        user_id,
+        emoji
+    ),
+    comment_reads (
+        user_id,
+        profiles (
             id,
-            name,
-            avatar_url,
-            verified
-        )
+            name
+          )
+       )
     `)
     .eq("post_id", postId)
     .eq("hidden", false);
@@ -6048,6 +6064,21 @@ const { data, error } = await query.range(
 
 console.log("🔥 POST ID:", postId);
 console.log("🔥 COMMENTS DATA:", data);
+if (data?.length) {
+
+    console.log("🧪 FIRST COMMENT:", data[0]);
+
+    console.log(
+        "❤️ LIKES:",
+        data[0].comment_likes
+    );
+
+    console.log(
+        "😀 REACTIONS:",
+        data[0].comment_reactions
+    );
+
+}
 console.log("🔥 COMMENTS ERROR:", error);
 console.log("🔥 COMMENTS PAGE:", commentsPage);
 console.log("🔥 COMMENTS CONTAINER:", document.getElementById("panelComments"));
@@ -6209,7 +6240,13 @@ if (data.length === COMMENTS_PER_PAGE) {
 
 function renderCommentsList(data, myId) {
 
-    const parents = data.filter(c => !c.parent_id);
+    if (!Array.isArray(data)) {
+        return "";
+    }
+
+    const parents = data.filter(
+        c => !c.parent_id
+    );
 
     return parents.map(comment => {
 
@@ -6244,7 +6281,11 @@ function renderCommentsList(data, myId) {
                             "
                         >
                             💬 View ${replyCount}
-                            ${replyCount === 1 ? "reply" : "replies"}
+                            ${
+                                replyCount === 1
+                                    ? "reply"
+                                    : "replies"
+                            }
                         </div>
                     `
                     : ""
@@ -6616,6 +6657,11 @@ window.renderReply = function(comment) {
         Array.isArray(comment.comment_likes)
             ? comment.comment_likes.length
             : 0;
+    const isLiked =
+        Array.isArray(comment.comment_likes) &&
+         comment.comment_likes.some(
+         like => like.user_id === window.currentUserId
+      );        
 
     const reactionHtml =
         renderCommentReactions(comment);
@@ -6985,7 +7031,7 @@ window.renderReply = function(comment) {
         class="commentCard replyCard"
         data-parent-id="${comment.parent_id || ""}"
         data-user-id="${userId}"
-        data-user-name="${safeName}"
+        data-user-name="${escapeHtml(name)}"
 
         onmousedown="
             commentPressStart(
@@ -7138,7 +7184,7 @@ window.renderReply = function(comment) {
                         "
                         style="
                             border:0;
-                            background:#232323;
+                            background:${isLiked ? "#ff3040" : "#232323"};
                             color:white;
                             border-radius:15px;
                             padding:4px 8px;
@@ -7379,34 +7425,36 @@ window.loadReplies = async function(parentId) {
             ),
 
             comment_likes(
-                user_id
+               id,
+              user_id
             ),
 
             comment_reactions(
-                user_id,
-                emoji
+               id,
+              user_id,
+              emoji
             ),
 
             comment_reads(
                 user_id
             )
         `)
-        .eq(
-            "parent_id",
-            parentId
-        )
-        .order(
-            "created_at",
-            {
-                ascending: true
-            }
-        )
-        .range(
-            from,
-            to
-        );
+  .eq(
+    "parent_id",
+    parentId
+  )
+  .order(
+    "created_at",
+    {
+      ascending: true
+    }
+  )
+  .range(
+    from,
+    to
+  );
 
-    loading?.remove();
+loading?.remove();
 
     /*
      * -----------------------------------------
@@ -8373,28 +8421,56 @@ window.cancelReply = function() {
 
 window.likeComment = async function(commentId) {
 
+    commentDebug(
+        "❤️ LIKE STARTED",
+        {
+            commentId: commentId
+        }
+    );
+
+    if (!commentId) {
+
+        commentDebug("❌ No commentId received");
+
+        return;
+    }
+
     const {
-        data: { session }
+        data: { session },
+        error: sessionError
     } = await supabase.auth.getSession();
 
-    if (!session) return;
+    if (sessionError) {
+
+        commentDebug(
+            "❌ SESSION ERROR",
+            sessionError
+        );
+
+        return;
+    }
+
+    if (!session) {
+
+        commentDebug(
+            "❌ NO ACTIVE SESSION"
+        );
+
+        return;
+    }
 
     const userId = session.user.id;
 
-    const button =
-        document.getElementById(
-            "commentLike-" + commentId
-        );
-
-    const count =
-        document.getElementById(
-            "commentLikeCount-" + commentId
-        );
+    commentDebug(
+        "✅ SESSION FOUND",
+        {
+            userId: userId,
+            email: session.user.email || "hidden"
+        }
+    );
 
     /*
-     * -----------------------------------------
      * CHECK EXISTING LIKE
-     * -----------------------------------------
      */
 
     const {
@@ -8409,278 +8485,98 @@ window.likeComment = async function(commentId) {
 
     if (existingError) {
 
-        console.error(
-            "Check comment like:",
+        commentDebug(
+            "❌ CHECK EXISTING LIKE FAILED",
             existingError
         );
 
         return;
     }
 
+    commentDebug(
+        "✅ EXISTING LIKE CHECK COMPLETE",
+        {
+            existing: existing
+        }
+    );
+
     /*
-     * -----------------------------------------
      * UNLIKE
-     * -----------------------------------------
      */
 
     if (existing) {
 
-        const { error } = await supabase
+        const {
+            error: deleteError
+        } = await supabase
             .from("comment_likes")
             .delete()
             .eq("id", existing.id);
 
-        if (error) {
+        if (deleteError) {
 
-            console.error(
-                "Unlike comment:",
-                error
+            commentDebug(
+                "❌ UNLIKE FAILED",
+                deleteError
             );
 
             return;
         }
 
-        if (button) {
-            button.style.background =
-                "#232323";
-        }
-
-        if (count) {
-
-            count.textContent =
-                Math.max(
-                    0,
-                    Number(count.textContent || 0) - 1
-                );
-
-        }
-
-        await supabase.rpc(
-            "decrement_comment_likes",
+        commentDebug(
+            "✅ LIKE REMOVED",
             {
-                comment_id_input: commentId
+                likeId: existing.id,
+                commentId: commentId
             }
         );
 
-        await updateSingleComment(
-            commentId
-        );
-
         return;
     }
 
     /*
-     * -----------------------------------------
-     * LIKE
-     * -----------------------------------------
+     * INSERT LIKE
      */
 
-    const { error: insertError } =
-        await supabase
-            .from("comment_likes")
-            .insert({
-                comment_id: commentId,
-                user_id: userId
-            });
+    commentDebug(
+        "⏳ INSERTING LIKE",
+        {
+            comment_id: commentId,
+            user_id: userId
+        }
+    );
+
+    const {
+        data: insertedLike,
+        error: insertError
+    } = await supabase
+        .from("comment_likes")
+        .insert({
+            comment_id: commentId,
+            user_id: userId
+        })
+        .select()
+        .single();
 
     if (insertError) {
 
-        console.error(
-            "Like comment:",
-            insertError
+        commentDebug(
+            "❌ LIKE INSERT FAILED",
+            {
+                message: insertError.message,
+                details: insertError.details,
+                hint: insertError.hint,
+                code: insertError.code
+            }
         );
 
         return;
     }
 
-    if (button) {
-        button.style.background =
-            "#ff3040";
-    }
-
-    if (count) {
-
-        count.textContent =
-            Number(count.textContent || 0) + 1;
-
-    }
-
-    await supabase.rpc(
-        "increment_comment_likes",
-        {
-            comment_id_input: commentId
-        }
+    commentDebug(
+        "🎉 LIKE INSERTED SUCCESSFULLY",
+        insertedLike
     );
-
-    /*
-     * -----------------------------------------
-     * GET COMMENT OWNER
-     * -----------------------------------------
-     */
-
-    const {
-        data: comment,
-        error: commentError
-    } = await supabase
-        .from("comments")
-        .select("user_id, post_id")
-        .eq("id", commentId)
-        .single();
-
-    if (commentError || !comment) {
-
-        console.error(
-            "Get comment owner:",
-            commentError
-        );
-
-        await updateSingleComment(
-            commentId
-        );
-
-        return;
-    }
-
-    /*
-     * Don't notify yourself
-     */
-
-    if (comment.user_id === userId) {
-
-        await updateSingleComment(
-            commentId
-        );
-
-        return;
-    }
-
-    /*
-     * -----------------------------------------
-     * GET SENDER PROFILE
-     * -----------------------------------------
-     */
-
-    const { data: profile } =
-        await supabase
-            .from("profiles")
-            .select(
-                "name, avatar_url"
-            )
-            .eq("id", userId)
-            .single();
-
-    /*
-     * -----------------------------------------
-     * COMMENT LIKE NOTIFICATION
-     * -----------------------------------------
-     */
-
-    if (profile) {
-
-        const {
-            data: existingNotif
-        } = await supabase
-            .from("notifications")
-            .select("*")
-            .eq(
-                "user_id",
-                comment.user_id
-            )
-            .eq(
-                "sender_id",
-                userId
-            )
-            .eq(
-                "type",
-                "comment_like"
-            )
-            .eq(
-                "comment_id",
-                commentId
-            )
-            .maybeSingle();
-
-        if (existingNotif) {
-
-            await supabase
-                .from("notifications")
-                .update({
-                    count:
-                        (existingNotif.count || 1) + 1,
-
-                    username:
-                        profile.name,
-
-                    avatar_url:
-                        profile.avatar_url,
-
-                    message:
-                        "liked your comment",
-
-                    last_time:
-                        new Date(),
-
-                    read: false
-                })
-                .eq(
-                    "id",
-                    existingNotif.id
-                );
-
-        } else {
-
-            await supabase
-                .from("notifications")
-                .insert({
-                    user_id:
-                        comment.user_id,
-
-                    sender_id:
-                        userId,
-
-                    username:
-                        profile.name,
-
-                    avatar_url:
-                        profile.avatar_url,
-
-                    type:
-                        "comment_like",
-
-                    comment_id:
-                        commentId,
-
-                    post_id:
-                        comment.post_id,
-
-                    message:
-                        "liked your comment",
-
-                    count: 1,
-
-                    created_at:
-                        new Date(),
-
-                    last_time:
-                        new Date(),
-
-                    read: false
-                });
-
-        }
-
-    }
-
-    /*
-     * -----------------------------------------
-     * REFRESH COMMENT
-     * -----------------------------------------
-     */
-
-    await updateSingleComment(
-        commentId
-    );
-
 };
 
 function commentDebug(message, data = null) {
@@ -8738,7 +8634,7 @@ function commentDebug(message, data = null) {
     `;
 }
 
-let commentPressTimer;
+let commentPressTimer = null;
 
 function commentPressStart(event, commentId, userId) {
 
@@ -8746,15 +8642,30 @@ function commentPressStart(event, commentId, userId) {
         event.preventDefault();
     }
 
+    // Cancel any previous timer
+    clearTimeout(commentPressTimer);
+
     commentPressTimer = setTimeout(() => {
-        openCommentMenu(commentId, userId);
-    }, 500);
+
+        openCommentMenu(
+            commentId,
+            userId
+        );
+
+        commentPressTimer = null;
+
+    }, 800); // 800ms long press
 }
+
 
 function commentPressEnd() {
 
-    clearTimeout(commentPressTimer);
+    if (commentPressTimer) {
 
+        clearTimeout(commentPressTimer);
+
+        commentPressTimer = null;
+    }
 }
 
 function commentDoubleTap(commentId) {
@@ -8868,6 +8779,15 @@ function commentSwipeMove(e) {
     // Only allow right swipe
     if (diffX <= 0) {
         return;
+    }
+
+    /*
+     * USER HAS STARTED SWIPING
+     * Cancel long-press menu timer
+     */
+    if (typeof commentPressTimer !== "undefined") {
+        clearTimeout(commentPressTimer);
+        commentPressTimer = null;
     }
 
     const card = document.getElementById(
@@ -9017,78 +8937,121 @@ let selectedCommentUserId = null;
 
 window.openCommentMenu = async function(commentId, userId) {
 
-reactionCommentId = commentId;
+    // Store selected comment immediately
+    selectedCommentId = String(commentId);
+    selectedCommentUserId = String(userId || "");
+
+    reactionCommentId = selectedCommentId;
+
+    const menu = document.getElementById("commentMenu");
+
+    if (!menu) {
+        console.warn("commentMenu not found");
+        return;
+    }
+
+    /*
+     * IMPORTANT:
+     * Keep the menu hidden while we determine ownership.
+     * This prevents the wrong buttons from flashing.
+     */
+    menu.style.transform = "translateY(100%)";
 
     const {
         data: { session }
     } = await supabase.auth.getSession();
 
-    selectedCommentId = commentId;
-    selectedCommentUserId = userId;
+    const currentUserId =
+        session?.user?.id
+            ? String(session.user.id)
+            : "";
 
-    const isMine = session && session.user.id === userId;
-    
+    const commentOwnerId =
+        String(userId || "");
+
+    const postOwnerId =
+        String(window.currentPostOwnerId || "");
+
+    /*
+     * Determine permissions BEFORE showing menu
+     */
+    const isMine =
+        !!currentUserId &&
+        currentUserId === commentOwnerId;
+
     const isPostOwner =
-    session &&
-    session.user.id === window.currentPostOwnerId;
+        !!currentUserId &&
+        currentUserId === postOwnerId;
 
-    const menu = document.getElementById("commentMenu");
-
+    /*
+     * Get menu buttons
+     */
     const copyBtn =
-    document.getElementById("commentCopyBtn");
+        document.getElementById("commentCopyBtn");
 
-const editBtn =
-    document.getElementById("commentEditBtn");
+    const editBtn =
+        document.getElementById("commentEditBtn");
 
-const deleteBtn =
-    document.getElementById("commentDeleteBtn");
+    const deleteBtn =
+        document.getElementById("commentDeleteBtn");
 
-const pinBtn =
-    document.getElementById("commentPinBtn");
+    const pinBtn =
+        document.getElementById("commentPinBtn");
 
-const hideBtn =
-    document.getElementById("commentHideBtn");
+    const hideBtn =
+        document.getElementById("commentHideBtn");
 
-const reportBtn =
-    document.getElementById("commentReportBtn");
+    const reportBtn =
+        document.getElementById("commentReportBtn");
 
-if (copyBtn) {
-    copyBtn.style.display = "block";
-}
 
-if (editBtn) {
-    editBtn.style.display =
-        isMine ? "block" : "none";
-}
+    /*
+     * Set ALL button visibility BEFORE
+     * making the menu visible.
+     */
 
-if (deleteBtn) {
-    deleteBtn.style.display =
-        isMine ? "block" : "none";
-}
+    if (copyBtn) {
+        copyBtn.style.display = "block";
+    }
 
-if (pinBtn) {
-    pinBtn.style.display =
-        isPostOwner ? "block" : "none";
-}
+    if (editBtn) {
+        editBtn.style.display =
+            isMine ? "block" : "none";
+    }
 
-if (hideBtn) {
-    hideBtn.style.display =
-        isPostOwner ? "block" : "none";
-}
+    if (deleteBtn) {
+        deleteBtn.style.display =
+            isMine ? "block" : "none";
+    }
 
-if (reportBtn) {
-    reportBtn.style.display =
-        (!isMine && !isPostOwner)
-            ? "block"
-            : "none";
-}
+    if (pinBtn) {
+        pinBtn.style.display =
+            isPostOwner ? "block" : "none";
+    }
 
-if (menu) {
+    if (hideBtn) {
+        hideBtn.style.display =
+            isPostOwner ? "block" : "none";
+    }
+
+    if (reportBtn) {
+        reportBtn.style.display =
+            (!isMine && !isPostOwner)
+                ? "block"
+                : "none";
+    }
+
+
+    /*
+     * NOW show the menu.
+     *
+     * At this point all permissions have
+     * already been applied.
+     */
+
     menu.style.transform =
         "translateY(0)";
-  }
-  
-}
+};
 
 async function copySelectedComment() {
 
@@ -9551,44 +9514,55 @@ color:#8e8e8e;
     `;
 }
 
-function renderCommentReactions(comment){
+function renderCommentReactions(comment) {
 
-    if (!comment.comment_reactions?.length) return "";
+    if (
+        !Array.isArray(comment.comment_reactions) ||
+        comment.comment_reactions.length === 0
+    ) {
+        return "";
+    }
 
     const grouped = {};
 
-    comment.comment_reactions.forEach(r => {
+    comment.comment_reactions.forEach(reaction => {
 
-        if (!grouped[r.emoji]) {
-            grouped[r.emoji] = [];
+        if (!reaction || !reaction.emoji) {
+            return;
         }
 
-        grouped[r.emoji].push(r.user_id);
+        if (!grouped[reaction.emoji]) {
+            grouped[reaction.emoji] = [];
+        }
 
+        grouped[reaction.emoji].push(
+            reaction.user_id
+        );
     });
 
+    return Object.entries(grouped)
+        .map(([emoji, users]) => {
 
-    return Object.entries(grouped).map(([emoji, users]) => {
+            return `
+                <span
+                    onclick="openReactionUsers('${comment.id}', ${JSON.stringify(emoji)})"
+                    style="
+                        background:#2a2a2a;
+                        padding:5px 10px;
+                        border-radius:20px;
+                        font-size:14px;
+                        display:inline-flex;
+                        align-items:center;
+                        gap:5px;
+                        cursor:pointer;
+                    "
+                >
+                    ${emoji} ${users.length}
+                </span>
+            `;
 
-        return `
-        <span
-        onclick="openReactionUsers('${comment.id}','${emoji}')"
-        style="
-        background:#2a2a2a;
-        padding:5px 10px;
-        border-radius:20px;
-        font-size:14px;
-        display:inline-flex;
-        align-items:center;
-        gap:5px;
-        cursor:pointer;
-        ">
-            ${emoji} ${users.length}
-        </span>
-        `;
-
-    }).join("");
-
+        })
+        .join("");
 }
 
 function openReactionPicker(commentId){
@@ -9617,116 +9591,287 @@ function openReactionPicker(commentId){
 
 }
 
-async function selectCommentReaction(emoji){
+async function selectCommentReaction(emoji) {
 
-    const picker = document.getElementById("reactionPicker");
+    const commentId = reactionCommentId;
 
-if (picker) {
-    picker.style.transform = "translateX(-50%) scale(0)";
+    if (!commentId) {
+        console.error("No reaction comment selected");
+        return;
+    }
 
-setTimeout(() => {
-    picker.style.display = "none";
-}, 200);
-}
+    const picker =
+        document.getElementById("reactionPicker");
+
+    if (picker) {
+
+        picker.style.transform =
+            "translateX(-50%) scale(0)";
+
+        setTimeout(() => {
+            picker.style.display = "none";
+        }, 200);
+    }
 
     const {
-        data:{session}
+        data: { session }
     } = await supabase.auth.getSession();
 
-    if(!session) return;
+    if (!session) {
+        return;
+    }
 
     const userId = session.user.id;
 
-    const {data:existing} = await supabase
-    .from("comment_reactions")
-    .select("id")
-    .eq("comment_id", reactionCommentId)
-    .eq("user_id", userId)
-    .maybeSingle();
+    /*
+     * -----------------------------------------
+     * CHECK EXISTING REACTION
+     * -----------------------------------------
+     */
 
-    if(existing){
-
-        await supabase
+    const {
+        data: existing,
+        error: existingError
+    } = await supabase
         .from("comment_reactions")
-        .update({
-            emoji
-        })
-        .eq("id", existing.id);
-
-    }else{
-
-        await supabase
-        .from("comment_reactions")
-        .insert({
-            comment_id: reactionCommentId,
-            user_id: userId,
-            emoji
-        });
-
-    }
-    
-    const { data: comment } = await supabase
-.from("comments")
-.select("user_id, post_id")
-.eq("id", reactionCommentId)
-.single();
-
-if (comment && comment.user_id !== userId) {
-
-    const { data: profile } = await supabase
-        .from("profiles")
-        .select("name, avatar_url")
-        .eq("id", userId)
-        .single();
-
-    const { data: existingNotif } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", comment.user_id)
-        .eq("sender_id", userId)
-        .eq("type", "comment_reaction")
-        .eq("comment_id", reactionCommentId)
+        .select("id, emoji")
+        .eq("comment_id", commentId)
+        .eq("user_id", userId)
         .maybeSingle();
 
-    if (existingNotif) {
+    if (existingError) {
 
-        await supabase
-            .from("notifications")
+        console.error(
+            "Check comment reaction:",
+            existingError
+        );
+
+        return;
+    }
+
+    /*
+     * -----------------------------------------
+     * SAME EMOJI = REMOVE REACTION
+     * -----------------------------------------
+     */
+
+    if (existing && existing.emoji === emoji) {
+
+        const { error } = await supabase
+            .from("comment_reactions")
+            .delete()
+            .eq("id", existing.id);
+
+        if (error) {
+
+            console.error(
+                "Remove comment reaction:",
+                error
+            );
+
+            return;
+        }
+
+        await updateSingleComment(commentId);
+
+        closeCommentMenu();
+
+        return;
+    }
+
+    /*
+     * -----------------------------------------
+     * EXISTING REACTION = CHANGE EMOJI
+     * -----------------------------------------
+     */
+
+    if (existing) {
+
+        const { error } = await supabase
+            .from("comment_reactions")
             .update({
-                count: (existingNotif.count || 1) + 1,
-                username: profile.name,
-                avatar_url: profile.avatar_url,
-                message: `reacted ${emoji} to your comment`,
-                last_time: new Date(),
-                read: false
+                emoji: emoji
             })
-            .eq("id", existingNotif.id);
+            .eq("id", existing.id);
 
-    } else {
+        if (error) {
 
-        await supabase
-            .from("notifications")
-            .insert({
-                user_id: comment.user_id,
-                sender_id: userId,
-                username: profile.name,
-                avatar_url: profile.avatar_url,
-                type: "comment_reaction",
-                comment_id: reactionCommentId,
-                post_id: comment.post_id,
-                message: `reacted ${emoji} to your comment`,
-                count: 1,
-                created_at: new Date(),
-                last_time: new Date(),
-                read: false
-            });
+            console.error(
+                "Change comment reaction:",
+                error
+            );
+
+            return;
+        }
 
     }
 
-}
-updateSingleComment(reactionCommentId);
-    
-closeCommentMenu();
+    /*
+     * -----------------------------------------
+     * NO REACTION = INSERT
+     * -----------------------------------------
+     */
+
+    else {
+
+        const { error } = await supabase
+            .from("comment_reactions")
+            .insert({
+                comment_id: commentId,
+                user_id: userId,
+                emoji: emoji
+            });
+
+        if (error) {
+
+            console.error(
+                "Insert comment reaction:",
+                error
+            );
+
+            return;
+        }
+    }
+
+    /*
+     * -----------------------------------------
+     * GET COMMENT OWNER
+     * -----------------------------------------
+     */
+
+    const {
+        data: comment,
+        error: commentError
+    } = await supabase
+        .from("comments")
+        .select("user_id, post_id")
+        .eq("id", commentId)
+        .single();
+
+    if (commentError) {
+
+        console.error(
+            "Get comment owner:",
+            commentError
+        );
+
+        await updateSingleComment(commentId);
+        closeCommentMenu();
+
+        return;
+    }
+
+    /*
+     * -----------------------------------------
+     * DON'T NOTIFY YOURSELF
+     * -----------------------------------------
+     */
+
+    if (
+        comment &&
+        comment.user_id !== userId
+    ) {
+
+        const {
+            data: profile
+        } = await supabase
+            .from("profiles")
+            .select("name, avatar_url")
+            .eq("id", userId)
+            .single();
+
+        if (profile) {
+
+            const {
+                data: existingNotif
+            } = await supabase
+                .from("notifications")
+                .select("*")
+                .eq("user_id", comment.user_id)
+                .eq("sender_id", userId)
+                .eq("type", "comment_reaction")
+                .eq("comment_id", commentId)
+                .maybeSingle();
+
+            if (existingNotif) {
+
+                await supabase
+                    .from("notifications")
+                    .update({
+                        count:
+                            (existingNotif.count || 1) + 1,
+
+                        username:
+                            profile.name,
+
+                        avatar_url:
+                            profile.avatar_url,
+
+                        message:
+                            `reacted ${emoji} to your comment`,
+
+                        last_time:
+                            new Date(),
+
+                        read: false
+                    })
+                    .eq(
+                        "id",
+                        existingNotif.id
+                    );
+
+            } else {
+
+                await supabase
+                    .from("notifications")
+                    .insert({
+                        user_id:
+                            comment.user_id,
+
+                        sender_id:
+                            userId,
+
+                        username:
+                            profile.name,
+
+                        avatar_url:
+                            profile.avatar_url,
+
+                        type:
+                            "comment_reaction",
+
+                        comment_id:
+                            commentId,
+
+                        post_id:
+                            comment.post_id,
+
+                        message:
+                            `reacted ${emoji} to your comment`,
+
+                        count: 1,
+
+                        created_at:
+                            new Date(),
+
+                        last_time:
+                            new Date(),
+
+                        read: false
+                    });
+            }
+        }
+    }
+
+    /*
+     * -----------------------------------------
+     * REFRESH UI
+     * -----------------------------------------
+     */
+
+    await updateSingleComment(commentId);
+
+    closeCommentMenu();
 }
 
 async function updateSingleComment(commentId) {
