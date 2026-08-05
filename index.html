@@ -5596,11 +5596,13 @@ window.openSavedPosts = async function(){
 
   document.getElementById("app").innerHTML = `
     <div style="padding:15px;color:white;">
-     <button
+    
+    <button
   type="button"
   onclick="
-    alert('🔥 SAVED POSTS BACK CLICKED');
+    alert('1️⃣ SAVED POSTS BACK CLICKED');
     window.openProfile(session.user.id, session.user.email);
+    alert('2️⃣ OPENPROFILE FINISHED');
   "
   style="
     position:relative;
@@ -13862,8 +13864,9 @@ color:white;
 <button
   type="button"
   onclick="
-    alert('🔥 SETTINGS BACK BUTTON CLICKED');
+    alert('1️⃣ SETTINGS BACK CLICKED');
     window.openProfile(session.user.id, session.user.email);
+    alert('2️⃣ OPENPROFILE FINISHED');
   "
   style="
     position:relative;
