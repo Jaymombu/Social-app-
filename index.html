@@ -5600,21 +5600,38 @@ window.openSavedPosts = async function(){
     <button
   type="button"
   onclick="
-    alert('1️⃣ SAVED POSTS BACK CLICKED');
-    window.openProfile(session.user.id, session.user.email);
-    alert('2️⃣ OPENPROFILE FINISHED');
+    alert('1️⃣ SAVED BACK CLICKED');
+
+    try {
+      alert('2️⃣ BEFORE OPENPROFILE');
+
+      window.openProfile(
+        session.user.id,
+        session.user.email
+      );
+
+      alert('3️⃣ OPENPROFILE RETURNED');
+
+    } catch (e) {
+
+      alert('❌ OPENPROFILE ERROR: ' + e.message);
+
+      console.error(
+        'OPENPROFILE ERROR:',
+        e
+      );
+
+    }
   "
   style="
     position:relative;
     z-index:99999999;
     pointer-events:auto;
-    display:block;
     padding:10px 16px;
     background:#181818;
     color:white;
     border:1px solid #333;
     border-radius:10px;
-    cursor:pointer;
   "
 >
   ← Back
@@ -13864,21 +13881,28 @@ color:white;
 <button
   type="button"
   onclick="
-    alert('1️⃣ SETTINGS BACK CLICKED');
-    window.openProfile(session.user.id, session.user.email);
-    alert('2️⃣ OPENPROFILE FINISHED');
-  "
-  style="
-    position:relative;
-    z-index:99999999;
-    pointer-events:auto;
-    display:block;
-    padding:10px 16px;
-    background:#181818;
-    color:white;
-    border:1px solid #333;
-    border-radius:10px;
-    cursor:pointer;
+    alert('1️⃣ BACK CLICKED');
+
+    try {
+      alert('2️⃣ BEFORE OPENPROFILE');
+
+      window.openProfile(
+        session.user.id,
+        session.user.email
+      );
+
+      alert('3️⃣ OPENPROFILE RETURNED');
+
+    } catch (e) {
+
+      alert('❌ OPENPROFILE ERROR: ' + e.message);
+
+      console.error(
+        'OPENPROFILE ERROR:',
+        e
+      );
+
+    }
   "
 >
   ← Back
