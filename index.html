@@ -5599,39 +5599,15 @@ window.openSavedPosts = async function(){
     
     <button
   type="button"
-  onclick="
-    alert('1️⃣ SAVED BACK CLICKED');
-
-    try {
-      alert('2️⃣ BEFORE OPENPROFILE');
-
-      window.openProfile(
-        session.user.id,
-        session.user.email
-      );
-
-      alert('3️⃣ OPENPROFILE RETURNED');
-
-    } catch (e) {
-
-      alert('❌ OPENPROFILE ERROR: ' + e.message);
-
-      console.error(
-        'OPENPROFILE ERROR:',
-        e
-      );
-
-    }
-  "
+  onclick="window.openProfile(currentUser.id, currentUser.email)"
   style="
-    position:relative;
-    z-index:99999999;
-    pointer-events:auto;
+    margin-bottom:20px;
     padding:10px 16px;
     background:#181818;
     color:white;
     border:1px solid #333;
     border-radius:10px;
+    cursor:pointer;
   "
 >
   ← Back
@@ -13880,29 +13856,15 @@ color:white;
 
 <button
   type="button"
-  onclick="
-    alert('1️⃣ BACK CLICKED');
-
-    try {
-      alert('2️⃣ BEFORE OPENPROFILE');
-
-      window.openProfile(
-        session.user.id,
-        session.user.email
-      );
-
-      alert('3️⃣ OPENPROFILE RETURNED');
-
-    } catch (e) {
-
-      alert('❌ OPENPROFILE ERROR: ' + e.message);
-
-      console.error(
-        'OPENPROFILE ERROR:',
-        e
-      );
-
-    }
+  onclick="window.openProfile(currentUser.id, currentUser.email)"
+  style="
+    margin-bottom:20px;
+    padding:10px 16px;
+    background:#181818;
+    color:white;
+    border:1px solid #333;
+    border-radius:10px;
+    cursor:pointer;
   "
 >
   ← Back
