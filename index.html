@@ -5596,9 +5596,27 @@ window.openSavedPosts = async function(){
 
   document.getElementById("app").innerHTML = `
     <div style="padding:15px;color:white;">
-     <button onclick="openProfile(session.user.id, session.user.email)">
-     ← Back
-    </button>
+     <button
+  type="button"
+  onclick="
+    alert('🔥 SAVED POSTS BACK CLICKED');
+    window.openProfile(session.user.id, session.user.email);
+  "
+  style="
+    position:relative;
+    z-index:99999999;
+    pointer-events:auto;
+    display:block;
+    padding:10px 16px;
+    background:#181818;
+    color:white;
+    border:1px solid #333;
+    border-radius:10px;
+    cursor:pointer;
+  "
+>
+  ← Back
+</button>
 
       <h2>🔖 Saved Posts</h2>
 
@@ -13842,18 +13860,25 @@ color:white;
 ">
 
 <button
-onclick="window.openProfile(session.user.id, session.user.email)"
-style="
-margin-bottom:20px;
-padding:10px 16px;
-background:#181818;
-color:white;
-border:1px solid #333;
-border-radius:10px;
-cursor:pointer;
-"
+  type="button"
+  onclick="
+    alert('🔥 SETTINGS BACK BUTTON CLICKED');
+    window.openProfile(session.user.id, session.user.email);
+  "
+  style="
+    position:relative;
+    z-index:99999999;
+    pointer-events:auto;
+    display:block;
+    padding:10px 16px;
+    background:#181818;
+    color:white;
+    border:1px solid #333;
+    border-radius:10px;
+    cursor:pointer;
+  "
 >
-← Back
+  ← Back
 </button>
 
 <h2 style="
