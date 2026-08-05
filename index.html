@@ -2527,8 +2527,7 @@ async function initAuth() {
   }
 
   if (!window.__appStarted) {
-  window.__appStarted = true;
-  startApp();
+  safeStart();
 }
 }
 
@@ -2546,16 +2545,20 @@ let currentProfileName = null;
 let activeTab = "explore";
 let storyPausedByUI = false;
 
-let appStarted = false;
-
 function safeStart() {
-  if (appStarted) return;
-  appStarted = true;
+
+  if (window.__appStarted) return;
+
+  window.__appStarted = true;
 
   startApp();
+
 }
 // 🔁 keep session always updated
 supabase.auth.onAuthStateChange(async (event, newSession) => {
+  
+  console.log("🔥 AUTH CALLBACK START:", event);
+  
   console.log("AUTH EVENT:", event);
 
   session = newSession;
@@ -2662,6 +2665,8 @@ window.storyMuted =
   localStorage.getItem("storyMuted") === "true";
 
 window.loadStories = async function () {
+  
+  console.time("storiesQuery");
 
   const storiesBar =
     document.getElementById("storiesBar");
@@ -2685,6 +2690,8 @@ const { data: stories, error } =
     .order("created_at", {
       ascending:false
     });
+    
+    console.timeEnd("storiesQuery");
 
   if (error) {
 
@@ -5223,34 +5230,23 @@ window.loadPosts = async function () {
   let error = null;
 
   if (activeTab === "explore") {
+    
+    console.time("postsQuery");
 
     const response = await supabase
-      .from("posts")
-      .select("*")
-      .order("created_at", {
-        ascending: false
-      });
+  .from("posts")
+  .select("*")
+  .order("created_at", {
+    ascending:false
+  })
+  .range(0,19);
 
     posts = response.data;
     error = response.error;
     
-    if (session?.user && posts?.length) {
-
-  const { data: savedPosts } = await supabase
-    .from("saved_posts")
-    .select("post_id")
-    .eq("user_id", session.user.id);
-
-  const savedIds = new Set(
-    (savedPosts || []).map(s => String(s.post_id))
-  );
-
-  posts = posts.map(post => ({
-    ...post,
-    saved: savedIds.has(String(post.id))
-  }));
-
-}
+    console.timeEnd("postsQuery");
+    
+    
 
   }
 
@@ -5285,23 +5281,7 @@ window.loadPosts = async function () {
   posts = response.data;
   error = response.error;
   
-  if (session?.user && posts?.length) {
-
-  const { data: savedPosts } = await supabase
-    .from("saved_posts")
-    .select("post_id")
-    .eq("user_id", session.user.id);
-
-  const savedIds = new Set(
-    (savedPosts || []).map(s => String(s.post_id))
-  );
-
-  posts = posts.map(post => ({
-    ...post,
-    saved: savedIds.has(String(post.id))
-  }));
-
-}
+  console.timeEnd("postsQuery");
 }
 
   postsDiv.replaceChildren();
@@ -5324,31 +5304,23 @@ window.loadPosts = async function () {
 
   }
   
-  let savedIds = [];
+  if (session?.user && posts.length) {
 
-if (session?.user) {
-
-  const { data } = await supabase
+  const { data: savedPosts } = await supabase
     .from("saved_posts")
     .select("post_id")
     .eq("user_id", session.user.id);
 
-  savedIds = (data || []).map(item => item.post_id);
+  const savedIds = new Set(
+    (savedPosts || []).map(s => String(s.post_id))
+  );
+
+  posts = posts.map(post => ({
+    ...post,
+    saved: savedIds.has(String(post.id))
+  }));
 
 }
-  
-  console.log("POST COUNT:", posts?.length);
-console.log("POST IDS:", posts?.map(p => p.id));
-
-console.log(
-  "POST CONTAINERS:",
-  document.querySelectorAll("#posts").length
-);
-
-posts = posts.map(post => ({
-  ...post,
-  saved: savedIds.includes(post.id)
-}));
 
 window.postsState = posts || [];
 
@@ -5726,6 +5698,7 @@ let commentFilter = "all";
 window.replyDepth = "parent";
 
 let selectedCommentMedia = null;
+window.reactionProfileReturn = null;
 
 
 
@@ -5974,7 +5947,15 @@ commentsChannel = supabase
     console.log("Comments realtime:", status);
 });
 
-loadComments(postId);
+await loadComments(postId);
+
+await loadComments(postId);
+
+await new Promise(resolve => {
+    requestAnimationFrame(() => {
+        requestAnimationFrame(resolve);
+    });
+});
 
 listenToCommentTyping();
 
@@ -6060,6 +6041,61 @@ if (commentSort === "top") {
 const { data, error } = await query.range(
     commentsPage * COMMENTS_PER_PAGE,
     (commentsPage + 1) * COMMENTS_PER_PAGE - 1
+);
+
+/*
+ * =========================================
+ * COMMENT LIKE / REACTION DEBUG
+ * =========================================
+ */
+
+const debugSummary = (data || []).map(c => ({
+    comment_id: c.id,
+
+    likes_count_from_table:
+        c.likes_count,
+
+    likes_returned:
+        Array.isArray(c.comment_likes)
+            ? c.comment_likes.length
+            : "NOT ARRAY",
+
+    likes:
+        Array.isArray(c.comment_likes)
+            ? c.comment_likes
+            : null,
+
+    reactions_returned:
+        Array.isArray(c.comment_reactions)
+            ? c.comment_reactions.length
+            : "NOT ARRAY",
+
+    reactions:
+        Array.isArray(c.comment_reactions)
+            ? c.comment_reactions
+            : null
+}));
+
+commentDebug(
+    "📥 SUPABASE COMMENT DATA",
+    {
+        logged_in: !!session,
+
+        user_id:
+            session?.user?.id || null,
+
+        post_id:
+            postId,
+
+        comments_returned:
+            data?.length || 0,
+
+        comments:
+            debugSummary,
+
+        supabase_error:
+            error || null
+    }
 );
 
 console.log("🔥 POST ID:", postId);
@@ -8423,41 +8459,59 @@ window.likeComment = async function(commentId) {
 
     if (!commentId) return;
 
+    const button =
+        document.getElementById("commentLike-" + commentId);
+
+    const count =
+        document.getElementById("commentLikeCount-" + commentId);
+
+    /*
+     * -----------------------------------------
+     * GET SESSION
+     * -----------------------------------------
+     */
+
     const {
         data: { session },
         error: sessionError
     } = await supabase.auth.getSession();
 
-    if (sessionError || !session) {
+    if (sessionError) {
+
         commentDebug(
-            "❌ NO ACTIVE SESSION",
-            sessionError || null
+            "❌ SESSION ERROR",
+            sessionError
         );
+
+        return;
+    }
+
+    /*
+     * Logged-out users can SEE likes,
+     * but cannot CREATE them.
+     */
+
+    if (!session) {
+
+        commentDebug(
+            "ℹ️ LOGIN REQUIRED",
+            {
+                message: "You must be logged in to like a comment."
+            }
+        );
+
         return;
     }
 
     const userId = session.user.id;
 
-    const button =
-        document.getElementById(
-            "commentLike-" + commentId
-        );
-
-    const count =
-        document.getElementById(
-            "commentLikeCount-" + commentId
-        );
-
     /*
-     * =========================================
-     * PREVENT DOUBLE TAP
-     * =========================================
+     * -----------------------------------------
+     * PREVENT DOUBLE TAP / RAPID REQUESTS
+     * -----------------------------------------
      */
 
-    if (
-        button &&
-        button.dataset.liking === "true"
-    ) {
+    if (button?.dataset.liking === "true") {
         return;
     }
 
@@ -8465,281 +8519,235 @@ window.likeComment = async function(commentId) {
         button.dataset.liking = "true";
     }
 
-    try {
-
-        /*
-         * =========================================
-         * CHECK DATABASE
-         * =========================================
-         */
-
-        const {
-            data: existing,
-            error: existingError
-        } = await supabase
-            .from("comment_likes")
-            .select("id")
-            .eq("comment_id", commentId)
-            .eq("user_id", userId)
-            .maybeSingle();
-
-        if (existingError) {
-
-            commentDebug(
-                "❌ CHECK LIKE FAILED",
-                {
-                    message: existingError.message,
-                    code: existingError.code
-                }
-            );
-
-            return;
-        }
-
-
-        /*
-         * =========================================
-         * UNLIKE
-         * =========================================
-         */
-
-        if (existing) {
-
-            /*
-             * UPDATE UI IMMEDIATELY
-             */
-
-            if (button) {
-                button.style.background = "#232323";
-            }
-
-            if (count) {
-
-                const current =
-                    Number(count.textContent) || 0;
-
-                count.textContent =
-                    Math.max(0, current - 1);
-            }
-
-
-            /*
-             * DELETE FROM DATABASE
-             */
-
-            const {
-                error: deleteError
-            } = await supabase
-                .from("comment_likes")
-                .delete()
-                .eq("id", existing.id);
-
-
-            if (deleteError) {
-
-                /*
-                 * ROLLBACK UI
-                 */
-
-                if (button) {
-                    button.style.background =
-                        "#ff3040";
-                }
-
-                if (count) {
-
-                    const current =
-                        Number(count.textContent) || 0;
-
-                    count.textContent =
-                        current + 1;
-                }
-
-                commentDebug(
-                    "❌ UNLIKE FAILED — UI ROLLED BACK",
-                    {
-                        message:
-                            deleteError.message,
-
-                        code:
-                            deleteError.code
-                    }
-                );
-
-                return;
-            }
-
-
-            /*
-             * UPDATE STORED COUNT
-             */
-
-            const {
-                error: rpcError
-            } = await supabase.rpc(
-                "decrement_comment_likes",
-                {
-                    comment_id_input:
-                        commentId
-                }
-            );
-
-
-            if (rpcError) {
-
-                commentDebug(
-                    "⚠️ LIKE REMOVED BUT COUNT RPC FAILED",
-                    rpcError
-                );
-            }
-
-
-            commentDebug(
-                "✅ UNLIKED",
-                {
-                    commentId: commentId
-                }
-            );
-
-            return;
-        }
-
-
-        /*
-         * =========================================
-         * LIKE
-         * =========================================
-         */
-
-        /*
-         * UPDATE UI IMMEDIATELY
-         */
-
-        if (button) {
-            button.style.background = "#ff3040";
-        }
-
-        if (count) {
-
-            const current =
-                Number(count.textContent) || 0;
-
-            count.textContent =
-                current + 1;
-        }
-
-
-        /*
-         * INSERT INTO DATABASE
-         */
-
-        const {
-            error: insertError
-        } = await supabase
-            .from("comment_likes")
-            .insert({
-                comment_id: commentId,
-                user_id: userId
-            });
-
-
-        if (insertError) {
-
-            /*
-             * ROLLBACK UI
-             */
-
-            if (button) {
-                button.style.background =
-                    "#232323";
-            }
-
-            if (count) {
-
-                const current =
-                    Number(count.textContent) || 0;
-
-                count.textContent =
-                    Math.max(0, current - 1);
-            }
-
-            commentDebug(
-                "❌ LIKE FAILED — UI ROLLED BACK",
-                {
-                    message:
-                        insertError.message,
-
-                    details:
-                        insertError.details,
-
-                    hint:
-                        insertError.hint,
-
-                    code:
-                        insertError.code
-                }
-            );
-
-            return;
-        }
-
-
-        /*
-         * =========================================
-         * UPDATE STORED COMMENTS COUNT
-         * =========================================
-         */
-
-        const {
-            error: rpcError
-        } = await supabase.rpc(
-            "increment_comment_likes",
-            {
-                comment_id_input:
-                    commentId
-            }
-        );
-
-
-        if (rpcError) {
-
-            commentDebug(
-                "⚠️ LIKE SAVED BUT COUNT RPC FAILED",
-                rpcError
-            );
-
-        }
-
+    /*
+     * -----------------------------------------
+     * CHECK EXISTING LIKE
+     * -----------------------------------------
+     */
+
+    const {
+        data: existing,
+        error: existingError
+    } = await supabase
+        .from("comment_likes")
+        .select("id")
+        .eq("comment_id", commentId)
+        .eq("user_id", userId)
+        .maybeSingle();
+
+    if (existingError) {
 
         commentDebug(
-            "❤️ LIKED",
-            {
-                commentId: commentId
-            }
+            "❌ CHECK LIKE FAILED",
+            existingError
         );
-
-
-    } catch (error) {
-
-        commentDebug(
-            "💥 LIKE ERROR",
-            {
-                message:
-                    error?.message,
-
-                stack:
-                    error?.stack || null
-            }
-        );
-
-    } finally {
 
         if (button) {
             button.dataset.liking = "false";
         }
 
+        return;
     }
 
+    /*
+     * =========================================
+     * UNLIKE
+     * =========================================
+     */
+
+    if (existing) {
+
+        /*
+         * Optimistic UI update
+         */
+
+        if (button) {
+            button.style.background = "#232323";
+        }
+
+        if (count) {
+
+            count.textContent = Math.max(
+                0,
+                Number(count.textContent || 0) - 1
+            );
+        }
+
+        /*
+         * Delete from database
+         */
+
+        const {
+            error: deleteError
+        } = await supabase
+            .from("comment_likes")
+            .delete()
+            .eq("id", existing.id);
+
+        if (deleteError) {
+
+            /*
+             * Roll UI back if database failed
+             */
+
+            if (button) {
+                button.style.background = "#ff3040";
+            }
+
+            if (count) {
+                count.textContent =
+                    Number(count.textContent || 0) + 1;
+            }
+
+            commentDebug(
+                "❌ UNLIKE FAILED",
+                deleteError
+            );
+
+            if (button) {
+                button.dataset.liking = "false";
+            }
+
+            return;
+        }
+
+        /*
+         * Update comments.likes_count
+         */
+
+        const {
+            error: rpcError
+        } = await supabase.rpc(
+            "decrement_comment_likes",
+            {
+                comment_id_input: commentId
+            }
+        );
+
+        if (rpcError) {
+
+            console.error(
+                "decrement_comment_likes:",
+                rpcError
+            );
+        }
+
+        if (button) {
+            button.dataset.liking = "false";
+        }
+
+        return;
+    }
+
+    /*
+     * =========================================
+     * LIKE
+     * =========================================
+     */
+
+    /*
+     * Optimistic UI update FIRST
+     */
+
+    if (button) {
+        button.style.background = "#ff3040";
+    }
+
+    if (count) {
+
+        count.textContent =
+            Number(count.textContent || 0) + 1;
+    }
+
+    /*
+     * Insert into database
+     */
+
+    const {
+        data: insertedLike,
+        error: insertError
+    } = await supabase
+        .from("comment_likes")
+        .insert({
+            comment_id: commentId,
+            user_id: userId
+        })
+        .select()
+        .single();
+
+    if (insertError) {
+
+        /*
+         * Roll UI back
+         */
+
+        if (button) {
+            button.style.background = "#232323";
+        }
+
+        if (count) {
+
+            count.textContent = Math.max(
+                0,
+                Number(count.textContent || 0) - 1
+            );
+        }
+
+        commentDebug(
+            "❌ LIKE INSERT FAILED",
+            {
+                message: insertError.message,
+                details: insertError.details,
+                hint: insertError.hint,
+                code: insertError.code
+            }
+        );
+
+        if (button) {
+            button.dataset.liking = "false";
+        }
+
+        return;
+    }
+
+    /*
+     * -----------------------------------------
+     * UPDATE STORED COMMENT COUNT
+     * -----------------------------------------
+     */
+
+    const {
+        error: rpcError
+    } = await supabase.rpc(
+        "increment_comment_likes",
+        {
+            comment_id_input: commentId
+        }
+    );
+
+    if (rpcError) {
+
+        console.error(
+            "increment_comment_likes:",
+            rpcError
+        );
+    }
+
+    /*
+     * -----------------------------------------
+     * DONE
+     * -----------------------------------------
+     */
+
+    if (button) {
+        button.dataset.liking = "false";
+    }
+
+    console.log(
+        "❤️ Comment liked:",
+        commentId,
+        insertedLike
+    );
 };
 
 function commentDebug(message, data = null) {
@@ -9677,9 +9685,10 @@ color:#8e8e8e;
     `;
 }
 
-function renderCommentReactions(comment) {
+window.renderCommentReactions = function(comment) {
 
     if (
+        !comment ||
         !Array.isArray(comment.comment_reactions) ||
         comment.comment_reactions.length === 0
     ) {
@@ -9688,45 +9697,98 @@ function renderCommentReactions(comment) {
 
     const grouped = {};
 
-    comment.comment_reactions.forEach(reaction => {
+    comment.comment_reactions.forEach(
+        reaction => {
 
-        if (!reaction || !reaction.emoji) {
-            return;
+            if (
+                !reaction ||
+                !reaction.emoji
+            ) {
+                return;
+            }
+
+            if (
+                !grouped[reaction.emoji]
+            ) {
+                grouped[reaction.emoji] = [];
+            }
+
+            grouped[reaction.emoji].push(
+                reaction.user_id
+            );
         }
-
-        if (!grouped[reaction.emoji]) {
-            grouped[reaction.emoji] = [];
-        }
-
-        grouped[reaction.emoji].push(
-            reaction.user_id
-        );
-    });
+    );
 
     return Object.entries(grouped)
         .map(([emoji, users]) => {
 
             return `
                 <span
-                    onclick="openReactionUsers('${comment.id}', ${JSON.stringify(emoji)})"
+                    class="commentReactionBadge"
+                    data-comment-id="${comment.id}"
+                    data-reaction-emoji="${escapeHtml(emoji)}"
                     style="
-                        background:#2a2a2a;
-                        padding:5px 10px;
-                        border-radius:20px;
-                        font-size:14px;
                         display:inline-flex;
                         align-items:center;
-                        gap:5px;
+                        gap:4px;
+                        background:#232323;
+                        color:white;
+                        border-radius:15px;
+                        padding:5px 9px;
+                        font-size:13px;
                         cursor:pointer;
+                        user-select:none;
                     "
                 >
-                    ${emoji} ${users.length}
+                    ${escapeHtml(emoji)}
+
+                    <span
+                        style="
+                            color:#aaa;
+                            font-size:11px;
+                        "
+                    >
+                        ${users.length}
+                    </span>
                 </span>
             `;
 
         })
         .join("");
-}
+};
+
+document.addEventListener(
+    "click",
+    function(event) {
+
+        const badge =
+            event.target.closest(
+                ".commentReactionBadge"
+            );
+
+        if (!badge) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const commentId =
+            badge.dataset.commentId;
+
+        const emoji =
+            badge.dataset.reactionEmoji;
+
+        if (!commentId || !emoji) {
+            return;
+        }
+
+        window.openReactionUsers(
+            commentId,
+            emoji
+        );
+    }
+);
 
 function openReactionPicker(commentId){
 
@@ -9754,14 +9816,660 @@ function openReactionPicker(commentId){
 
 }
 
-async function selectCommentReaction(emoji) {
+window.openReactionUsers = async function(commentId, emoji, postId, cachedUsers = null) {
+  
+  const actualPostId = postId ?? currentPostId;
+
+    if (!commentId || !emoji) {
+        return;
+    }
+
+    /*
+     * Remove existing popup
+     */
+    document
+        .getElementById("reactionUsersPopup")
+        ?.remove();
+
+
+    /*
+     * -----------------------------------------
+     * LOAD REACTION USERS
+     * -----------------------------------------
+     */
+
+    let data = cachedUsers;
+
+if (!data) {
+
+    const result = await supabase
+        .from("comment_reactions")
+        .select(`
+            user_id,
+            emoji,
+            profiles:profiles!comment_reactions_user_id_fkey(
+                id,
+                name,
+                avatar_url,
+                verified
+            )
+        `)
+        .eq("comment_id", commentId)
+        .eq("emoji", emoji);
+
+    data = result.data;
+
+    if (result.error) {
+
+        console.error(
+            "Load reaction users:",
+            result.error
+        );
+
+        return;
+    }
+}
+
+
+    /*
+     * -----------------------------------------
+     * CREATE POPUP
+     * -----------------------------------------
+     */
+
+    const popup =
+        document.createElement("div");
+
+    popup.id =
+        "reactionUsersPopup";
+
+    popup.style.cssText = `
+        position:fixed;
+        left:50%;
+        top:50%;
+        transform:translate(-50%,-50%);
+        width:min(340px,90vw);
+        max-height:70vh;
+        overflow-y:auto;
+        background:#181818;
+        color:white;
+        border:1px solid #333;
+        border-radius:18px;
+        padding:16px;
+        z-index:9999999;
+        box-shadow:0 15px 50px rgba(0,0,0,.7);
+    `;
+
+
+    /*
+     * -----------------------------------------
+     * HEADER
+     * -----------------------------------------
+     */
+
+    const header =
+        document.createElement("div");
+
+    header.style.cssText = `
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        margin-bottom:14px;
+    `;
+
+
+    const title =
+        document.createElement("div");
+
+    title.style.cssText = `
+        font-size:18px;
+        font-weight:700;
+    `;
+
+    title.textContent =
+        emoji + " Reactions";
+
+
+    const closeButton =
+        document.createElement("button");
+
+    closeButton.type =
+        "button";
+
+    closeButton.textContent =
+        "×";
+
+    closeButton.style.cssText = `
+        border:0;
+        background:#292929;
+        color:white;
+        width:32px;
+        height:32px;
+        border-radius:50%;
+        font-size:18px;
+        cursor:pointer;
+    `;
+
+    closeButton.addEventListener(
+        "click",
+        function(event) {
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            popup.remove();
+
+            /*
+             * User intentionally closed the popup.
+             * Do not restore it later.
+             */
+            window.reactionProfileReturn = null;
+        }
+    );
+
+
+    header.appendChild(title);
+    header.appendChild(closeButton);
+
+    popup.appendChild(header);
+
+
+    /*
+     * -----------------------------------------
+     * USER LIST
+     * -----------------------------------------
+     */
+
+    const list =
+        document.createElement("div");
+
+    list.id =
+        "reactionUsersList";
+
+    popup.appendChild(list);
+
+    document.body.appendChild(popup);
+
+
+    /*
+     * -----------------------------------------
+     * NO USERS
+     * -----------------------------------------
+     */
+
+    if (
+        !data ||
+        data.length === 0
+    ) {
+
+        list.innerHTML = `
+            <div
+                style="
+                    text-align:center;
+                    padding:20px;
+                    color:#888;
+                "
+            >
+                No reactions yet
+            </div>
+        `;
+
+        return;
+    }
+
+
+    /*
+     * -----------------------------------------
+     * RENDER USERS
+     * -----------------------------------------
+     */
+
+    data.forEach(reaction => {
+
+        const profile =
+            reaction.profiles || {};
+
+        const name =
+            profile.name || "User";
+
+        const avatar =
+            profile.avatar_url || "";
+
+
+        /*
+         * USER ROW
+         */
+
+        const row =
+            document.createElement("div");
+
+        row.style.cssText = `
+            display:flex;
+            align-items:center;
+            gap:12px;
+            padding:9px 4px;
+            cursor:pointer;
+            border-radius:10px;
+        `;
+
+
+        /*
+         * AVATAR
+         */
+
+        if (avatar) {
+
+            const img =
+                document.createElement("img");
+
+            img.src =
+                avatar;
+
+            img.alt =
+                name;
+
+            img.style.cssText = `
+                width:42px;
+                height:42px;
+                border-radius:50%;
+                object-fit:cover;
+                flex-shrink:0;
+            `;
+
+            row.appendChild(img);
+
+        } else {
+
+            const fallback =
+                document.createElement("div");
+
+            fallback.style.cssText = `
+                width:42px;
+                height:42px;
+                border-radius:50%;
+                background:#333;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                font-weight:bold;
+                flex-shrink:0;
+            `;
+
+            fallback.textContent =
+                name.charAt(0).toUpperCase();
+
+            row.appendChild(fallback);
+        }
+
+
+        /*
+         * NAME
+         */
+
+        const nameBox =
+            document.createElement("div");
+
+        nameBox.style.cssText = `
+            flex:1;
+            min-width:0;
+        `;
+
+
+        const nameText =
+            document.createElement("div");
+
+        nameText.style.cssText = `
+            font-size:14px;
+            font-weight:600;
+        `;
+
+        nameText.textContent =
+            name;
+
+
+        /*
+         * VERIFIED
+         */
+
+        if (profile.verified) {
+
+            const verified =
+                document.createElement("span");
+
+            verified.textContent =
+                " ✓";
+
+            verified.style.cssText = `
+                color:#3897f0;
+            `;
+
+            nameText.appendChild(
+                verified
+            );
+        }
+
+
+        nameBox.appendChild(
+            nameText
+        );
+
+        row.appendChild(
+            nameBox
+        );
+
+
+        /*
+         * EMOJI
+         */
+
+        const emojiBox =
+            document.createElement("span");
+
+        emojiBox.textContent =
+            emoji;
+
+        emojiBox.style.cssText = `
+            font-size:20px;
+        `;
+
+        row.appendChild(
+            emojiBox
+        );
+
+
+        /*
+         * -------------------------------------
+         * OPEN PROFILE
+         * -------------------------------------
+         */
+
+        row.addEventListener(
+            "click",
+            function(event) {
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                /*
+                 * SAVE EXACT RETURN LOCATION
+                 */
+                
+const actualPostId = postId || currentPostId;
+
+console.log("Saving reaction return:", {
+    postId: actualPostId,
+    commentId,
+    emoji
+});
+
+window.reactionProfileReturn = {
+    postId: actualPostId,
+    commentId,
+    emoji,
+    users: data
+};
+
+                /*
+                 * Remove reaction popup
+                 */
+                popup.remove();
+
+                /*
+                 * Open selected profile
+                 */
+                if (
+                    typeof window.openProfile ===
+                    "function"
+                ) {
+
+                    window.openProfile(
+                        reaction.user_id,
+                        name
+                    );
+
+                } else {
+
+                    console.error(
+                        "openProfile function not found"
+                    );
+
+                    window.reactionProfileReturn =
+                        null;
+                }
+            }
+        );
+
+
+        list.appendChild(row);
+
+    });
+
+};
+
+window.restoreReactionUsers = async function () {
+
+    const state = window.reactionProfileReturn;
+
+console.log(
+    "🔄 RESTORE USING STATE:",
+    state
+);
+
+    if (
+        !state ||
+        !state.postId ||
+        !state.commentId ||
+        !state.emoji
+    ) {
+        console.error("❌ Missing reaction return state");
+        return;
+    }
+
+    const postId = state.postId;
+    const commentId = state.commentId;
+    const emoji = state.emoji;
+
+    console.log("📌 Exact post:", postId);
+    console.log("📌 Exact comment:", commentId);
+    console.log("📌 Exact emoji:", emoji);
+
+
+    try {
+
+        // -----------------------------------------
+        // 1. MAKE SURE MAIN APP IS AVAILABLE
+        // -----------------------------------------
+
+        if (
+            !document.getElementById("commentsScreen") ||
+            !document.getElementById("panelComments")
+        ) {
+
+            console.log("🏠 Starting app because comments UI is missing");
+
+            if (typeof window.startApp !== "function") {
+                throw new Error("window.startApp is missing");
+            }
+
+            await window.startApp();
+            
+          
+        }
+
+
+        // -----------------------------------------
+        // 2. OPEN EXACT COMMENTS
+        // -----------------------------------------
+
+        console.log(
+            "💬 OPENING EXACT POST COMMENTS:",
+            postId
+        );
+
+        if (typeof window.openComments !== "function") {
+            throw new Error("window.openComments is missing");
+        }
+
+        await window.openComments(postId);
+
+
+        // -----------------------------------------
+        // 3. WAIT UNTIL EXACT COMMENT EXISTS
+        // -----------------------------------------
+
+        let comment = null;
+
+// First check the comments already loaded
+comment =
+    document.getElementById(
+        "comment-" + commentId
+    );
+
+// ------------------------------------------------
+// If not found, load more comment pages
+// ------------------------------------------------
+
+while (
+    !comment &&
+    hasMoreComments
+) {
+
+    console.log(
+        "🔎 Exact comment not loaded yet. Loading more..."
+    );
+
+    await loadMoreComments();
+
+    await new Promise(resolve =>
+        setTimeout(resolve, 100)
+    );
+
+    comment =
+        document.getElementById(
+            "comment-" + commentId
+        );
+}
+
+
+        // -----------------------------------------
+        // 4. EXACT COMMENT
+        // -----------------------------------------
+
+        if (!comment) {
+
+            console.error(
+                "❌ EXACT COMMENT NOT FOUND:",
+                commentId
+            );
+
+            return;
+        }
+
+        console.log(
+            "✅ EXACT COMMENT FOUND:",
+            commentId
+        );
+
+
+        // -----------------------------------------
+        // 5. SCROLL TO IT
+        // -----------------------------------------
+
+        const commentsBody =
+    document.getElementById("commentsBody");
+
+if (commentsBody) {
+
+    const commentTop =
+        comment.offsetTop;
+
+    commentsBody.scrollTo({
+        top:
+            commentTop -
+            (commentsBody.clientHeight / 2) +
+            (comment.offsetHeight / 2),
+
+        behavior: "instant"
+    });
+
+} else {
+
+    comment.scrollIntoView({
+        behavior: "instant",
+        block: "center"
+    });
+
+}
+
+
+        // -----------------------------------------
+        // 6. HIGHLIGHT IT
+        // -----------------------------------------
+
+        const oldBackground =
+            comment.style.background;
+
+        comment.style.background =
+            "rgba(0,149,246,.15)";
+
+        setTimeout(() => {
+
+            if (document.body.contains(comment)) {
+                comment.style.background =
+                    oldBackground;
+            }
+
+        }, 1200);
+
+
+        // -----------------------------------------
+        // 7. OPEN EXACT REACTION USERS
+        // -----------------------------------------
+
+        console.log(
+            "😀 REOPENING REACTION USERS"
+        );
+
+        await window.openReactionUsers(
+    commentId,
+    emoji,
+    postId,
+    state.users
+);
+
+
+        console.log(
+            "✅ RESTORE COMPLETE"
+        );
+
+    } catch (error) {
+
+        console.error(
+            "❌ RESTORE ERROR:",
+            error
+        );
+
+        alert(
+            "Reaction return error:\n\n" +
+            (error?.message || String(error))
+        );
+    }
+};
+
+window.selectCommentReaction = async function(emoji) {
 
     const commentId = reactionCommentId;
 
     if (!commentId) {
-        console.error("No reaction comment selected");
+        console.warn("No reaction comment selected");
         return;
     }
+
+    /*
+     * -----------------------------------------
+     * CLOSE PICKER IMMEDIATELY
+     * -----------------------------------------
+     */
 
     const picker =
         document.getElementById("reactionPicker");
@@ -9772,270 +10480,588 @@ async function selectCommentReaction(emoji) {
             "translateX(-50%) scale(0)";
 
         setTimeout(() => {
+
             picker.style.display = "none";
+
         }, 200);
     }
 
+    /*
+     * -----------------------------------------
+     * GET SESSION
+     * -----------------------------------------
+     */
+
     const {
-        data: { session }
+        data: { session },
+        error: sessionError
     } = await supabase.auth.getSession();
+
+    if (sessionError) {
+
+        console.error(
+            "Reaction session error:",
+            sessionError
+        );
+
+        return;
+    }
+
+    /*
+     * Reactions require login
+     */
 
     if (!session) {
         return;
     }
 
-    const userId = session.user.id;
+    const userId =
+        session.user.id;
 
     /*
      * -----------------------------------------
-     * CHECK EXISTING REACTION
-     * -----------------------------------------
-     */
-
-    const {
-        data: existing,
-        error: existingError
-    } = await supabase
-        .from("comment_reactions")
-        .select("id, emoji")
-        .eq("comment_id", commentId)
-        .eq("user_id", userId)
-        .maybeSingle();
-
-    if (existingError) {
-
-        console.error(
-            "Check comment reaction:",
-            existingError
-        );
-
-        return;
-    }
-
-    /*
-     * -----------------------------------------
-     * SAME EMOJI = REMOVE REACTION
-     * -----------------------------------------
-     */
-
-    if (existing && existing.emoji === emoji) {
-
-        const { error } = await supabase
-            .from("comment_reactions")
-            .delete()
-            .eq("id", existing.id);
-
-        if (error) {
-
-            console.error(
-                "Remove comment reaction:",
-                error
-            );
-
-            return;
-        }
-
-        await updateSingleComment(commentId);
-
-        closeCommentMenu();
-
-        return;
-    }
-
-    /*
-     * -----------------------------------------
-     * EXISTING REACTION = CHANGE EMOJI
-     * -----------------------------------------
-     */
-
-    if (existing) {
-
-        const { error } = await supabase
-            .from("comment_reactions")
-            .update({
-                emoji: emoji
-            })
-            .eq("id", existing.id);
-
-        if (error) {
-
-            console.error(
-                "Change comment reaction:",
-                error
-            );
-
-            return;
-        }
-
-    }
-
-    /*
-     * -----------------------------------------
-     * NO REACTION = INSERT
-     * -----------------------------------------
-     */
-
-    else {
-
-        const { error } = await supabase
-            .from("comment_reactions")
-            .insert({
-                comment_id: commentId,
-                user_id: userId,
-                emoji: emoji
-            });
-
-        if (error) {
-
-            console.error(
-                "Insert comment reaction:",
-                error
-            );
-
-            return;
-        }
-    }
-
-    /*
-     * -----------------------------------------
-     * GET COMMENT OWNER
-     * -----------------------------------------
-     */
-
-    const {
-        data: comment,
-        error: commentError
-    } = await supabase
-        .from("comments")
-        .select("user_id, post_id")
-        .eq("id", commentId)
-        .single();
-
-    if (commentError) {
-
-        console.error(
-            "Get comment owner:",
-            commentError
-        );
-
-        await updateSingleComment(commentId);
-        closeCommentMenu();
-
-        return;
-    }
-
-    /*
-     * -----------------------------------------
-     * DON'T NOTIFY YOURSELF
+     * PREVENT DOUBLE REQUEST
      * -----------------------------------------
      */
 
     if (
-        comment &&
-        comment.user_id !== userId
+        window.reactionProcessing &&
+        window.reactionProcessing[commentId]
     ) {
+        return;
+    }
+
+    window.reactionProcessing =
+        window.reactionProcessing || {};
+
+    window.reactionProcessing[commentId] = true;
+
+    try {
+
+        /*
+         * -----------------------------------------
+         * GET CURRENT REACTION
+         * -----------------------------------------
+         */
 
         const {
-            data: profile
+            data: existing,
+            error: existingError
         } = await supabase
-            .from("profiles")
-            .select("name, avatar_url")
-            .eq("id", userId)
-            .single();
+            .from("comment_reactions")
+            .select(`
+                id,
+                emoji
+            `)
+            .eq(
+                "comment_id",
+                commentId
+            )
+            .eq(
+                "user_id",
+                userId
+            )
+            .maybeSingle();
 
-        if (profile) {
+        if (existingError) {
+
+            console.error(
+                "Check comment reaction:",
+                existingError
+            );
+
+            return;
+        }
+
+        /*
+         * -----------------------------------------
+         * SAME EMOJI
+         * REMOVE IT
+         * -----------------------------------------
+         */
+
+        if (
+            existing &&
+            existing.emoji === emoji
+        ) {
 
             const {
-                data: existingNotif
+                error: deleteError
             } = await supabase
-                .from("notifications")
-                .select("*")
-                .eq("user_id", comment.user_id)
-                .eq("sender_id", userId)
-                .eq("type", "comment_reaction")
-                .eq("comment_id", commentId)
-                .maybeSingle();
+                .from("comment_reactions")
+                .delete()
+                .eq(
+                    "id",
+                    existing.id
+                );
 
-            if (existingNotif) {
+            if (deleteError) {
 
-                await supabase
-                    .from("notifications")
-                    .update({
-                        count:
-                            (existingNotif.count || 1) + 1,
+                console.error(
+                    "Remove reaction:",
+                    deleteError
+                );
 
-                        username:
-                            profile.name,
+                return;
+            }
 
-                        avatar_url:
-                            profile.avatar_url,
+            /*
+             * Update UI immediately
+             */
 
-                        message:
-                            `reacted ${emoji} to your comment`,
+            await refreshCommentReactionUI(
+                commentId
+            );
 
-                        last_time:
-                            new Date(),
+            closeCommentMenu();
 
-                        read: false
-                    })
-                    .eq(
-                        "id",
-                        existingNotif.id
-                    );
+            return;
+        }
 
-            } else {
+        /*
+         * -----------------------------------------
+         * CHANGE EXISTING REACTION
+         * -----------------------------------------
+         */
 
-                await supabase
-                    .from("notifications")
-                    .insert({
-                        user_id:
-                            comment.user_id,
+        if (existing) {
 
-                        sender_id:
-                            userId,
+            const {
+                error: updateError
+            } = await supabase
+                .from("comment_reactions")
+                .update({
+                    emoji: emoji
+                })
+                .eq(
+                    "id",
+                    existing.id
+                );
 
-                        username:
-                            profile.name,
+            if (updateError) {
 
-                        avatar_url:
-                            profile.avatar_url,
+                console.error(
+                    "Change reaction:",
+                    updateError
+                );
 
-                        type:
-                            "comment_reaction",
+                return;
+            }
 
-                        comment_id:
-                            commentId,
+        }
 
-                        post_id:
-                            comment.post_id,
+        /*
+         * -----------------------------------------
+         * INSERT NEW REACTION
+         * -----------------------------------------
+         */
 
-                        message:
-                            `reacted ${emoji} to your comment`,
+        else {
 
-                        count: 1,
+            const {
+                error: insertError
+            } = await supabase
+                .from("comment_reactions")
+                .insert({
+                    comment_id:
+                        commentId,
 
-                        created_at:
-                            new Date(),
+                    user_id:
+                        userId,
 
-                        last_time:
-                            new Date(),
+                    emoji:
+                        emoji
+                });
 
-                        read: false
-                    });
+            if (insertError) {
+
+                console.error(
+                    "Insert reaction:",
+                    insertError
+                );
+
+                return;
             }
         }
+
+        /*
+         * -----------------------------------------
+         * UPDATE REACTION UI IMMEDIATELY
+         * -----------------------------------------
+         */
+
+        await refreshCommentReactionUI(
+            commentId
+        );
+
+        /*
+         * -----------------------------------------
+         * GET COMMENT OWNER
+         * -----------------------------------------
+         */
+
+        const {
+            data: comment,
+            error: commentError
+        } = await supabase
+            .from("comments")
+            .select(`
+                user_id,
+                post_id
+            `)
+            .eq(
+                "id",
+                commentId
+            )
+            .single();
+
+        if (commentError) {
+
+            console.error(
+                "Get comment owner:",
+                commentError
+            );
+
+            return;
+        }
+
+        /*
+         * -----------------------------------------
+         * DON'T NOTIFY YOURSELF
+         * -----------------------------------------
+         */
+
+        if (
+            !comment ||
+            comment.user_id === userId
+        ) {
+            return;
+        }
+
+        /*
+         * -----------------------------------------
+         * GET SENDER PROFILE
+         * -----------------------------------------
+         */
+
+        const {
+            data: profile,
+            error: profileError
+        } = await supabase
+            .from("profiles")
+            .select(`
+                name,
+                avatar_url
+            `)
+            .eq(
+                "id",
+                userId
+            )
+            .single();
+
+        if (profileError || !profile) {
+
+            console.error(
+                "Get reaction profile:",
+                profileError
+            );
+
+            return;
+        }
+
+        /*
+         * -----------------------------------------
+         * CHECK EXISTING NOTIFICATION
+         * -----------------------------------------
+         */
+
+        const {
+            data: existingNotif,
+            error: notifCheckError
+        } = await supabase
+            .from("notifications")
+            .select("*")
+            .eq(
+                "user_id",
+                comment.user_id
+            )
+            .eq(
+                "sender_id",
+                userId
+            )
+            .eq(
+                "type",
+                "comment_reaction"
+            )
+            .eq(
+                "comment_id",
+                commentId
+            )
+            .maybeSingle();
+
+        if (notifCheckError) {
+
+            console.error(
+                "Reaction notification check:",
+                notifCheckError
+            );
+        }
+
+        /*
+         * -----------------------------------------
+         * UPDATE NOTIFICATION
+         * -----------------------------------------
+         */
+
+        if (existingNotif) {
+
+            const {
+                error: notifUpdateError
+            } = await supabase
+                .from("notifications")
+                .update({
+
+                    count:
+                        (existingNotif.count || 1) + 1,
+
+                    username:
+                        profile.name,
+
+                    avatar_url:
+                        profile.avatar_url,
+
+                    message:
+                        `reacted ${emoji} to your comment`,
+
+                    last_time:
+                        new Date(),
+
+                    read:
+                        false
+                })
+                .eq(
+                    "id",
+                    existingNotif.id
+                );
+
+            if (notifUpdateError) {
+
+                console.error(
+                    "Update reaction notification:",
+                    notifUpdateError
+                );
+            }
+
+        }
+
+        /*
+         * -----------------------------------------
+         * CREATE NOTIFICATION
+         * -----------------------------------------
+         */
+
+        else {
+
+            const {
+                error: notifInsertError
+            } = await supabase
+                .from("notifications")
+                .insert({
+
+                    user_id:
+                        comment.user_id,
+
+                    sender_id:
+                        userId,
+
+                    username:
+                        profile.name,
+
+                    avatar_url:
+                        profile.avatar_url,
+
+                    type:
+                        "comment_reaction",
+
+                    comment_id:
+                        commentId,
+
+                    post_id:
+                        comment.post_id,
+
+                    message:
+                        `reacted ${emoji} to your comment`,
+
+                    count:
+                        1,
+
+                    created_at:
+                        new Date(),
+
+                    last_time:
+                        new Date(),
+
+                    read:
+                        false
+                });
+
+            if (notifInsertError) {
+
+                console.error(
+                    "Insert reaction notification:",
+                    notifInsertError
+                );
+            }
+        }
+
+    } finally {
+
+        window.reactionProcessing[commentId] =
+            false;
+    }
+
+    closeCommentMenu();
+};
+
+window.refreshCommentReactionUI = async function(commentId) {
+
+    if (!commentId) return;
+
+    const {
+        data: reactions,
+        error
+    } = await supabase
+        .from("comment_reactions")
+        .select(`
+            id,
+            user_id,
+            emoji
+        `)
+        .eq(
+            "comment_id",
+            commentId
+        );
+
+    if (error) {
+
+        console.error(
+            "Refresh reaction UI:",
+            error
+        );
+
+        return;
     }
 
     /*
      * -----------------------------------------
-     * REFRESH UI
+     * FIND COMMENT ELEMENT
      * -----------------------------------------
      */
 
-    await updateSingleComment(commentId);
+    const comment =
+        document.getElementById(
+            "comment-" + commentId
+        );
 
-    closeCommentMenu();
-}
+    if (!comment) {
+        return;
+    }
+
+    /*
+     * -----------------------------------------
+     * FIND REACTION CONTAINER
+     * -----------------------------------------
+     */
+
+    let reactionContainer =
+        comment.querySelector(
+            ".commentReactions"
+        );
+
+    if (!reactionContainer) {
+        return;
+    }
+
+    /*
+     * -----------------------------------------
+     * EMPTY
+     * -----------------------------------------
+     */
+
+    if (
+        !Array.isArray(reactions) ||
+        reactions.length === 0
+    ) {
+
+        reactionContainer.innerHTML = "";
+
+        return;
+    }
+
+    /*
+     * -----------------------------------------
+     * GROUP REACTIONS
+     * -----------------------------------------
+     */
+
+    const grouped = {};
+
+    reactions.forEach(reaction => {
+
+        if (!reaction.emoji) {
+            return;
+        }
+
+        if (!grouped[reaction.emoji]) {
+
+            grouped[reaction.emoji] = 0;
+        }
+
+        grouped[reaction.emoji]++;
+    });
+
+    /*
+     * -----------------------------------------
+     * RENDER REACTIONS
+     * -----------------------------------------
+     */
+
+    reactionContainer.innerHTML =
+        Object.entries(grouped)
+            .map(
+                ([emoji, count]) => `
+                    <span
+                        style="
+                            display:inline-flex;
+                            align-items:center;
+                            gap:4px;
+                            background:#232323;
+                            border-radius:14px;
+                            padding:4px 8px;
+                            font-size:13px;
+                        "
+                    >
+                        ${escapeHtml(emoji)}
+
+                        ${
+                            count > 1
+                            ? `
+                                <span
+                                    style="
+                                        color:#aaa;
+                                        font-size:11px;
+                                    "
+                                >
+                                    ${count}
+                                </span>
+                            `
+                            : ""
+                        }
+                    </span>
+                `
+            )
+            .join("");
+};
 
 async function updateSingleComment(commentId) {
 
@@ -10724,9 +11750,10 @@ if (preview) {
         commentsChannel = null;
     }
 
-   document.querySelectorAll("#posts video").forEach(v=>{
-    v.play().catch(()=>{});
-});
+   // 🔥 Reinitialize home-feed video playback
+setTimeout(() => {
+    observeVideos();
+}, 100);
 
 if (commentsTypingChannel) {
 
@@ -10748,24 +11775,6 @@ currentPostId = null;
 }
 
 
-window.goHome = async () => {
-
-  alert("A");
-
-  try {
-
-    await startApp();
-
-    alert("B");
-
-  } catch (e) {
-
-    alert("ERROR");
-    console.error(e);
-
-  }
-
-};
 
 // =====================================================
 // PROFILE
@@ -10786,7 +11795,167 @@ let dragStartY = 0;
 
 let draggingPhoto = false;
 
+window.closeProfile = async function () {
+
+    console.log("🔙 CLOSE PROFILE");
+
+    // ------------------------------------------------
+    // SAVE THE RETURN STATE BEFORE STARTAPP
+    // ------------------------------------------------
+
+    const profileState = window._profileReturnState
+        ? { ...window._profileReturnState }
+        : null;
+
+    const reactionState =
+        window.reactionProfileReturn
+            ? { ...window.reactionProfileReturn }
+            : null;
+
+    console.log("📌 PROFILE STATE:", profileState);
+    console.log("📌 REACTION STATE:", reactionState
+      
+    );
+
+    // ------------------------------------------------
+    // REACTION PROFILE RETURN
+    // ------------------------------------------------
+
+console.log("fromReaction =", profileState?.fromReaction);
+console.log("postId =", reactionState?.postId);
+console.log("commentId =", reactionState?.commentId);
+console.log("emoji =", reactionState?.emoji);
+
+    if (
+        profileState?.fromReaction &&
+        reactionState?.postId &&
+        reactionState?.commentId &&
+        reactionState?.emoji
+    ) {
+
+        console.log(
+            "💬 RETURNING TO EXACT COMMENT REACTION"
+        );
+
+        try {
+
+            // ------------------------------------------------
+            // RESTORE MAIN APP
+            // ------------------------------------------------
+
+            document.getElementById("app").innerHTML = window.savedAppHtml;
+
+attachEvents();
+            
+            console.log("AFTER STARTAPP:", window.reactionProfileReturn);
+
+window.reactionProfileReturn = {
+    postId: reactionState.postId,
+    commentId: reactionState.commentId,
+    emoji: reactionState.emoji,
+    users: reactionState.users
+};
+
+console.log("AFTER RESTORE:", window.reactionProfileReturn);
+
+            console.log(
+                "🏠 STARTAPP FINISHED"
+            );
+
+            // ------------------------------------------------
+            // RESTORE REACTION STATE AFTER STARTAPP
+            // ------------------------------------------------
+
+            window.reactionProfileReturn = {
+    postId: reactionState.postId,
+    commentId: reactionState.commentId,
+    emoji: reactionState.emoji,
+    users: reactionState.users
+};
+
+            console.log(
+                "📌 REACTION STATE RESTORED:",
+                window.reactionProfileReturn
+            );
+
+            // ------------------------------------------------
+            // RESTORE EXACT COMMENTS + REACTION USERS
+            // ------------------------------------------------
+
+            await window.restoreReactionUsers();
+
+            console.log(
+                "✅ COMMENT REACTION RETURN COMPLETE"
+            );
+
+        } catch (error) {
+
+            console.error(
+                "❌ PROFILE RETURN FAILED:",
+                error
+            );
+
+        }
+
+        return;
+    }
+
+    // ------------------------------------------------
+    // NORMAL PROFILE RETURN
+    // ------------------------------------------------
+
+    console.log(
+        "🏠 NORMAL PROFILE RETURN"
+    );
+
+    document.body.style.overflow = "";
+
+    await window.startApp();
+
+    if (profileState?.scrollY != null) {
+
+        requestAnimationFrame(() => {
+
+            window.scrollTo(
+                0,
+                profileState.scrollY
+            );
+
+        });
+
+    }
+
+    window._profileReturnState = null;
+};
+
 window.openProfile = async (userId, name) => {
+  
+  window._profileReturnState = {
+    scrollY: window.scrollY,
+
+    postId: window.reactionProfileReturn?.postId || null,
+    commentId: window.reactionProfileReturn?.commentId || null,
+    emoji: window.reactionProfileReturn?.emoji || null,
+
+    fromReaction:
+        !!window.reactionProfileReturn
+};
+
+console.log(
+    "👤 PROFILE RETURN STATE:",
+    window._profileReturnState
+);
+
+// Profile must be scrollable
+document.body.style.overflow = "";
+
+console.log(
+    "👤 OPEN PROFILE:",
+    userId,
+    "REACTION RETURN:",
+    window.reactionProfileReturn
+);
+
   console.log("Logged in:", session?.user?.id);
 console.log("Profile opened:", userId);
   const { data } = await supabase.auth.getSession();
@@ -10805,23 +11974,57 @@ console.log("Profile opened:", userId);
     ? profile.avatar_url
     : "https://via.placeholder.com/60";
     
-    const { count: followersCount } = await supabase
-  .from("follows")
-  .select("*", { count: "exact", head: true })
-  .eq("following_id", userId);
+    const [
+    followersResult,
+    followingResult,
+    postsResult
+] = await Promise.all([
 
-   const { count: followingCount } = await supabase
-  .from("follows")
-  .select("*", { count: "exact", head: true })
-  .eq("follower_id", userId);
-  
-  const { count: postsCount } = await supabase
-  .from("posts")
-  .select("*", { count: "exact", head: true })
-  .eq("user_id", userId);
+    supabase
+        .from("follows")
+        .select("*", {
+            count: "exact",
+            head: true
+        })
+        .eq("following_id", userId),
+
+    supabase
+        .from("follows")
+        .select("*", {
+            count: "exact",
+            head: true
+        })
+        .eq("follower_id", userId),
+
+    supabase
+        .from("posts")
+        .select("*", {
+            count: "exact",
+            head: true
+        })
+        .eq("user_id", userId)
+
+]);
+
+
+const followersCount =
+    followersResult.count || 0;
+
+const followingCount =
+    followingResult.count || 0;
+
+const postsCount =
+    postsResult.count || 0;
+    
+    window.savedAppHtml = document.getElementById("app").innerHTML;
 
 document.getElementById("app").innerHTML = `
-<div style="color:white;">
+<div style="
+    color:white;
+    min-height:100vh;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+">
 
 <div
 style="
@@ -10845,7 +12048,7 @@ z-index:2;
 </button>
 
 <button
-onclick="window.startApp()"
+onclick="window.closeProfile()"
 style="
 position:absolute;
 top:15px;
@@ -11147,23 +12350,43 @@ style="margin-top:15px;"
 </div>
 `;
 
+// =====================================================
+// PROFILE EVENTS / TABS
+// =====================================================
+
 attachEvents();
 
 loadProfilePosts(userId);
 
-const postsTab = document.getElementById("profilePostsTab");
-const photosTab = document.getElementById("profilePhotosTab");
-const videosTab = document.getElementById("profileVideosTab");
-const savedTab = document.getElementById("profileSavedTab");
+const postsTab =
+    document.getElementById("profilePostsTab");
 
-const indicator = document.getElementById("profileTabIndicator");
+const photosTab =
+    document.getElementById("profilePhotosTab");
+
+const videosTab =
+    document.getElementById("profileVideosTab");
+
+const savedTab =
+    document.getElementById("profileSavedTab");
+
+const indicator =
+    document.getElementById("profileTabIndicator");
+
 
 setTimeout(() => {
-  setProfileTab(postsTab, 0);
+
+    setProfileTab(postsTab, 0);
+
 }, 0);
 
+
 if (indicator) {
-  indicator.style.width = savedTab ? "25%" : "33.333%";
+
+    indicator.style.width =
+        savedTab
+            ? "25%"
+            : "33.333%";
 }
 
 function setProfileTab(active,index){
@@ -12418,12 +13641,9 @@ window.openProfileVideoViewer = function(index){
 
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
-      <button onclick="
-        goHome();
-        openSearch();
-         ">
-        ← Back
-      </button>
+     <button onclick="openProfileSettings()">
+  ← Back
+</button>
 
       <h2>Edit Profile</h2>
 
@@ -12622,7 +13842,7 @@ color:white;
 ">
 
 <button
-onclick="openProfile(session.user.id, session.user.email)"
+onclick="window.openProfile(session.user.id, session.user.email)"
 style="
 margin-bottom:20px;
 padding:10px 16px;
@@ -13536,6 +14756,7 @@ window.closePhotoGallery = function(){
   }
 
 };
+
 
 function attachEvents() {
 
@@ -14951,10 +16172,15 @@ function formatSearchTime(date) {
 let postsEl = null;
 let scrollTimeout;
 
-async function startApp() {
+window.startApp = async function () {
   
-  console.log("START APP CALLED");
+  const t0 = performance.now();
 
+console.log(new Error("startApp called").stack);
+
+    console.log("START APP CALLED");
+    
+    
   document.getElementById("app").innerHTML = `
     <div style="padding:70px 10px 10px;">
     
@@ -15637,35 +16863,55 @@ box-shadow:0 4px 20px rgba(0,0,0,.4);
 
   postsEl = document.getElementById("posts");
 
+console.time("loadPosts");
 await loadPosts();
-await loadStories();
-setupScrollSnap();
+console.timeEnd("loadPosts");
 
+console.time("loadStories");
+await loadStories();
+console.timeEnd("loadStories");
+
+setupScrollSnap();
 adjustStoryBar();
 
 if (session && currentUser) {
 
+    console.time("updateOnlineStatus");
     try {
-    await updateOnlineStatus(true);
-} catch (err) {
-    console.log(err);
-}
+        await updateOnlineStatus(true);
+    } catch (err) {
+        console.log(err);
+    }
+    console.timeEnd("updateOnlineStatus");
 
+    console.time("registerPush");
     try {
-    await registerPush();
-} catch (err) {
-    console.log("Push registration failed:", err);
-}
+        await registerPush();
+    } catch (err) {
+        console.log("Push registration failed:", err);
+    }
+    console.timeEnd("registerPush");
 
+    console.time("loadUnreadCount");
     await loadUnreadCount();
+    console.timeEnd("loadUnreadCount");
 
+    console.time("loadUnreadMessages");
     await loadUnreadMessages();
+    console.timeEnd("loadUnreadMessages");
 
 }
 
 setTimeout(attachEvents, 0);
 
 setActiveTopButton("homeBtn");
+
+console.log(
+    "startApp finished in",
+    Math.round(performance.now() - t0),
+    "ms"
+);
+
 }
 
 window.addEventListener("beforeunload", () => {
@@ -19801,6 +21047,7 @@ window.goHome = function () {
 
 };
 
+
 // ========================
 // GLOBAL FUNCTIONS
 // ========================
@@ -19820,14 +21067,14 @@ window.openNotification = openNotification;
 window.loadUnreadCount = loadUnreadCount;
 window.openProfile = openProfile;
 window.openEditProfile = openEditProfile;
-window.goHome = goHome;
+
 window.likePost = likePost;
 window.deletePost = deletePost;
 window.openComments = openComments;
 window.openChat = openChat;
 window.sendMessage = sendMessage;
 window.deleteMessage = deleteMessage;
-window.startApp = startApp;
+
 
 // ========================
 // VIDEO AUTOPLAY
@@ -19888,8 +21135,19 @@ const videoObserver = new IntersectionObserver(
 
       if (
         entry.isIntersecting &&
-        entry.intersectionRatio > 0.75
+        entry.intersectionRatio >= 0.75
       ) {
+
+        // 🔥 ONLY ONE HOME VIDEO CAN PLAY
+        document
+          .querySelectorAll("#posts .post-card video")
+          .forEach((otherVideo) => {
+
+            if (otherVideo !== video) {
+              otherVideo.pause();
+            }
+
+          });
 
         video.play().catch(() => {});
 
@@ -19907,15 +21165,51 @@ const videoObserver = new IntersectionObserver(
   }
 );
 
+
+// =====================================================
+// HOME FEED VIDEO OBSERVER
+// =====================================================
+
 function observeVideos() {
 
-  document
-    .querySelectorAll(".post-card")
-    .forEach((post) => {
+  console.log("🎬 observeVideos START");
 
-      videoObserver.observe(post);
+  videoObserver.disconnect();
 
-    });
+  const posts =
+    document.querySelectorAll("#posts .post-card");
+
+  const videos =
+    document.querySelectorAll("#posts .post-card video");
+
+  console.log("🎬 HOME POSTS:", posts.length);
+  console.log("🎬 HOME VIDEOS:", videos.length);
+
+  videos.forEach(video => {
+
+    console.log(
+      "🎬 VIDEO:",
+      video,
+      "paused:",
+      video.paused
+    );
+
+    video.pause();
+
+  });
+
+  posts.forEach(post => {
+
+    console.log(
+      "👀 OBSERVING POST:",
+      post.id
+    );
+
+    videoObserver.observe(post);
+
+  });
+
+  console.log("🎬 observeVideos END");
 
 }
 
