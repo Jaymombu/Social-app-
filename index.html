@@ -1699,28 +1699,24 @@ transform:scale(1);
 .edit-save-bottom{
 
     flex:1;
-
     width:auto;
 
     height:48px;
 
-    margin-top:15px;
+    margin-top:0;
 
     border:none;
-
     border-radius:12px;
 
     background:#1877f2;
-
     color:white;
 
     font-size:15px;
-
     font-weight:700;
 
     cursor:pointer;
-
     transition:.2s;
+
 }
 
 .edit-save-bottom:active{
@@ -14356,6 +14352,7 @@ document.getElementById("app").innerHTML = `
   display:flex;
   gap:10px;
   margin-top:15px;
+  align-items:stretch;
 ">
 
   <button
@@ -14367,12 +14364,12 @@ document.getElementById("app").innerHTML = `
   </button>
 
   <button
-  type="button"
-  id="saveProfile"
-  class="edit-save-bottom"
->
-  Save Changes
-</button>
+    type="button"
+    id="saveProfile"
+    class="edit-save-bottom"
+  >
+    Save Changes
+  </button>
 
 </div>
 
@@ -14438,15 +14435,23 @@ document.getElementById("app").innerHTML = `
   =============================== */
 
   const { data: oldProfile, error: oldProfileError } =
-    await supabase
-      .from("profiles")
-      .select("avatar_url, cover_url")
-      .eq("id", session.user.id)
-      .maybeSingle();
+  await supabase
+    .from("profiles")
+    .select(`
+      name,
+      username,
+      website,
+      location,
+      bio,
+      avatar_url,
+      cover_url
+    `)
+    .eq("id", session.user.id)
+    .maybeSingle();
 
-  if (oldProfileError) {
-    console.log("OLD PROFILE ERROR:", oldProfileError);
-  }
+if (oldProfileError) {
+  console.log("OLD PROFILE ERROR:", oldProfileError);
+}
 
 
   /* ===============================
@@ -14521,6 +14526,71 @@ document.getElementById("app").innerHTML = `
       "?t=" +
       Date.now();
   }
+  
+  /* ===============================
+   DETECT PROFILE CHANGES
+=============================== */
+
+const changes = [];
+
+
+/* NAME */
+if ((oldProfile?.name || "") !== name) {
+  changes.push(
+    `Name changed to "${name || "empty"}"`
+  );
+}
+
+
+/* USERNAME */
+if ((oldProfile?.username || "") !== username) {
+  changes.push(
+    `Username changed to "@${username || "empty"}"`
+  );
+}
+
+
+/* WEBSITE */
+if ((oldProfile?.website || "") !== website) {
+  changes.push(
+    `Website changed to "${website || "empty"}"`
+  );
+}
+
+
+/* LOCATION */
+if ((oldProfile?.location || "") !== location) {
+  changes.push(
+    `Location changed to "${location || "empty"}"`
+  );
+}
+
+
+/* BIO */
+if ((oldProfile?.bio || "") !== bio) {
+  changes.push(
+    `Bio changed to "${bio || "empty"}"`
+  );
+}
+
+
+/* PROFILE PHOTO */
+if (avatarUrl) {
+  changes.push(
+    "Profile photo was changed"
+  );
+}
+
+
+/* COVER PHOTO */
+if (coverUrl) {
+  changes.push(
+    "Cover photo was changed"
+  );
+}
+
+
+console.log("PROFILE CHANGES:", changes);
 
 
   /* ===============================
@@ -14589,6 +14659,96 @@ document.getElementById("app").innerHTML = `
 
     return;
   }
+  
+  
+  /* ==========================================
+   NOTIFY FOLLOWERS + FOLLOWING
+========================================== */
+
+if (changes.length > 0) {
+
+  // Get everyone who follows me
+  const { data: followers, error: followersError } =
+    await supabase
+      .from("follows")
+      .select("follower_id")
+      .eq("following_id", session.user.id);
+
+  if (followersError) {
+    console.log("FOLLOWERS ERROR:", followersError);
+  }
+
+
+  // Get everyone I follow
+  const { data: following, error: followingError } =
+    await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", session.user.id);
+
+  if (followingError) {
+    console.log("FOLLOWING ERROR:", followingError);
+  }
+
+
+  // Combine both groups
+  const recipientIds = [
+    ...(followers || []).map(row => row.follower_id),
+    ...(following || []).map(row => row.following_id)
+  ];
+
+
+  // Remove duplicates
+  const uniqueRecipientIds = [
+    ...new Set(recipientIds)
+  ];
+
+
+  // Never notify yourself
+  const recipients = uniqueRecipientIds.filter(
+    id => id !== session.user.id
+  );
+
+
+  // Get my updated profile
+  const { data: me } = await supabase
+    .from("profiles")
+    .select("name, username, avatar_url")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+
+  // Create notifications
+  const notifications = recipients.map(userId => ({
+  user_id: userId,
+  sender_id: session.user.id,
+  username: me?.name || me?.username || "User",
+  avatar_url: me?.avatar_url || null,
+  type: "profile_update",
+  message:
+    `${me?.name || me?.username || "User"} updated their profile:\n` +
+    changes.join("\n"),
+  read: false,
+  created_at: new Date(),
+  last_time: new Date()
+}));
+
+
+  if (notifications.length > 0) {
+
+    const { error: notificationError } =
+      await supabase
+        .from("notifications")
+        .insert(notifications);
+
+    if (notificationError) {
+      console.log(
+        "PROFILE NOTIFICATION ERROR:",
+        notificationError
+      );
+    }
+  }
+}
 
 
   /* ===============================
@@ -21335,6 +21495,20 @@ if (data.type === "message_reaction") {
     return;
 }
 
+if (data.type === "profile_update") {
+
+  if (data.sender_id) {
+
+    openProfile(
+      data.sender_id,
+      data.username || "User"
+    );
+
+  }
+
+  return;
+}
+
 if (data.type === "follow_request") {
 
   openFollowRequests();
@@ -21712,7 +21886,9 @@ function renderNotifications(notifications = notificationCache) {
 
   list.innerHTML = notifications.map(n => {
 
-    const avatar = n.avatar_url || "https://via.placeholder.com/50";
+    const avatar = escapeHtml(
+  n.avatar_url || "https://via.placeholder.com/50"
+);
     const username =
   escapeHtml(n.username || "User");
 
@@ -21733,12 +21909,13 @@ if (n.type === "follow_request") icon = "👥";
 
 if (n.type === "message") icon = "📩";
 if (n.type === "message_reaction") icon = "😊";
+if (n.type === "profile_update") icon = "✏️";
 
     const rawTime = n.last_time || n.created_at || new Date().toISOString();
 const time = formatTime(rawTime);
 
     let text =
-  escapeHtml(n.message || "");
+  escapeHtml(n.message || "").replace(/\n/g, "<br>");
 
     if (n.count > 1) {
 
