@@ -1400,6 +1400,484 @@ transform:scale(1);
 
 }
 
+/* =====================================================
+   EDIT PROFILE
+===================================================== */
+
+.edit-profile-page{
+    min-height:100vh;
+    background:var(--bg);
+    color:var(--text);
+    box-sizing:border-box;
+    padding-bottom:40px;
+}
+
+
+/* HEADER */
+
+.edit-profile-header{
+    position:sticky;
+    top:0;
+    z-index:1000;
+
+    height:60px;
+
+    display:flex;
+    align-items:center;
+
+    padding:0 12px;
+
+    background:#18191a;
+    border-bottom:1px solid #333;
+
+    box-sizing:border-box;
+}
+
+.edit-profile-header h2{
+    flex:1;
+
+    margin:0 0 0 12px;
+
+    font-size:19px;
+    font-weight:700;
+
+    color:white;
+}
+
+
+/* BACK BUTTON */
+
+.edit-back-btn{
+    width:42px;
+    height:42px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    background:transparent;
+    border:none;
+
+    color:white;
+
+    font-size:28px;
+
+    cursor:pointer;
+
+    border-radius:50%;
+
+    transition:.2s;
+}
+
+.edit-back-btn:active{
+    background:#292929;
+    transform:scale(.92);
+}
+
+
+/* TOP SAVE */
+
+.edit-save-top{
+    border:none;
+
+    background:#1877f2;
+
+    color:white;
+
+    font-size:14px;
+    font-weight:700;
+
+    padding:9px 16px;
+
+    border-radius:999px;
+
+    cursor:pointer;
+
+    transition:.2s;
+}
+
+.edit-save-top:active{
+    transform:scale(.94);
+}
+
+
+/* FORM CARD */
+
+.edit-profile-card{
+    max-width:600px;
+
+    margin:0 auto;
+
+    padding:20px 16px 40px;
+
+    box-sizing:border-box;
+}
+
+
+/* FIELD */
+
+.edit-field{
+    margin-bottom:20px;
+}
+
+.edit-field label{
+    display:block;
+
+    margin-bottom:8px;
+
+    color:#aaa;
+
+    font-size:13px;
+    font-weight:600;
+}
+
+
+/* INPUTS */
+
+.edit-field input,
+.edit-field textarea{
+
+    width:100%;
+
+    box-sizing:border-box;
+
+    background:#1c1c1c;
+
+    color:white;
+
+    border:1px solid #333;
+
+    border-radius:12px;
+
+    outline:none;
+
+    font-size:15px;
+
+    transition:
+        border-color .2s,
+        background .2s;
+
+}
+
+.edit-field input{
+
+    height:48px;
+
+    padding:0 14px;
+
+}
+
+.edit-field textarea{
+
+    min-height:120px;
+
+    padding:14px;
+
+    resize:none;
+
+    line-height:1.5;
+
+}
+
+
+/* FOCUS */
+
+.edit-field input:focus,
+.edit-field textarea:focus{
+
+    border-color:#1877f2;
+
+    background:#202020;
+
+}
+
+
+/* PLACEHOLDER */
+
+.edit-field input::placeholder,
+.edit-field textarea::placeholder{
+
+    color:#777;
+
+}
+
+
+/* MEDIA SECTIONS */
+
+.edit-media-section{
+
+    margin:24px 0;
+
+}
+
+.edit-media-title{
+
+    color:#aaa;
+
+    font-size:13px;
+
+    font-weight:600;
+
+    margin-bottom:10px;
+
+}
+
+
+/* UPLOAD BOX */
+
+.edit-upload-box{
+
+    min-height:58px;
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+    padding:0 15px;
+
+    box-sizing:border-box;
+
+    background:#1c1c1c;
+
+    border:1px solid #333;
+
+    border-radius:12px;
+
+    color:white;
+
+    font-size:15px;
+
+    cursor:pointer;
+
+    transition:.2s;
+
+}
+
+.edit-upload-box:active{
+
+    transform:scale(.98);
+
+    background:#242424;
+
+}
+
+.edit-upload-icon{
+
+    width:38px;
+    height:38px;
+
+    display:flex;
+
+    align-items:center;
+    justify-content:center;
+
+    background:#292929;
+
+    border-radius:50%;
+
+    font-size:19px;
+
+}
+
+
+/* BIO HINT */
+
+.edit-hint{
+
+    margin-top:6px;
+
+    color:#666;
+
+    font-size:12px;
+
+}
+
+
+/* BOTTOM SAVE */
+
+.edit-save-bottom{
+
+    width:100%;
+
+    height:48px;
+
+    margin-top:15px;
+
+    border:none;
+
+    border-radius:12px;
+
+    background:#1877f2;
+
+    color:white;
+
+    font-size:15px;
+
+    font-weight:700;
+
+    cursor:pointer;
+
+    transition:.2s;
+
+}
+
+.edit-save-bottom:active{
+
+    transform:scale(.98);
+
+}
+
+
+/* MOBILE */
+
+@media(max-width:600px){
+
+    .edit-profile-card{
+
+        padding:18px 14px 35px;
+
+    }
+
+    .edit-profile-header{
+
+        height:58px;
+
+    }
+
+    .edit-profile-header h2{
+
+        font-size:18px;
+
+    }
+
+}
+
+
+/* LIGHT MODE */
+
+body:not(.dark) .edit-profile-header{
+
+    background:#fff;
+
+    border-bottom:1px solid #ddd;
+
+}
+
+body:not(.dark) .edit-profile-header h2{
+
+    color:#111;
+
+}
+
+body:not(.dark) .edit-back-btn{
+
+    color:#111;
+
+}
+
+body:not(.dark) .edit-field input,
+body:not(.dark) .edit-field textarea,
+body:not(.dark) .edit-upload-box{
+
+    background:#f5f5f5;
+
+    color:#111;
+
+    border-color:#ddd;
+
+}
+
+body:not(.dark) .edit-upload-icon{
+
+    background:#e5e5e5;
+
+}
+
+/* =====================================================
+   PROFILE PHOTO PREVIEWS
+===================================================== */
+
+.edit-cover-preview{
+    width:100%;
+    height:150px;
+    border-radius:16px;
+    overflow:hidden;
+    background:#181818;
+    border:1px solid #333;
+    position:relative;
+    margin-bottom:12px;
+}
+
+.edit-cover-preview img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+}
+
+.edit-cover-overlay{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(0,0,0,.25);
+    pointer-events:none;
+}
+
+.edit-avatar-preview{
+    width:100px;
+    height:100px;
+    border-radius:50%;
+    overflow:hidden;
+    background:#181818;
+    border:4px solid var(--bg);
+    margin:-55px auto 15px;
+    position:relative;
+    z-index:5;
+}
+
+.edit-avatar-preview img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+}
+
+.edit-photo-button{
+    width:100%;
+    min-height:50px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    background:#1c1c1c;
+    border:1px solid #333;
+    border-radius:12px;
+    color:white;
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+}
+
+.edit-photo-button:active{
+    transform:scale(.98);
+    background:#242424;
+}
+
+body:not(.dark) .edit-cover-preview{
+    background:#eee;
+    border-color:#ddd;
+}
+
+body:not(.dark) .edit-photo-button{
+    background:#f5f5f5;
+    color:#111;
+    border-color:#ddd;
+}
+
 </style>
 </head>
 <body class="dark">
@@ -13651,9 +14129,7 @@ window.openProfileVideoViewer = function(index){
 
 };
 
-
-
-  window.openEditProfile = async () => {
+window.openEditProfile = async () => {
   alert("EDIT FUNCTION RUNNING");
 
   const { data: sessionData } = await supabase.auth.getSession();
@@ -13678,64 +14154,179 @@ window.openProfileVideoViewer = function(index){
 
   // ❌ DO NOT STOP if error
 
-  document.getElementById("app").innerHTML = `
-    <div style="padding:15px; color:white;">
-    
+document.getElementById("app").innerHTML = `
+<div class="edit-profile-page">
+
+  <div class="edit-profile-header">
+
     <button
-  type="button"
-  onclick="window.backToProfileSettings()"
-  style="
-    margin-bottom:20px;
-    padding:10px 16px;
-    background:#181818;
-    color:white;
-    border:1px solid #333;
-    border-radius:10px;
-    cursor:pointer;
-  "
->
-  ← Back
-</button>
+      type="button"
+      class="edit-back-btn"
+      onclick="window.backToProfileSettings()"
+    >
+      ←
+    </button>
 
-      <h2>Edit Profile</h2>
+    <h2>Edit Profile</h2>
 
-      <input id="editName" placeholder="Name" value="${data?.name || ""}" />
-      
+    <button
+      type="button"
+      class="edit-save-top"
+      id="saveProfileTop"
+    >
+      Save
+    </button>
+
+  </div>
+
+
+  <div class="edit-profile-card">
+
+    <!-- NAME -->
+    <div class="edit-field">
+      <label>Name</label>
+
       <input
-id="editUsername"
-placeholder="Username"
-value="${data?.username || ""}"
-/>
-
-<input
-id="editWebsite"
-placeholder="Website"
-value="${data?.website || ""}"
-/>
-
-<input
-id="editLocation"
-placeholder="Location"
-value="${data?.location || ""}"
-/>
-      
-      <input type="file" id="avatarFile" accept="image/*" />
-      
-      <label style="display:block;margin-top:10px;">
-  Cover Photo
-</label>
-
-<input
-  type="file"
-  id="coverFile"
-  accept="image/*"
-/>
-      
-      <textarea id="editBio" placeholder="Bio">${data?.bio || ""}</textarea>
-
-      <button id="saveProfile">Save</button>
+        id="editName"
+        placeholder="Your name"
+        value="${data?.name || ""}"
+      >
     </div>
-  `;
+
+
+    <!-- USERNAME -->
+    <div class="edit-field">
+      <label>Username</label>
+
+      <input
+        id="editUsername"
+        placeholder="Username"
+        value="${data?.username || ""}"
+      >
+    </div>
+
+
+    <!-- WEBSITE -->
+    <div class="edit-field">
+      <label>Website</label>
+
+      <input
+        id="editWebsite"
+        placeholder="https://example.com"
+        value="${data?.website || ""}"
+      >
+    </div>
+
+
+    <!-- LOCATION -->
+    <div class="edit-field">
+      <label>Location</label>
+
+      <input
+        id="editLocation"
+        placeholder="Location"
+        value="${data?.location || ""}"
+      >
+    </div>
+
+
+    <!-- BIO -->
+    <div class="edit-field">
+
+      <label>Bio</label>
+
+      <textarea
+        id="editBio"
+        placeholder="Tell people about yourself..."
+      >${data?.bio || ""}</textarea>
+
+      <div class="edit-hint">
+        Tell people a little about yourself.
+      </div>
+
+    </div>
+
+   <!-- COVER PHOTO -->
+<div class="edit-media-section">
+
+  <div class="edit-media-title">
+    Cover Photo
+  </div>
+
+  <div class="edit-cover-preview">
+
+    <img
+      id="coverPreview"
+      src="${data?.cover_url || "https://via.placeholder.com/600x200/181818/777?text=Cover+Photo"}"
+      alt="Cover Photo"
+    >
+
+  </div>
+
+  <label class="edit-photo-button">
+
+    🖼️
+    <span>Change Cover Photo</span>
+
+    <input
+      type="file"
+      id="coverFile"
+      accept="image/*"
+      style="display:none;"
+    >
+
+  </label>
+
+</div>
+
+
+<!-- PROFILE PHOTO -->
+<div class="edit-media-section">
+
+  <div class="edit-media-title">
+    Profile Photo
+  </div>
+
+  <div class="edit-avatar-preview">
+
+    <img
+      id="avatarPreview"
+      src="${data?.avatar_url || "https://via.placeholder.com/200/292929/ffffff?text=Photo"}"
+      alt="Profile Photo"
+    >
+
+  </div>
+
+  <label class="edit-photo-button">
+
+    👤
+    <span>Change Profile Photo</span>
+
+    <input
+      type="file"
+      id="avatarFile"
+      accept="image/*"
+      style="display:none;"
+    >
+
+  </label>
+
+</div>
+
+
+    <!-- BOTTOM SAVE -->
+    <button
+      type="button"
+      id="saveProfile"
+      class="edit-save-bottom"
+    >
+      Save Changes
+    </button>
+
+  </div>
+
+</div>
+`;
   
   document.getElementById("saveProfile").onclick = async () => {
     
@@ -13883,6 +14474,36 @@ bio
 
   openProfile(session.user.id, name);
 };
+
+const avatarFileInput = document.getElementById("avatarFile");
+const avatarPreview = document.getElementById("avatarPreview");
+
+avatarFileInput.addEventListener("change", () => {
+
+  const file = avatarFileInput.files[0];
+
+  if (!file) return;
+
+  const imageUrl = URL.createObjectURL(file);
+
+  avatarPreview.src = imageUrl;
+});
+
+
+const coverFileInput = document.getElementById("coverFile");
+const coverPreview = document.getElementById("coverPreview");
+
+coverFileInput.addEventListener("change", () => {
+
+  const file = coverFileInput.files[0];
+
+  if (!file) return;
+
+  const imageUrl = URL.createObjectURL(file);
+
+  coverPreview.src = imageUrl;
+});
+
 };
 
 window.openProfileSettings = function(){
