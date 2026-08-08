@@ -5442,162 +5442,246 @@ function snapToNearestPost() {
 }
 
   function renderPostElement(post) {
-    
-    console.log("renderPostElement started", post.id);
-    
-    console.log("Rendering:", post.id);
-    
-    if (!window.renderedPosts) {
-  window.renderedPosts = new Set();
-}
-    
-    console.log(post);
+
+  console.log("renderPostElement started", post.id);
+  console.log("Rendering:", post.id);
+
+  if (!window.renderedPosts) {
+    window.renderedPosts = new Set();
+  }
+
+  console.log(post);
+
+  /* ==========================================
+     CURRENT PROFILE DATA
+  ========================================== */
+
+  const profile = post.profile || {};
+
+  const profileName =
+    profile.name ||
+    post.name ||
+    "User";
+
+  const profileUsername =
+    profile.username ||
+    post.username ||
+    "";
+
+  const profileAvatar =
+    profile.avatar_url ||
+    post.avatar_url ||
+    "";
+
+  const profileVerified =
+    profile.verified ??
+    post.verified ??
+    false;
+
 
   const time =
     new Date(post.created_at)
       .toLocaleString();
 
-  const isOwner =
+/* ==========================================
+   ALWAYS USE CURRENT PROFILE DATA
+========================================== */
+
+const isOwner =
     session?.user?.id &&
     String(session.user.id) ===
     String(post.user_id);
+
 
   const isLiked =
     (post.liked_by || [])
       .includes(session?.user?.id);
 
+
   const div =
     document.createElement("div");
 
-  div.id = `post-${post.id}`;
-  div.className = "post-card";
 
-  // ======================
-  // MEDIA HTML
-  // ======================
+  div.id =
+    `post-${post.id}`;
+
+  div.className =
+    "post-card";
+
+
+  /* ======================
+     MEDIA HTML
+  ====================== */
 
   let mediaHTML = "";
 
-  
+
   // IMAGE
-if (
-  post.media_type === "image" &&
-  post.file_url
-) {
+  if (
+    post.media_type === "image" &&
+    post.file_url
+  ) {
 
-  mediaHTML = `
-  <img
-    src="${post.file_url}"
+    mediaHTML = `
+      <img
+        src="${escapeHtml(post.file_url)}"
 
-    onclick="
-      openMedia(
-        '${post.file_url}',
-        'image'
-      )
-    "
+        onclick="
+          openMedia(
+            '${post.file_url}',
+            'image'
+          )
+        "
 
-    style="
-      max-width:100%;
-      width:auto;
-      height:auto;
-      margin-top:10px;
-      border-radius:12px;
-      max-height:600px;
-      object-fit:contain;
-      display:block;
-      cursor:pointer;
-    "
-  />
-`;
-}
+        style="
+          max-width:100%;
+          width:auto;
+          height:auto;
+          margin-top:10px;
+          border-radius:12px;
+          max-height:600px;
+          object-fit:contain;
+          display:block;
+          cursor:pointer;
+        "
+      />
+    `;
 
-// VIDEO
-if (
-  post.media_type === "video" &&
-  post.file_url
-) {
+  }
 
- mediaHTML = `
-    <video
-      src="${post.file_url}"
-      controls
-      playsinline
-      muted
-      loop
-      style="
-        width:100%;
-        margin-top:10px;
-        border-radius:12px;
-        max-height:700px;
-        object-fit:cover;
-      "
-    ></video>
-  `;
-}
 
-  // ======================
-  // POST HTML
-  // ======================
+  // VIDEO
+  if (
+    post.media_type === "video" &&
+    post.file_url
+  ) {
+
+    mediaHTML = `
+      <video
+        src="${escapeHtml(post.file_url)}"
+        controls
+        playsinline
+        muted
+        loop
+        style="
+          width:100%;
+          margin-top:10px;
+          border-radius:12px;
+          max-height:700px;
+          object-fit:cover;
+        "
+      ></video>
+    `;
+
+  }
+
+
+  /* ======================
+     AVATAR FALLBACK
+  ====================== */
+
+  const fallbackAvatar =
+    "https://ui-avatars.com/api/?name=" +
+    encodeURIComponent(profileName);
+
+
+  const avatarSrc =
+    profileAvatar &&
+    profileAvatar !== "null"
+      ? profileAvatar
+      : fallbackAvatar;
+
+
+  /* ======================
+     POST HTML
+  ====================== */
 
   div.innerHTML = `
+
     <div style="
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-bottom:10px;
-">
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin-bottom:10px;
+    ">
 
-      <img 
-  class="avatar"
+      <img
+        class="avatar"
 
-  src="${
-    post.avatar_url &&
-    post.avatar_url !== "null"
-      ? post.avatar_url
-      : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(post.name)
-  }"
+        src="${escapeHtml(avatarSrc)}"
 
-  onerror="
-    this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(post.name)}'
-  "
+        onerror="
+          this.src='${fallbackAvatar}'
+        "
 
-  style="
-    width:50px;
-    height:50px;
-    border-radius:50%;
-    object-fit:cover;
-    background:#222;
-    flex-shrink:0;
-  "
-/>
+        style="
+          width:50px;
+          height:50px;
+          border-radius:50%;
+          object-fit:cover;
+          background:#222;
+          flex-shrink:0;
+        "
+      />
 
-     <div style="flex:1; overflow:hidden;">
+
+      <div style="
+        flex:1;
+        overflow:hidden;
+      ">
 
         <div
-  onclick="openProfile(
+         onclick="
+  openProfile(
     '${post.user_id}',
-    '${post.name}'
-  )"
-  style="
-    font-weight:bold;
-    cursor:pointer;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-  "
->
-${escapeHtml(post.name)}
+    ${JSON.stringify(profileName)}
+  )
+"
+         
+          style="
+            font-weight:bold;
+            cursor:pointer;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+          "
+        >
 
-${post.verified ? `
-<span style="
-color:#1d9bf0;
-font-size:14px;
-margin-left:4px;
-">
-✔️
-</span>
-` : ""}
+          ${escapeHtml(profileName)}
+
+          ${
+            profileVerified
+              ? `
+                <span style="
+                  color:#1d9bf0;
+                  font-size:14px;
+                  margin-left:4px;
+                ">
+                  ✔️
+                </span>
+              `
+              : ""
+          }
+
         </div>
+
+
+        ${
+          profileUsername
+            ? `
+              <div style="
+                font-size:12px;
+                color:#888;
+                white-space:nowrap;
+                overflow:hidden;
+                text-overflow:ellipsis;
+              ">
+                @${escapeHtml(profileUsername)}
+              </div>
+            `
+            : ""
+        }
+
 
         <div style="
           font-size:12px;
@@ -5610,42 +5694,51 @@ margin-left:4px;
 
     </div>
 
-  <div style="margin-top:10px;">
 
-<div id="postContent-${post.id}">
-${escapeHtml(post.content)}
-</div>
+    <div style="margin-top:10px;">
 
-${
-shouldShowTranslate(post.language_code)
-? `
-<div
-id="translatePostBtn-${post.id}"
-onclick="translatePost('${post.id}')"
-style="
-margin-top:8px;
-color:#0095f6;
-font-size:14px;
-font-weight:600;
-cursor:pointer;
-">
-🌐 See translation
-</div>
-`
-: ""
-}
+      <div id="postContent-${post.id}">
+        ${escapeHtml(post.content || "")}
+      </div>
 
-</div>
+
+      ${
+        shouldShowTranslate(post.language_code)
+          ? `
+            <div
+              id="translatePostBtn-${post.id}"
+              onclick="translatePost('${post.id}')"
+              style="
+                margin-top:8px;
+                color:#0095f6;
+                font-size:14px;
+                font-weight:600;
+                cursor:pointer;
+              "
+            >
+              🌐 See translation
+            </div>
+          `
+          : ""
+      }
+
+    </div>
+
 
     ${mediaHTML}
 
-    <div style="margin-top:8px;">
+
+    <div style="
+      margin-top:8px;
+    ">
       ❤️ ${post.likes || 0}
     </div>
 
-   <button
-  class="like-btn"
-  onclick="likePost('${post.id}')"
+
+    <button
+      class="like-btn"
+      onclick="likePost('${post.id}')"
+
       style="
         margin-top:5px;
         background:${
@@ -5659,16 +5752,21 @@ cursor:pointer;
         border-radius:5px;
       "
     >
+
       ${
         isLiked
           ? "❤️ Liked"
           : "🤍 Like"
       }
+
       (${post.likes || 0})
+
     </button>
+
 
     <button
       onclick="openComments('${post.id}')"
+
       style="
         margin-top:5px;
         background:#333;
@@ -5680,27 +5778,35 @@ cursor:pointer;
     >
       💬 Comment
     </button>
-    
- <button
-  onclick="toggleSavePost('${post.id}')"
-  style="
-    margin-top:5px;
-    margin-left:6px;
-    background:#444;
-    color:white;
-    border:none;
-    padding:5px 10px;
-    border-radius:5px;
-  "
->
-${post.saved ? "✅ Saved" : "🔖 Save"}
-</button>
+
+
+    <button
+      onclick="toggleSavePost('${post.id}')"
+
+      style="
+        margin-top:5px;
+        margin-left:6px;
+        background:#444;
+        color:white;
+        border:none;
+        padding:5px 10px;
+        border-radius:5px;
+      "
+    >
+      ${
+        post.saved
+          ? "✅ Saved"
+          : "🔖 Save"
+      }
+    </button>
+
 
     ${
       isOwner
         ? `
           <button
             onclick="deletePost('${post.id}')"
+
             style="
               margin-top:8px;
               background:#ff4d4d;
@@ -5715,15 +5821,27 @@ ${post.saved ? "✅ Saved" : "🔖 Save"}
         `
         : ""
     }
-  `;
-  
-  console.log("RENDERING POST:", post.id);
-  
-  console.log("Returning post:", post.id);
-  
-  console.log("renderPostElement finished", post.id);
 
-return div;
+  `;
+
+
+  console.log(
+    "RENDERING POST:",
+    post.id
+  );
+
+  console.log(
+    "Returning post:",
+    post.id
+  );
+
+  console.log(
+    "renderPostElement finished",
+    post.id
+  );
+
+
+  return div;
 }
 
 function renderFeed(posts) {
@@ -5816,25 +5934,83 @@ window.loadPosts = async function () {
   console.timeEnd("postsQuery");
 }
 
-  postsDiv.replaceChildren();
-
   if (error) {
 
-    postsDiv.innerHTML =
-      "❌ Error loading posts";
+  postsDiv.innerHTML =
+    "❌ Error loading posts";
 
-    return;
+  return;
+
+}
+
+if (!posts || posts.length === 0) {
+
+  postsDiv.innerHTML =
+    "😢 No posts yet";
+
+  return;
+
+}
+
+
+/* ==========================================
+   GET CURRENT PROFILE DATA FOR POST OWNERS
+========================================== */
+
+const userIds = [
+  ...new Set(
+    posts
+      .map(post => post.user_id)
+      .filter(Boolean)
+  )
+];
+
+if (userIds.length > 0) {
+
+  const { data: profiles, error: profilesError } =
+  await supabase
+    .from("profiles")
+    .select(`
+      id,
+      name,
+      username,
+      avatar_url,
+      cover_url,
+      verified
+    `)
+    .in("id", userIds);
+
+  if (profilesError) {
+
+    console.log(
+      "❌ PROFILE FETCH ERROR:",
+      profilesError
+    );
+
+  } else {
+
+    const profileMap = new Map(
+      (profiles || []).map(profile => [
+        profile.id,
+        profile
+      ])
+    );
+
+    posts = posts.map(post => ({
+
+      ...post,
+
+      profile:
+        profileMap.get(post.user_id) || null
+
+    }));
 
   }
 
-  if (!posts || posts.length === 0) {
+}
 
-    postsDiv.innerHTML =
-      "😢 No posts yet";
 
-    return;
-
-  }
+postsDiv.replaceChildren();
   
   if (session?.user && posts.length) {
 
@@ -6053,9 +6229,14 @@ function upsertPost(updatedPost) {
 
   if (index >= 0) {
     window.postsState[index] = {
-      ...window.postsState[index],
-      ...updatedPost
-    };
+  ...window.postsState[index],
+  ...updatedPost,
+
+  profile:
+    updatedPost.profile ||
+    window.postsState[index].profile ||
+    null
+};
   } else {
     window.postsState.unshift(updatedPost);
   }
@@ -6088,16 +6269,25 @@ window.togglePinnedPost = async function(postId) {
     .single();
 
   if (error) {
-    console.log(error);
+    console.log("❌ PINNED POST FETCH ERROR:", error);
     return;
   }
 
-  // If it's not already pinned, unpin all of your posts first
+  // If it's not already pinned,
+  // unpin all of your posts first
   if (!post.pinned) {
-    await supabase
+
+    const { error: unpinError } = await supabase
       .from("posts")
-      .update({ pinned: false })
+      .update({
+        pinned: false
+      })
       .eq("user_id", session.user.id);
+
+    if (unpinError) {
+      console.log("❌ UNPIN ERROR:", unpinError);
+      return;
+    }
   }
 
   // Toggle this post
@@ -6109,7 +6299,7 @@ window.togglePinnedPost = async function(postId) {
     .eq("id", postId);
 
   if (updateError) {
-    console.log(updateError);
+    console.log("❌ PIN UPDATE ERROR:", updateError);
     return;
   }
 
@@ -12361,6 +12551,33 @@ window.closeProfile = async function () {
     console.log("📌 REACTION STATE:", reactionState
       
     );
+    
+    
+    // ------------------------------------------------
+// RETURN TO NOTIFICATIONS
+// ------------------------------------------------
+
+if (openedProfileFromNotification) {
+
+    console.log(
+        "🔔 RETURNING TO NOTIFICATIONS"
+    );
+
+    openedProfileFromNotification = false;
+
+    document.body.style.overflow = "";
+
+    const notificationsScreen =
+        document.getElementById("notificationsScreen");
+
+    if (notificationsScreen) {
+        notificationsScreen.style.display = "flex";
+    }
+
+    await loadNotifications();
+
+    return;
+}
 
     // ------------------------------------------------
     // REACTION PROFILE RETURN
@@ -12519,6 +12736,11 @@ console.log("Profile opened:", userId);
     ? profile.avatar_url
     : "https://via.placeholder.com/60";
     
+    const safeCoverUrl =
+  profile?.cover_url
+    ? escapeHtml(profile.cover_url)
+    : "";
+    
     const [
     followersResult,
     followingResult,
@@ -12575,8 +12797,8 @@ document.getElementById("app").innerHTML = `
 style="
 height:200px;
 background:${
-  profile?.cover_url
-    ? `url('${profile.cover_url}') center/cover`
+  safeCoverUrl
+    ? `url("${safeCoverUrl}") center/cover`
     : "#333"
 };
 position:relative;
@@ -12747,7 +12969,7 @@ font-size:14px;
 ">
 🌐
 <a
-href="${profile.website}"
+href="${escapeHtml(profile.website)}"
 target="_blank"
 style="
 color:#1d9bf0;
@@ -14726,7 +14948,7 @@ if (changes.length > 0) {
   avatar_url: me?.avatar_url || null,
   type: "profile_update",
   message:
-    `${me?.name || me?.username || "User"} updated their profile:\n` +
+    `updated their profile:\n` +
     changes.join("\n"),
   read: false,
   created_at: new Date(),
@@ -14752,6 +14974,17 @@ if (changes.length > 0) {
 
 
   /* ===============================
+     REFRESH ALL POSTS
+  =============================== */
+
+  console.log("🔄 Refreshing posts with latest profile data...");
+
+  await loadPosts();
+
+  console.log("✅ Posts refreshed with latest profile data");
+
+
+  /* ===============================
      OPEN UPDATED PROFILE
   =============================== */
 
@@ -14760,7 +14993,7 @@ if (changes.length > 0) {
     name
   );
 
-};
+}; // ✅ CLOSE SAVE PROFILE CLICK HANDLER
 
 
 /* =====================================================
@@ -21283,505 +21516,774 @@ window.closeMedia = function () {
 // NOTIFICATIONS
 // =====================================================
 
+let openedProfileFromNotification = false;
+
+
+// =====================================================
+// CURRENT PROFILE DATA FOR NOTIFICATIONS
+// =====================================================
+
+window.notificationProfileCache =
+  window.notificationProfileCache || new Map();
+
+
+window.loadNotificationProfiles = async function(notifications) {
+
+  const senderIds = [
+    ...new Set(
+      notifications
+        .map(n => n.sender_id)
+        .filter(Boolean)
+    )
+  ];
+
+  if (!senderIds.length) return;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(`
+      id,
+      name,
+      username,
+      avatar_url
+    `)
+    .in("id", senderIds);
+
+  if (error) {
+    console.log(
+      "❌ NOTIFICATION PROFILE ERROR:",
+      error
+    );
+    return;
+  }
+
+  (data || []).forEach(profile => {
+
+    window.notificationProfileCache.set(
+      profile.id,
+      profile
+    );
+
+  });
+
+};
+
+
+// =====================================================
+// LOAD NOTIFICATIONS
+// =====================================================
 
 async function loadNotifications() {
 
   if (!currentUser) return;
 
   const { data, error } = await supabase
-  .from("notifications")
-  .select("*")
-  .eq("user_id", currentUser.id);
+    .from("notifications")
+    .select("*")
+    .eq("user_id", currentUser.id);
 
-  // ...the rest of your code...
+  console.log("CURRENT USER:", currentUser.id);
+  console.log("NOTIFICATION ERROR:", error);
+  console.log("NOTIFICATION DATA:", data);
 
-console.log("CURRENT USER:", currentUser.id);
-console.log("ERROR:", error);
-console.log("DATA:", data);
-console.log("NOTIFICATION DATA:", data);
+  if (error) {
+    console.log(error);
+    return;
+  }
 
-notificationCache = mergeFromServer([...notificationCache], data || []);
-
-// STEP 1: start from cache
-let notifications = [...notificationCache].sort(
-  (a, b) =>
-    new Date(b.last_time) - new Date(a.last_time)
-);
-
-// STEP 2: filter by type
-if (notificationFilter !== "all") {
-
-  if (notificationFilter === "stories") {
-
-    notifications = notifications.filter(n =>
-      n.type === "story_reply" ||
-      n.type === "story_reaction"
+  notificationCache =
+    mergeFromServer(
+      [...notificationCache],
+      data || []
     );
 
-  } else {
 
-    notifications = notifications.filter(
-      n => n.type === notificationFilter
+  // Get latest sender profiles
+  await loadNotificationProfiles(
+    notificationCache
+  );
+
+
+  // =====================================================
+  // START FROM CACHE
+  // =====================================================
+
+  let notifications =
+    [...notificationCache].sort(
+      (a, b) =>
+        new Date(
+          b.last_time || b.created_at
+        ) -
+        new Date(
+          a.last_time || a.created_at
+        )
     );
+
+
+  // =====================================================
+  // FILTER
+  // =====================================================
+
+  if (notificationFilter !== "all") {
+
+    if (notificationFilter === "stories") {
+
+      notifications =
+        notifications.filter(n =>
+          n.type === "story_reply" ||
+          n.type === "story_reaction"
+        );
+
+    } else {
+
+      notifications =
+        notifications.filter(
+          n =>
+            n.type === notificationFilter
+        );
+
+    }
 
   }
 
+
+  // =====================================================
+  // SEARCH
+  // =====================================================
+
+  const search =
+    document
+      .getElementById("notificationSearch")
+      ?.value
+      ?.toLowerCase()
+      .trim() || "";
+
+
+  if (search) {
+
+    notifications =
+      notifications.filter(n => {
+
+        const profile =
+          window.notificationProfileCache.get(
+            n.sender_id
+          ) || {};
+
+
+        const currentName =
+          profile.name ||
+          profile.username ||
+          "";
+
+
+        const currentUsername =
+          profile.username ||
+          "";
+
+
+        const message =
+          n.message || "";
+
+
+        return (
+          currentName
+            .toLowerCase()
+            .includes(search) ||
+
+          currentUsername
+            .toLowerCase()
+            .includes(search) ||
+
+          message
+            .toLowerCase()
+            .includes(search)
+        );
+
+      });
+
+  }
+
+
+  // =====================================================
+  // RENDER
+  // =====================================================
+
+  const list =
+    document.getElementById(
+      "notificationsList"
+    );
+
+
+  if (!list) {
+
+    console.warn(
+      "notificationsList missing in DOM"
+    );
+
+    return;
+
+  }
+
+
+  renderNotifications(
+    notifications
+  );
+
 }
 
-// STEP 3: search filter
-const search =
-  document.getElementById("notificationSearch")?.value?.toLowerCase() || "";
 
-if (search) {
-  notifications = notifications.filter(n => {
-    const username = n.username?.toLowerCase() || "";
-    const message = n.message?.toLowerCase() || "";
+// =====================================================
+// OPEN NOTIFICATION
+// =====================================================
 
-    return username.includes(search) || message.includes(search);
-  });
-}
+window.openNotification =
+async function(id) {
 
-// STEP 4: render FINAL result ONLY
+  setActiveTopButton(
+    "notificationBtn"
+  );
 
 
-const list = document.getElementById("notificationsList");
-
-if (!list) {
-  console.warn("notificationsList missing in DOM");
-  return;
-}
-
-if (!notifications.length) {
-  list.innerHTML = `
-    <div style="color:#777;padding:15px;">
-      No notifications
-    </div>
-  `;
-  return;
-}
-console.log("RENDERING:", notifications);
-renderNotifications(notifications);
-}
-
-window.openNotification = async function(id) {
-  
-  setActiveTopButton("notificationBtn");
-  
-  const { data, error } =
+  const {
+    data,
+    error
+  } =
     await supabase
       .from("notifications")
       .select("*")
       .eq("id", id)
       .single();
 
+
   if (error || !data) return;
 
+
+  // Mark as read
   await supabase
-  .from("notifications")
-  .update({ read: true })
-  .eq("id", id);
+    .from("notifications")
+    .update({
+      read: true
+    })
+    .eq("id", id);
 
-// Update local cache immediately
-const item = notificationCache.find(n => n.id === id);
 
-if (item) {
-  item.read = true;
-}
+  // Update cache
+  const item =
+    notificationCache.find(
+      n => n.id === id
+    );
 
-renderNotifications();
-loadUnreadCount();
-    
-    document.getElementById(
-  "notificationsScreen"
-).style.display = "none";
 
-if (data.type === "story_reply") {
-
-  if (!data.story_id) return;
-
-  if (window.__openingStory === data.story_id) return;
-  window.__openingStory = data.story_id;
-
-  window.openStoryById(
-  data.story_id,
-  {
-    type: "reply",
-    story_id: data.story_id
+  if (item) {
+    item.read = true;
   }
-);
 
-  setTimeout(() => {
-    window.__openingStory = null;
-    window.storyOpenContext = null;
-  }, 1000);
 
-  return;
-}
+  loadUnreadCount();
 
-if (data.type === "story_reaction") {
 
-  if (!data.story_id) return;
+  const screen =
+    document.getElementById(
+      "notificationsScreen"
+    );
 
-  window.openStoryById(
-    data.story_id,
-    {
-      type: "reaction",
-      story_id: data.story_id
+
+  if (screen) {
+    screen.style.display = "none";
+  }
+
+
+  // =====================================================
+  // STORY REPLY
+  // =====================================================
+
+  if (data.type === "story_reply") {
+
+    if (!data.story_id) return;
+
+    if (
+      window.__openingStory ===
+      data.story_id
+    ) {
+      return;
     }
-  );
 
-  return;
-}
+
+    window.__openingStory =
+      data.story_id;
+
+
+    window.openStoryById(
+      data.story_id,
+      {
+        type: "reply",
+        story_id: data.story_id
+      }
+    );
+
+
+    setTimeout(() => {
+
+      window.__openingStory =
+        null;
+
+      window.storyOpenContext =
+        null;
+
+    }, 1000);
+
+
+    return;
+
+  }
+
+
+  // =====================================================
+  // STORY REACTION
+  // =====================================================
+
+  if (data.type === "story_reaction") {
+
+    if (!data.story_id) return;
+
+
+    window.openStoryById(
+      data.story_id,
+      {
+        type: "reaction",
+        story_id: data.story_id
+      }
+    );
+
+
+    return;
+
+  }
+
+
+  // =====================================================
+  // LIKE
+  // =====================================================
 
   if (data.type === "like") {
 
-  if (data.post_id) {
+    if (data.post_id) {
+      openComments(
+        data.post_id
+      );
+    }
 
-    // Scroll to post or open post screen
-    openComments(data.post_id);
+    return;
 
   }
 
-  return;
-}
+
+  // =====================================================
+  // COMMENT
+  // =====================================================
 
   if (data.type === "comment") {
 
-  if (data.post_id) {
+    if (data.post_id) {
+      openComments(
+        data.post_id
+      );
+    }
 
-    openComments(data.post_id);
+    return;
 
   }
 
-  return;
-}
+
+  // =====================================================
+  // FOLLOW
+  // =====================================================
 
   if (data.type === "follow") {
 
-  if (data.sender_id) {
-
-    openProfile(data.sender_id);
-
-  }
-
-  return;
-}
-
-  if (data.type === "message") {
-
-  if (data.sender_id) {
-
-    openChat(
-      data.sender_id,
-      data.username || "User"
-    );
-
-  }
-
-  return;
-}
-
-if (data.type === "message_reaction") {
-
     if (data.sender_id) {
 
-        openChat(
-            data.sender_id,
-            data.username || "User"
-        );
+      openProfile(
+        data.sender_id,
+        data.username || "User"
+      );
 
     }
 
     return;
-}
-
-if (data.type === "profile_update") {
-
-  if (data.sender_id) {
-
-    openProfile(
-      data.sender_id,
-      data.username || "User"
-    );
 
   }
 
-  return;
-}
 
-if (data.type === "follow_request") {
+  // =====================================================
+  // MESSAGE
+  // =====================================================
 
-  openFollowRequests();
+  if (
+    data.type === "message" ||
+    data.type === "message_reaction"
+  ) {
 
-  return;
-}
-renderNotifications();
+    if (data.sender_id) {
+
+      openChat(
+        data.sender_id,
+        data.username || "User"
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  // =====================================================
+  // PROFILE UPDATE
+  // =====================================================
+
+  if (data.type === "profile_update") {
+
+    if (data.sender_id) {
+
+      openedProfileFromNotification =
+        true;
+
+
+      openProfile(
+        data.sender_id,
+        data.username || "User"
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  // =====================================================
+  // FOLLOW REQUEST
+  // =====================================================
+
+  if (
+    data.type ===
+    "follow_request"
+  ) {
+
+    openFollowRequests();
+
+    return;
+
+  }
+
+
+  renderNotifications();
+
 };
 
-window.deleteNotification = async function(id) {
 
-  const ok = confirm(
-    "Delete this notification?"
-  );
+// =====================================================
+// DELETE ONE NOTIFICATION
+// =====================================================
+
+window.deleteNotification =
+async function(id) {
+
+  const ok =
+    confirm(
+      "Delete this notification?"
+    );
+
 
   if (!ok) return;
+
 
   await supabase
     .from("notifications")
     .delete()
     .eq("id", id);
 
-  loadNotifications();
+
+  await loadNotifications();
+
   loadUnreadCount();
 
 };
 
-window.clearNotifications = async function () {
+
+// =====================================================
+// CLEAR ALL NOTIFICATIONS
+// =====================================================
+
+window.clearNotifications =
+async function() {
 
   if (!currentUser) return;
 
-  const ok = confirm("Delete all notifications?");
+
+  const ok =
+    confirm(
+      "Delete all notifications?"
+    );
+
+
   if (!ok) return;
 
-  const { error } = await supabase
-    .from("notifications")
-    .delete()
-    .eq("user_id", currentUser.id);
+
+  const {
+    error
+  } =
+    await supabase
+      .from("notifications")
+      .delete()
+      .eq(
+        "user_id",
+        currentUser.id
+      );
+
 
   if (error) {
+
     console.log(error);
+
     return;
+
   }
 
+
   notificationCache = [];
+
   renderNotifications([]);
+
   unreadCount = 0;
+
   updateNotifBadge();
+
 };
 
-window.markAllNotificationsRead = async function () {
+
+// =====================================================
+// MARK ALL READ
+// =====================================================
+
+window.markAllNotificationsRead =
+async function() {
 
   if (!currentUser) return;
 
-  const { error } = await supabase
-    .from("notifications")
-    .update({ read: true })
-    .eq("user_id", currentUser.id)
-    .eq("read", false);
+
+  const {
+    error
+  } =
+    await supabase
+      .from("notifications")
+      .update({
+        read: true
+      })
+      .eq(
+        "user_id",
+        currentUser.id
+      )
+      .eq(
+        "read",
+        false
+      );
+
 
   if (error) {
+
     console.log(error);
+
     return;
+
   }
 
-  notificationCache.forEach(n => {
-    n.read = true;
-  });
+
+  notificationCache.forEach(
+    n => {
+      n.read = true;
+    }
+  );
+
 
   unreadCount = 0;
+
   updateNotifBadge();
 
-  renderNotifications(notificationCache);
+  renderNotifications(
+    notificationCache
+  );
+
 };
 
-window.setNotificationFilter = function(button, type) {
+
+// =====================================================
+// FILTER
+// =====================================================
+
+window.setNotificationFilter =
+function(button, type) {
 
   document
-    .querySelectorAll(".notifFilter")
-    .forEach(btn => btn.classList.remove("active"));
+    .querySelectorAll(
+      ".notifFilter"
+    )
+    .forEach(btn =>
+      btn.classList.remove(
+        "active"
+      )
+    );
 
-  button.classList.add("active");
 
-  notificationFilter = type;
+  button.classList.add(
+    "active"
+  );
+
+
+  notificationFilter =
+    type;
+
 
   loadNotifications();
 
 };
+
+
+// =====================================================
+// OPEN NOTIFICATIONS
+// =====================================================
 
 async function openNotifications() {
 
-  const screen = document.getElementById("notificationsScreen");
+  const screen =
+    document.getElementById(
+      "notificationsScreen"
+    );
 
-  if (screen) screen.style.display = "flex";
+
+  if (screen) {
+    screen.style.display =
+      "flex";
+  }
+
 
   await loadNotifications();
-}
-
-window.openNotifications = openNotifications;
-
-setActiveTopButton("notificationBtn");
-
-function getNotifKey(n) {
-  return n.id;
-}
-
-if (!window.notificationsSubscription) {
-
-  window.notificationsSubscription =
-    supabase
-      .channel("notifications_channel")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications"
-        },
-(payload) => {
-
-  const n = payload.new;
-
-  if (!currentUser || n.user_id !== currentUser.id) return;
-
-  const key = getNotifKey(n);
-
-  if (seenNotifications.has(key)) return;
-  seenNotifications.add(key);
-
-  tabChannel.postMessage(n);
-
-  // ✅ ONLY ONCE each
-  mergeNotification(n);
-
-loadUnreadCount();
-
-showToastNotification(n);
-
-const screen =
-  document.getElementById("notificationsScreen");
-
-if (screen && screen.style.display === "flex") {
-  renderNotifications(notificationCache);
-}
-}
-
-   )
-   
-   .on(
-  "postgres_changes",
-  {
-    event: "UPDATE",
-    schema: "public",
-    table: "notifications"
-  },
-  (payload) => {
-
-    const updated = payload.new;
-
-    const item = notificationCache.find(n => n.id === updated.id);
-
-    if (item) {
-      Object.assign(item, updated);
-    }
-
-    renderNotifications(notificationCache);
-    loadUnreadCount();
-  }
-)
-     .subscribe();
-}
-
-tabChannel.onmessage = (event) => {
-
-  const n = event.data;
-
-  // 1. FIRST: user check
-  if (!currentUser || n.user_id !== currentUser.id) return;
-
-  // 2. BUILD KEY
-  const key = getNotifKey(n);
-
-  // 3. DEDUP CHECK (ONLY ONCE)
-  if (seenNotifications.has(key)) return;
-  seenNotifications.add(key);
-
-  // 4. UI UPDATE
-  mergeNotification(n);
-  
-  loadUnreadCount();
-
-showToastNotification(n);
-
-const screen =
-  document.getElementById("notificationsScreen");
-
-if (screen && screen.style.display === "flex") {
-  renderNotifications(notificationCache);
-}
-};
-
-if (!window.postsSubscription) {
-
-  window.postsSubscription = supabase
-    .channel("posts_realtime")
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "posts"
-      },
-      (payload) => {
-
-        upsertPost(payload.new);
-
-        loadPosts();
-
-      }
-    )
-    .subscribe();
 
 }
-  
-  async function loadUnreadCount() {
+
+
+window.openNotifications =
+  openNotifications;
+
+
+// =====================================================
+// UNREAD BADGE
+// =====================================================
+
+async function loadUnreadCount() {
 
   if (!currentUser) return;
 
-  const { data, error } = await supabase
-    .from("notifications")
-    .select("id", { count: "exact" })
-    .eq("user_id", currentUser.id)
-    .eq("read", false);
-    
-    
+
+  const {
+    data,
+    error
+  } =
+    await supabase
+      .from("notifications")
+      .select(
+        "id",
+        {
+          count: "exact"
+        }
+      )
+      .eq(
+        "user_id",
+        currentUser.id
+      )
+      .eq(
+        "read",
+        false
+      );
+
 
   if (error) {
+
     console.log(error);
+
     return;
+
   }
 
-  unreadCount = data ? data.length : 0;
-  
-  console.log("Unread notifications:", unreadCount);
+
+  unreadCount =
+    data
+      ? data.length
+      : 0;
+
 
   updateNotifBadge();
+
 }
+
 
 function updateNotifBadge() {
 
-  const badge = document.getElementById("notificationBadge");
+  const badge =
+    document.getElementById(
+      "notificationBadge"
+    );
+
 
   if (!badge) return;
 
+
   if (unreadCount > 0) {
 
-    badge.style.display = "flex";
-    badge.style.alignItems = "center";
-    badge.style.justifyContent = "center";
-    badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
+    badge.style.display =
+      "flex";
+
+    badge.style.alignItems =
+      "center";
+
+    badge.style.justifyContent =
+      "center";
+
+    badge.textContent =
+      unreadCount > 99
+        ? "99+"
+        : unreadCount;
 
   } else {
 
-    badge.style.display = "none";
+    badge.style.display =
+      "none";
 
   }
+
 }
+
+
+// =====================================================
+// TOAST
+// =====================================================
 
 function showToastNotification(n) {
 
-  const toast = document.createElement("div");
+  const toast =
+    document.createElement(
+      "div"
+    );
 
-  toast.innerText = "🔔 " + (n.message || "New notification");
+
+  toast.innerText =
+    "🔔 " +
+    (
+      n.message ||
+      "New notification"
+    );
+
 
   toast.style = `
     position:fixed;
@@ -21796,59 +22298,31 @@ function showToastNotification(n) {
     animation:fadeInOut 2s ease;
   `;
 
-  document.body.appendChild(toast);
 
-  setTimeout(() => toast.remove(), 2000);
+  document.body.appendChild(
+    toast
+  );
+
+
+  setTimeout(
+    () => toast.remove(),
+    2000
+  );
+
 }
 
-function prependNotification(n) {
 
-  const list =
-    document.getElementById("notificationsList");
-
-  if (!list) return;
-
-  const avatar = n.avatar_url || "https://via.placeholder.com/50";
-  const username = n.username || "User";
-  const time = "Just now";
-
-  const html = `
-    <div
-      onclick="openNotification('${n.id}')"
-      style="
-        display:flex;
-        align-items:center;
-        gap:12px;
-        padding:14px;
-        border-bottom:1px solid #222;
-        background:#151515;
-        animation:fadeInOut .4s ease;
-      "
-    >
-
-      <img src="${avatar}"
-        style="width:48px;height:48px;border-radius:50%;object-fit:cover;"
-      />
-
-      <div style="flex:1;">
-        <div style="color:white;font-size:15px;">
-          <b>${username}</b> ${n.message}
-        </div>
-
-        <div style="color:#888;font-size:12px;">
-          ${time}
-        </div>
-      </div>
-
-    </div>
-  `;
-
-  list.insertAdjacentHTML("afterbegin", html);
-}
+// =====================================================
+// MERGE NOTIFICATION
+// =====================================================
 
 function mergeNotification(n) {
 
-  const index = notificationCache.findIndex(x => x.id === n.id);
+  const index =
+    notificationCache.findIndex(
+      x => x.id === n.id
+    );
+
 
   if (index >= 0) {
 
@@ -21866,208 +22340,899 @@ function mergeNotification(n) {
 
   }
 
+
   notificationCache.sort(
     (a, b) =>
-      new Date(b.last_time || b.created_at) -
-      new Date(a.last_time || a.created_at)
+      new Date(
+        b.last_time ||
+        b.created_at
+      ) -
+      new Date(
+        a.last_time ||
+        a.created_at
+      )
   );
 
 }
 
-function renderNotifications(notifications = notificationCache) {
 
-  const list = document.getElementById("notificationsList");
+// =====================================================
+// MERGE SERVER DATA
+// =====================================================
+
+function mergeFromServer(
+  cache,
+  serverData
+) {
+
+  const map =
+    new Map();
+
+
+  // Server data wins
+  serverData.forEach(n => {
+
+    map.set(
+      n.id,
+      {
+        ...n
+      }
+    );
+
+  });
+
+
+  // Keep local items not yet on server
+  cache.forEach(n => {
+
+    if (!map.has(n.id)) {
+
+      map.set(
+        n.id,
+        {
+          ...n
+        }
+      );
+
+    }
+
+  });
+
+
+  return [
+    ...map.values()
+  ].sort(
+    (a, b) =>
+      new Date(
+        b.last_time ||
+        b.created_at
+      ) -
+      new Date(
+        a.last_time ||
+        a.created_at
+      )
+  );
+
+}
+
+
+// =====================================================
+// RENDER NOTIFICATIONS
+// =====================================================
+
+function renderNotifications(
+  notifications =
+    notificationCache
+) {
+
+  const list =
+    document.getElementById(
+      "notificationsList"
+    );
+
+
   if (!list) return;
 
-  if (notifications.length === 0) {
-    list.innerHTML = `<div style="color:#777;padding:15px;">No notifications</div>`;
-    return;
-  }
 
-  list.innerHTML = notifications.map(n => {
+  if (!notifications.length) {
 
-    const avatar = escapeHtml(
-  n.avatar_url || "https://via.placeholder.com/50"
-);
-    const username =
-  escapeHtml(n.username || "User");
-
-    let icon = "🔔";
-
-if (n.type === "story_reply") icon = "💬";
-if (n.type === "story_reaction") icon = "😍";
-
-if (n.type === "like") icon = "❤️";
-if (n.type === "comment") icon = "📝";
-
-if (n.type === "comment_like") icon = "❤️";
-if (n.type === "comment_reply") icon = "↩️";
-if (n.type === "comment_reaction") icon = "😊";
-
-if (n.type === "follow") icon = "👤";
-if (n.type === "follow_request") icon = "👥";
-
-if (n.type === "message") icon = "📩";
-if (n.type === "message_reaction") icon = "😊";
-if (n.type === "profile_update") icon = "✏️";
-
-    const rawTime = n.last_time || n.created_at || new Date().toISOString();
-const time = formatTime(rawTime);
-
-    let text =
-  escapeHtml(n.message || "").replace(/\n/g, "<br>");
-
-    if (n.count > 1) {
-
-    if (n.type === "like") {
-        text = `${n.count} people liked your post`;
-    }
-
-    else if (n.type === "comment") {
-        text = `${n.count} people commented on your post`;
-    }
-
-    else if (n.type === "comment_like") {
-        text = `${n.count} people liked your comment`;
-    }
-
-    else if (n.type === "comment_reply") {
-        text = `${n.count} people replied to your comment`;
-    }
-
-    else if (n.type === "comment_reaction") {
-        text = `${n.count} people reacted to your comment`;
-    }
-
-    else if (n.type === "message_reaction") {
-        text = `${n.count} people reacted to your message`;
-    }
-
-    else if (n.type === "follow") {
-        text = `${n.count} people followed you`;
-    }
-
-    else if (n.type === "story_reaction") {
-        text = `${n.count} people reacted to your story`;
-    }
-
-    else {
-        text = `${n.count} notifications`;
-    }
-
-}
-
-console.log("Notification:", n.id, "read =", n.read, typeof n.read);
-
-    const bg = n.read === true ? "#151515" : "red";
-
-return `
-  <div onclick="openNotification('${n.id}')"
-    style="
-      display:flex;
-      gap:12px;
-      padding:14px;
-      border-bottom:1px solid #222;
-      background:${bg};
-      transition:.25s;
-    ">
-
-        <img src="${avatar}" style="width:48px;height:48px;border-radius:50%;" />
-
-        <div style="flex:1;">
-         <b>${icon} ${username}</b> ${text}
-          <div style="color:#888;font-size:12px;">${time}</div>
-        </div>
-
+    list.innerHTML = `
+      <div style="
+        color:#777;
+        padding:15px;
+      ">
+        No notifications
       </div>
     `;
-  }).join("");
+
+    return;
+
+  }
+
+
+  list.innerHTML =
+    notifications.map(n => {
+
+
+      const currentProfile =
+        window
+          .notificationProfileCache
+          .get(
+            n.sender_id
+          ) || {};
+
+
+      const currentName =
+        currentProfile.name ||
+        currentProfile.username ||
+        "User";
+
+
+      const fallbackAvatar =
+        "https://ui-avatars.com/api/?name=" +
+        encodeURIComponent(
+          currentName
+        );
+
+
+      const currentAvatar =
+        currentProfile.avatar_url ||
+        fallbackAvatar;
+
+
+      const username =
+        escapeHtml(
+          currentName
+        );
+
+
+      const safeAvatar =
+        escapeHtml(
+          currentAvatar
+        );
+
+
+      // =================================================
+      // ICON
+      // =================================================
+
+      let icon = "🔔";
+
+
+      if (
+        n.type ===
+        "story_reply"
+      )
+        icon = "💬";
+
+
+      if (
+        n.type ===
+        "story_reaction"
+      )
+        icon = "😍";
+
+
+      if (
+        n.type ===
+        "like"
+      )
+        icon = "❤️";
+
+
+      if (
+        n.type ===
+        "comment"
+      )
+        icon = "📝";
+
+
+      if (
+        n.type ===
+        "comment_like"
+      )
+        icon = "❤️";
+
+
+      if (
+        n.type ===
+        "comment_reply"
+      )
+        icon = "↩️";
+
+
+      if (
+        n.type ===
+        "comment_reaction"
+      )
+        icon = "😊";
+
+
+      if (
+        n.type ===
+        "follow"
+      )
+        icon = "👤";
+
+
+      if (
+        n.type ===
+        "follow_request"
+      )
+        icon = "👥";
+
+
+      if (
+        n.type ===
+        "message"
+      )
+        icon = "📩";
+
+
+      if (
+        n.type ===
+        "message_reaction"
+      )
+        icon = "😊";
+
+
+      if (
+        n.type ===
+        "profile_update"
+      )
+        icon = "✏️";
+
+
+      // =================================================
+      // TIME
+      // =================================================
+
+      const rawTime =
+        n.last_time ||
+        n.created_at ||
+        new Date()
+          .toISOString();
+
+
+      const time =
+        formatTime(
+          rawTime
+        );
+
+
+      // =================================================
+      // MESSAGE
+      // =================================================
+
+      let text =
+        escapeHtml(
+          n.message || ""
+        ).replace(
+          /\n/g,
+          "<br>"
+        );
+
+
+      // =================================================
+      // GROUPED NOTIFICATIONS
+      // =================================================
+
+      if (n.count > 1) {
+
+        if (
+          n.type ===
+          "like"
+        ) {
+
+          text =
+            `${n.count} people liked your post`;
+
+        }
+
+        else if (
+          n.type ===
+          "comment"
+        ) {
+
+          text =
+            `${n.count} people commented on your post`;
+
+        }
+
+        else if (
+          n.type ===
+          "comment_like"
+        ) {
+
+          text =
+            `${n.count} people liked your comment`;
+
+        }
+
+        else if (
+          n.type ===
+          "comment_reply"
+        ) {
+
+          text =
+            `${n.count} people replied to your comment`;
+
+        }
+
+        else if (
+          n.type ===
+          "comment_reaction"
+        ) {
+
+          text =
+            `${n.count} people reacted to your comment`;
+
+        }
+
+        else if (
+          n.type ===
+          "message_reaction"
+        ) {
+
+          text =
+            `${n.count} people reacted to your message`;
+
+        }
+
+        else if (
+          n.type ===
+          "follow"
+        ) {
+
+          text =
+            `${n.count} people followed you`;
+
+        }
+
+        else if (
+          n.type ===
+          "story_reaction"
+        ) {
+
+          text =
+            `${n.count} people reacted to your story`;
+
+        }
+
+        else {
+
+          text =
+            `${n.count} notifications`;
+
+        }
+
+      }
+
+
+      // =================================================
+      // READ / UNREAD
+      // =================================================
+
+      const bg =
+        n.read === true
+          ? "#151515"
+          : "red";
+
+
+      return `
+
+        <div
+          onclick="openNotification('${escapeHtml(String(n.id))}')"
+          style="
+            display:flex;
+            gap:12px;
+            padding:14px;
+            border-bottom:1px solid #222;
+            background:${bg};
+            transition:.25s;
+            cursor:pointer;
+          "
+        >
+
+          <img
+            src="${safeAvatar}"
+            onerror="
+              this.src='${fallbackAvatar}'
+            "
+            style="
+              width:48px;
+              height:48px;
+              border-radius:50%;
+              object-fit:cover;
+              background:#222;
+              flex-shrink:0;
+            "
+          />
+
+
+          <div style="
+            flex:1;
+            min-width:0;
+          ">
+
+            <div style="
+              color:white;
+              line-height:1.4;
+            ">
+
+              <b>
+                ${icon} ${username}
+              </b>
+
+              ${text}
+
+            </div>
+
+
+            <div style="
+              color:#888;
+              font-size:12px;
+              margin-top:4px;
+            ">
+              ${time}
+            </div>
+
+          </div>
+
+        </div>
+
+      `;
+
+    }).join("");
+
 }
+
+
+// =====================================================
+// FORMAT TIME
+// =====================================================
 
 function formatTime(dateString) {
-  const mins = Math.floor((Date.now() - new Date(dateString)) / 60000);
 
-  if (mins < 1) return "now";
-  if (mins < 60) return mins + "m";
-  if (mins < 1440) return Math.floor(mins / 60) + "h";
-  return Math.floor(mins / 1440) + "d";
-}
+  const mins =
+    Math.floor(
+      (
+        Date.now() -
+        new Date(
+          dateString
+        )
+      ) / 60000
+    );
 
-function mergeFromServer(cache, serverData) {
 
-  const map = new Map();
+  if (mins < 1)
+    return "now";
 
-  // Server data always wins
-  serverData.forEach(n => {
-    map.set(n.id, { ...n });
-  });
 
-  // Add cached items only if they don't already exist
-  cache.forEach(n => {
-    if (!map.has(n.id)) {
-      map.set(n.id, { ...n });
-    }
-  });
+  if (mins < 60)
+    return mins + "m";
 
-  return [...map.values()].sort(
-    (a, b) =>
-      new Date(b.last_time || b.created_at) -
-      new Date(a.last_time || a.created_at)
+
+  if (mins < 1440)
+    return (
+      Math.floor(
+        mins / 60
+      ) + "h"
+    );
+
+
+  return (
+    Math.floor(
+      mins / 1440
+    ) + "d"
   );
 
 }
+
+// =====================================================
+// NOTIFICATION REALTIME
+// =====================================================
+
+function getNotifKey(n) {
+
+  return n.id;
+
+}
+
+
+if (!window.notificationsSubscription) {
+
+  window.notificationsSubscription =
+    supabase
+      .channel(
+        "notifications_channel"
+      )
+
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications"
+        },
+
+        async payload => {
+
+          const n =
+            payload.new;
+
+
+          if (
+            !currentUser ||
+            n.user_id !==
+              currentUser.id
+          ) {
+
+            return;
+
+          }
+
+
+          // Load latest sender profile
+          if (n.sender_id) {
+
+            const {
+              data: profile
+            } =
+              await supabase
+                .from("profiles")
+                .select(`
+                  id,
+                  name,
+                  username,
+                  avatar_url
+                `)
+                .eq(
+                  "id",
+                  n.sender_id
+                )
+                .maybeSingle();
+
+
+            if (profile) {
+
+              window
+                .notificationProfileCache
+                .set(
+                  profile.id,
+                  profile
+                );
+
+            }
+
+          }
+
+
+          const key =
+            getNotifKey(n);
+
+
+          if (
+            seenNotifications.has(
+              key
+            )
+          ) {
+
+            return;
+
+          }
+
+
+          seenNotifications.add(
+            key
+          );
+
+
+          // Sync other tab
+          if (
+            window.tabChannel
+          ) {
+
+            tabChannel.postMessage(
+              n
+            );
+
+          }
+
+
+          mergeNotification(n);
+
+          loadUnreadCount();
+
+          showToastNotification(n);
+
+
+          const screen =
+            document.getElementById(
+              "notificationsScreen"
+            );
+
+
+          if (
+            screen &&
+            screen.style.display ===
+              "flex"
+          ) {
+
+            renderNotifications(
+              notificationCache
+            );
+
+          }
+
+        }
+      )
+
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications"
+        },
+
+        payload => {
+
+          const updated =
+            payload.new;
+
+          const item =
+            notificationCache.find(
+              n =>
+                n.id ===
+                updated.id
+            );
+
+          if (item) {
+
+            Object.assign(
+              item,
+              updated
+            );
+
+          }
+
+          renderNotifications(
+            notificationCache
+          );
+
+          loadUnreadCount();
+
+        }
+      )
+
+      .subscribe();
+
+}
+
+// =====================================================
+// CROSS-TAB NOTIFICATIONS
+// =====================================================
+
+if (
+  window.tabChannel &&
+  !window.notificationTabListenerAttached
+) {
+
+  window.notificationTabListenerAttached =
+    true;
+
+  tabChannel.onmessage =
+    event => {
+
+      const n =
+        event.data;
+
+      if (
+        !currentUser ||
+        n.user_id !==
+          currentUser.id
+      ) {
+
+        return;
+
+      }
+
+      const key =
+        getNotifKey(n);
+
+      if (
+        seenNotifications.has(
+          key
+        )
+      ) {
+
+        return;
+
+      }
+
+      seenNotifications.add(
+        key
+      );
+
+      mergeNotification(n);
+
+      loadUnreadCount();
+
+      showToastNotification(n);
+
+      const screen =
+        document.getElementById(
+          "notificationsScreen"
+        );
+
+      if (
+        screen &&
+        screen.style.display ===
+          "flex"
+      ) {
+
+        renderNotifications(
+          notificationCache
+        );
+
+      }
+
+    };
+
+}
+
+// =====================================================
+// STORY REPLIES
+// =====================================================
 
 function renderReplies(data) {
 
-  const box = document.getElementById("storyReplies");
+  const box =
+    document.getElementById(
+      "storyReplies"
+    );
+
+
+  if (!box) return;
+
+
   box.innerHTML = "";
 
+
   appendReplies(data);
+
 }
 
-async function loadMoreReplies(storyId) {
 
-  const { data, error } = await supabase
-    .from("story_replies")
-    .select(`
-      reply,
-      created_at,
-      sender_id,
-      profiles:profiles(
-        name,
-        avatar_url
+async function loadMoreReplies(
+  storyId
+) {
+
+  const {
+    data,
+    error
+  } =
+    await supabase
+      .from("story_replies")
+      .select(`
+        reply,
+        created_at,
+        sender_id,
+        profiles:profiles(
+          name,
+          avatar_url
+        )
+      `)
+      .eq(
+        "story_id",
+        storyId
       )
-    `)
-    .eq("story_id", storyId)
-    .order("created_at", { ascending: true })
-    .range(replyOffset, replyOffset + 19);
+      .order(
+        "created_at",
+        {
+          ascending: true
+        }
+      )
+      .range(
+        replyOffset,
+        replyOffset + 19
+      );
 
-  if (error || !data?.length) return;
+
+  if (
+    error ||
+    !data?.length
+  ) {
+
+    return;
+
+  }
+
 
   replyOffset += 20;
 
+
   appendReplies(data);
+
 }
+
 
 function appendReplies(data) {
-  const box = document.getElementById("storyReplies");
 
-  const html = data.map(r => `
-    <div style="display:flex;gap:10px;margin-bottom:10px;">
-      <img src="${r.profiles?.avatar_url || 'https://via.placeholder.com/40'}"
-        style="width:40px;height:40px;border-radius:50%;">
+  const box =
+    document.getElementById(
+      "storyReplies"
+    );
 
-      <div>
-        <b style="color:white">${escapeHtml(r.profiles?.name || "User")}</b>
-        <div style="color:white">${escapeHtml(r.reply)}</div>
-        <small style="color:#888">${formatTime(r.created_at)}</small>
+
+  if (!box) return;
+
+
+  const html =
+    data.map(r => `
+
+      <div style="
+        display:flex;
+        gap:10px;
+        margin-bottom:10px;
+      ">
+
+        <img
+          src="${
+            escapeHtml(
+              r.profiles?.avatar_url ||
+              "https://via.placeholder.com/40"
+            )
+          }"
+          style="
+            width:40px;
+            height:40px;
+            border-radius:50%;
+            object-fit:cover;
+          "
+        >
+
+        <div>
+
+          <b style="color:white">
+            ${
+              escapeHtml(
+                r.profiles?.name ||
+                "User"
+              )
+            }
+          </b>
+
+          <div style="color:white">
+            ${
+              escapeHtml(
+                r.reply || ""
+              )
+            }
+          </div>
+
+          <small style="color:#888">
+            ${
+              formatTime(
+                r.created_at
+              )
+            }
+          </small>
+
+        </div>
+
       </div>
-    </div>
-  `).join("");
 
-  box.insertAdjacentHTML("beforeend", html);
+    `).join("");
+
+
+  box.insertAdjacentHTML(
+    "beforeend",
+    html
+  );
+
 }
-
 // ========================
 // GLOBAL HOME PAGE 
 // ========================
@@ -22137,7 +23302,8 @@ window.openComments = openComments;
 window.openChat = openChat;
 window.sendMessage = sendMessage;
 window.deleteMessage = deleteMessage;
-
+window.renderNotifications = renderNotifications;
+window.loadNotificationProfiles = loadNotificationProfiles;
 
 // ========================
 // VIDEO AUTOPLAY
