@@ -5599,7 +5599,7 @@ window.openSavedPosts = async function(){
     
     <button
   type="button"
-  onclick="window.openProfile(currentUser.id, currentUser.email)"
+  onclick="window.backToMyProfile()"
   style="
     margin-bottom:20px;
     padding:10px 16px;
@@ -13856,7 +13856,7 @@ color:white;
 
 <button
   type="button"
-  onclick="window.openProfile(currentUser.id, currentUser.email)"
+  onclick="window.backToMyProfile()"
   style="
     margin-bottom:20px;
     padding:10px 16px;
@@ -14012,6 +14012,47 @@ cursor:pointer;
 
 </div>
 `;
+
+};
+
+window.backToMyProfile = async function () {
+
+  try {
+
+    const {
+      data,
+      error
+    } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error("BACK PROFILE SESSION ERROR:", error);
+      alert("Could not get your session");
+      return;
+    }
+
+    const user = data.session?.user;
+
+    if (!user) {
+      alert("You are not logged in");
+      return;
+    }
+
+    console.log("🔙 BACK TO PROFILE:", user.id);
+
+    await window.openProfile(
+      user.id,
+      user.email
+    );
+
+  } catch (e) {
+
+    console.error("BACK TO PROFILE ERROR:", e);
+
+    alert(
+      "Back error: " + e.message
+    );
+
+  }
 
 };
 
