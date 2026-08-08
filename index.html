@@ -12247,25 +12247,21 @@ cursor:pointer;
 
 </div>
 
-      ${
-        String(session?.user?.id) === String(userId)
-          ? `<div style="
+     ${
+  String(session?.user?.id) === String(userId)
+    ? `<div style="
 display:flex;
 gap:10px;
 margin-top:10px;
 ">
-
-<button onclick="openEditProfile()">
-✏️ Edit Profile
-</button>
 
 <button onclick="openProfileSettings()">
 ⚙️ Settings
 </button>
 
 </div>`
-          : ""
-      }
+    : ""
+}
 
 <div
 id="profileTabs"
@@ -13654,7 +13650,20 @@ window.openProfileVideoViewer = function(index){
 
   document.getElementById("app").innerHTML = `
     <div style="padding:15px; color:white;">
-     <button onclick="openProfiles()">
+    
+    <button
+  type="button"
+  onclick="window.backToProfileSettings()"
+  style="
+    margin-bottom:20px;
+    padding:10px 16px;
+    background:#181818;
+    color:white;
+    border:1px solid #333;
+    border-radius:10px;
+    cursor:pointer;
+  "
+>
   ← Back
 </button>
 
@@ -14048,14 +14057,15 @@ window.backToMyProfile = async function () {
 
     console.error("BACK TO PROFILE ERROR:", e);
 
-    alert(
-      "Back error: " + e.message
-    );
+    alert("Back error: " + e.message);
 
   }
 
 };
 
+
+// Saved Posts → Settings
+// Edit Profile → Settings
 window.backToProfileSettings = function () {
   window.openProfileSettings();
 };
@@ -16341,25 +16351,6 @@ box-sizing:border-box;
 ">
 0
 </span>
-</button>
-
-<button
-  id="savedBtn"
-  onclick="openSavedPosts()"
-  style="
-background:none;
-width:44px;
-height:44px;
-border:none;
-color:white;
-font-size:26px;
-position:relative;
-display:flex;
-align-items:center;
-justify-content:center;
-  "
->
-  🔖
 </button>
 
 </div>
