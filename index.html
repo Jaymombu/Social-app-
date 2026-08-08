@@ -5599,7 +5599,7 @@ window.openSavedPosts = async function(){
     
     <button
   type="button"
-  onclick="window.backToMyProfile()"
+  onclick="window.backToProfileSettings()"
   style="
     margin-bottom:20px;
     padding:10px 16px;
@@ -14054,6 +14054,10 @@ window.backToMyProfile = async function () {
 
   }
 
+};
+
+window.backToProfileSettings = function () {
+  window.openProfileSettings();
 };
 
 window.openLanguageSettings = async function () {
