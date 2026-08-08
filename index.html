@@ -1699,7 +1699,7 @@ transform:scale(1);
 
 .edit-save-bottom{
 
-    width:100%;
+    width:1%;
 
     height:48px;
 
@@ -1873,6 +1873,38 @@ body:not(.dark) .edit-cover-preview{
 }
 
 body:not(.dark) .edit-photo-button{
+    background:#f5f5f5;
+    color:#111;
+    border-color:#ddd;
+}
+
+/* =====================================================
+   DISCARD CHANGES BUTTON
+===================================================== */
+
+.edit-discard-btn{
+    flex:1;
+    height:48px;
+
+    border:1px solid #444;
+    border-radius:12px;
+
+    background:#1c1c1c;
+    color:white;
+
+    font-size:15px;
+    font-weight:700;
+
+    cursor:pointer;
+    transition:.2s;
+}
+
+.edit-discard-btn:active{
+    transform:scale(.98);
+    background:#292929;
+}
+
+body:not(.dark) .edit-discard-btn{
     background:#f5f5f5;
     color:#111;
     border-color:#ddd;
@@ -14130,7 +14162,6 @@ window.openProfileVideoViewer = function(index){
 };
 
 window.openEditProfile = async () => {
-  alert("EDIT FUNCTION RUNNING");
 
   const { data: sessionData } = await supabase.auth.getSession();
   session = sessionData.session;
@@ -14189,7 +14220,7 @@ document.getElementById("app").innerHTML = `
       <input
         id="editName"
         placeholder="Your name"
-        value="${data?.name || ""}"
+        value="${escapeHtml(data?.name)}"
       >
     </div>
 
@@ -14201,7 +14232,7 @@ document.getElementById("app").innerHTML = `
       <input
         id="editUsername"
         placeholder="Username"
-        value="${data?.username || ""}"
+        value="${escapeHtml(data?.username)}"
       >
     </div>
 
@@ -14213,7 +14244,7 @@ document.getElementById("app").innerHTML = `
       <input
         id="editWebsite"
         placeholder="https://example.com"
-        value="${data?.website || ""}"
+        value="${escapeHtml(data?.website)}"
       >
     </div>
 
@@ -14225,7 +14256,7 @@ document.getElementById("app").innerHTML = `
       <input
         id="editLocation"
         placeholder="Location"
-        value="${data?.location || ""}"
+        value="${escapeHtml(data?.location)}"
       >
     </div>
 
@@ -14235,10 +14266,10 @@ document.getElementById("app").innerHTML = `
 
       <label>Bio</label>
 
-      <textarea
-        id="editBio"
-        placeholder="Tell people about yourself..."
-      >${data?.bio || ""}</textarea>
+     <textarea
+  id="editBio"
+  placeholder="Tell people about yourself..."
+>${escapeHtml(data?.bio)}</textarea>
 
       <div class="edit-hint">
         Tell people a little about yourself.
@@ -14257,7 +14288,10 @@ document.getElementById("app").innerHTML = `
 
     <img
       id="coverPreview"
-      src="${data?.cover_url || "https://via.placeholder.com/600x200/181818/777?text=Cover+Photo"}"
+      src="${escapeHtml(
+  data?.cover_url ||
+  "https://via.placeholder.com/600x200/181818/777?text=Cover+Photo"
+)}"
       alt="Cover Photo"
     >
 
@@ -14291,7 +14325,10 @@ document.getElementById("app").innerHTML = `
 
     <img
       id="avatarPreview"
-      src="${data?.avatar_url || "https://via.placeholder.com/200/292929/ffffff?text=Photo"}"
+      src="${escapeHtml(
+  data?.avatar_url ||
+  "https://via.placeholder.com/200/292929/ffffff?text=Photo"
+)}"
       alt="Profile Photo"
     >
 
@@ -14315,13 +14352,29 @@ document.getElementById("app").innerHTML = `
 
 
     <!-- BOTTOM SAVE -->
-    <button
-      type="button"
-      id="saveProfile"
-      class="edit-save-bottom"
-    >
-      Save Changes
-    </button>
+<div style="
+  display:flex;
+  gap:10px;
+  margin-top:15px;
+">
+
+  <button
+    type="button"
+    id="discardProfile"
+    class="edit-discard-btn"
+  >
+    Discard Changes
+  </button>
+
+  <button
+  type="button"
+  id="saveProfile"
+  class="edit-save-bottom"
+>
+  Save Changes
+</button>
+
+</div>
 
   </div>
 
@@ -14329,180 +14382,316 @@ document.getElementById("app").innerHTML = `
 `;
   
   document.getElementById("saveProfile").onclick = async () => {
-    
-    if (!session?.user) {
-  alert("Please log in first.");
-  return;
-}
-    
+
+  if (!session?.user) {
+    alert("Please log in first.");
+    return;
+  }
+
   const name =
-document.getElementById("editName").value.trim();
+    document.getElementById("editName").value.trim();
 
-const username =
-document.getElementById("editUsername")
-.value
-.trim()
-.toLowerCase()
-.replace(/\s+/g, "");
+  const username =
+    document.getElementById("editUsername")
+      .value
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "");
 
-if (
-  username &&
-  !/^[a-z0-9_.]{3,20}$/.test(username)
-) {
-  alert(
-    "Username must be 3-20 characters and use only letters, numbers, _ or ."
-  );
-  return;
-}
+  if (
+    username &&
+    !/^[a-z0-9_.]{3,20}$/.test(username)
+  ) {
+    alert(
+      "Username must be 3-20 characters and use only letters, numbers, _ or ."
+    );
+    return;
+  }
 
-const website =
-document.getElementById("editWebsite").value.trim();
+  const website =
+    document.getElementById("editWebsite").value.trim();
 
-const location =
-document.getElementById("editLocation").value.trim();
+  const location =
+    document.getElementById("editLocation").value.trim();
 
-const bio =
-document.getElementById("editBio").value.trim();
+  const bio =
+    document.getElementById("editBio").value.trim();
 
-  const fileInput = document.getElementById("avatarFile");
-  const file = fileInput.files[0];
+  const fileInput =
+    document.getElementById("avatarFile");
+
+  const file =
+    fileInput.files[0];
+
+  const coverInput =
+    document.getElementById("coverFile");
+
+  const coverFile =
+    coverInput.files[0];
 
   let avatarUrl = null;
-  
-  const coverInput = document.getElementById("coverFile");
-  const coverFile = coverInput.files[0];
-
   let coverUrl = null;
 
+
+  /* ===============================
+     GET OLD PROFILE
+  =============================== */
+
+  const { data: oldProfile, error: oldProfileError } =
+    await supabase
+      .from("profiles")
+      .select("avatar_url, cover_url")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+  if (oldProfileError) {
+    console.log("OLD PROFILE ERROR:", oldProfileError);
+  }
+
+
+  /* ===============================
+     AVATAR UPLOAD
+  =============================== */
+
   if (file) {
-    const originalFile = file;
+
     const fileName =
-  `${session.user.id}-${Date.now()}-${file.name}`;
+      `${session.user.id}-${Date.now()}-${file.name}`;
 
-    const { data, error: uploadError } = await supabase.storage
-  .from("avatars")
-  .upload(fileName, originalFile, {
-    cacheControl: "3600",
-    upsert: true
-  });
+    const { data: uploadData, error: uploadError } =
+      await supabase.storage
+        .from("avatars")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: true
+        });
 
-console.log("UPLOAD RESULT:", data);
-console.log("UPLOAD ERROR:", uploadError);
+    console.log("AVATAR UPLOAD:", uploadData);
+    console.log("AVATAR ERROR:", uploadError);
 
     if (uploadError) {
-      alert("Upload failed");
-      console.log(uploadError);
+      alert("Upload failed.");
       return;
     }
 
-    const { data: publicUrlData } = supabase.storage
-      .from("avatars")
-      .getPublicUrl(fileName);
+    const { data: publicUrlData } =
+      supabase.storage
+        .from("avatars")
+        .getPublicUrl(fileName);
 
     avatarUrl =
-  publicUrlData.publicUrl + "?t=" + Date.now();
+      publicUrlData.publicUrl +
+      "?t=" +
+      Date.now();
   }
 
-  const { data: oldProfile } = await supabase
-  .from("profiles")
-  .select("avatar_url, cover_url")
-  .eq("id", session.user.id)
-  .single();
-  
+
+  /* ===============================
+     COVER UPLOAD
+  =============================== */
+
   if (coverFile) {
 
-  const coverName =
-    `${session.user.id}-cover-${Date.now()}-${coverFile.name}`;
+    const coverName =
+      `${session.user.id}-cover-${Date.now()}-${coverFile.name}`;
 
-  const { error: coverError } =
-    await supabase.storage
-      .from("avatars")
-      .upload(coverName, coverFile, {
-        cacheControl: "3600",
-        upsert: true
+    const { data: coverData, error: coverError } =
+      await supabase.storage
+        .from("avatars")
+        .upload(coverName, coverFile, {
+          cacheControl: "3600",
+          upsert: true
+        });
+
+    console.log("COVER UPLOAD:", coverData);
+    console.log("COVER ERROR:", coverError);
+
+    if (coverError) {
+      alert("Cover upload failed.");
+      return;
+    }
+
+    const { data: coverPublic } =
+      supabase.storage
+        .from("avatars")
+        .getPublicUrl(coverName);
+
+    coverUrl =
+      coverPublic.publicUrl +
+      "?t=" +
+      Date.now();
+  }
+
+
+  /* ===============================
+     CHECK USERNAME
+  =============================== */
+
+  if (username) {
+
+    const { data: existing, error: usernameError } =
+      await supabase
+        .from("profiles")
+        .select("id")
+        .ilike("username", username)
+        .neq("id", session.user.id)
+        .maybeSingle();
+
+    if (usernameError) {
+      console.log("USERNAME CHECK ERROR:", usernameError);
+    }
+
+    if (existing) {
+      alert("That username is already taken.");
+      return;
+    }
+  }
+
+
+  /* ===============================
+     SAVE PROFILE
+  =============================== */
+
+  const { error: saveError } =
+    await supabase
+      .from("profiles")
+      .upsert({
+
+        id: session.user.id,
+
+        name,
+        username,
+        website,
+        location,
+        bio,
+
+        avatar_url:
+          avatarUrl ||
+          oldProfile?.avatar_url ||
+          null,
+
+        cover_url:
+          coverUrl ||
+          oldProfile?.cover_url ||
+          null
+
       });
 
-  if (coverError) {
-    alert("Cover upload failed");
-    console.log(coverError);
+
+  if (saveError) {
+
+    alert("Save failed.");
+
+    console.log(
+      "PROFILE SAVE ERROR:",
+      saveError
+    );
+
     return;
   }
 
-  const { data: coverPublic } =
-    supabase.storage
-      .from("avatars")
-      .getPublicUrl(coverName);
 
-  coverUrl =
-    coverPublic.publicUrl + "?t=" + Date.now();
-}
+  /* ===============================
+     OPEN UPDATED PROFILE
+  =============================== */
 
-if (username) {
+  openProfile(
+    session.user.id,
+    name
+  );
 
-  const { data: existing } = await supabase
-    .from("profiles")
-    .select("id")
-    .ilike("username", username)
-    .neq("id", session.user.id)
-    .maybeSingle();
-
-  if (existing) {
-    alert("That username is already taken.");
-    return;
-  }
-
-}
-
-  const { error } = await supabase.from("profiles").upsert({
-
-id: session.user.id,
-name,
-username,
-website,
-location,
-avatar_url: avatarUrl || oldProfile?.avatar_url,
-cover_url: coverUrl || oldProfile?.cover_url,
-bio
-
-});
-
-  if (error) {
-    alert("Save failed");
-    console.log(error);
-    return;
-  }
-
-  openProfile(session.user.id, name);
 };
 
-const avatarFileInput = document.getElementById("avatarFile");
-const avatarPreview = document.getElementById("avatarPreview");
 
-avatarFileInput.addEventListener("change", () => {
+/* =====================================================
+   AVATAR PREVIEW
+===================================================== */
 
-  const file = avatarFileInput.files[0];
+const avatarFileInput =
+  document.getElementById("avatarFile");
 
-  if (!file) return;
+const avatarPreview =
+  document.getElementById("avatarPreview");
 
-  const imageUrl = URL.createObjectURL(file);
+avatarFileInput.addEventListener(
+  "change",
+  () => {
 
-  avatarPreview.src = imageUrl;
-});
+    const file =
+      avatarFileInput.files[0];
+
+    if (!file) return;
+
+    const imageUrl =
+      URL.createObjectURL(file);
+
+    avatarPreview.src =
+      imageUrl;
+  }
+);
 
 
-const coverFileInput = document.getElementById("coverFile");
-const coverPreview = document.getElementById("coverPreview");
+/* =====================================================
+   COVER PREVIEW
+===================================================== */
 
-coverFileInput.addEventListener("change", () => {
+const coverFileInput =
+  document.getElementById("coverFile");
 
-  const file = coverFileInput.files[0];
+const coverPreview =
+  document.getElementById("coverPreview");
 
-  if (!file) return;
+coverFileInput.addEventListener(
+  "change",
+  () => {
 
-  const imageUrl = URL.createObjectURL(file);
+    const file =
+      coverFileInput.files[0];
 
-  coverPreview.src = imageUrl;
-});
+    if (!file) return;
+
+    const imageUrl =
+      URL.createObjectURL(file);
+
+    coverPreview.src =
+      imageUrl;
+  }
+);
+
+
+/* =====================================================
+   TOP SAVE BUTTON
+===================================================== */
+
+document.getElementById(
+  "saveProfileTop"
+).onclick = () => {
+
+  document.getElementById(
+    "saveProfile"
+  ).click();
+
+};
+
+
+/* =====================================================
+   DISCARD CHANGES
+===================================================== */
+
+document.getElementById(
+  "discardProfile"
+).onclick = () => {
+
+  const confirmed =
+    confirm(
+      "Discard all changes?"
+    );
+
+  if (!confirmed) return;
+
+  window.backToProfileSettings();
+
+};
 
 };
 
