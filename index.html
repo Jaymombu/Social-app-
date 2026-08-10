@@ -5606,24 +5606,25 @@ const isOwner =
     ">
 
       <img
-        class="avatar"
-
-        src="${escapeHtml(avatarSrc)}"
-
-        onerror="
-          this.src='${fallbackAvatar}'
-        "
-
-        style="
-          width:50px;
-          height:50px;
-          border-radius:50%;
-          object-fit:cover;
-          background:#222;
-          flex-shrink:0;
-        "
-      />
-
+  class="avatar"
+  src="${escapeHtml(avatarSrc)}"
+  onclick='openMedia(
+    ${JSON.stringify(avatarSrc)},
+    "image"
+  )'
+  onerror="
+    this.src='${fallbackAvatar}'
+  "
+  style="
+    width:50px;
+    height:50px;
+    border-radius:50%;
+    object-fit:cover;
+    background:#222;
+    flex-shrink:0;
+    cursor:pointer;
+  "
+/>
 
       <div style="
         flex:1;
@@ -5631,22 +5632,19 @@ const isOwner =
       ">
 
         <div
-         onclick="
-  openProfile(
-    '${post.user_id}',
+  onclick='openProfile(
+    ${JSON.stringify(post.user_id)},
     ${JSON.stringify(profileName)}
-  )
-"
+  )'
+  style="
+    font-weight:bold;
+    cursor:pointer;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  "
+>
          
-          style="
-            font-weight:bold;
-            cursor:pointer;
-            white-space:nowrap;
-            overflow:hidden;
-            text-overflow:ellipsis;
-          "
-        >
-
           ${escapeHtml(profileName)}
 
           ${
@@ -12736,10 +12734,13 @@ console.log("Profile opened:", userId);
     ? profile.avatar_url
     : "https://via.placeholder.com/60";
     
-    const safeCoverUrl =
-  profile?.cover_url
-    ? escapeHtml(profile.cover_url)
-    : "";
+    const coverUrl =
+  profile?.cover_url &&
+  profile.cover_url !== "null"
+    ? profile.cover_url
+    : null;
+
+console.log("🖼️ PROFILE COVER:", coverUrl);
     
     const [
     followersResult,
@@ -12796,13 +12797,38 @@ document.getElementById("app").innerHTML = `
 <div
 style="
 height:200px;
-background:${
-  safeCoverUrl
-    ? `url("${safeCoverUrl}") center/cover`
-    : "#333"
-};
+background:#333;
 position:relative;
+overflow:hidden;
 ">
+
+${
+  coverUrl
+    ? `
+      <img
+        id="profileCoverImage"
+        src="${escapeHtml(coverUrl)}"
+        alt="Cover Photo"
+
+        onclick="window.openMedia(this.src, 'image')"
+
+        onerror="
+          this.style.display='none';
+        "
+
+        style="
+          position:absolute;
+          inset:0;
+          width:100%;
+          height:100%;
+          object-fit:cover;
+          display:block;
+          cursor:pointer;
+        "
+      >
+    `
+    : ""
+}
 
 <!-- Top buttons -->
 <div style="
@@ -12862,7 +12888,7 @@ cursor:pointer;
      <div style="display:flex;align-items:center;gap:10px;">
 
   <img 
-src="${avatarUrl}"
+src="${escapeHtml(avatarUrl)}"
 
   onclick="
     openMedia(
@@ -12874,7 +12900,7 @@ src="${avatarUrl}"
   style="
     width:120px;
     height:120px;
-    object-fit:contain;
+    object-fit:cover;
     border-radius:50%;
     background:#222;
     cursor:pointer;
@@ -13116,6 +13142,43 @@ style="margin-top:15px;"
    </div>
 </div>
 `;
+
+
+/* =====================================================
+   OPEN PROFILE COVER PHOTO
+===================================================== */
+
+const profileCoverImage =
+  document.getElementById("profileCoverImage");
+
+if (profileCoverImage && coverUrl) {
+
+  profileCoverImage.addEventListener(
+    "click",
+    () => {
+
+      console.log(
+        "🖼️ PROFILE COVER CLICKED:",
+        coverUrl
+      );
+
+      if (typeof window.openMedia !== "function") {
+        console.error(
+          "❌ window.openMedia is not available"
+        );
+        return;
+      }
+
+      window.openMedia(
+        coverUrl,
+        "image"
+      );
+
+    }
+  );
+
+}
+
 
 // =====================================================
 // PROFILE EVENTS / TABS
@@ -14495,7 +14558,7 @@ document.getElementById("app").innerHTML = `
 
     </div>
 
-   <!-- COVER PHOTO -->
+  <!-- COVER PHOTO -->
 <div class="edit-media-section">
 
   <div class="edit-media-title">
@@ -14507,10 +14570,18 @@ document.getElementById("app").innerHTML = `
     <img
       id="coverPreview"
       src="${escapeHtml(
-  data?.cover_url ||
-  "https://via.placeholder.com/600x200/181818/777?text=Cover+Photo"
-)}"
+        data?.cover_url ||
+        "https://via.placeholder.com/600x200/181818/777?text=Cover+Photo"
+      )}"
       alt="Cover Photo"
+      style="
+        width:100%;
+        height:200px;
+        object-fit:cover;
+        border-radius:12px;
+        cursor:pointer;
+        display:block;
+      "
     >
 
   </div>
@@ -14530,7 +14601,6 @@ document.getElementById("app").innerHTML = `
   </label>
 
 </div>
-
 
 <!-- PROFILE PHOTO -->
 <div class="edit-media-section">
@@ -15025,7 +15095,7 @@ avatarFileInput.addEventListener(
 
 
 /* =====================================================
-   COVER PREVIEW
+   COVER PREVIEW + OPEN COVER
 ===================================================== */
 
 const coverFileInput =
@@ -15034,22 +15104,61 @@ const coverFileInput =
 const coverPreview =
   document.getElementById("coverPreview");
 
-coverFileInput.addEventListener(
-  "change",
-  () => {
 
-    const file =
-      coverFileInput.files[0];
+/* =====================================================
+   OPEN COVER PHOTO
+===================================================== */
 
-    if (!file) return;
+coverPreview.onclick = () => {
 
-    const imageUrl =
-      URL.createObjectURL(file);
+  const coverUrl = coverPreview.src;
 
-    coverPreview.src =
-      imageUrl;
+  console.log("🖼️ COVER CLICKED:", coverUrl);
+
+  if (
+    !coverUrl ||
+    coverUrl.includes("placeholder.com")
+  ) {
+    console.log("⚠️ No real cover image available.");
+    return;
   }
-);
+
+  if (typeof window.openMedia !== "function") {
+    console.error("❌ openMedia() does not exist.");
+    return;
+  }
+
+  window.openMedia(
+    coverUrl,
+    "image"
+  );
+
+};
+
+
+/* =====================================================
+   CHANGE COVER PREVIEW
+===================================================== */
+
+coverFileInput.onchange = () => {
+
+  const file =
+    coverFileInput.files[0];
+
+  if (!file) return;
+
+  const imageUrl =
+    URL.createObjectURL(file);
+
+  coverPreview.src =
+    imageUrl;
+
+  console.log(
+    "🖼️ NEW COVER PREVIEW:",
+    imageUrl
+  );
+
+};
 
 
 /* =====================================================
@@ -20957,7 +21066,29 @@ window.updateOnlineStatus = async function(status){
 
 window.openMedia = function (url, type) {
 
+  // 🔒 LOCK HOME PAGE
+  document.body.style.overflow = "hidden";
+
+  // ⏸️ PAUSE ALL BACKGROUND VIDEOS
+  document.querySelectorAll("video").forEach(video => {
+    if (!video.closest("#mediaViewer")) {
+      video.pause();
+    }
+  });
+
   const viewer = document.getElementById("mediaViewer");
+
+  if (!viewer) return;
+
+  // Make viewer completely cover the home page
+  viewer.style.position = "fixed";
+  viewer.style.inset = "0";
+  viewer.style.width = "100vw";
+  viewer.style.height = "100vh";
+  viewer.style.zIndex = "9999999";
+  viewer.style.background = "rgba(0,0,0,0.95)";
+  viewer.style.display = "block";
+  viewer.style.overflow = "hidden";
 
   // RESET VIEWER
   viewer.innerHTML = "";
@@ -21495,11 +21626,13 @@ video.addEventListener("touchend", () => {
 
 // CLOSE MEDIA
 window.closeMedia = function () {
-  
+
   document.onkeydown = null;
 
   const viewer =
     document.getElementById("mediaViewer");
+
+  if (!viewer) return;
 
   viewer.style.opacity = "0";
 
@@ -21507,6 +21640,14 @@ window.closeMedia = function () {
 
     viewer.style.display = "none";
     viewer.innerHTML = "";
+
+    // 🔓 UNLOCK HOME PAGE
+    document.body.style.overflow = "";
+
+    // Reset viewer
+    viewer.style.opacity = "1";
+    viewer.style.transform = "";
+    viewer.style.background = "rgba(0,0,0,0.95)";
 
   }, 200);
 
