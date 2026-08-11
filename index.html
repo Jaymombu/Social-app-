@@ -1906,6 +1906,792 @@ body:not(.dark) .edit-discard-btn{
     border-color:#ddd;
 }
 
+/* =====================================================
+   CLEAN PROFILE VIDEO VIEWER
+===================================================== */
+
+#profileVideoFeed {
+    position: fixed;
+    inset: 0;
+
+    width: 100%;
+    height: 100dvh;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+
+    background: #000;
+
+    scrollbar-width: none;
+}
+
+#profileVideoFeed::-webkit-scrollbar {
+    display: none;
+}
+
+
+/* =====================================================
+   VIDEO PAGE
+===================================================== */
+
+.profile-video-item {
+    position: relative;
+
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+
+    overflow: hidden;
+
+    background: #000;
+
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+
+    isolation: isolate;
+}
+
+
+/* =====================================================
+   VIDEO
+===================================================== */
+
+.profile-video-item > video {
+    position: absolute;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    object-fit: cover;
+
+    background: #000;
+
+    display: block;
+}
+
+
+/* =====================================================
+   BOTTOM GRADIENT
+===================================================== */
+
+.profile-video-item > div:first-of-type {
+    position: absolute;
+
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    height: 48%;
+
+    background: linear-gradient(
+        to top,
+        rgba(0,0,0,.92),
+        rgba(0,0,0,.65) 35%,
+        rgba(0,0,0,.2) 70%,
+        transparent
+    );
+
+    pointer-events: none;
+
+    z-index: 2;
+}
+
+
+/* =====================================================
+   VIDEO INFORMATION
+===================================================== */
+
+.profile-video-info {
+    position: absolute;
+
+    left: 16px;
+    right: 88px;
+    bottom: 48px;
+
+    color: #fff;
+
+    z-index: 5;
+
+    text-shadow:
+        0 1px 3px rgba(0,0,0,.8);
+
+    opacity: 1;
+
+    transition: opacity .2s ease;
+}
+
+
+/* USERNAME */
+
+.profile-video-info > div:first-child {
+    font-size: 17px !important;
+
+    font-weight: 700;
+
+    margin-bottom: 8px;
+}
+
+
+/* CAPTION */
+
+.profile-video-info > div:nth-child(2) {
+    font-size: 15px;
+
+    line-height: 1.4;
+
+    max-height: 90px;
+
+    overflow: hidden;
+
+    white-space: pre-wrap;
+
+    word-break: break-word;
+}
+
+
+/* MUSIC */
+
+.profile-video-info .video-music {
+    margin-top: 10px;
+
+    font-size: 14px;
+
+    color: rgba(255,255,255,.9);
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+}
+
+
+/* =====================================================
+   RIGHT ACTIONS
+===================================================== */
+
+.profile-video-actions {
+    position: absolute;
+
+    right: 12px;
+    bottom: 95px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    gap: 18px;
+
+    z-index: 10;
+
+    opacity: 1;
+
+    transition: opacity .2s ease;
+}
+
+
+/* ACTION */
+
+.profile-video-actions > div {
+    width: 48px;
+    min-height: 48px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: center;
+
+    justify-content: center;
+
+    color: #fff;
+
+    font-size: 25px;
+
+    font-weight: 600;
+
+    cursor: pointer;
+
+    user-select: none;
+
+    text-shadow:
+        0 2px 5px rgba(0,0,0,.9);
+
+    transition:
+        transform .15s ease,
+        opacity .2s ease;
+}
+
+
+.profile-video-actions > div:active {
+    transform: scale(.82);
+}
+
+
+/* COUNTS */
+
+.profile-video-actions > div > div {
+    margin-top: 3px;
+
+    font-size: 12px;
+
+    font-weight: 500;
+
+    color: #fff;
+}
+
+
+/* =====================================================
+   AVATAR
+===================================================== */
+
+.profile-video-actions > div:first-child {
+    background: transparent;
+}
+
+
+/* Avatar wrapper */
+
+.profile-video-actions > div:first-child img {
+    width: 52px;
+    height: 52px;
+
+    border-radius: 50%;
+
+    object-fit: cover;
+
+    border: 2px solid #fff;
+
+    display: block;
+}
+
+
+/* =====================================================
+   FOLLOW BUTTON
+===================================================== */
+
+.profile-video-actions > div:first-child > div {
+    margin-top: 0;
+}
+
+
+/* =====================================================
+   MUTE
+===================================================== */
+
+.video-mute-btn {
+    position: absolute;
+
+    top: 18px;
+    right: 18px;
+
+    width: 42px;
+    height: 42px;
+
+    padding: 0;
+
+    border-radius: 50%;
+
+    border: 1px solid rgba(255,255,255,.2);
+
+    background: rgba(0,0,0,.55);
+
+    color: #fff;
+
+    font-size: 19px;
+
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+
+    z-index: 20;
+
+    backdrop-filter: blur(8px);
+
+    -webkit-backdrop-filter: blur(8px);
+
+    opacity: 1;
+
+    transition:
+        opacity .2s ease,
+        transform .15s ease;
+}
+
+.video-mute-btn:active {
+    transform: scale(.88);
+}
+
+
+/* =====================================================
+   PROGRESS BAR
+===================================================== */
+
+.video-progress {
+    position: absolute;
+
+    left: 0;
+    right: 0;
+    bottom: 0;
+
+    width: 100%;
+    height: 3px;
+
+    background: rgba(255,255,255,.25);
+
+    z-index: 30;
+
+    opacity: 1;
+
+    transition: opacity .2s ease;
+}
+
+.video-progress-fill {
+    height: 100%;
+
+    width: 0%;
+
+    background: #fff;
+
+    transition: width .1s linear;
+}
+
+
+/* =====================================================
+   LOADING
+===================================================== */
+
+.profile-video-item > div.loader {
+    position: absolute;
+
+    top: 50%;
+    left: 50%;
+
+    transform: translate(-50%,-50%);
+
+    z-index: 50;
+}
+
+
+/* =====================================================
+   HEART
+===================================================== */
+
+.heart-animation {
+    position: absolute;
+
+    top: 50%;
+    left: 50%;
+
+    transform:
+        translate(-50%,-50%)
+        scale(.3);
+
+    font-size: 90px;
+
+    opacity: 0;
+
+    pointer-events: none;
+
+    z-index: 100;
+}
+
+.heart-animation.show {
+    animation: profileHeartPop .7s ease;
+}
+
+@keyframes profileHeartPop {
+
+    0% {
+        transform:
+            translate(-50%,-50%)
+            scale(.3);
+
+        opacity: 0;
+    }
+
+    30% {
+        transform:
+            translate(-50%,-50%)
+            scale(1.2);
+
+        opacity: 1;
+    }
+
+    70% {
+    transform:
+        translate(-50%,-50%)
+        scale(1);
+
+    opacity: 1;
+    }
+
+    100% {
+        transform:
+            translate(-50%,-50%)
+            scale(1.7);
+
+        opacity: 0;
+    }
+}
+
+
+/* =====================================================
+   2X SPEED
+===================================================== */
+
+.speedIndicator {
+    position: absolute;
+
+    top: 50%;
+    left: 50%;
+
+    transform: translate(-50%,-50%);
+
+    padding: 10px 18px;
+
+    border-radius: 999px;
+
+    background: rgba(0,0,0,.65);
+
+    color: #fff;
+
+    font-size: 20px;
+
+    font-weight: 700;
+
+    z-index: 100;
+
+    backdrop-filter: blur(8px);
+}
+
+
+/* =====================================================
+   MUSIC
+===================================================== */
+
+.video-music {
+    overflow: hidden;
+
+    white-space: nowrap;
+
+    text-overflow: ellipsis;
+}
+
+
+/* =====================================================
+   SMALL PHONES
+===================================================== */
+
+@media (max-width: 600px) {
+
+    .profile-video-info {
+        left: 14px;
+        right: 82px;
+        bottom: 42px;
+    }
+
+    .profile-video-actions {
+        right: 10px;
+        bottom: 90px;
+        gap: 16px;
+    }
+
+    .profile-video-actions > div {
+        width: 46px;
+        min-height: 46px;
+        font-size: 24px;
+    }
+
+    .video-mute-btn {
+        top: 14px;
+        right: 14px;
+    }
+
+}
+
+/* =====================================================
+   PROFILE VIDEO AVATAR + FOLLOW BUTTON FIX
+===================================================== */
+
+.profile-video-avatar-wrap {
+    position: relative !important;
+
+    width: 58px !important;
+    height: 68px !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    background: transparent !important;
+    min-height: 0 !important;
+
+    cursor: pointer;
+}
+
+
+/* PROFILE AVATAR */
+
+.profile-video-avatar-wrap .profile-video-avatar {
+    width: 54px !important;
+    height: 54px !important;
+
+    border-radius: 50% !important;
+
+    object-fit: cover !important;
+
+    border: 2px solid #fff !important;
+
+    display: block !important;
+
+    background: #222;
+}
+
+
+/* FOLLOW BUTTON */
+
+.profile-video-avatar-wrap .profile-video-follow {
+    position: absolute !important;
+
+    bottom: -5px !important;
+    left: 50% !important;
+
+    transform: translateX(-50%) !important;
+
+    width: 28px !important;
+    height: 28px !important;
+
+    min-height: 28px !important;
+
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+
+    border-radius: 50% !important;
+
+    background: #1877f2 !important;
+
+    border: 3px solid #000 !important;
+
+    color: #fff !important;
+
+    font-size: 21px !important;
+    font-weight: 700 !important;
+
+    line-height: 1 !important;
+
+    z-index: 50 !important;
+
+    box-shadow: 0 2px 8px rgba(0,0,0,.5);
+
+    cursor: pointer;
+
+    text-shadow: none !important;
+
+    transition:
+        transform .15s ease,
+        background .2s ease;
+}
+
+
+/* TAP EFFECT */
+
+.profile-video-avatar-wrap .profile-video-follow:active {
+    transform: translateX(-50%) scale(.85) !important;
+}
+
+
+/* IMPORTANT:
+   Don't let the general action CSS resize
+   the avatar wrapper/follow button.
+*/
+
+.profile-video-actions > .profile-video-avatar-wrap {
+    width: 58px !important;
+    min-height: 68px !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+
+    background: transparent !important;
+
+    text-shadow: none !important;
+}
+
+
+/* Mobile */
+
+@media (max-width:600px) {
+
+    .profile-video-avatar-wrap {
+        width: 56px !important;
+        height: 66px !important;
+    }
+
+    .profile-video-avatar-wrap .profile-video-avatar {
+        width: 52px !important;
+        height: 52px !important;
+    }
+
+    .profile-video-avatar-wrap .profile-video-follow {
+        width: 29px !important;
+        height: 29px !important;
+
+        font-size: 21px !important;
+    }
+
+}
+
+/* ==========================================
+   PROFILE VIDEO FOLLOW BUTTON
+========================================== */
+
+.profile-video-avatar-wrap{
+    position:relative;
+    width:58px;
+    height:70px;
+    display:flex;
+    justify-content:center;
+    align-items:flex-start;
+}
+
+.profile-video-avatar-wrap .profile-video-follow{
+
+    position:absolute;
+
+    left:50%;
+    bottom:-8px;
+
+    transform:translateX(-50%);
+
+    width:28px;
+    height:28px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    border-radius:50%;
+
+    background:#1877f2;
+
+    color:white;
+
+    font-size:18px;
+    font-weight:800;
+
+    border:2px solid white;
+
+    box-shadow:0 3px 8px rgba(0,0,0,.5);
+
+    cursor:pointer;
+
+    z-index:20;
+
+    transition:
+        background .25s ease,
+        transform .25s ease,
+        box-shadow .25s ease;
+}
+
+
+/* FOLLOWING */
+
+.profile-video-avatar-wrap
+.profile-video-follow.following{
+
+    background:#20c76a !important;
+
+    box-shadow:
+        0 0 0 2px rgba(32,199,106,.25),
+        0 3px 10px rgba(0,0,0,.5);
+
+}
+
+
+/* TRANSFORMATION */
+
+.profile-video-avatar-wrap
+.profile-video-follow.follow-transform{
+
+    animation:followTransform .3s ease;
+
+}
+
+
+@keyframes followTransform{
+
+    0%{
+        transform:translateX(-50%) scale(1) rotate(0deg);
+    }
+
+    40%{
+        transform:translateX(-50%) scale(1.3) rotate(90deg);
+    }
+
+    70%{
+        transform:translateX(-50%) scale(.9) rotate(180deg);
+    }
+
+    100%{
+        transform:translateX(-50%) scale(1) rotate(360deg);
+    }
+
+}
+
+/* =====================================================
+   PROFILE VIDEO LOADER
+===================================================== */
+
+.profile-video-loader {
+    position: absolute;
+
+    top: 50%;
+    left: 50%;
+
+    width: 42px;
+    height: 42px;
+
+    margin: -21px 0 0 -21px;
+
+    border: 4px solid rgba(255,255,255,.25);
+    border-top-color: #fff;
+
+    border-radius: 50%;
+
+    animation: profileVideoSpin .8s linear infinite;
+
+    z-index: 50;
+
+    pointer-events: none;
+}
+
+@keyframes profileVideoSpin {
+
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+
+}
+
 </style>
 </head>
 <body class="dark">
@@ -6436,275 +7222,502 @@ window.reactionProfileReturn = null;
 
 
 window.openComments = async (postId) => {
-  
-  console.log("💬 opening comments for:", postId);
 
-  currentPostId = postId;
-  
-  commentDebug("COMMENTS OPENED", {
-    currentPostId: currentPostId
-});
+    // ==========================================
+    // SAVE CURRENT POST
+    // ==========================================
 
-const panel = document.getElementById("commentsScreen");
+    window.currentPostId = postId;
+    currentPostId = postId;
 
-console.log(panel);
+    console.log(
+        "💬 OPEN COMMENTS POST ID:",
+        postId
+    );
 
-panel.style.display = "flex";
-
-document.body.style.overflow = "hidden";
-
-document.getElementById("panelInput").value = "";
-document.getElementById("panelInput").placeholder = "Add a comment...";
-
-const container = document.getElementById("panelComments");
-
-if (container) {
-    container.innerHTML = "";
-}
-
-replyingToComment = null;
-replyingToUserId = null;
-window.replyingToComment = null;
-
-const preview = document.getElementById("replyPreview");
-
-if (preview) {
-    preview.style.display = "none";
-}
-
-loadingComments = false;
-commentsPage = 0;
-hasMoreComments = true;
-
-expandedReplies.clear();
-reactionCommentId = null;
-selectedCommentId = null;
-selectedCommentUserId = null;
-
-document.querySelectorAll("video").forEach(v => {
-    if (!v.closest("#commentsScreen")) {
-        v.pause();
-    }
-});
-
-if (window.currentVideo) {
-    window.currentVideo.pause();
-}
-
-// Load the post media
-const { data: post, error } = await supabase
-.from("posts")
-.select("*")
-.eq("id", postId)
-.single();
-
-window.currentPostOwnerId = post?.user_id || null;
-
-console.log("Post:", post);
-console.log("Post Error:", error);
-console.log("postId:", postId, typeof postId);
-
-const media = document.getElementById("commentMediaContent");
-
-if (post) {
-  
-  if (!media) return;
-
-  if (post.media_type === "image") {
-
-    media.innerHTML = `
-    <img
-        src="${post.file_url || post.media_url}"
-        style="
-            width:100%;
-            max-height:350px;
-            object-fit:contain;
-            border-radius:18px;
-            display:block;
-        ">
-    `;
-
-} else if (post.media_type === "video") {
-
-    media.innerHTML = `
-    <video
-        src="${post.file_url || post.media_url}"
-        controls
-        playsinline
-        preload="metadata"
-        style="
-            width:100%;
-            max-height:350px;
-            object-fit:contain;
-            border-radius:18px;
-            display:block;
-            background:#000;
-        ">
-    </video>
-    `;
-
-    } else {
-
-        media.innerHTML = `
-        <div style="
-            width:100%;
-            min-height:40vh;
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            padding:30px;
-            box-sizing:border-box;
-            color:white;
-            font-size:22px;
-            line-height:1.5;
-            white-space:pre-wrap;
-            word-break:break-word;
-            text-align:center;
-        ">
-            ${escapeHtml(post.content || "No text")}
-        </div>
-        `;
-
-    }
-
-}
-
-if (commentsChannel) {
-    supabase.removeChannel(commentsChannel);
-}
-
-commentsChannel = supabase
-.channel("comments-" + postId)
-
-.on(
-    "postgres_changes",
-    {
-        event: "*",
-        schema: "public",
-        table: "comments",
-        filter: `post_id=eq.${postId}`
-    },
-    async (payload) => {
-
-       if (payload.eventType === "INSERT") {
-
-    await insertComment(payload.new.id);
-
-    if (payload.new.parent_id) {
-        await updateReplyCount(payload.new.parent_id);
-    }
-
-    return;
-}
-
-        if (payload.eventType === "UPDATE") {
-            await refreshComment(payload.new.id);
-            return;
-        }
-
-        if (payload.eventType === "DELETE") {
-
-    document.getElementById("comment-" + payload.old.id)?.remove();
-
-    if (payload.old.parent_id) {
-        await updateReplyCount(payload.old.parent_id);
-    }
-
-    return;
-     }
-  }
-  
-)
-
-.on(
-    "postgres_changes",
-    {
-        event: "*",
-        schema: "public",
-        table: "comment_likes"
-    },
-    async (payload) => {
-
-        const id =
-            payload.new?.comment_id ||
-            payload.old?.comment_id;
-
-        if (id) {
-            updateSingleComment(id);
-        }
-
-    }
-)
-
-.on(
-    "postgres_changes",
-    {
-        event: "*",
-        schema: "public",
-        table: "comment_reactions"
-    },
-    async (payload) => {
-
-        const id =
-            payload.new?.comment_id ||
-            payload.old?.comment_id;
-
-        if (id) {
-            updateSingleComment(id);
-        }
-
-    }
-)
-
-.on(
-    "postgres_changes",
-    {
-        event: "*",
-        schema: "public",
-        table: "comment_reads"
-    },
-    async (payload) => {
-
-        const id =
-            payload.new?.comment_id ||
-            payload.old?.comment_id;
-
-        if (id) {
-            updateSingleComment(id);
-        }
-
-    }
-)
-
-.subscribe(status => {
-    console.log("Comments realtime:", status);
-});
-
-await loadComments(postId);
-
-await loadComments(postId);
-
-await new Promise(resolve => {
-    requestAnimationFrame(() => {
-        requestAnimationFrame(resolve);
+    commentDebug("COMMENTS OPENED", {
+        currentPostId: currentPostId
     });
-});
 
-listenToCommentTyping();
 
-const commentsBody = document.getElementById("commentsBody");
+    // ==========================================
+// FIND COMMENTS SCREEN
+// ==========================================
 
-commentsBody.onscroll = () => {
+const panel =
+    document.getElementById("commentsScreen");
 
-    if (
-        hasMoreComments &&
-        !loadingComments &&
-        commentsBody.scrollTop + commentsBody.clientHeight >= commentsBody.scrollHeight - 200
-    ) {
-        loadMoreComments();
+
+if (!panel) {
+
+    console.error(
+        "❌ commentsScreen does not exist"
+    );
+
+    return;
+}
+
+
+console.log(
+    "✅ COMMENTS SCREEN FOUND:",
+    panel
+);
+
+    console.log(
+        "✅ COMMENTS SCREEN FOUND:",
+        panel
+    );
+
+
+    panel.style.display = "flex";
+
+    document.body.style.overflow = "hidden";
+
+
+    // ==========================================
+    // INPUT
+    // ==========================================
+
+    const panelInput =
+        document.getElementById("panelInput");
+
+    if (!panelInput) {
+
+        console.error(
+            "❌ panelInput element does not exist"
+        );
+
+        return;
     }
 
-  };
+    panelInput.value = "";
+    panelInput.placeholder =
+        "Add a comment...";
+
+
+    // ==========================================
+    // COMMENTS CONTAINER
+    // ==========================================
+
+    const container =
+        document.getElementById("panelComments");
+
+    if (container) {
+        container.innerHTML = "";
+    }
+
+
+    // ==========================================
+    // RESET COMMENT STATE
+    // ==========================================
+
+    replyingToComment = null;
+    replyingToUserId = null;
+
+    window.replyingToComment = null;
+
+    const preview =
+        document.getElementById("replyPreview");
+
+    if (preview) {
+        preview.style.display = "none";
+    }
+
+    loadingComments = false;
+    commentsPage = 0;
+    hasMoreComments = true;
+
+    expandedReplies.clear();
+
+    reactionCommentId = null;
+    selectedCommentId = null;
+    selectedCommentUserId = null;
+
+
+    // ==========================================
+    // PAUSE OTHER VIDEOS
+    // ==========================================
+
+    document
+        .querySelectorAll("video")
+        .forEach(video => {
+
+            if (!video.closest("#commentsScreen")) {
+                video.pause();
+            }
+
+        });
+
+
+    if (window.currentVideo) {
+        window.currentVideo.pause();
+    }
+
+
+    // ==========================================
+    // LOAD POST
+    // ==========================================
+
+    const {
+        data: post,
+        error: postError
+    } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("id", postId)
+        .single();
+
+
+    window.currentPostOwnerId =
+        post?.user_id || null;
+
+
+    console.log(
+        "📌 POST:",
+        post
+    );
+
+    console.log(
+        "📌 POST ERROR:",
+        postError
+    );
+
+
+    if (postError || !post) {
+
+        console.error(
+            "❌ Could not load post:",
+            postError
+        );
+
+        return;
+    }
+
+
+    // ==========================================
+    // LOAD POST MEDIA
+    // ==========================================
+
+    const media =
+        document.getElementById(
+            "commentMediaContent"
+        );
+
+
+    if (media) {
+
+        if (post.media_type === "image") {
+
+            media.innerHTML = `
+                <img
+                    src="${post.file_url || post.media_url || ""}"
+                    style="
+                        width:100%;
+                        max-height:350px;
+                        object-fit:contain;
+                        border-radius:18px;
+                        display:block;
+                    "
+                >
+            `;
+
+        }
+
+        else if (post.media_type === "video") {
+
+            media.innerHTML = `
+                <video
+                    src="${post.file_url || post.media_url || ""}"
+                    controls
+                    playsinline
+                    preload="metadata"
+                    style="
+                        width:100%;
+                        max-height:350px;
+                        object-fit:contain;
+                        border-radius:18px;
+                        display:block;
+                        background:#000;
+                    "
+                ></video>
+            `;
+
+        }
+
+        else {
+
+            media.innerHTML = `
+                <div style="
+                    width:100%;
+                    min-height:40vh;
+                    display:flex;
+                    justify-content:center;
+                    align-items:center;
+                    padding:30px;
+                    box-sizing:border-box;
+                    color:white;
+                    font-size:22px;
+                    line-height:1.5;
+                    white-space:pre-wrap;
+                    word-break:break-word;
+                    text-align:center;
+                ">
+                    ${escapeHtml(post.content || "No text")}
+                </div>
+            `;
+
+        }
+
+    }
+
+
+    // ==========================================
+    // REMOVE OLD REALTIME CHANNEL
+    // ==========================================
+
+    if (commentsChannel) {
+
+        await supabase.removeChannel(
+            commentsChannel
+        );
+
+    }
+
+
+    // ==========================================
+    // COMMENTS REALTIME
+    // ==========================================
+
+    commentsChannel =
+        supabase
+            .channel("comments-" + postId)
+
+
+            // ----------------------------------
+            // COMMENTS
+            // ----------------------------------
+
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "comments",
+                    filter:
+                        `post_id=eq.${postId}`
+                },
+
+                async payload => {
+
+                    if (
+                        payload.eventType === "INSERT"
+                    ) {
+
+                        await insertComment(
+                            payload.new.id
+                        );
+
+
+                        if (
+                            payload.new.parent_id
+                        ) {
+
+                            await updateReplyCount(
+                                payload.new.parent_id
+                            );
+
+                        }
+
+                        return;
+                    }
+
+
+                    if (
+                        payload.eventType === "UPDATE"
+                    ) {
+
+                        await refreshComment(
+                            payload.new.id
+                        );
+
+                        return;
+                    }
+
+
+                    if (
+                        payload.eventType === "DELETE"
+                    ) {
+
+                        document
+                            .getElementById(
+                                "comment-" +
+                                payload.old.id
+                            )
+                            ?.remove();
+
+
+                        if (
+                            payload.old.parent_id
+                        ) {
+
+                            await updateReplyCount(
+                                payload.old.parent_id
+                            );
+
+                        }
+
+                    }
+
+                }
+            )
+
+
+            // ----------------------------------
+            // COMMENT LIKES
+            // ----------------------------------
+
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "comment_likes"
+                },
+
+                async payload => {
+
+                    const id =
+                        payload.new?.comment_id ||
+                        payload.old?.comment_id;
+
+                    if (id) {
+                        updateSingleComment(id);
+                    }
+
+                }
+            )
+
+
+            // ----------------------------------
+            // COMMENT REACTIONS
+            // ----------------------------------
+
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "comment_reactions"
+                },
+
+                async payload => {
+
+                    const id =
+                        payload.new?.comment_id ||
+                        payload.old?.comment_id;
+
+                    if (id) {
+                        updateSingleComment(id);
+                    }
+
+                }
+            )
+
+
+            // ----------------------------------
+            // COMMENT READS
+            // ----------------------------------
+
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "comment_reads"
+                },
+
+                async payload => {
+
+                    const id =
+                        payload.new?.comment_id ||
+                        payload.old?.comment_id;
+
+                    if (id) {
+                        updateSingleComment(id);
+                    }
+
+                }
+            )
+
+
+            .subscribe(status => {
+
+                console.log(
+                    "Comments realtime:",
+                    status
+                );
+
+            });
+
+
+    // ==========================================
+    // LOAD COMMENTS
+    // ==========================================
+
+    await loadComments(postId);
+
+
+    // ==========================================
+    // WAIT FOR DOM
+    // ==========================================
+
+    await new Promise(resolve => {
+
+        requestAnimationFrame(() => {
+
+            requestAnimationFrame(resolve);
+
+        });
+
+    });
+
+
+    // ==========================================
+    // TYPING LISTENER
+    // ==========================================
+
+    listenToCommentTyping();
+
+
+    // ==========================================
+    // COMMENT SCROLL
+    // ==========================================
+
+    const commentsBody =
+        document.getElementById(
+            "commentsBody"
+        );
+
+
+    if (commentsBody) {
+
+        commentsBody.onscroll = () => {
+
+            if (
+                hasMoreComments &&
+                !loadingComments &&
+                commentsBody.scrollTop +
+                commentsBody.clientHeight >=
+                commentsBody.scrollHeight - 200
+            ) {
+
+                loadMoreComments();
+
+            }
+
+        };
+
+    }
 
 };
 
@@ -12784,7 +13797,16 @@ const followingCount =
 const postsCount =
     postsResult.count || 0;
     
-    window.savedAppHtml = document.getElementById("app").innerHTML;
+    const commentsScreen =
+    document.getElementById("commentsScreen");
+
+window.savedCommentsScreenHtml =
+    commentsScreen
+        ? commentsScreen.outerHTML
+        : null;
+
+window.savedAppHtml =
+    document.getElementById("app").innerHTML;
 
 document.getElementById("app").innerHTML = `
 <div style="
@@ -13144,6 +14166,31 @@ style="margin-top:15px;"
 `;
 
 
+// =====================================================
+// RESTORE COMMENTS SCREEN FOR PROFILE
+// =====================================================
+
+if (window.savedCommentsScreenHtml) {
+
+    const existingComments =
+        document.getElementById("commentsScreen");
+
+    if (!existingComments) {
+
+        document.body.insertAdjacentHTML(
+            "beforeend",
+            window.savedCommentsScreenHtml
+        );
+
+        console.log(
+            "✅ Comments screen restored for profile"
+        );
+
+    }
+
+}
+
+
 /* =====================================================
    OPEN PROFILE COVER PHOTO
 ===================================================== */
@@ -13448,91 +14495,271 @@ if (targetProfile?.allow_followers === "approved") {
 
 async function loadProfilePosts(userId) {
 
-  const container = document.getElementById("profilePosts");
+    const container =
+        document.getElementById("profilePosts");
 
-  container.innerHTML = "Loading...";
+    if (!container) return;
 
-const { data: posts, error } = await supabase
-    .from("posts")
-    .select("*")
-    .eq("user_id", userId)
-    .order("pinned", { ascending: false })
-    .order("created_at", { ascending: false });
+    container.innerHTML = "Loading...";
 
-  if (error) {
-    container.innerHTML = "Error loading posts";
-    return;
-  }
+    // -----------------------------------------
+    // GET POSTS
+    // -----------------------------------------
 
-  if (!posts || posts.length === 0) {
-    container.innerHTML = "No posts yet";
-    return;
-  }
+    const {
+        data: posts,
+        error
+    } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("user_id", userId)
+        .order("pinned", {
+            ascending: false
+        })
+        .order("created_at", {
+            ascending: false
+        });
 
-container.replaceChildren();
+    if (error) {
 
-window.renderedPosts = new Set();
+        console.error(
+            "❌ PROFILE POSTS ERROR:",
+            error
+        );
 
-posts.forEach(post => {
+        container.innerHTML =
+            "Error loading posts";
 
-  const el = renderPostElement(post);
+        return;
+    }
 
-  if(el){
-    container.appendChild(el);
-  }
+    if (!posts || posts.length === 0) {
 
-});
+        container.innerHTML =
+            "No posts yet";
+
+        return;
+    }
+
+
+    // -----------------------------------------
+    // GET CURRENT PROFILE
+    // -----------------------------------------
+
+    const {
+        data: profile,
+        error: profileError
+    } = await supabase
+        .from("profiles")
+        .select(`
+            id,
+            name,
+            username,
+            avatar_url,
+            verified
+        `)
+        .eq("id", userId)
+        .maybeSingle();
+
+    if (profileError) {
+
+        console.error(
+            "❌ PROFILE DATA ERROR:",
+            profileError
+        );
+    }
+
+
+    // -----------------------------------------
+    // ATTACH CURRENT PROFILE TO EVERY POST
+    // -----------------------------------------
+
+    posts.forEach(post => {
+
+        post.profiles =
+            profile || null;
+
+        post.name =
+            profile?.name ||
+            "User";
+
+        post.username =
+            profile?.username ||
+            "";
+
+        post.avatar_url =
+            profile?.avatar_url ||
+            "";
+
+        post.verified =
+            profile?.verified ||
+            false;
+
+    });
+
+
+    // -----------------------------------------
+    // RENDER
+    // -----------------------------------------
+
+    container.replaceChildren();
+
+    window.renderedPosts =
+        new Set();
+
+    posts.forEach(post => {
+
+        const el =
+            renderPostElement(post);
+
+        if (el) {
+            container.appendChild(el);
+        }
+
+    });
 
 }
 
 async function loadProfilePhotos(userId) {
 
-  const container =
-    document.getElementById("profilePosts");
+    const container =
+        document.getElementById("profilePosts");
 
-  container.innerHTML = "Loading photos...";
+    if (!container) return;
 
-  const { data: posts, error } = await supabase
-    .from("posts")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("media_type", "image")
-    .order("created_at", { ascending: false });
+    container.innerHTML =
+        "Loading photos...";
 
-  if (error) {
-    container.innerHTML = "Error loading photos";
-    return;
-  }
 
-  if (!posts || posts.length === 0) {
-    container.innerHTML = "No photos yet";
-    return;
-  }
-  
-  window.profileGallery = posts;
+    // -----------------------------------------
+    // GET PHOTOS
+    // -----------------------------------------
 
-  container.innerHTML = `
-    <div style="
-      display:grid;
-      grid-template-columns:repeat(3,1fr);
-      gap:4px;
-    ">
-      ${posts.map((post, index) => `
-        <img
-          src="${post.file_url}"
-          onclick="openPhotoGallery(${index}, '${userId}')"
-          style="
-            width:100%;
-            aspect-ratio:1;
-            object-fit:cover;
-            border-radius:8px;
-            cursor:pointer;
-          "
-        >
-      `).join("")}
-    </div>
-  `;
+    const {
+        data: posts,
+        error
+    } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("media_type", "image")
+        .order("created_at", {
+            ascending: false
+        });
 
+
+    if (error) {
+
+        console.error(
+            "❌ PROFILE PHOTOS ERROR:",
+            error
+        );
+
+        container.innerHTML =
+            "Error loading photos";
+
+        return;
+    }
+
+
+    if (!posts || posts.length === 0) {
+
+        container.innerHTML =
+            "No photos yet";
+
+        return;
+    }
+
+
+    // -----------------------------------------
+    // GET CURRENT PROFILE
+    // -----------------------------------------
+
+    const {
+        data: profile,
+        error: profileError
+    } = await supabase
+        .from("profiles")
+        .select(`
+            id,
+            name,
+            username,
+            avatar_url,
+            verified
+        `)
+        .eq("id", userId)
+        .maybeSingle();
+
+
+    if (profileError) {
+
+        console.error(
+            "❌ PHOTO PROFILE ERROR:",
+            profileError
+        );
+    }
+
+
+    // -----------------------------------------
+    // ATTACH CURRENT PROFILE
+    // -----------------------------------------
+
+    posts.forEach(post => {
+
+        post.profiles =
+            profile || null;
+
+        post.name =
+            profile?.name ||
+            "User";
+
+        post.username =
+            profile?.username ||
+            "";
+
+        post.avatar_url =
+            profile?.avatar_url ||
+            "";
+
+        post.verified =
+            profile?.verified ||
+            false;
+
+    });
+
+
+    window.profileGallery =
+        posts;
+
+
+    // -----------------------------------------
+    // RENDER PHOTO GRID
+    // -----------------------------------------
+
+    container.innerHTML = `
+        <div style="
+            display:grid;
+            grid-template-columns:repeat(3,1fr);
+            gap:4px;
+        ">
+            ${posts.map((post, index) => `
+                <img
+                    src="${escapeHtml(post.file_url || "")}"
+                    onclick="openPhotoGallery(
+                        ${index},
+                        '${escapeHtml(String(userId))}'
+                    )"
+                    style="
+                        width:100%;
+                        aspect-ratio:1;
+                        object-fit:cover;
+                        border-radius:8px;
+                        cursor:pointer;
+                    "
+                >
+            `).join("")}
+        </div>
+    `;
 }
 
 function createVideoPage(post, index){
@@ -13633,7 +14860,7 @@ if (window.profileVideos[index - 1]) {
 
 }
     
-    video.autoplay = true;
+    video.autoplay = false;
     video.loop = false;
     video.muted = true;
     video.playsInline = true;
@@ -13658,39 +14885,14 @@ transition:opacity .25s ease;
     // Gradient overlay
 const gradient = document.createElement("div");
 
-gradient.style.cssText = `
-position:absolute;
-left:0;
-right:0;
-bottom:0;
-height:45%;
-background:linear-gradient(
-to top,
-rgba(0,0,0,.85),
-rgba(0,0,0,.4),
-transparent
-);
-pointer-events:none;
-z-index:1;
-`;
+gradient.className = "profile-video-gradient";
 
 page.appendChild(gradient);
     
     // Loading spinner
 const loader = document.createElement("div");
 
-loader.innerHTML = "⏳";
-
-loader.style.cssText = `
-position:absolute;
-top:50%;
-left:50%;
-transform:translate(-50%,-50%);
-font-size:40px;
-color:white;
-z-index:50;
-animation:spin 1s linear infinite;
-`;
+loader.className = "profile-video-loader";
 
 page.appendChild(loader);
     
@@ -13714,27 +14916,13 @@ if (e.clientX > page.clientWidth * 0.65) {
 
             video.playbackRate = 2;
 
-            const speed = document.createElement("div");
+    const speed = document.createElement("div");
 
-            speed.className = "speedIndicator";
+speed.className = "profile-video-speed";
 
-            speed.innerHTML = "⏩ 2×";
+speed.innerHTML = "⏩ 2×";
 
-            speed.style.cssText = `
-position:absolute;
-top:50%;
-left:50%;
-transform:translate(-50%,-50%);
-padding:12px 22px;
-background:rgba(0,0,0,.6);
-color:white;
-border-radius:30px;
-font-size:22px;
-font-weight:bold;
-z-index:999;
-`;
-
-            page.appendChild(speed);
+page.appendChild(speed);
 
         }, 250);
 
@@ -13828,31 +15016,25 @@ video.addEventListener("click", (event) => {
     // INFO
     const info = document.createElement("div");
 
-    info.className = "profile-video-info";
-    
-    info.style.zIndex = "2";
+info.className = "profile-video-info";
 
-    info.innerHTML = `
-        <div style="font-size:18px;font-weight:bold;">
-            ${post.name || ""}
-            ${post.verified ? " ✔️" : ""}
-        </div>
+info.innerHTML = `
+    <div class="profile-video-username">
+        ${escapeHtml(post.name || "")}
+        ${post.verified ? "✓" : ""}
+    </div>
 
-        <div style="margin-top:8px;">
-            ${post.content || ""}
-        </div>
-
-        <div style="margin-top:10px;">
-            ❤️ <span>${post.likes || 0}</span>
-        </div>
-    `;
+    <div class="profile-video-caption">
+        ${escapeHtml(post.content || "")}
+    </div>
+`;
 
 const music = document.createElement("div");
 
-music.className = "video-music";
+music.className = "profile-video-music";
 
 music.innerHTML =
-`🎵 ${post.music_name || "Original audio"}`;
+`🎵 ${escapeHtml(post.music_name || "Original audio")}`;
 
 info.appendChild(music);
 
@@ -13865,46 +15047,61 @@ info.appendChild(music);
     
     actions.style.zIndex = "2";
     
+    
     const avatar = document.createElement("img");
+
+avatar.className = "profile-video-avatar";
 
 avatar.src =
     post.avatar_url || "https://via.placeholder.com/60";
 
-avatar.style.cssText = `
-width:50px;
-height:50px;
-border-radius:50%;
-border:2px solid white;
-margin-bottom:18px;
-object-fit:cover;
-`;
 
 const follow = document.createElement("div");
 
+follow.className = "profile-video-follow";
+
 follow.innerHTML = "+";
 
-follow.style.cssText = `
-position:absolute;
-bottom:-5px;
-left:50%;
-transform:translateX(-50%);
-width:22px;
-height:22px;
-background:#ff0050;
-color:white;
-border-radius:50%;
-display:flex;
-justify-content:center;
-align-items:center;
-font-weight:bold;
-font-size:18px;
-cursor:pointer;
-border:2px solid black;
-z-index:10;
-`;
+follow.onclick = async (event) => {
 
-follow.onclick = () => {
-    followUser(post.user_id);
+    event.stopPropagation();
+
+    // Prevent double taps
+    if (follow.dataset.busy === "true") return;
+
+    follow.dataset.busy = "true";
+
+    // Change immediately
+    follow.innerHTML = "✓";
+    follow.classList.add("following");
+    follow.classList.add("follow-transform");
+
+    setTimeout(() => {
+        follow.classList.remove("follow-transform");
+    }, 300);
+
+    try {
+
+        const result = await followUser(post.user_id);
+
+        // If your followUser() explicitly reports failure
+        if (result === false) {
+            throw new Error("Follow operation failed");
+        }
+
+    } catch (error) {
+
+        console.error("Follow failed:", error);
+
+        // Restore button
+        follow.innerHTML = "+";
+        follow.classList.remove("following");
+
+    } finally {
+
+        follow.dataset.busy = "false";
+
+    }
 };
 
     actions.innerHTML = `
@@ -13913,9 +15110,23 @@ follow.onclick = () => {
 <div>${post.likes || 0}</div>
 </div>
 
-<div onclick="openComments('${post.id}')">
-💬
-<div>${post.comments || 0}</div>
+<div
+    onclick="
+        event.stopPropagation();
+
+        window.currentPostId = '${post.id}';
+        currentPostId = '${post.id}';
+
+        console.log(
+            '💬 PROFILE VIDEO COMMENT CLICK:',
+            '${post.id}'
+        );
+
+        openComments('${post.id}');
+    "
+>
+    💬
+    <div>${post.comments || 0}</div>
 </div>
 
 <div onclick="savePost('${post.id}')">
@@ -13929,12 +15140,7 @@ follow.onclick = () => {
 
 const avatarWrap = document.createElement("div");
 
-avatarWrap.style.cssText = `
-position:relative;
-width:50px;
-height:50px;
-margin-bottom:18px;
-`;
+avatarWrap.className = "profile-video-avatar-wrap";
 
 avatarWrap.appendChild(avatar);
 avatarWrap.appendChild(follow);
@@ -13984,18 +15190,56 @@ page.addEventListener("touchstart", e => {
 
 page.addEventListener("touchend", e => {
 
-    touchEndX = e.changedTouches[0].screenX;
+    touchEndX =
+        e.changedTouches[0].screenX;
 
-    const diff = touchStartX - touchEndX;
+    const diff =
+        touchStartX - touchEndX;
 
-    // Swipe left
+    // Swipe left → open comments
     if (diff > 80) {
 
         video.pause();
 
-window.currentVideo = video;
+        // -----------------------------------------
+        // IMPORTANT:
+        // SAVE EXACT POST ID
+        // -----------------------------------------
 
-openComments(post.id);
+        window.currentVideo =
+            video;
+
+        window.currentPostId =
+            post.id;
+
+        currentPostId =
+            post.id;
+
+        console.log(
+            "💬 PROFILE VIDEO COMMENTS POST:",
+            post.id
+        );
+
+        // -----------------------------------------
+        // OPEN COMMENTS
+        // -----------------------------------------
+
+        if (
+            typeof window.openComments ===
+            "function"
+        ) {
+
+            window.openComments(
+                post.id
+            );
+
+        } else {
+
+            console.error(
+                "❌ openComments() not found"
+            );
+
+        }
 
     }
 
@@ -14028,12 +15272,8 @@ function showUI() {
 
 function hideUI() {
 
-    info.style.opacity = "0";
-    actions.style.opacity = "0";
-    mute.style.opacity = "0";
-    progress.style.opacity = "0";
-
-    uiVisible = false;
+    // Keep video controls visible
+    showUI();
 
 }
 
@@ -14068,25 +15308,13 @@ video.oncanplay = () => {
 
 };
 
-let hideTimer;
-
 video.onplay = () => {
 
-    clearTimeout(hideTimer);
-
     showUI();
-
-    hideTimer = setTimeout(() => {
-
-        hideUI();
-
-    }, 2500);
 
 };
 
 video.onpause = () => {
-
-    clearTimeout(hideTimer);
 
     showUI();
 
@@ -14350,97 +15578,198 @@ setTimeout(() => {
 
 async function loadProfileVideos(userId) {
 
-  const container = document.getElementById("profilePosts");
+    const container =
+        document.getElementById("profilePosts");
 
-  container.innerHTML = "Loading videos...";
-  
-  const { data: profile } = await supabase
-  .from("profiles")
-  .select("name, avatar_url")
-  .eq("id", userId)
-  .single();
+    if (!container) return;
 
-const avatarUrl =
-  profile?.avatar_url || "https://via.placeholder.com/50";
+    container.innerHTML =
+        "Loading videos...";
 
-  const { data: posts, error } = await supabase
-    .from("posts")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("media_type", "video")
-    .order("created_at", { ascending: false });
 
-  if (error) {
-    container.innerHTML = "Error loading videos";
-    return;
-  }
+    // =====================================================
+    // GET VIDEOS
+    // =====================================================
 
-  if (!posts || posts.length === 0) {
-    container.innerHTML = "No videos yet";
-    return;
-  }
+    const {
+        data: posts,
+        error: postsError
+    } = await supabase
+        .from("posts")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("media_type", "video")
+        .order("created_at", {
+            ascending: false
+        });
 
-  window.profileVideos = posts;
 
-container.innerHTML = `
-<div style="
-display:grid;
-grid-template-columns:repeat(3,1fr);
-gap:4px;
-">
-${posts.map((post,index)=>`
-<div
-onclick="openProfileVideoViewer(${index})"
-style="
-position:relative;
-aspect-ratio:1;
-overflow:hidden;
-border-radius:8px;
-cursor:pointer;
-">
+    if (postsError) {
 
-<video
-src="${post.file_url}"
-muted
-preload="metadata"
-style="
-width:100%;
-height:100%;
-object-fit:cover;
-pointer-events:none;
-">
-</video>
+        console.error(
+            "❌ PROFILE VIDEOS ERROR:",
+            postsError
+        );
 
-<div style="
-position:absolute;
-top:50%;
-left:50%;
-transform:translate(-50%,-50%);
-color:white;
-font-size:28px;
-text-shadow:0 0 10px black;
-">
-▶
-</div>
+        container.innerHTML =
+            "Error loading videos";
 
-</div>
-`).join("")}
-</div>
-`;
-};
+        return;
+    }
+
+
+    if (!posts || posts.length === 0) {
+
+        container.innerHTML =
+            "No videos yet";
+
+        return;
+    }
+
+
+    // =====================================================
+    // GET LATEST PROFILE DATA
+    // =====================================================
+
+    const {
+        data: profile,
+        error: profileError
+    } = await supabase
+        .from("profiles")
+        .select(`
+            id,
+            name,
+            username,
+            avatar_url,
+            verified
+        `)
+        .eq("id", userId)
+        .maybeSingle();
+
+
+    if (profileError) {
+
+        console.error(
+            "❌ VIDEO PROFILE ERROR:",
+            profileError
+        );
+    }
+
+
+    // =====================================================
+    // ATTACH LATEST PROFILE TO EVERY VIDEO
+    // =====================================================
+
+    posts.forEach(post => {
+
+        post.profiles =
+            profile || null;
+
+        post.name =
+            profile?.name ||
+            "User";
+
+        post.username =
+            profile?.username ||
+            "";
+
+        post.avatar_url =
+            profile?.avatar_url ||
+            "";
+
+        post.verified =
+            profile?.verified ||
+            false;
+
+    });
+
+
+    // =====================================================
+    // SAVE PROFILE VIDEOS
+    // =====================================================
+
+    window.profileVideos =
+        posts;
+
+
+    // =====================================================
+    // RENDER VIDEO GRID
+    // =====================================================
+
+    container.innerHTML = `
+        <div style="
+            display:grid;
+            grid-template-columns:repeat(3,1fr);
+            gap:4px;
+        ">
+            ${posts.map((post, index) => `
+                <div
+                    onclick="openProfileVideoViewer(${index})"
+                    style="
+                        position:relative;
+                        aspect-ratio:1;
+                        overflow:hidden;
+                        border-radius:8px;
+                        cursor:pointer;
+                    "
+                >
+
+                    <video
+                        src="${escapeHtml(post.file_url || "")}"
+                        muted
+                        preload="metadata"
+                        style="
+                            width:100%;
+                            height:100%;
+                            object-fit:cover;
+                            pointer-events:none;
+                        "
+                    ></video>
+
+                    <div style="
+                        position:absolute;
+                        top:50%;
+                        left:50%;
+                        transform:translate(-50%,-50%);
+                        color:white;
+                        font-size:28px;
+                        text-shadow:0 0 10px black;
+                    ">
+                        ▶
+                    </div>
+
+                </div>
+            `).join("")}
+        </div>
+    `;
+}
+
+
+// =====================================================
+// PROFILE VIDEO INDEX
+// =====================================================
+
 window.profileVideoIndex = 0;
 
-window.openProfileVideoViewer = function(index){
 
-    window.profileVideoIndex = index;
+// =====================================================
+// OPEN PROFILE VIDEO VIEWER
+// =====================================================
 
-    const post = window.profileVideos[index];
+window.openProfileVideoViewer = function(index) {
+
+    window.profileVideoIndex =
+        index;
+
+    const post =
+        window.profileVideos?.[index];
 
     if (!post) return;
 
     openProfileVideo(index);
 
 };
+
 
 window.openEditProfile = async () => {
 
@@ -15051,8 +16380,35 @@ if (changes.length > 0) {
 
   await loadPosts();
 
-  console.log("✅ Posts refreshed with latest profile data");
+/* ==========================================
+   REFRESH PROFILE CONTENT
+========================================== */
 
+const profilePostsContainer =
+  document.getElementById("profilePosts");
+
+if (profilePostsContainer) {
+
+  const activeTab =
+    window.currentProfileTab || "posts";
+
+  if (activeTab === "photos") {
+
+    await loadProfilePhotos(session.user.id);
+
+  } else if (activeTab === "videos") {
+
+    await loadProfileVideos(session.user.id);
+
+  } else {
+
+    await loadProfilePosts(session.user.id);
+
+  }
+
+}
+
+console.log("✅ Posts refreshed with latest profile data");
 
   /* ===============================
      OPEN UPDATED PROFILE
@@ -15516,6 +16872,84 @@ showToast("Language updated.");
 
 openProfileSettings();
 
+};
+
+window.followUser = async function(userId){
+
+    if(!session?.user){
+        alert("Login first");
+        return false;
+    }
+
+    if(!userId){
+        console.error("❌ Missing user ID");
+        return false;
+    }
+
+    // Don't follow yourself
+    if(userId === session.user.id){
+        return false;
+    }
+
+    console.log("👤 FOLLOW USER:", userId);
+
+    // Check if already following
+    const { data: existingFollow, error: checkError } =
+        await supabase
+        .from("follows")
+        .select("follower_id, following_id")
+        .eq("follower_id", session.user.id)
+        .eq("following_id", userId)
+        .maybeSingle();
+
+    if(checkError){
+        console.error("❌ FOLLOW CHECK ERROR:", checkError);
+        return false;
+    }
+
+    if(existingFollow){
+        return true;
+    }
+
+    // -----------------------------------------
+    // FOLLOW
+    // -----------------------------------------
+
+    const { error } = await supabase
+        .from("follows")
+        .insert({
+            follower_id: session.user.id,
+            following_id: userId
+        });
+
+    if(error){
+
+        console.error(
+            "❌ FOLLOW ERROR:",
+            error
+        );
+
+        return false;
+    }
+
+    // -----------------------------------------
+    // NOTIFY USER
+    // -----------------------------------------
+
+    await supabase
+        .from("notifications")
+        .insert({
+            user_id: userId,
+            sender_id: session.user.id,
+            type: "follow",
+            message: "started following you",
+            read: false,
+            created_at: new Date()
+        });
+
+    console.log("✅ FOLLOW SUCCESS");
+
+    return true;
 };
 
 window.openFollowRequests = async function(){
