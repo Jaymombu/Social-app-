@@ -17243,9 +17243,9 @@ window.followUser = async function(userId){
     return "pending";
 };
 
-window.openFollowRequests = async function(){
+window.openFollowRequests = async function () {
 
-    if(!session?.user){
+    if (!session?.user) {
         alert("Login first");
         return;
     }
@@ -17253,7 +17253,7 @@ window.openFollowRequests = async function(){
     const currentUserId = session.user.id;
 
     // ==========================================
-    // GET MY PENDING REQUESTS
+    // LOAD PENDING REQUESTS
     // ==========================================
 
     const { data: requests, error } = await supabase
@@ -17267,12 +17267,16 @@ window.openFollowRequests = async function(){
         `)
         .eq("receiver_id", currentUserId)
         .eq("status", "pending")
-        .order("created_at", { ascending:false });
+        .order("created_at", {
+            ascending: false
+        });
 
+    if (error) {
 
-    if(error){
-
-        console.error("❌ LOAD FOLLOW REQUESTS ERROR:", error);
+        console.error(
+            "❌ LOAD FOLLOW REQUESTS ERROR:",
+            error
+        );
 
         alert(
             "Failed to load follow requests:\n\n" +
@@ -17290,52 +17294,32 @@ window.openFollowRequests = async function(){
 
 
     // ==========================================
-    // REMOVE OLD POPUP IF EXISTS
+    // REMOVE OLD SCREEN
     // ==========================================
 
     document
-        .getElementById("followRequestsPopup")
+        .getElementById("followRequestsScreen")
         ?.remove();
 
 
     // ==========================================
-    // CREATE POPUP
+    // FULL SCREEN
     // ==========================================
 
-    const popup = document.createElement("div");
+    const screen = document.createElement("div");
 
-    popup.id = "followRequestsPopup";
+    screen.id = "followRequestsScreen";
 
-    popup.style.cssText = `
+    screen.style.cssText = `
         position:fixed;
         inset:0;
-        background:rgba(0,0,0,.75);
-        z-index:999999999;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        padding:20px;
-        box-sizing:border-box;
-    `;
-
-
-    // ==========================================
-    // POPUP CONTAINER
-    // ==========================================
-
-    const box = document.createElement("div");
-
-    box.style.cssText = `
         width:100%;
-        max-width:500px;
-        max-height:85vh;
-        overflow:auto;
-        background:#181818;
+        height:100%;
+        background:#111;
         color:white;
-        border-radius:18px;
-        padding:20px;
-        box-sizing:border-box;
-        box-shadow:0 10px 40px rgba(0,0,0,.7);
+        z-index:999999999;
+        overflow-y:auto;
+        -webkit-overflow-scrolling:touch;
     `;
 
 
@@ -17346,121 +17330,156 @@ window.openFollowRequests = async function(){
     const header = document.createElement("div");
 
     header.style.cssText = `
+        position:sticky;
+        top:0;
+        z-index:10;
+        height:60px;
         display:flex;
         align-items:center;
-        justify-content:space-between;
-        margin-bottom:20px;
+        gap:15px;
+        padding:0 15px;
+        background:#181818;
+        border-bottom:1px solid #292929;
+        box-sizing:border-box;
     `;
 
 
     header.innerHTML = `
 
-        <h2 style="
-            margin:0;
-            font-size:20px;
-        ">
-            Follow Requests
-        </h2>
-
         <button
             id="closeFollowRequests"
             style="
-                width:38px;
-                height:38px;
+                width:40px;
+                height:40px;
                 border:none;
                 border-radius:50%;
                 background:#333;
                 color:white;
-                font-size:20px;
+                font-size:22px;
                 cursor:pointer;
             "
         >
-            ✕
+            ←
         </button>
+
+        <div style="
+            font-size:20px;
+            font-weight:bold;
+        ">
+            Follow Requests
+        </div>
 
     `;
 
 
-    box.appendChild(header);
+    screen.appendChild(header);
+
+
+    // ==========================================
+    // CONTENT
+    // ==========================================
+
+    const content = document.createElement("div");
+
+    content.style.cssText = `
+        padding:0 15px 30px;
+        box-sizing:border-box;
+    `;
+
+
+    screen.appendChild(content);
 
 
     // ==========================================
     // NO REQUESTS
     // ==========================================
 
-    if(!requests || requests.length === 0){
+    if (!requests || requests.length === 0) {
 
-        const empty = document.createElement("div");
+        content.innerHTML = `
 
-        empty.style.cssText = `
-            text-align:center;
-            padding:50px 20px;
-            color:#aaa;
+            <div style="
+                text-align:center;
+                padding:100px 20px;
+                color:#aaa;
+            ">
+
+                <div style="
+                    font-size:60px;
+                    margin-bottom:20px;
+                ">
+                    👥
+                </div>
+
+                <div style="
+                    font-size:20px;
+                    color:white;
+                    font-weight:bold;
+                    margin-bottom:10px;
+                ">
+                    No follow requests
+                </div>
+
+                <div style="
+                    font-size:14px;
+                    color:#888;
+                ">
+                    You don't have any pending follow requests.
+                </div>
+
+            </div>
+
         `;
 
-        empty.innerHTML = `
-
-            <div style="
-                font-size:50px;
-                margin-bottom:15px;
-            ">
-                👥
-            </div>
-
-            <div style="
-                font-size:17px;
-                color:white;
-                font-weight:bold;
-                margin-bottom:8px;
-            ">
-                No follow requests
-            </div>
-
-            <div style="
-                font-size:13px;
-            ">
-                You don't have any pending follow requests.
-            </div>
-
-        `;
-
-        box.appendChild(empty);
-
-    }else{
-
+    } else {
 
         // ==========================================
-        // LOAD EACH REQUEST
+        // REQUESTS
         // ==========================================
 
-        for(const request of requests){
+        for (const request of requests) {
 
-            // Get sender profile
+            // ==========================================
+            // LOAD PROFILE
+            // ==========================================
+
             const {
                 data: profile,
                 error: profileError
             } = await supabase
                 .from("profiles")
-                .select("id,name,username,avatar_url")
+                .select(`
+                    id,
+                    name,
+                    username,
+                    avatar_url
+                `)
                 .eq("id", request.sender_id)
                 .maybeSingle();
 
 
-            console.log(
-                "👤 REQUEST PROFILE:",
-                request.sender_id,
-                profile
-            );
+            if (profileError) {
 
+                console.error(
+                    "❌ PROFILE ERROR:",
+                    profileError
+                );
+
+            }
+
+
+            // ==========================================
+            // ROW
+            // ==========================================
 
             const row = document.createElement("div");
 
             row.style.cssText = `
                 display:flex;
                 align-items:center;
-                gap:12px;
-                padding:14px 0;
-                border-bottom:1px solid #2a2a2a;
+                gap:14px;
+                padding:16px 0;
+                border-bottom:1px solid #292929;
             `;
 
 
@@ -17475,8 +17494,8 @@ window.openFollowRequests = async function(){
                 "https://via.placeholder.com/60";
 
             avatar.style.cssText = `
-                width:52px;
-                height:52px;
+                width:58px;
+                height:58px;
                 border-radius:50%;
                 object-fit:cover;
                 background:#333;
@@ -17515,10 +17534,24 @@ window.openFollowRequests = async function(){
                     ${escapeHtml(name)}
                 </div>
 
+                ${
+                    profile?.username
+                    ? `
+                    <div style="
+                        color:#888;
+                        font-size:13px;
+                        margin-top:3px;
+                    ">
+                        @${escapeHtml(profile.username)}
+                    </div>
+                    `
+                    : ""
+                }
+
                 <div style="
-                    font-size:12px;
-                    color:#888;
-                    margin-top:4px;
+                    color:#999;
+                    font-size:13px;
+                    margin-top:5px;
                 ">
                     Wants to follow you
                 </div>
@@ -17539,7 +17572,9 @@ window.openFollowRequests = async function(){
             `;
 
 
+            // ==========================================
             // ACCEPT
+            // ==========================================
 
             const accept = document.createElement("button");
 
@@ -17548,7 +17583,7 @@ window.openFollowRequests = async function(){
             accept.style.cssText = `
                 border:none;
                 border-radius:8px;
-                padding:9px 12px;
+                padding:10px 13px;
                 background:#0095f6;
                 color:white;
                 font-weight:bold;
@@ -17556,15 +17591,37 @@ window.openFollowRequests = async function(){
             `;
 
 
-            accept.onclick = async function(){
+            // ==========================================
+            // DECLINE
+            // ==========================================
 
-                if(accept.disabled) return;
+            const decline = document.createElement("button");
+
+            decline.innerHTML = "Decline";
+
+            decline.style.cssText = `
+                border:none;
+                border-radius:8px;
+                padding:10px 13px;
+                background:#333;
+                color:white;
+                font-weight:bold;
+                cursor:pointer;
+            `;
+
+
+            // ==========================================
+            // ACCEPT CLICK
+            // ==========================================
+
+            accept.onclick = async function () {
+
+                if (accept.disabled) return;
 
                 accept.disabled = true;
                 decline.disabled = true;
 
                 accept.innerHTML = "Accepting...";
-
 
                 await window.acceptFollowRequest(
                     request.id,
@@ -17574,32 +17631,18 @@ window.openFollowRequests = async function(){
             };
 
 
-            // DECLINE
+            // ==========================================
+            // DECLINE CLICK
+            // ==========================================
 
-            const decline = document.createElement("button");
+            decline.onclick = async function () {
 
-            decline.innerHTML = "Decline";
-
-            decline.style.cssText = `
-                border:none;
-                border-radius:8px;
-                padding:9px 12px;
-                background:#333;
-                color:white;
-                font-weight:bold;
-                cursor:pointer;
-            `;
-
-
-            decline.onclick = async function(){
-
-                if(decline.disabled) return;
+                if (decline.disabled) return;
 
                 accept.disabled = true;
                 decline.disabled = true;
 
                 decline.innerHTML = "Declining...";
-
 
                 await window.declineFollowRequest(
                     request.id
@@ -17616,17 +17659,7 @@ window.openFollowRequests = async function(){
             row.appendChild(info);
             row.appendChild(buttons);
 
-            box.appendChild(row);
-
-
-            if(profileError){
-
-                console.error(
-                    "❌ PROFILE ERROR:",
-                    profileError
-                );
-
-            }
+            content.appendChild(row);
 
         }
 
@@ -17634,12 +17667,10 @@ window.openFollowRequests = async function(){
 
 
     // ==========================================
-    // ADD POPUP
+    // ADD SCREEN
     // ==========================================
 
-    popup.appendChild(box);
-
-    document.body.appendChild(popup);
+    document.body.appendChild(screen);
 
 
     // ==========================================
@@ -17648,23 +17679,11 @@ window.openFollowRequests = async function(){
 
     document
         .getElementById("closeFollowRequests")
-        .onclick = function(){
+        .onclick = function () {
 
-            popup.remove();
+            screen.remove();
 
         };
-
-
-    // Close when clicking outside
-    popup.onclick = function(event){
-
-        if(event.target === popup){
-
-            popup.remove();
-
-        }
-
-    };
 
 };
 
@@ -24153,6 +24172,28 @@ async function(id) {
     return;
 
   }
+  
+  
+  // =====================================================
+// FOLLOW ACCEPTED
+// =====================================================
+
+if (data.type === "follow_accept") {
+
+  if (data.sender_id) {
+
+    // Remember that this profile was opened from notifications
+    openedProfileFromNotification = true;
+
+    openProfile(
+      data.sender_id,
+      data.username || "User"
+    );
+
+  }
+
+  return;
+}
 
 
   // =====================================================
@@ -24800,6 +24841,13 @@ function renderNotifications(
         "follow_request"
       )
         icon = "👥";
+        
+        
+        if (
+          n.type ===
+          "follow_accept"
+      )
+        icon = "✅";
 
 
       if (
