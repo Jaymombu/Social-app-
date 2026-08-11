@@ -14343,14 +14343,69 @@ if (
   session.user.id !== userId
 ) {
 
-  const { data: existingFollow } = await supabase
-    .from("follows")
-    .select("*")
-    .eq("follower_id", session.user.id)
-    .eq("following_id", userId)
-    .maybeSingle();
+  // ==========================================
+  // CHECK ACTUAL FOLLOW
+  // ==========================================
+
+  const { data: existingFollow, error: followError } =
+    await supabase
+      .from("follows")
+      .select("id")
+      .eq("follower_id", session.user.id)
+      .eq("following_id", userId)
+      .maybeSingle();
+
+
+  // ==========================================
+  // CHECK PENDING REQUEST
+  // ==========================================
+
+  const { data: pendingRequest, error: requestError } =
+    await supabase
+      .from("follow_requests")
+      .select("id,status")
+      .eq("sender_id", session.user.id)
+      .eq("receiver_id", userId)
+      .eq("status", "pending")
+      .maybeSingle();
+
+
+  if (followError) {
+    console.error("❌ FOLLOW CHECK ERROR:", followError);
+  }
+
+  if (requestError) {
+    console.error("❌ REQUEST CHECK ERROR:", requestError);
+  }
+
 
   const isFollowing = !!existingFollow;
+  const isPending = !!pendingRequest;
+
+
+  // ==========================================
+  // DETERMINE BUTTON STATE
+  // ==========================================
+
+  let buttonText = "Follow";
+  let buttonBackground = "#1d9bf0";
+
+  if (isFollowing) {
+
+    buttonText = "Following";
+    buttonBackground = "#444";
+
+  } else if (isPending) {
+
+    buttonText = "Requested";
+    buttonBackground = "#444";
+
+  }
+
+
+  // ==========================================
+  // CREATE BUTTON
+  // ==========================================
 
   followContainer.innerHTML = `
     <button id="followBtn"
@@ -14359,137 +14414,118 @@ if (
         padding:8px 14px;
         border:none;
         border-radius:8px;
-        background:${isFollowing ? "#444" : "#1d9bf0"};
+        background:${buttonBackground};
         color:white;
+        cursor:pointer;
       ">
-      ${isFollowing ? "Following" : "Follow"}
+      ${buttonText}
     </button>
   `;
 
+
   document.getElementById("followBtn").onclick =
     async () => {
-      
+
       if (!session?.user) {
-  alert("Please log in first.");
-  return;
-}
+        alert("Please log in first.");
+        return;
+      }
+
+
+      // ========================================
+      // ALREADY FOLLOWING → UNFOLLOW
+      // ========================================
 
       if (isFollowing) {
 
-        await supabase
+        const { error } = await supabase
           .from("follows")
           .delete()
           .eq("follower_id", session.user.id)
           .eq("following_id", userId);
 
-      } else {
-        
-        const { data: targetProfile } = await supabase
-  .from("profiles")
-  .select("allow_followers")
-  .eq("id", userId)
-  .single();
 
-if (targetProfile?.allow_followers === "nobody") {
-  alert("This user is not accepting followers.");
-  return;
-}
+        if (error) {
 
-if (targetProfile?.allow_followers === "approved") {
+          console.error(
+            "❌ UNFOLLOW ERROR:",
+            error
+          );
 
-  await supabase
-    .from("follow_requests")
-    .upsert({
-      sender_id: session.user.id,
-      receiver_id: userId,
-      status: "pending"
-    });
+          alert(
+            "Failed to unfollow:\n\n" +
+            error.message
+          );
 
-  const { data: me } = await supabase
-    .from("profiles")
-    .select("name, avatar_url")
-    .eq("id", session.user.id)
-    .single();
+          return;
+        }
 
-  await supabase
-    .from("notifications")
-    .insert({
-      user_id: userId,
-      sender_id: session.user.id,
-      username: me.name,
-      avatar_url: me.avatar_url,
-      type: "follow_request",
-      message: "sent you a follow request",
-      read: false,
-      created_at: new Date()
-    });
 
-  alert("Follow request sent.");
+        alert("Unfollowed.");
 
-  return;
-}
+        openProfile(userId, name);
 
-        const { error } = await supabase
-  .from("follows")
-  .insert({
-    follower_id: session.user.id,
-    following_id: userId
-  });
-  
-  if (!error) {
+        return;
+      }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, avatar_url")
-    .eq("id", session.user.id)
-    .single();
 
-  const { data: existing } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("type", "follow")
-    .maybeSingle();
+      // ========================================
+      // REQUEST ALREADY PENDING
+      // ========================================
 
-  if (existing) {
+      if (isPending) {
 
-    await supabase
-      .from("notifications")
-      .update({
-        count: (existing.count || 1) + 1,
-        username: profile.name,
-        avatar_url: profile.avatar_url,
-        last_time: new Date(),
-        message: "started following you"
-      })
-      .eq("id", existing.id);
+        alert("⏳ Follow request is already pending.");
 
-  } else {
+        return;
+      }
 
-    await supabase
-      .from("notifications")
-      .insert({
-        user_id: userId,
-        sender_id: session.user.id,
-        username: profile.name,
-        avatar_url: profile.avatar_url,
-        type: "follow",
-        message: "started following you",
-        count: 1,
-        created_at: new Date(),
-        last_time: new Date(),
-        read: false
-      });
 
-  }
+      // ========================================
+      // SEND FOLLOW REQUEST
+      // ========================================
 
-}
+      const result =
+        await window.followUser(userId);
+
+
+      console.log(
+        "👤 FOLLOW RESULT:",
+        result
+      );
+
+
+      if (result === "pending") {
+
+        alert("✅ Follow request sent.");
 
       }
+
+
+      else if (result === "following") {
+
+        alert(
+          "You are already following this user."
+        );
+
+      }
+
+
+      else if (result === false) {
+
+        return;
+
+      }
+
+
+      // ========================================
+      // REFRESH PROFILE
+      // ========================================
 
       openProfile(userId, name);
 
     };
+
 }
 };
 
@@ -16999,10 +17035,46 @@ window.followUser = async function(userId){
         return false;
     }
 
-    console.log("👤 Sending follow request:", {
+    console.log("👤 FOLLOW REQUEST:", {
         sender_id: currentUserId,
         receiver_id: userId
     });
+
+
+    // ==========================================
+    // CHECK TARGET FOLLOW SETTINGS
+    // ==========================================
+
+    const { data: targetProfile, error: profileError } =
+        await supabase
+            .from("profiles")
+            .select("allow_followers")
+            .eq("id", userId)
+            .single();
+
+    if(profileError){
+
+        console.error(
+            "❌ PROFILE ERROR:",
+            profileError
+        );
+
+        alert("Could not check this user's follow settings.");
+
+        return false;
+    }
+
+
+    // ==========================================
+    // USER DOES NOT ACCEPT FOLLOWERS
+    // ==========================================
+
+    if(targetProfile?.allow_followers === "nobody"){
+
+        alert("This user is not accepting followers.");
+
+        return false;
+    }
 
 
     // ==========================================
@@ -17019,6 +17091,7 @@ window.followUser = async function(userId){
         .eq("following_id", userId)
         .maybeSingle();
 
+
     if(followCheckError){
 
         console.error(
@@ -17030,20 +17103,16 @@ window.followUser = async function(userId){
     }
 
 
-    // ==========================================
-    // ALREADY FOLLOWING
-    // ==========================================
-
     if(existingFollow){
 
-        console.log("ℹ️ Already following this user");
+        console.log("ℹ️ Already following");
 
         return "following";
     }
 
 
     // ==========================================
-    // CHECK EXISTING PENDING REQUEST
+    // CHECK EXISTING REQUEST
     // ==========================================
 
     const {
@@ -17057,6 +17126,7 @@ window.followUser = async function(userId){
         .eq("status", "pending")
         .maybeSingle();
 
+
     if(requestCheckError){
 
         console.error(
@@ -17068,14 +17138,10 @@ window.followUser = async function(userId){
     }
 
 
-    // ==========================================
-    // REQUEST ALREADY SENT
-    // ==========================================
-
     if(existingRequest){
 
         console.log(
-            "⏳ Follow request already pending"
+            "⏳ Request already pending"
         );
 
         return "pending";
@@ -17086,35 +17152,26 @@ window.followUser = async function(userId){
     // CREATE FOLLOW REQUEST
     // ==========================================
 
-    const {
-        data: newRequest,
-        error: requestError
-    } = await supabase
-        .from("follow_requests")
-        .insert({
-
-            sender_id: currentUserId,
-
-            receiver_id: userId,
-
-            status: "pending",
-
-            created_at: new Date().toISOString()
-
-        })
-        .select()
-        .single();
+    const { error: requestError } =
+        await supabase
+            .from("follow_requests")
+            .insert({
+                sender_id: currentUserId,
+                receiver_id: userId,
+                status: "pending",
+                created_at: new Date().toISOString()
+            });
 
 
     if(requestError){
 
         console.error(
-            "❌ FOLLOW REQUEST ERROR:",
+            "❌ FOLLOW REQUEST INSERT ERROR:",
             requestError
         );
 
         alert(
-            "Failed to send follow request:\n" +
+            "❌ Failed to send follow request:\n\n" +
             requestError.message
         );
 
@@ -17123,34 +17180,49 @@ window.followUser = async function(userId){
 
 
     console.log(
-        "✅ FOLLOW REQUEST CREATED:",
-        newRequest
+        "✅ FOLLOW REQUEST CREATED"
     );
 
 
     // ==========================================
-    // SEND NOTIFICATION
+    // GET SENDER PROFILE
     // ==========================================
 
-    const {
-        error: notificationError
-    } = await supabase
-        .from("notifications")
-        .insert({
+    const { data: me } = await supabase
+        .from("profiles")
+        .select("name, avatar_url")
+        .eq("id", currentUserId)
+        .single();
 
-            user_id: userId,
 
-            sender_id: currentUserId,
+    // ==========================================
+    // SEND REQUEST NOTIFICATION
+    // ==========================================
 
-            type: "follow_request",
+    const { error: notificationError } =
+        await supabase
+            .from("notifications")
+            .insert({
 
-            message: "sent you a follow request",
+                user_id: userId,
 
-            read: false,
+                sender_id: currentUserId,
 
-            created_at: new Date().toISOString()
+                username: me?.name || "User",
 
-        });
+                avatar_url: me?.avatar_url || null,
+
+                type: "follow_request",
+
+                message: "sent you a follow request",
+
+                read: false,
+
+                created_at: new Date().toISOString(),
+
+                last_time: new Date().toISOString()
+
+            });
 
 
     if(notificationError){
@@ -17163,14 +17235,10 @@ window.followUser = async function(userId){
     }
 
 
-    // ==========================================
-    // RESULT
-    // ==========================================
-
     console.log(
-        "⏳ FOLLOW REQUEST PENDING:",
-        userId
+        "⏳ FOLLOW REQUEST PENDING"
     );
+
 
     return "pending";
 };
@@ -17602,56 +17670,109 @@ window.openFollowRequests = async function(){
 
 window.acceptFollowRequest = async function(requestId, senderId){
 
-  if(!session?.user) return;
+    if(!session?.user){
+        alert("Login first");
+        return;
+    }
 
-  // Add the follower
-  const { error } = await supabase
-    .from("follows")
-    .insert({
-      follower_id: senderId,
-      following_id: session.user.id
-    });
+    // ==========================================
+    // CREATE ACTUAL FOLLOW
+    // ==========================================
 
-  if(error){
-    console.log(error);
-    alert("Failed to accept request.");
-    return;
-  }
+    const { error: followError } = await supabase
+        .from("follows")
+        .insert({
+            follower_id: senderId,
+            following_id: session.user.id
+        });
 
-  // Delete the request
-await supabase
-    .from("follow_requests")
-    .delete()
-    .eq("id", requestId);
+    if(followError){
+
+        console.error(
+            "❌ ACCEPT FOLLOW ERROR:",
+            followError
+        );
+
+        alert(
+            "Failed to accept request:\n\n" +
+            followError.message
+        );
+
+        return;
+    }
+
+
+    // ==========================================
+    // DELETE REQUEST
+    // ==========================================
+
+    const { error: deleteError } = await supabase
+        .from("follow_requests")
+        .delete()
+        .eq("id", requestId);
+
+    if(deleteError){
+
+        console.error(
+            "❌ DELETE REQUEST ERROR:",
+            deleteError
+        );
+
+        alert(
+            "Follow accepted, but request could not be removed."
+        );
+
+        return;
+    }
+
+
+    // ==========================================
+    // GET MY PROFILE
+    // ==========================================
+
+    const { data: me } = await supabase
+        .from("profiles")
+        .select("name, avatar_url")
+        .eq("id", session.user.id)
+        .single();
+
+
+    // ==========================================
+    // NOTIFY REQUESTER
+    // ==========================================
+
+    const { error: notificationError } = await supabase
+        .from("notifications")
+        .insert({
+            user_id: senderId,
+            sender_id: session.user.id,
+            username: me?.name || "User",
+            avatar_url: me?.avatar_url || null,
+            type: "follow_accept",
+            message: "accepted your follow request",
+            read: false,
+            created_at: new Date().toISOString(),
+            last_time: new Date().toISOString()
+        });
+
+
+    if(notificationError){
+
+        console.error(
+            "⚠️ ACCEPT NOTIFICATION ERROR:",
+            notificationError
+        );
+
+    }
+
+
+    alert("✅ Follow request accepted.");
     
-    
-// Notify requester
-const { data: me } = await supabase
-.from("profiles")
-.select("name, avatar_url")
-.eq("id", session.user.id)
-.single();
+    if (typeof window.loadFollowingUsers === "function") {
+    await window.loadFollowingUsers();
+}
 
-
-await supabase
-.from("notifications")
-.insert({
-  user_id: senderId,
-  sender_id: session.user.id,
-  username: me?.name || "User",
-  avatar_url: me?.avatar_url,
-  type: "follow",
-  message: "accepted your follow request",
-  read:false,
-  created_at: new Date().toISOString(),
-last_time: new Date().toISOString()
-});
-
-
-alert("Follow request accepted.");
-
-  openFollowRequests();
-
+    openFollowRequests();
 };
 
 window.declineFollowRequest = async function(requestId){
