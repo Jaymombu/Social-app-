@@ -15060,48 +15060,116 @@ const follow = document.createElement("div");
 
 follow.className = "profile-video-follow";
 
-follow.innerHTML = "+";
+const isFollowing =
+    window.followingUsers?.has(
+        String(post.user_id)
+    );
+
+if(isFollowing){
+
+    follow.innerHTML = "✓";
+    follow.classList.add("following");
+
+}else{
+
+    follow.innerHTML = "+";
+
+}
 
 follow.onclick = async (event) => {
 
     event.stopPropagation();
 
-    // Prevent double taps
-    if (follow.dataset.busy === "true") return;
+    if(follow.dataset.busy === "true"){
+        return;
+    }
 
     follow.dataset.busy = "true";
 
-    // Change immediately
-    follow.innerHTML = "✓";
-    follow.classList.add("following");
-    follow.classList.add("follow-transform");
-
-    setTimeout(() => {
-        follow.classList.remove("follow-transform");
-    }, 300);
+    const wasFollowing =
+        follow.classList.contains("following");
 
     try {
 
-        const result = await followUser(post.user_id);
+        const result =
+            await followUser(post.user_id);
 
-        // If your followUser() explicitly reports failure
-        if (result === false) {
-            throw new Error("Follow operation failed");
+        if(result === "followed"){
+
+            follow.innerHTML = "✓";
+
+            follow.classList.add(
+                "following"
+            );
+
+            follow.classList.add(
+                "follow-transform"
+            );
+
         }
 
-    } catch (error) {
+        else if(result === "unfollowed"){
 
-        console.error("Follow failed:", error);
+            follow.innerHTML = "+";
 
-        // Restore button
-        follow.innerHTML = "+";
-        follow.classList.remove("following");
+            follow.classList.remove(
+                "following"
+            );
+
+            follow.classList.add(
+                "follow-transform"
+            );
+
+        }
+
+        else {
+
+            throw new Error(
+                "Follow operation failed"
+            );
+
+        }
+
+        setTimeout(() => {
+
+            follow.classList.remove(
+                "follow-transform"
+            );
+
+        }, 300);
+
+    } catch(error){
+
+        console.error(
+            "Follow failed:",
+            error
+        );
+
+        // Restore previous state
+        if(wasFollowing){
+
+            follow.innerHTML = "✓";
+
+            follow.classList.add(
+                "following"
+            );
+
+        }else{
+
+            follow.innerHTML = "+";
+
+            follow.classList.remove(
+                "following"
+            );
+
+        }
 
     } finally {
 
         follow.dataset.busy = "false";
 
     }
+
 };
 
     actions.innerHTML = `
@@ -15412,10 +15480,12 @@ window.profileVideoIndex = currentIndex;
         
 }
 
-window.openProfileVideo = function(index){
+window.openProfileVideo = async function(index){
+
+    await window.loadFollowingUsers();
 
     window.profileVideoIndex = index;
-
+    
     const viewer = document.getElementById("mediaViewer");
 
     viewer.innerHTML = "";
@@ -15768,6 +15838,42 @@ window.openProfileVideoViewer = function(index) {
 
     openProfileVideo(index);
 
+};
+
+
+window.loadFollowingUsers = async function () {
+
+    window.followingUsers = new Set();
+
+    if (!session?.user) return;
+
+    const { data, error } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", session.user.id);
+
+    if (error) {
+
+        console.error(
+            "❌ LOAD FOLLOWING ERROR:",
+            error
+        );
+
+        return;
+    }
+
+    (data || []).forEach(row => {
+
+        window.followingUsers.add(
+            String(row.following_id)
+        );
+
+    });
+
+    console.log(
+        "✅ FOLLOWING USERS:",
+        window.followingUsers
+    );
 };
 
 
@@ -16886,70 +16992,153 @@ window.followUser = async function(userId){
         return false;
     }
 
-    // Don't follow yourself
-    if(userId === session.user.id){
+    if(String(userId) === String(session.user.id)){
         return false;
     }
 
-    console.log("👤 FOLLOW USER:", userId);
+    const currentUserId = session.user.id;
 
-    // Check if already following
-    const { data: existingFollow, error: checkError } =
-        await supabase
+    // ==========================================
+    // CHECK CURRENT FOLLOW STATE
+    // ==========================================
+
+    const {
+        data: existingFollow,
+        error: checkError
+    } = await supabase
         .from("follows")
         .select("follower_id, following_id")
-        .eq("follower_id", session.user.id)
+        .eq("follower_id", currentUserId)
         .eq("following_id", userId)
         .maybeSingle();
 
     if(checkError){
-        console.error("❌ FOLLOW CHECK ERROR:", checkError);
-        return false;
-    }
-
-    if(existingFollow){
-        return true;
-    }
-
-    // -----------------------------------------
-    // FOLLOW
-    // -----------------------------------------
-
-    const { error } = await supabase
-        .from("follows")
-        .insert({
-            follower_id: session.user.id,
-            following_id: userId
-        });
-
-    if(error){
 
         console.error(
-            "❌ FOLLOW ERROR:",
-            error
+            "❌ FOLLOW CHECK ERROR:",
+            checkError
         );
 
         return false;
     }
 
-    // -----------------------------------------
-    // NOTIFY USER
-    // -----------------------------------------
+    // ==========================================
+    // ALREADY FOLLOWING → UNFOLLOW
+    // ==========================================
 
-    await supabase
-        .from("notifications")
+    if(existingFollow){
+
+        const { error: deleteError } =
+            await supabase
+            .from("follows")
+            .delete()
+            .eq("follower_id", currentUserId)
+            .eq("following_id", userId);
+
+        if(deleteError){
+
+            console.error(
+                "❌ UNFOLLOW ERROR:",
+                deleteError
+            );
+
+            return false;
+        }
+
+        // Remove from local state
+        if(window.followingUsers){
+
+            window.followingUsers.delete(
+                String(userId)
+            );
+
+        }
+
+        console.log(
+            "✅ UNFOLLOW SUCCESS:",
+            userId
+        );
+
+        return "unfollowed";
+    }
+
+    // ==========================================
+    // NOT FOLLOWING → FOLLOW
+    // ==========================================
+
+    const { error: followError } =
+        await supabase
+        .from("follows")
         .insert({
-            user_id: userId,
-            sender_id: session.user.id,
-            type: "follow",
-            message: "started following you",
-            read: false,
-            created_at: new Date()
+
+            follower_id: currentUserId,
+
+            following_id: userId
+
         });
 
-    console.log("✅ FOLLOW SUCCESS");
+    if(followError){
 
-    return true;
+        console.error(
+            "❌ FOLLOW ERROR:",
+            followError
+        );
+
+        return false;
+    }
+
+    // Save local state
+    if(!window.followingUsers){
+
+        window.followingUsers =
+            new Set();
+
+    }
+
+    window.followingUsers.add(
+        String(userId)
+    );
+
+    // ==========================================
+    // NOTIFICATION
+    // ==========================================
+
+    const {
+        error: notificationError
+    } = await supabase
+        .from("notifications")
+        .insert({
+
+            user_id: userId,
+
+            sender_id: currentUserId,
+
+            type: "follow",
+
+            message:
+                "started following you",
+
+            read: false,
+
+            created_at: new Date()
+
+        });
+
+    if(notificationError){
+
+        console.error(
+            "⚠️ NOTIFICATION ERROR:",
+            notificationError
+        );
+
+    }
+
+    console.log(
+        "✅ FOLLOW SUCCESS:",
+        userId
+    );
+
+    return "followed";
 };
 
 window.openFollowRequests = async function(){
