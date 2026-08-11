@@ -16998,13 +16998,16 @@ window.followUser = async function(userId){
 
     const currentUserId = session.user.id;
 
+    console.log("👤 FOLLOW USER:", userId);
+
+
     // ==========================================
-    // CHECK CURRENT FOLLOW STATE
+    // CHECK IF ALREADY FOLLOWING
     // ==========================================
 
     const {
         data: existingFollow,
-        error: checkError
+        error: checkFollowError
     } = await supabase
         .from("follows")
         .select("follower_id, following_id")
@@ -17012,15 +17015,16 @@ window.followUser = async function(userId){
         .eq("following_id", userId)
         .maybeSingle();
 
-    if(checkError){
+    if(checkFollowError){
 
         console.error(
             "❌ FOLLOW CHECK ERROR:",
-            checkError
+            checkFollowError
         );
 
         return false;
     }
+
 
     // ==========================================
     // ALREADY FOLLOWING → UNFOLLOW
@@ -17045,7 +17049,6 @@ window.followUser = async function(userId){
             return false;
         }
 
-        // Remove from local state
         if(window.followingUsers){
 
             window.followingUsers.delete(
@@ -17062,42 +17065,92 @@ window.followUser = async function(userId){
         return "unfollowed";
     }
 
+
     // ==========================================
-    // NOT FOLLOWING → FOLLOW
+    // CHECK EXISTING FOLLOW REQUEST
     // ==========================================
 
-    const { error: followError } =
-        await supabase
-        .from("follows")
-        .insert({
+    const {
+        data: existingRequest,
+        error: requestCheckError
+    } = await supabase
+        .from("follow_requests")
+        .select("id, sender_id, receiver_id, status")
+        .eq("sender_id", currentUserId)
+        .eq("receiver_id", userId)
+        .eq("status", "pending")
+        .maybeSingle();
 
-            follower_id: currentUserId,
-
-            following_id: userId
-
-        });
-
-    if(followError){
+    if(requestCheckError){
 
         console.error(
-            "❌ FOLLOW ERROR:",
-            followError
+            "❌ REQUEST CHECK ERROR:",
+            requestCheckError
         );
 
         return false;
     }
 
-    // Save local state
-    if(!window.followingUsers){
 
-        window.followingUsers =
-            new Set();
+    // ==========================================
+    // REQUEST ALREADY SENT
+    // ==========================================
 
+    if(existingRequest){
+
+        console.log(
+            "⏳ FOLLOW REQUEST ALREADY SENT:",
+            userId
+        );
+
+        return "pending";
     }
 
-    window.followingUsers.add(
-        String(userId)
+
+    // ==========================================
+    // CREATE FOLLOW REQUEST
+    // ==========================================
+
+    const {
+        data: newRequest,
+        error: requestError
+    } = await supabase
+        .from("follow_requests")
+        .insert({
+
+            sender_id: currentUserId,
+
+            receiver_id: userId,
+
+            status: "pending",
+
+            created_at: new Date()
+
+        })
+        .select()
+        .single();
+
+    if(requestError){
+
+        console.error(
+            "❌ FOLLOW REQUEST ERROR:",
+            requestError
+        );
+
+        alert(
+            "Failed to send follow request: " +
+            requestError.message
+        );
+
+        return false;
+    }
+
+
+    console.log(
+        "✅ FOLLOW REQUEST SENT:",
+        newRequest
     );
+
 
     // ==========================================
     // NOTIFICATION
@@ -17113,10 +17166,9 @@ window.followUser = async function(userId){
 
             sender_id: currentUserId,
 
-            type: "follow",
+            type: "follow_request",
 
-            message:
-                "started following you",
+            message: "sent you a follow request",
 
             read: false,
 
@@ -17133,12 +17185,28 @@ window.followUser = async function(userId){
 
     }
 
+
+    // ==========================================
+    // LOCAL STATE
+    // ==========================================
+
+    if(!window.followingUsers){
+
+        window.followingUsers =
+            new Set();
+
+    }
+
+
+    // Don't mark as following yet.
+    // The request is still pending.
+
     console.log(
-        "✅ FOLLOW SUCCESS:",
+        "⏳ FOLLOW REQUEST PENDING:",
         userId
     );
 
-    return "followed";
+    return "pending";
 };
 
 window.openFollowRequests = async function(){
