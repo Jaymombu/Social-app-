@@ -17149,88 +17149,80 @@ window.openFollowRequests = async function(){
   }
 
   document.getElementById("app").innerHTML = `
-  <div style="padding:15px;color:white;">
+    <div style="padding:15px;color:white;">
 
-    <button onclick="openProfileSettings()">
-      ← Back
-    </button>
+      <button onclick="openProfileSettings()">
+        ← Back
+      </button>
 
-    <h2>👥 Follow Requests</h2>
+      <h2>👥 Follow Requests</h2>
 
-    <div id="followRequestsList">
-      Loading...
+      <div id="followRequestsList">
+        Checking...
+      </div>
+
     </div>
-
-  </div>
   `;
-
-  const { data: requests, error } = await supabase
-    .from("follow_requests")
-    .select(`
-      id,
-      sender_id,
-      profiles:sender_id(
-        id,
-        name,
-        avatar_url,
-        verified
-      )
-    `)
-    .eq("receiver_id", session.user.id)
-    .eq("status", "pending");
 
   const container =
     document.getElementById("followRequestsList");
 
+  console.log("================================");
+  console.log("CURRENT USER ID:", session.user.id);
+  console.log("CHECKING ALL FOLLOW REQUESTS...");
+  console.log("================================");
+
+  // Get ALL requests for this user, regardless of status
+  const { data, error } = await supabase
+    .from("follow_requests")
+    .select("*")
+    .eq("receiver_id", session.user.id);
+
+  console.log("ALL REQUESTS FOR THIS USER:", data);
+  console.log("ERROR:", error);
+
   if(error){
-    container.innerHTML = "Failed to load requests";
-    return;
-  }
 
-  if(!requests || requests.length === 0){
-    container.innerHTML = "No follow requests.";
-    return;
-  }
-
-  container.innerHTML = requests.map(req => `
-    <div style="
-      display:flex;
-      align-items:center;
-      gap:12px;
-      padding:12px;
-      border-bottom:1px solid #333;
-    ">
-
-      <img
-        src="${req.profiles?.avatar_url || "https://via.placeholder.com/50"}"
-        style="
-          width:50px;
-          height:50px;
-          border-radius:50%;
-          object-fit:cover;
-        "
-      >
-
-      <div style="flex:1;">
-
-        <b>${escapeHtml(req.profiles?.name || "User")}</b>
-
-        ${req.profiles.verified ? " ✔️" : ""}
-
+    container.innerHTML = `
+      <div style="color:red;">
+        ERROR:
+        <br><br>
+        ${escapeHtml(error.message)}
       </div>
+    `;
 
-      <button
-        onclick="acceptFollowRequest(${req.id}, '${req.sender_id}')">
-        ✅ Accept
-      </button>
+    return;
+  }
 
-      <button
-        onclick="declineFollowRequest(${req.id})">
-        ❌ Decline
-      </button>
+  if(!data || data.length === 0){
 
+    container.innerHTML = `
+      <div style="color:#ff5555;">
+        ❌ ZERO REQUESTS FOUND
+        <br><br>
+        User ID:
+        <br>
+        ${session.user.id}
+      </div>
+    `;
+
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="color:#00ff88;">
+      ✅ ${data.length} REQUEST(S) FOUND
     </div>
-  `).join("");
+
+    <pre style="
+      white-space:pre-wrap;
+      color:#fff;
+      background:#111;
+      padding:10px;
+      margin-top:15px;
+      border-radius:8px;
+    ">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+  `;
 
 };
 
