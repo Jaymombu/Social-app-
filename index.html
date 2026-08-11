@@ -17177,86 +17177,277 @@ window.followUser = async function(userId){
 
 window.openFollowRequests = async function(){
 
-  if(!session?.user){
-    alert("Login first");
-    return;
-  }
+    if(!session?.user){
+        alert("Login first");
+        return;
+    }
 
-  document.getElementById("app").innerHTML = `
-    <div style="padding:15px;color:white;">
+    const currentUserId = session.user.id;
 
-      <button onclick="openProfileSettings()">
-        ← Back
-      </button>
+    // ==========================================
+    // GET ALL REQUESTS
+    // ==========================================
 
-      <h2>👥 Follow Requests</h2>
+    const {
+        data: allRequests,
+        error: allError
+    } = await supabase
+        .from("follow_requests")
+        .select("*");
 
-      <div id="followRequestsList">
-        Checking...
-      </div>
 
-    </div>
-  `;
+    // ==========================================
+    // GET MY REQUESTS
+    // ==========================================
 
-  const container =
-    document.getElementById("followRequestsList");
+    const {
+        data: myRequests,
+        error: myError
+    } = await supabase
+        .from("follow_requests")
+        .select("*")
+        .eq("receiver_id", currentUserId);
 
-  console.log("================================");
-  console.log("CURRENT USER ID:", session.user.id);
-  console.log("CHECKING ALL FOLLOW REQUESTS...");
-  console.log("================================");
 
-  // Get ALL requests for this user, regardless of status
-  const { data, error } = await supabase
-    .from("follow_requests")
-    .select("*")
-    .eq("receiver_id", session.user.id);
+    // ==========================================
+    // POPUP
+    // ==========================================
 
-  console.log("ALL REQUESTS FOR THIS USER:", data);
-  console.log("ERROR:", error);
+    const popup = document.createElement("div");
 
-  if(error){
-
-    container.innerHTML = `
-      <div style="color:red;">
-        ERROR:
-        <br><br>
-        ${escapeHtml(error.message)}
-      </div>
+    popup.style.cssText = `
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,.75);
+        z-index:999999999;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:20px;
+        box-sizing:border-box;
     `;
 
-    return;
-  }
 
-  if(!data || data.length === 0){
+    popup.innerHTML = `
 
-    container.innerHTML = `
-      <div style="color:#ff5555;">
-        ❌ ZERO REQUESTS FOUND
-        <br><br>
-        User ID:
-        <br>
-        ${session.user.id}
-      </div>
+        <div style="
+            width:100%;
+            max-width:500px;
+            max-height:85vh;
+            overflow:auto;
+            background:#181818;
+            color:white;
+            border-radius:18px;
+            padding:20px;
+            box-sizing:border-box;
+            box-shadow:0 10px 40px rgba(0,0,0,.7);
+        ">
+
+            <div style="
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                margin-bottom:18px;
+            ">
+
+                <h2 style="
+                    margin:0;
+                    font-size:20px;
+                ">
+                    👥 Follow Request Check
+                </h2>
+
+                <button
+                    id="closeFollowDebug"
+                    style="
+                        width:38px;
+                        height:38px;
+                        border:none;
+                        border-radius:50%;
+                        background:#333;
+                        color:white;
+                        font-size:20px;
+                        cursor:pointer;
+                    "
+                >
+                    ✕
+                </button>
+
+            </div>
+
+
+            <!-- USER ID -->
+
+            <div style="
+                background:#222;
+                padding:14px;
+                border-radius:12px;
+                margin-bottom:12px;
+            ">
+
+                <div style="
+                    color:#aaa;
+                    font-size:13px;
+                    margin-bottom:6px;
+                ">
+                    Current User ID
+                </div>
+
+                <div style="
+                    color:#00ff88;
+                    font-size:13px;
+                    word-break:break-all;
+                ">
+                    ${escapeHtml(currentUserId)}
+                </div>
+
+            </div>
+
+
+            <!-- ALL REQUESTS -->
+
+            <div style="
+                background:#222;
+                padding:14px;
+                border-radius:12px;
+                margin-bottom:12px;
+            ">
+
+                <div style="
+                    color:#aaa;
+                    font-size:13px;
+                ">
+                    All Requests Visible
+                </div>
+
+                <div style="
+                    font-size:28px;
+                    font-weight:bold;
+                    color:#00ff88;
+                    margin-top:5px;
+                ">
+                    ${allRequests?.length || 0}
+                </div>
+
+            </div>
+
+
+            <!-- MY REQUESTS -->
+
+            <div style="
+                background:#222;
+                padding:14px;
+                border-radius:12px;
+                margin-bottom:12px;
+            ">
+
+                <div style="
+                    color:#aaa;
+                    font-size:13px;
+                ">
+                    Requests For This User
+                </div>
+
+                <div style="
+                    font-size:28px;
+                    font-weight:bold;
+                    color:#00aaff;
+                    margin-top:5px;
+                ">
+                    ${myRequests?.length || 0}
+                </div>
+
+            </div>
+
+
+            <!-- ERRORS -->
+
+            ${
+                allError
+                ?
+                `
+                <div style="
+                    background:#3a1111;
+                    color:#ff5555;
+                    padding:12px;
+                    border-radius:10px;
+                    margin-bottom:10px;
+                ">
+                    ❌ All Requests Error:
+                    <br><br>
+                    ${escapeHtml(allError.message)}
+                </div>
+                `
+                :
+                ""
+            }
+
+
+            ${
+                myError
+                ?
+                `
+                <div style="
+                    background:#3a1111;
+                    color:#ff5555;
+                    padding:12px;
+                    border-radius:10px;
+                ">
+                    ❌ My Requests Error:
+                    <br><br>
+                    ${escapeHtml(myError.message)}
+                </div>
+                `
+                :
+                ""
+            }
+
+
+            <!-- DATA -->
+
+            <div style="
+                margin-top:15px;
+                color:#aaa;
+                font-size:13px;
+            ">
+                Database Result
+            </div>
+
+            <pre style="
+                margin-top:8px;
+                background:#050505;
+                padding:12px;
+                border-radius:10px;
+                color:#fff;
+                font-size:11px;
+                white-space:pre-wrap;
+                word-break:break-word;
+                overflow:auto;
+            ">${escapeHtml(
+                JSON.stringify(
+                    allRequests || [],
+                    null,
+                    2
+                )
+            )}</pre>
+
+
+        </div>
     `;
 
-    return;
-  }
 
-  container.innerHTML = `
-    <div style="color:#00ff88;">
-      ✅ ${data.length} REQUEST(S) FOUND
-    </div>
+    document.body.appendChild(popup);
 
-    <pre style="
-      white-space:pre-wrap;
-      color:#fff;
-      background:#111;
-      padding:10px;
-      margin-top:15px;
-      border-radius:8px;
-    ">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
-  `;
+
+    // CLOSE
+
+    document
+        .getElementById("closeFollowDebug")
+        .onclick = () => {
+
+            popup.remove();
+
+        };
 
 };
 
