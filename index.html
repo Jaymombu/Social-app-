@@ -16992,13 +16992,17 @@ window.followUser = async function(userId){
         return false;
     }
 
-    if(String(userId) === String(session.user.id)){
+    const currentUserId = session.user.id;
+
+    // Don't follow yourself
+    if(String(userId) === String(currentUserId)){
         return false;
     }
 
-    const currentUserId = session.user.id;
-
-    console.log("👤 FOLLOW USER:", userId);
+    console.log("👤 Sending follow request:", {
+        sender_id: currentUserId,
+        receiver_id: userId
+    });
 
 
     // ==========================================
@@ -17007,19 +17011,19 @@ window.followUser = async function(userId){
 
     const {
         data: existingFollow,
-        error: checkFollowError
+        error: followCheckError
     } = await supabase
         .from("follows")
-        .select("follower_id, following_id")
+        .select("id")
         .eq("follower_id", currentUserId)
         .eq("following_id", userId)
         .maybeSingle();
 
-    if(checkFollowError){
+    if(followCheckError){
 
         console.error(
             "❌ FOLLOW CHECK ERROR:",
-            checkFollowError
+            followCheckError
         );
 
         return false;
@@ -17027,47 +17031,19 @@ window.followUser = async function(userId){
 
 
     // ==========================================
-    // ALREADY FOLLOWING → UNFOLLOW
+    // ALREADY FOLLOWING
     // ==========================================
 
     if(existingFollow){
 
-        const { error: deleteError } =
-            await supabase
-            .from("follows")
-            .delete()
-            .eq("follower_id", currentUserId)
-            .eq("following_id", userId);
+        console.log("ℹ️ Already following this user");
 
-        if(deleteError){
-
-            console.error(
-                "❌ UNFOLLOW ERROR:",
-                deleteError
-            );
-
-            return false;
-        }
-
-        if(window.followingUsers){
-
-            window.followingUsers.delete(
-                String(userId)
-            );
-
-        }
-
-        console.log(
-            "✅ UNFOLLOW SUCCESS:",
-            userId
-        );
-
-        return "unfollowed";
+        return "following";
     }
 
 
     // ==========================================
-    // CHECK EXISTING FOLLOW REQUEST
+    // CHECK EXISTING PENDING REQUEST
     // ==========================================
 
     const {
@@ -17075,7 +17051,7 @@ window.followUser = async function(userId){
         error: requestCheckError
     } = await supabase
         .from("follow_requests")
-        .select("id, sender_id, receiver_id, status")
+        .select("id,status")
         .eq("sender_id", currentUserId)
         .eq("receiver_id", userId)
         .eq("status", "pending")
@@ -17099,8 +17075,7 @@ window.followUser = async function(userId){
     if(existingRequest){
 
         console.log(
-            "⏳ FOLLOW REQUEST ALREADY SENT:",
-            userId
+            "⏳ Follow request already pending"
         );
 
         return "pending";
@@ -17124,11 +17099,12 @@ window.followUser = async function(userId){
 
             status: "pending",
 
-            created_at: new Date()
+            created_at: new Date().toISOString()
 
         })
         .select()
         .single();
+
 
     if(requestError){
 
@@ -17138,7 +17114,7 @@ window.followUser = async function(userId){
         );
 
         alert(
-            "Failed to send follow request: " +
+            "Failed to send follow request:\n" +
             requestError.message
         );
 
@@ -17147,13 +17123,13 @@ window.followUser = async function(userId){
 
 
     console.log(
-        "✅ FOLLOW REQUEST SENT:",
+        "✅ FOLLOW REQUEST CREATED:",
         newRequest
     );
 
 
     // ==========================================
-    // NOTIFICATION
+    // SEND NOTIFICATION
     // ==========================================
 
     const {
@@ -17172,9 +17148,10 @@ window.followUser = async function(userId){
 
             read: false,
 
-            created_at: new Date()
+            created_at: new Date().toISOString()
 
         });
+
 
     if(notificationError){
 
@@ -17187,19 +17164,8 @@ window.followUser = async function(userId){
 
 
     // ==========================================
-    // LOCAL STATE
+    // RESULT
     // ==========================================
-
-    if(!window.followingUsers){
-
-        window.followingUsers =
-            new Set();
-
-    }
-
-
-    // Don't mark as following yet.
-    // The request is still pending.
 
     console.log(
         "⏳ FOLLOW REQUEST PENDING:",
