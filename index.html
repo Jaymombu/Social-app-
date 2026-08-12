@@ -13442,6 +13442,37 @@ async function getPreferredLanguage() {
 
 async function closeComments() {
   
+  if (openedCommentsFromNotification) {
+
+    console.log(
+        "🔔 RETURNING TO NOTIFICATIONS FROM COMMENTS"
+    );
+
+    openedCommentsFromNotification = false;
+
+    const commentsScreen =
+        document.getElementById("commentsScreen");
+
+    if (commentsScreen) {
+        commentsScreen.style.display = "none";
+    }
+
+    document.body.style.overflow = "";
+
+    const notificationsScreen =
+        document.getElementById(
+            "notificationsScreen"
+        );
+
+    if (notificationsScreen) {
+        notificationsScreen.style.display = "flex";
+    }
+
+    await loadNotifications();
+
+    return;
+}
+  
   const stopTyping = async () => {
 
     const {
@@ -17678,12 +17709,43 @@ window.openFollowRequests = async function () {
     // ==========================================
 
     document
-        .getElementById("closeFollowRequests")
-        .onclick = function () {
+    .getElementById("closeFollowRequests")
+    .onclick = async function () {
 
-            screen.remove();
+        screen.remove();
 
-        };
+        // ==========================================
+        // RETURN TO NOTIFICATIONS
+        // ==========================================
+
+        if (openedFollowRequestsFromNotification) {
+
+            console.log(
+                "🔔 RETURNING TO NOTIFICATIONS FROM FOLLOW REQUESTS"
+            );
+
+            openedFollowRequestsFromNotification = false;
+
+            document.body.style.overflow = "";
+
+            const notificationsScreen =
+                document.getElementById(
+                    "notificationsScreen"
+                );
+
+            if (notificationsScreen) {
+
+                notificationsScreen.style.display =
+                    "flex";
+
+            }
+
+            await loadNotifications();
+
+            return;
+        }
+
+    };
 
 };
 
@@ -23776,6 +23838,8 @@ window.closeMedia = function () {
 // =====================================================
 
 let openedProfileFromNotification = false;
+let openedFollowRequestsFromNotification = false;
+let openedCommentsFromNotification = false;
 
 
 // =====================================================
@@ -24127,14 +24191,14 @@ async function(id) {
   if (data.type === "like") {
 
     if (data.post_id) {
-      openComments(
-        data.post_id
-      );
+
+        openedCommentsFromNotification = true;
+
+        openComments(data.post_id);
     }
 
     return;
-
-  }
+}
 
 
   // =====================================================
@@ -24144,14 +24208,14 @@ async function(id) {
   if (data.type === "comment") {
 
     if (data.post_id) {
-      openComments(
-        data.post_id
-      );
+
+        openedCommentsFromNotification = true;
+
+        openComments(data.post_id);
     }
 
     return;
-
-  }
+}
 
 
   // =====================================================
@@ -24162,16 +24226,17 @@ async function(id) {
 
     if (data.sender_id) {
 
-      openProfile(
-        data.sender_id,
-        data.username || "User"
-      );
+        openedProfileFromNotification = true;
+
+        openProfile(
+            data.sender_id,
+            data.username || "User"
+        );
 
     }
 
     return;
-
-  }
+}
   
   
   // =====================================================
@@ -24243,20 +24308,18 @@ if (data.type === "follow_accept") {
   }
 
 
-  // =====================================================
-  // FOLLOW REQUEST
-  // =====================================================
+// =====================================================
+// FOLLOW REQUEST
+// =====================================================
 
-  if (
-    data.type ===
-    "follow_request"
-  ) {
+if (data.type === "follow_request") {
+
+    openedFollowRequestsFromNotification = true;
 
     openFollowRequests();
 
     return;
-
-  }
+}
 
 
   renderNotifications();
