@@ -6886,9 +6886,18 @@ window.likePost = async (id) => {
     return;
   }
 
-  const postDiv = document.getElementById(`post-${id}`);
-  const btn =
-  postDiv?.querySelector(".like-btn");
+  const postDiv =
+    document.getElementById(`post-${id}`);
+
+const btn =
+    postDiv?.querySelector(".like-btn");
+
+const commentsLikeBtn =
+    String(window.currentPostId) === String(id)
+        ? document.querySelector(
+            ".comments-post-like-btn"
+          )
+        : null;
 
   // get current post
   const { data: post, error } = await supabase
@@ -6927,6 +6936,35 @@ window.likePost = async (id) => {
         { transform: "scale(1)" }
     ], {
         duration: 250
+    });
+}
+
+if (commentsLikeBtn) {
+
+    commentsLikeBtn.innerHTML =
+        `${
+            !isLiked
+                ? "❤️ Liked"
+                : "🤍 Like Post"
+        } (${newLikes})`;
+
+    commentsLikeBtn.style.background =
+        !isLiked
+            ? "#ff4d6d"
+            : "#222";
+
+    commentsLikeBtn.animate([
+        {
+            transform: "scale(1)"
+        },
+        {
+            transform: "scale(1.08)"
+        },
+        {
+            transform: "scale(1)"
+        }
+    ], {
+        duration: 200
     });
 }
 
@@ -7392,6 +7430,55 @@ console.log(
 
         return;
     }
+    
+    
+// ==========================================
+// RENDER POST LIKE BUTTON
+// ==========================================
+
+const postLikeArea =
+    document.getElementById("commentPostLikeArea");
+
+if (postLikeArea) {
+
+    const userId =
+        session?.user?.id;
+
+    const likedBy =
+        post.liked_by || [];
+
+    const isLiked =
+        userId &&
+        likedBy.includes(userId);
+
+    postLikeArea.innerHTML = `
+
+        <button
+            class="comments-post-like-btn"
+            onclick="likePost('${post.id}')"
+            style="
+                width:100%;
+                height:46px;
+                border:none;
+                border-radius:12px;
+                background:${isLiked ? "#ff4d6d" : "#222"};
+                color:white;
+                font-size:15px;
+                font-weight:600;
+                cursor:pointer;
+            "
+        >
+            ${
+                isLiked
+                    ? "❤️ Liked"
+                    : "🤍 Like Post"
+            }
+
+            (${post.likes || 0})
+        </button>
+
+    `;
+}
 
 
     // ==========================================
@@ -11566,9 +11653,16 @@ window.openReactionUsers = async function(commentId, emoji, postId, cachedUsers 
   
   const actualPostId = postId ?? currentPostId;
 
-    if (!commentId || !emoji) {
-        return;
-    }
+if (!commentId || !emoji) {
+    return;
+}
+
+// Prevent duplicate reaction popups
+if (window.openingReactionUsers) {
+    return;
+}
+
+window.openingReactionUsers = true;
 
     /*
      * Remove existing popup
@@ -11673,7 +11767,7 @@ if (!data) {
     `;
 
     title.textContent =
-        emoji + " Reactions";
+    emoji + " Reactions · " + data.length;
 
 
     const closeButton =
@@ -11749,16 +11843,24 @@ if (!data) {
     ) {
 
         list.innerHTML = `
-            <div
-                style="
-                    text-align:center;
-                    padding:20px;
-                    color:#888;
-                "
-            >
-                No reactions yet
-            </div>
-        `;
+    <div style="
+        text-align:center;
+        padding:30px 20px;
+        color:#888;
+    ">
+        <div style="font-size:32px;margin-bottom:8px;">
+            ${emoji}
+        </div>
+
+        <div style="
+            font-size:15px;
+            font-weight:600;
+            color:#aaa;
+        ">
+            No reactions yet
+        </div>
+    </div>
+`;
 
         return;
     }
@@ -11790,13 +11892,22 @@ if (!data) {
             document.createElement("div");
 
         row.style.cssText = `
-            display:flex;
-            align-items:center;
-            gap:12px;
-            padding:9px 4px;
-            cursor:pointer;
-            border-radius:10px;
-        `;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:9px 4px;
+    cursor:pointer;
+    border-radius:10px;
+    transition:background .15s ease;
+`;
+
+row.addEventListener("mouseenter", () => {
+    row.style.background = "#292929";
+});
+
+row.addEventListener("mouseleave", () => {
+    row.style.background = "transparent";
+});
 
 
         /*
@@ -11930,65 +12041,47 @@ if (!data) {
          */
 
         row.addEventListener(
-            "click",
-            function(event) {
+    "click",
+    async function(event) {
 
-                event.preventDefault();
-                event.stopPropagation();
+        event.preventDefault();
+        event.stopPropagation();
 
-                /*
-                 * SAVE EXACT RETURN LOCATION
-                 */
-                
-const actualPostId = postId || currentPostId;
+        window.reactionProfileReturn = {
+            postId: actualPostId,
+            commentId: commentId,
+            emoji: emoji,
+            users: data
+        };
 
-console.log("Saving reaction return:", {
-    postId: actualPostId,
-    commentId,
-    emoji
-});
-
-window.reactionProfileReturn = {
-    postId: actualPostId,
-    commentId,
-    emoji,
-    users: data
-};
-
-                /*
-                 * Remove reaction popup
-                 */
-                popup.remove();
-
-                /*
-                 * Open selected profile
-                 */
-                if (
-                    typeof window.openProfile ===
-                    "function"
-                ) {
-
-                    window.openProfile(
-                        reaction.user_id,
-                        name
-                    );
-
-                } else {
-
-                    console.error(
-                        "openProfile function not found"
-                    );
-
-                    window.reactionProfileReturn =
-                        null;
-                }
-            }
+        console.log(
+            "💬 REACTION PROFILE RETURN:",
+            window.reactionProfileReturn
         );
 
+        popup.remove();
+
+        if (typeof window.openProfile === "function") {
+
+            await window.openProfile(
+                reaction.user_id,
+                name
+            );
+
+        } else {
+
+            console.error(
+                "❌ openProfile function not found"
+            );
+        }
+
+    }
+);
 
         list.appendChild(row);
 
     });
+    window.openingReactionUsers = false;
 
 };
 
@@ -12167,22 +12260,39 @@ if (commentsBody) {
 
         }, 1200);
 
+// -----------------------------------------
+// 7. OPEN EXACT REACTION USERS
+// -----------------------------------------
 
-        // -----------------------------------------
-        // 7. OPEN EXACT REACTION USERS
-        // -----------------------------------------
-
-        console.log(
-            "😀 REOPENING REACTION USERS"
-        );
-
-        await window.openReactionUsers(
-    commentId,
-    emoji,
-    postId,
-    state.users
+console.log(
+    "😀 REOPENING REACTION USERS"
 );
 
+if (
+    Array.isArray(state.users) &&
+    state.users.length > 0
+) {
+
+    await window.openReactionUsers(
+        commentId,
+        emoji,
+        postId,
+        state.users
+    );
+
+} else {
+
+    console.log(
+        "ℹ️ Cached reaction users unavailable. Loading fresh list."
+    );
+
+    await window.openReactionUsers(
+        commentId,
+        emoji,
+        postId
+    );
+
+}
 
         console.log(
             "✅ RESTORE COMPLETE"
@@ -13442,6 +13552,41 @@ async function getPreferredLanguage() {
 
 async function closeComments() {
   
+// =====================================================
+// COMPLETE COMMENTS CLEANUP
+// =====================================================
+
+console.log("🧹 CLOSING ALL COMMENT-RELATED UI");
+
+// -----------------------------------------
+// CLOSE REACTION USERS POPUP
+// -----------------------------------------
+
+const reactionPopup =
+    document.getElementById("reactionUsersPopup");
+
+if (reactionPopup) {
+    reactionPopup.remove();
+}
+
+// -----------------------------------------
+// CLEAR REACTION RETURN STATE
+// -----------------------------------------
+
+window.reactionProfileReturn = null;
+
+// -----------------------------------------
+// CLEAR REACTION USER CACHE
+// -----------------------------------------
+
+window.allReactionUsers = null;
+
+// -----------------------------------------
+// RESET REACTION OPENING STATE
+// -----------------------------------------
+
+window.openingReactionUsers = false;
+  
   if (openedCommentsFromNotification) {
 
     console.log(
@@ -13734,16 +13879,30 @@ console.log("AFTER RESTORE:", window.reactionProfileReturn);
 
 window.openProfile = async (userId, name) => {
   
-  window._profileReturnState = {
-    scrollY: window.scrollY,
+// =====================================================
+// SAVE PROFILE RETURN STATE
+// DO NOT OVERWRITE AN EXISTING REACTION RETURN STATE
+// =====================================================
 
-    postId: window.reactionProfileReturn?.postId || null,
-    commentId: window.reactionProfileReturn?.commentId || null,
-    emoji: window.reactionProfileReturn?.emoji || null,
+if (!window._profileReturnState) {
 
-    fromReaction:
-        !!window.reactionProfileReturn
-};
+    window._profileReturnState = {
+        scrollY: window.scrollY,
+
+        postId:
+            window.reactionProfileReturn?.postId || null,
+
+        commentId:
+            window.reactionProfileReturn?.commentId || null,
+
+        emoji:
+            window.reactionProfileReturn?.emoji || null,
+
+        fromReaction:
+            !!window.reactionProfileReturn
+    };
+
+}
 
 console.log(
     "👤 PROFILE RETURN STATE:",
@@ -13828,18 +13987,29 @@ const followingCount =
 const postsCount =
     postsResult.count || 0;
     
-    const commentsScreen =
+    const app = document.getElementById("app");
+
+const commentsScreen =
     document.getElementById("commentsScreen");
 
-window.savedCommentsScreenHtml =
-    commentsScreen
-        ? commentsScreen.outerHTML
-        : null;
+// Keep the ACTUAL DOM element, not just outerHTML
+window.savedCommentsScreenElement =
+    commentsScreen || null;
 
 window.savedAppHtml =
-    document.getElementById("app").innerHTML;
+    app.innerHTML;
 
-document.getElementById("app").innerHTML = `
+console.log(
+    "💾 SAVED COMMENTS SCREEN ELEMENT:",
+    window.savedCommentsScreenElement
+);
+
+// Remove commentsScreen from app before replacing app HTML
+if (commentsScreen) {
+    commentsScreen.remove();
+}
+
+app.innerHTML = `
 <div style="
     color:white;
     min-height:100vh;
@@ -13859,26 +14029,32 @@ ${
   coverUrl
     ? `
       <img
-        id="profileCoverImage"
-        src="${escapeHtml(coverUrl)}"
-        alt="Cover Photo"
+    id="profileCoverImage"
+    src="${escapeHtml(coverUrl)}"
+    alt="Cover Photo"
 
-        onclick="window.openMedia(this.src, 'image')"
+    onclick="window.openMedia(
+        this.src,
+        'image',
+        true,
+        '${userId}',
+        'cover'
+    )"
 
-        onerror="
-          this.style.display='none';
-        "
+    onerror="
+        this.style.display='none';
+    "
 
-        style="
-          position:absolute;
-          inset:0;
-          width:100%;
-          height:100%;
-          object-fit:cover;
-          display:block;
-          cursor:pointer;
-        "
-      >
+    style="
+        position:absolute;
+        inset:0;
+        width:100%;
+        height:100%;
+        object-fit:cover;
+        display:block;
+        cursor:pointer;
+    "
+    >
     `
     : ""
 }
@@ -13944,11 +14120,14 @@ cursor:pointer;
 src="${escapeHtml(avatarUrl)}"
 
   onclick="
-    openMedia(
-      '${profile?.avatar_url || 'https://via.placeholder.com/60'}',
-      'image'
-    )
-  "
+  openMedia(
+    '${profile?.avatar_url || 'https://via.placeholder.com/60'}',
+    'image',
+    true,
+    '${userId}',
+    'avatar'
+  )
+"
 
   style="
     width:120px;
@@ -14180,7 +14359,7 @@ position:absolute;
 bottom:-1px;
 left:0;
 height:2px;
-width:25%;
+width:33.333%;
 background:#1d9bf0;
 transition:left .25s ease, width .25s ease;
 ">
@@ -14196,67 +14375,17 @@ style="margin-top:15px;"
 </div>
 `;
 
-
 // =====================================================
-// RESTORE COMMENTS SCREEN FOR PROFILE
+// RESTORE COMMENTS SCREEN AFTER PROFILE RENDER
 // =====================================================
 
-if (window.savedCommentsScreenHtml) {
+const restoredCommentsScreen =
+    window.ensureCommentsScreen();
 
-    const existingComments =
-        document.getElementById("commentsScreen");
-
-    if (!existingComments) {
-
-        document.body.insertAdjacentHTML(
-            "beforeend",
-            window.savedCommentsScreenHtml
-        );
-
-        console.log(
-            "✅ Comments screen restored for profile"
-        );
-
-    }
-
-}
-
-
-/* =====================================================
-   OPEN PROFILE COVER PHOTO
-===================================================== */
-
-const profileCoverImage =
-  document.getElementById("profileCoverImage");
-
-if (profileCoverImage && coverUrl) {
-
-  profileCoverImage.addEventListener(
-    "click",
-    () => {
-
-      console.log(
-        "🖼️ PROFILE COVER CLICKED:",
-        coverUrl
-      );
-
-      if (typeof window.openMedia !== "function") {
-        console.error(
-          "❌ window.openMedia is not available"
-        );
-        return;
-      }
-
-      window.openMedia(
-        coverUrl,
-        "image"
-      );
-
-    }
-  );
-
-}
-
+console.log(
+    "🔎 COMMENTS SCREEN AFTER PROFILE:",
+    restoredCommentsScreen
+);
 
 // =====================================================
 // PROFILE EVENTS / TABS
@@ -14275,9 +14404,6 @@ const photosTab =
 const videosTab =
     document.getElementById("profileVideosTab");
 
-const savedTab =
-    document.getElementById("profileSavedTab");
-
 const indicator =
     document.getElementById("profileTabIndicator");
 
@@ -14290,40 +14416,33 @@ setTimeout(() => {
 
 
 if (indicator) {
-
-    indicator.style.width =
-        savedTab
-            ? "25%"
-            : "33.333%";
+    indicator.style.width = "33.333%";
 }
 
-function setProfileTab(active,index){
 
-  [postsTab, photosTab, videosTab, savedTab]
-  .forEach(tab=>{
+function setProfileTab(active, index) {
 
-    if(!tab) return;
+    [postsTab, photosTab, videosTab]
+        .forEach(tab => {
 
-    tab.style.color="#888";
+            if (!tab) return;
 
-  });
+            tab.style.color = "#888";
 
+        });
 
-  active.style.color="white";
+    active.style.color = "white";
 
+    const indicator =
+        document.getElementById("profileTabIndicator");
 
-  const indicator =
-  document.getElementById("profileTabIndicator");
+    if (indicator) {
 
+        const step = 33.333;
 
-  if(indicator){
-
-    const step = savedTab ? 25 : 33.333;
-
-indicator.style.left = `${index * step}%`;
-
-  }
-
+        indicator.style.left =
+            `${index * step}%`;
+    }
 }
 
 
@@ -14353,18 +14472,6 @@ videosTab.onclick = () => {
 
 };
 
-
-if(savedTab){
-
-savedTab.onclick = () => {
-
-  setProfileTab(savedTab,3);
-
-  loadProfileSaved();
-
-};
-
-}
 
 const followContainer =
   document.getElementById("followContainer");
@@ -14559,6 +14666,7 @@ if (
 
 }
 };
+      
 
 async function loadProfilePosts(userId) {
 
@@ -18349,7 +18457,6 @@ window.closePhotoGallery = function(){
 
 };
 
-
 function attachEvents() {
 
     if (window.commentEventsAttached) {
@@ -19760,12 +19867,16 @@ let postsEl = null;
 let scrollTimeout;
 
 window.startApp = async function () {
-  
-  const t0 = performance.now();
 
-console.log(new Error("startApp called").stack);
+    console.log(
+        "🚨 START APP CALLED"
+    );
 
-    console.log("START APP CALLED");
+    console.trace(
+        "🚨 WHO CALLED STARTAPP?"
+    );
+
+    const t0 = performance.now();
     
     
   document.getElementById("app").innerHTML = `
@@ -19998,9 +20109,21 @@ justify-content:center;
 overflow:hidden;
 "></div>
 
-    </div>
+</div>
 
-    <!-- Bottom Comments -->
+<!-- POST LIKE BUTTON -->
+
+<div id="commentPostLikeArea" style="
+padding:10px 16px;
+background:var(--card);
+position:relative;
+z-index:3;
+">
+
+</div>
+
+<!-- Bottom Comments -->
+
 <div id="commentsBody" style="
 background:var(--card);
 border-top-left-radius:24px;
@@ -20428,6 +20551,8 @@ box-shadow:0 4px 20px rgba(0,0,0,.4);
 
 </div>
   `;
+  
+  
 
   postsEl = document.getElementById("posts");
 
@@ -22672,74 +22797,217 @@ renderReactionUsers(users);
 
 };
 
-window.renderReactionUsers = function(users) {
+window.renderReactionUsers = function(
+    users,
+    commentId = null,
+    postId = null,
+    emoji = null
+) {
 
-  const list =
-    document.getElementById("reactionUsers");
+    const list =
+        document.getElementById("reactionUsers");
 
-  list.innerHTML = users.map(u => `
+    if (!list) return;
 
-<div
-  onclick="openProfile('${u.profiles?.id}','${u.profiles?.name || "User"}')"
-  style="
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding:12px 0;
-    border-bottom:1px solid #333;
-    cursor:pointer;
-  ">
+    list.innerHTML = users.map((u, index) => {
 
-<img
-src="${
-  u.profiles?.avatar_url ||
-  'https://ui-avatars.com/api/?name=' +
-  encodeURIComponent(u.profiles?.name || 'User')
-}"
-style="
-width:45px;
-height:45px;
-border-radius:50%;
-object-fit:cover;
-">
+        const profile =
+            u.profiles || {};
 
-<div style="flex:1;">
+        const userId =
+            profile.id || u.user_id;
 
-<div style="font-weight:bold;">
-${u.profiles?.name || "Unknown"}
-</div>
+        const userName =
+            profile.name || "User";
 
-<div style="
-font-size:13px;
-color:#aaa;
-">
-Reacted with ${u.reaction}
-</div>
+        const avatar =
+            profile.avatar_url ||
+            "https://ui-avatars.com/api/?name=" +
+            encodeURIComponent(userName);
 
-</div>
+        return `
 
-<div style="font-size:24px;">
-${u.reaction}
-</div>
+        <div
+            class="reaction-user-row"
+            data-user-id="${escapeHtml(userId)}"
+            data-user-name="${escapeHtml(userName)}"
+            data-reaction-index="${index}"
+            style="
+                display:flex;
+                align-items:center;
+                gap:12px;
+                padding:12px 0;
+                border-bottom:1px solid #333;
+                cursor:pointer;
+            "
+        >
 
-</div>
+            <img
+                src="${escapeHtml(avatar)}"
+                style="
+                    width:45px;
+                    height:45px;
+                    border-radius:50%;
+                    object-fit:cover;
+                "
+            >
 
-`).join("");
+            <div style="flex:1;">
+
+                <div style="
+                    font-weight:bold;
+                ">
+                    ${escapeHtml(userName)}
+
+                    ${
+                        profile.verified
+                            ? `
+                            <span style="
+                                color:#3897f0;
+                                font-size:13px;
+                            ">
+                                ✓
+                            </span>
+                            `
+                            : ""
+                    }
+                </div>
+
+                <div style="
+                    font-size:13px;
+                    color:#aaa;
+                ">
+                    Reacted with
+                    ${escapeHtml(u.reaction || emoji || "")}
+                </div>
+
+            </div>
+
+            <div style="
+                font-size:24px;
+            ">
+                ${escapeHtml(u.reaction || emoji || "")}
+            </div>
+
+        </div>
+
+        `;
+
+    }).join("");
+
+
+    // =================================================
+    // OPEN PROFILE FROM REACTION USER
+    // =================================================
+
+    list
+        .querySelectorAll(".reaction-user-row")
+        .forEach(row => {
+
+            row.addEventListener(
+                "click",
+                async function(event) {
+
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    const userId =
+                        row.dataset.userId;
+
+                    const userName =
+                        row.dataset.userName;
+
+                    const reactionIndex =
+                        Number(
+                            row.dataset.reactionIndex
+                        );
+
+                    const reactionUser =
+                        users[reactionIndex];
+
+                    console.log(
+                        "👤 REACTION USER PROFILE:",
+                        userId,
+                        userName
+                    );
+
+
+                    // =================================
+                    // SAVE EXACT RETURN STATE
+                    // =================================
+
+                    window.reactionProfileReturn = {
+                        postId: postId,
+                        commentId: commentId,
+                        emoji:
+                            reactionUser?.reaction ||
+                            emoji ||
+                            null,
+                        users: users
+                    };
+
+                    console.log(
+                        "💬 REACTION PROFILE RETURN:",
+                        window.reactionProfileReturn
+                    );
+
+
+                    // =================================
+                    // CLOSE REACTION POPUP
+                    // =================================
+
+                    document
+                        .getElementById(
+                            "reactionUsersPopup"
+                        )
+                        ?.remove();
+
+
+                    // =================================
+                    // OPEN PROFILE DIRECTLY
+                    // =================================
+
+                    if (
+                        typeof window.openProfile ===
+                        "function"
+                    ) {
+
+                        await window.openProfile(
+                            userId,
+                            userName
+                        );
+
+                    } else {
+
+                        console.error(
+                            "❌ openProfile not found"
+                        );
+
+                    }
+
+                }
+            );
+
+        });
 
 };
 
 window.filterReaction = function(reaction){
 
-if(reaction==="all"){
-renderReactionUsers(window.allReactionUsers);
-return;
-}
+    if (reaction === "all") {
 
-renderReactionUsers(
-window.allReactionUsers.filter(
-u=>u.reaction===reaction
-)
-);
+        renderReactionUsers(
+            window.allReactionUsers
+        );
+
+        return;
+    }
+
+    renderReactionUsers(
+        window.allReactionUsers.filter(
+            u => u.reaction === reaction
+        )
+    );
 
 };
 
@@ -23244,7 +23512,13 @@ window.updateOnlineStatus = async function(status){
 // MEDIA VIEWER
 // =====================================================
 
-window.openMedia = function (url, type) {
+window.openMedia = function (
+    url,
+    type,
+    isProfileMedia = false,
+    profileUserId = null,
+    profileMediaType = null
+) {
 
   // 🔒 LOCK HOME PAGE
   document.body.style.overflow = "hidden";
@@ -23259,6 +23533,8 @@ window.openMedia = function (url, type) {
   const viewer = document.getElementById("mediaViewer");
 
   if (!viewer) return;
+  
+  viewer.style.pointerEvents = "auto";
 
   // Make viewer completely cover the home page
   viewer.style.position = "fixed";
@@ -23363,7 +23639,8 @@ container.style.cssText = `
   justify-content:center;
   overflow:hidden;
   position:relative;
-  z-index:1;
+  z-index:10;
+  pointer-events:none;
 `;
 
   // IMAGE
@@ -23795,14 +24072,2152 @@ video.addEventListener("touchend", () => {
 
 
   viewer.appendChild(container);
+  
 
-  // SHOW VIEWER
-  viewer.style.display = "flex";
-  viewer.style.justifyContent = "center";
-  viewer.style.alignItems = "center";
-  viewer.style.background = "rgba(0,0,0,0.95)";
+// =================================================
+// SHOW VIEWER
+// =================================================
+
+viewer.style.display = "flex";
+viewer.style.justifyContent = "center";
+viewer.style.alignItems = "center";
+viewer.style.background = "rgba(0,0,0,0.95)";
+
+
+// =================================================
+// PROFILE MEDIA ACTIONS
+// MUST BE CREATED LAST
+// =================================================
+
+if (isProfileMedia) {
+
+    window.addProfileMediaActions(
+        viewer,
+        url,
+        profileUserId,
+        profileMediaType
+    );
+
+  }
 };
 
+// =====================================================
+// GET PROFILE MEDIA RECORD
+// =====================================================
+
+window.getProfileMedia = async function (
+    mediaUrl,
+    mediaType,
+    profileUserId = null
+) {
+
+    if (!mediaType) {
+
+        console.error(
+            "❌ Missing profile media type"
+        );
+
+        return null;
+    }
+
+    // ---------------------------------------------
+    // GET CURRENT USER IF AVAILABLE
+    // ---------------------------------------------
+
+    const {
+        data: { session }
+    } = await supabase.auth.getSession();
+
+    // ---------------------------------------------
+    // OWNER
+    // ---------------------------------------------
+
+    const ownerId =
+        profileUserId ||
+        session?.user?.id ||
+        null;
+
+    if (!ownerId) {
+
+        console.error(
+            "❌ Cannot determine profile owner"
+        );
+
+        return null;
+    }
+
+    console.log(
+        "🖼️ GET PROFILE MEDIA:",
+        {
+            ownerId,
+            mediaType,
+            mediaUrl
+        }
+    );
+
+    // ---------------------------------------------
+    // IMPORTANT:
+    // DO NOT MATCH media_url
+    // ---------------------------------------------
+
+    const {
+        data: media,
+        error
+    } = await supabase
+        .from("profile_media")
+        .select("*")
+        .eq("user_id", ownerId)
+        .eq("media_type", mediaType)
+        .limit(1)
+        .maybeSingle();
+
+    if (error) {
+
+        console.error(
+            "❌ PROFILE MEDIA SELECT ERROR:",
+            error
+        );
+
+        return null;
+    }
+
+    if (!media) {
+
+        console.error(
+            "❌ PROFILE MEDIA RECORD NOT FOUND:",
+            {
+                ownerId,
+                mediaType,
+                mediaUrl
+            }
+        );
+
+        return null;
+    }
+
+    console.log(
+        "✅ PROFILE MEDIA FOUND:",
+        media
+    );
+
+    return media;
+};
+
+// =====================================================
+// PROFILE MEDIA ACTIONS
+// =====================================================
+
+window.addProfileMediaActions = async function (
+    viewer,
+    mediaUrl,
+    profileUserId,
+    profileMediaType
+) {
+
+    console.log(
+        "🟢 ADD PROFILE MEDIA ACTIONS STARTED"
+    );
+
+    // -------------------------------------------------
+    // REMOVE OLD ACTION BAR
+    // -------------------------------------------------
+
+    document
+        .getElementById("profileMediaActions")
+        ?.remove();
+
+
+    // =================================================
+    // CREATE ACTION BAR
+    // =================================================
+
+    const actions =
+        document.createElement("div");
+
+    actions.id =
+        "profileMediaActions";
+
+    actions.style.cssText = `
+        position:absolute;
+        bottom:30px;
+        left:50%;
+        transform:translateX(-50%);
+
+        display:flex;
+        align-items:center;
+        justify-content:center;
+
+        gap:12px;
+
+        width:auto;
+
+        z-index:9999999999;
+
+        pointer-events:auto;
+        touch-action:manipulation;
+    `;
+
+
+    // =================================================
+    // LIKE BUTTON
+    // =================================================
+
+    const likeButton =
+        document.createElement("button");
+
+    likeButton.type = "button";
+
+    likeButton.innerHTML =
+        "🤍 Like";
+
+    likeButton.style.cssText = `
+        display:block;
+
+        padding:12px 20px;
+
+        border:none;
+        border-radius:12px;
+
+        background:#222;
+        color:white;
+
+        font-size:15px;
+        font-weight:600;
+
+        cursor:pointer;
+
+        pointer-events:auto;
+        touch-action:manipulation;
+
+        position:relative;
+        z-index:10000000000;
+
+        white-space:nowrap;
+    `;
+
+
+    // =================================================
+    // COMMENT BUTTON
+    // =================================================
+
+    const commentButton =
+        document.createElement("button");
+
+    commentButton.type = "button";
+
+    commentButton.innerHTML =
+        "💬 Comment";
+
+    commentButton.style.cssText = `
+        display:block;
+
+        padding:12px 20px;
+
+        border:none;
+        border-radius:12px;
+
+        background:#222;
+        color:white;
+
+        font-size:15px;
+        font-weight:600;
+
+        cursor:pointer;
+
+        pointer-events:auto;
+        touch-action:manipulation;
+
+        position:relative;
+        z-index:10000000000;
+
+        white-space:nowrap;
+    `;
+
+
+    // =================================================
+    // ADD BUTTONS IMMEDIATELY
+    // =================================================
+
+    actions.appendChild(
+        likeButton
+    );
+
+    actions.appendChild(
+        commentButton
+    );
+
+    viewer.appendChild(
+        actions
+    );
+
+
+    console.log(
+        "✅ PROFILE MEDIA BUTTONS DISPLAYED"
+    );
+
+
+    // =================================================
+    // GET SESSION
+    // =================================================
+
+    const {
+        data: { session }
+    } = await supabase.auth.getSession();
+
+
+    // =================================================
+    // MEDIA TYPE
+    // =================================================
+
+    const mediaType =
+        profileMediaType || "avatar";
+
+
+    console.log(
+        "🖼️ PROFILE MEDIA TYPE:",
+        mediaType
+    );
+
+
+    // =================================================
+    // GET MEDIA RECORD
+    // =================================================
+
+    const media =
+        await window.getProfileMedia(
+            mediaUrl,
+            mediaType,
+            profileUserId
+        );
+
+
+    if (!media) {
+
+        console.error(
+            "❌ PROFILE MEDIA RECORD NOT FOUND"
+        );
+
+        // ---------------------------------------------
+        // COMMENT MUST STILL WORK IF POSSIBLE
+        // ---------------------------------------------
+
+        likeButton.disabled = true;
+
+        likeButton.style.opacity = "0.5";
+
+        /*
+         * Do NOT disable comment button.
+         *
+         * We want guests to be able to open
+         * the comments panel.
+         */
+
+        return;
+    }
+
+
+    // =================================================
+    // MEDIA ID
+    // =================================================
+
+    const mediaId =
+        media.id;
+
+
+    console.log(
+        "🖼️ PROFILE MEDIA ID:",
+        mediaId
+    );
+
+
+    // =================================================
+    // LIKE
+    // =================================================
+
+    if (session) {
+
+        const {
+            data: existingLike,
+            error: likeCheckError
+        } = await supabase
+            .from("profile_media_likes")
+            .select("id")
+            .eq(
+                "media_id",
+                mediaId
+            )
+            .eq(
+                "user_id",
+                session.user.id
+            )
+            .maybeSingle();
+
+
+        if (likeCheckError) {
+
+            console.error(
+                "❌ LIKE CHECK ERROR:",
+                likeCheckError
+            );
+        }
+
+
+        let liked =
+            !!existingLike;
+
+
+        likeButton.innerHTML =
+            liked
+                ? "❤️ Liked"
+                : "🤍 Like";
+
+
+        // ---------------------------------------------
+        // LIKE / UNLIKE
+        // ---------------------------------------------
+
+        likeButton.onclick =
+            async function(event) {
+
+            event.preventDefault();
+            event.stopPropagation();
+
+
+            if (liked) {
+
+                const {
+                    error
+                } = await supabase
+                    .from("profile_media_likes")
+                    .delete()
+                    .eq(
+                        "media_id",
+                        mediaId
+                    )
+                    .eq(
+                        "user_id",
+                        session.user.id
+                    );
+
+
+                if (error) {
+
+                    console.error(
+                        "❌ REMOVE LIKE ERROR:",
+                        error
+                    );
+
+                    return;
+                }
+
+
+                liked = false;
+
+                likeButton.innerHTML =
+                    "🤍 Like";
+
+                return;
+            }
+
+
+            const {
+                error
+            } = await supabase
+                .from("profile_media_likes")
+                .insert({
+
+                    media_id:
+                        mediaId,
+
+                    user_id:
+                        session.user.id
+
+                });
+
+
+            if (error) {
+
+                console.error(
+                    "❌ ADD LIKE ERROR:",
+                    error
+                );
+
+                return;
+            }
+
+
+            liked = true;
+
+            likeButton.innerHTML =
+                "❤️ Liked";
+        };
+
+    } else {
+
+        // ---------------------------------------------
+        // GUEST LIKE
+        // ---------------------------------------------
+
+        likeButton.onclick =
+            function(event) {
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            alert(
+                "Please log in to like this media."
+            );
+        };
+    }
+
+
+    // =================================================
+    // COMMENT BUTTON
+    // =================================================
+
+    commentButton.onclick =
+    async function(event) {
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    console.log(
+        "💬 OPEN PROFILE MEDIA COMMENTS:",
+        mediaId
+    );
+
+    // ---------------------------------------------
+    // OPEN COMMENTS
+    // ---------------------------------------------
+
+    if (
+        typeof window.openProfileMediaComments ===
+        "function"
+    ) {
+
+        await window.openProfileMediaComments(
+            mediaId,
+            mediaUrl,
+            profileUserId
+        );
+
+        return;
+    }
+
+    console.error(
+        "❌ openProfileMediaComments() is not defined"
+    );
+};
+    console.log(
+        "✅ PROFILE MEDIA ACTIONS READY"
+    );
+};
+
+// =====================================================
+// OPEN PROFILE MEDIA COMMENTS
+// =====================================================
+
+window.openProfileMediaComments = async function (
+    mediaId,
+    mediaUrl = null,
+    profileUserId = null
+) {
+
+    if (!mediaId) {
+        console.error("❌ Missing profile media ID");
+        return;
+    }
+
+    console.log("💬 OPENING PROFILE MEDIA COMMENTS:", mediaId);
+
+    const commentsScreen =
+        document.getElementById("commentsScreen");
+
+    if (!commentsScreen) {
+        console.error("❌ commentsScreen does not exist in DOM");
+        return;
+    }
+
+    console.log("✅ PROFILE COMMENTS SCREEN FOUND");
+
+    window.currentProfileMediaCommentId = mediaId;
+    window.currentProfileMediaUrl = mediaUrl;
+    window.currentProfileMediaUserId = profileUserId;
+
+    // Tell the comment system this is NOT a post comment
+    window.currentPostId = null;
+
+    commentsScreen.style.display = "flex";
+    commentsScreen.style.position = "fixed";
+    commentsScreen.style.inset = "0";
+    commentsScreen.style.zIndex = "999999999";
+
+    document.body.style.overflow = "hidden";
+
+    // -----------------------------------------
+    // MEDIA
+    // -----------------------------------------
+
+    const mediaContent =
+        document.getElementById("commentMediaContent");
+
+    if (mediaContent) {
+
+        if (mediaUrl) {
+
+            mediaContent.innerHTML = `
+                <img
+                    src="${escapeHtml(mediaUrl)}"
+                    style="
+                        width:100%;
+                        height:100%;
+                        object-fit:contain;
+                        display:block;
+                        background:#000;
+                    "
+                >
+            `;
+
+        } else {
+
+            mediaContent.innerHTML = "";
+        }
+    }
+
+    // -----------------------------------------
+    // CLEAR COMMENTS
+    // -----------------------------------------
+
+    const container =
+        document.getElementById("panelComments");
+
+    if (container) {
+
+        container.innerHTML = `
+            <div style="
+                padding:30px;
+                text-align:center;
+                color:#999;
+            ">
+                Loading comments...
+            </div>
+        `;
+    }
+
+    // -----------------------------------------
+    // LOAD PROFILE MEDIA COMMENTS
+    // -----------------------------------------
+
+    if (
+        typeof window.loadProfileMediaComments ===
+        "function"
+    ) {
+
+        await window.loadProfileMediaComments(mediaId);
+
+    } else {
+
+        console.error(
+            "❌ loadProfileMediaComments() not defined"
+        );
+
+        if (container) {
+            container.innerHTML = `
+                <div style="
+                    padding:30px;
+                    text-align:center;
+                    color:#ff6b6b;
+                ">
+                    Comment loader missing.
+                </div>
+            `;
+        }
+    }
+};
+
+// =====================================================
+// PROFILE MEDIA COMMENTS
+// =====================================================
+
+window.loadProfileMediaComments = async function(mediaId) {
+
+    if (!mediaId) {
+        console.error("❌ Missing profile media ID");
+        return;
+    }
+
+    const container =
+        document.getElementById("panelComments");
+
+    if (!container) {
+        console.error("❌ panelComments does not exist");
+        return;
+    }
+
+    console.log(
+        "💬 Loading PROFILE MEDIA comments:",
+        mediaId
+    );
+
+    container.innerHTML = `
+        <div style="
+            padding:30px;
+            text-align:center;
+            color:#999;
+        ">
+            Loading comments...
+        </div>
+    `;
+
+    const {
+        data: { session }
+    } = await supabase.auth.getSession();
+
+    const myId =
+        session?.user?.id || null;
+
+    // =================================================
+    // LOAD COMMENTS
+    // =================================================
+
+    const {
+        data: comments,
+        error
+    } = await supabase
+        .from("profile_media_comments")
+        .select("*")
+        .eq("media_id", mediaId)
+        .eq("hidden", false)
+        .order("created_at", {
+            ascending: true
+        });
+
+    if (error) {
+
+        console.error(
+            "❌ PROFILE MEDIA COMMENTS ERROR:",
+            error
+        );
+
+        container.innerHTML = `
+            <div style="
+                padding:30px;
+                text-align:center;
+                color:#ff6b6b;
+            ">
+                Failed to load comments.
+            </div>
+        `;
+
+        return;
+    }
+
+    console.log(
+        "✅ PROFILE MEDIA COMMENTS:",
+        comments
+    );
+
+    if (!comments || comments.length === 0) {
+
+        container.innerHTML = `
+            <div style="
+                padding:30px;
+                text-align:center;
+                color:#777;
+            ">
+                No comments yet
+            </div>
+        `;
+
+        return;
+    }
+
+    // =================================================
+    // USER IDS
+    // =================================================
+
+    const userIds = [
+        ...new Set(
+            comments
+                .map(c => c.user_id)
+                .filter(Boolean)
+        )
+    ];
+
+    // =================================================
+    // LOAD PROFILES
+    // =================================================
+
+    let profiles = [];
+
+    if (userIds.length) {
+
+        const {
+            data: profileData,
+            error: profileError
+        } = await supabase
+            .from("profiles")
+            .select(`
+                id,
+                name,
+                avatar_url,
+                verified
+            `)
+            .in("id", userIds);
+
+        if (profileError) {
+
+            console.error(
+                "❌ PROFILE LOOKUP ERROR:",
+                profileError
+            );
+
+        } else {
+
+            profiles = profileData || [];
+        }
+    }
+
+    const profileMap =
+        new Map(
+            profiles.map(profile => [
+                profile.id,
+                profile
+            ])
+        );
+
+    // =================================================
+    // LOAD LIKES
+    // =================================================
+
+    const commentIds =
+        comments.map(c => c.id);
+
+    let likes = [];
+
+    if (commentIds.length) {
+
+        const {
+            data: likeData,
+            error: likeError
+        } = await supabase
+            .from("profile_media_comment_likes")
+            .select(`
+                id,
+                comment_id,
+                user_id
+            `)
+            .in("comment_id", commentIds);
+
+        if (likeError) {
+
+            console.error(
+                "❌ PROFILE MEDIA LIKE LOAD ERROR:",
+                likeError
+            );
+
+        } else {
+
+            likes = likeData || [];
+        }
+    }
+
+    // =================================================
+    // LOAD REACTIONS
+    // =================================================
+
+    let reactions = [];
+
+    if (commentIds.length) {
+
+        const {
+            data: reactionData,
+            error: reactionError
+        } = await supabase
+            .from("profile_media_comment_reactions")
+            .select(`
+                id,
+                comment_id,
+                user_id,
+                emoji
+            `)
+            .in("comment_id", commentIds);
+
+        if (reactionError) {
+
+            console.error(
+                "❌ PROFILE MEDIA REACTION LOAD ERROR:",
+                reactionError
+            );
+
+        } else {
+
+            reactions = reactionData || [];
+        }
+    }
+
+    // =================================================
+    // LOAD READS
+    // =================================================
+
+    let reads = [];
+
+    if (commentIds.length) {
+
+        const {
+            data: readData,
+            error: readError
+        } = await supabase
+            .from("profile_media_comment_reads")
+            .select(`
+                comment_id,
+                user_id
+            `)
+            .in("comment_id", commentIds);
+
+        if (readError) {
+
+            console.error(
+                "❌ PROFILE MEDIA READ LOAD ERROR:",
+                readError
+            );
+
+        } else {
+
+            reads = readData || [];
+        }
+    }
+
+    // =================================================
+    // NORMALIZE
+    // =================================================
+
+    const normalized =
+        comments.map(comment => {
+
+            const profile =
+                profileMap.get(
+                    comment.user_id
+                ) || {
+                    id: comment.user_id,
+                    name: "Unknown User",
+                    avatar_url: null,
+                    verified: false
+                };
+
+            return {
+
+                ...comment,
+
+                profiles: profile,
+
+                comment_likes:
+                    likes.filter(
+                        like =>
+                            String(like.comment_id) ===
+                            String(comment.id)
+                    ),
+
+                comment_reactions:
+                    reactions.filter(
+                        reaction =>
+                            String(reaction.comment_id) ===
+                            String(comment.id)
+                    ),
+
+                comment_reads:
+                    reads.filter(
+                        read =>
+                            String(read.comment_id) ===
+                            String(comment.id)
+                    )
+
+            };
+        });
+
+    // =================================================
+    // TOP LEVEL COMMENTS
+    // =================================================
+
+    const parents =
+        normalized.filter(
+            comment => !comment.parent_id
+        );
+
+    if (!parents.length) {
+
+        container.innerHTML = `
+            <div style="
+                padding:30px;
+                text-align:center;
+                color:#777;
+            ">
+                No comments yet
+            </div>
+        `;
+
+        return;
+    }
+
+    // =================================================
+    // RENDER
+    // =================================================
+
+    container.innerHTML =
+        parents.map(comment => {
+
+            const replyCount =
+                normalized.filter(
+                    reply =>
+                        String(reply.parent_id) ===
+                        String(comment.id)
+                ).length;
+
+            return `
+                ${renderProfileMediaComment(
+                    comment,
+                    myId
+                )}
+
+                <div
+                    style="
+                        margin-left:52px;
+                        padding-left:12px;
+                    "
+                >
+
+                    ${
+                        replyCount > 0
+                        ? `
+                            <div
+                                id="profileReplyToggle-${comment.id}"
+                                onclick="
+                                    event.stopPropagation();
+
+                                    loadProfileMediaReplies(
+                                        '${comment.id}',
+                                        '${mediaId}'
+                                    );
+                                "
+                                style="
+                                    margin:8px 0;
+                                    font-size:13px;
+                                    color:#0095f6;
+                                    cursor:pointer;
+                                    font-weight:600;
+                                "
+                            >
+                                💬 View ${replyCount}
+                                ${
+                                    replyCount === 1
+                                        ? "reply"
+                                        : "replies"
+                                }
+                            </div>
+                        `
+                        : ""
+                    }
+
+                    <div
+                        id="profile-replies-${comment.id}"
+                        class="nestedReplies"
+                        style="
+                            display:none;
+                            margin-top:3px;
+                            border-left:1px solid #292929;
+                            padding-left:8px;
+                        "
+                    ></div>
+
+                </div>
+            `;
+
+        }).join("");
+
+    console.log(
+        "✅ PROFILE MEDIA COMMENTS RENDERED:",
+        parents.length
+    );
+};
+
+// =====================================================
+// PROFILE MEDIA COMMENT RENDERER
+// =====================================================
+
+window.renderProfileMediaComment = function(comment, myId) {
+
+    if (!comment) return "";
+
+    const profile =
+        comment.profiles || {};
+
+    const name =
+        profile.name || "Unknown User";
+
+    const avatar =
+        profile.avatar_url || "";
+
+    const safeName =
+        escapeHtml(name);
+
+    const safeContent =
+        formatCommentText(
+            comment.content || ""
+        );
+
+    // ---------------------------------------------
+    // LIKE STATE
+    // ---------------------------------------------
+
+    const likes =
+        Array.isArray(comment.comment_likes)
+            ? comment.comment_likes
+            : [];
+
+    const liked =
+        likes.some(
+            like =>
+                like.user_id === myId
+        );
+
+    // ---------------------------------------------
+    // REACTIONS
+    // ---------------------------------------------
+
+    const reactions =
+        Array.isArray(
+            comment.comment_reactions
+        )
+            ? comment.comment_reactions
+            : [];
+
+    // ---------------------------------------------
+    // REPLY COUNT
+    // ---------------------------------------------
+
+    const replyCount =
+        Number(comment.replies_count || 0);
+
+    // ---------------------------------------------
+    // VERIFIED
+    // ---------------------------------------------
+
+    const verified =
+        profile.verified
+            ? `
+                <span style="
+                    color:#3897f0;
+                    font-size:13px;
+                ">
+                    ✓
+                </span>
+            `
+            : "";
+
+    // ---------------------------------------------
+    // AVATAR
+    // ---------------------------------------------
+
+    const avatarHtml =
+        avatar
+            ? `
+                <img
+                    src="${escapeHtml(avatar)}"
+                    alt="${safeName}"
+                    onclick="
+                        event.stopPropagation();
+
+                        openProfile(
+                            '${comment.user_id}',
+                            ${JSON.stringify(name)}
+                        );
+                    "
+                    style="
+                        width:42px;
+                        height:42px;
+                        border-radius:50%;
+                        object-fit:cover;
+                        flex-shrink:0;
+                        cursor:pointer;
+                    "
+                >
+            `
+            : `
+                <div
+                    onclick="
+                        event.stopPropagation();
+
+                        openProfile(
+                            '${comment.user_id}',
+                            ${JSON.stringify(name)}
+                        );
+                    "
+                    style="
+                        width:42px;
+                        height:42px;
+                        border-radius:50%;
+                        background:#333;
+                        color:white;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                        font-weight:bold;
+                        flex-shrink:0;
+                        cursor:pointer;
+                    "
+                >
+                    ${escapeHtml(
+                        name.charAt(0).toUpperCase()
+                    )}
+                </div>
+            `;
+
+    // ---------------------------------------------
+    // MEDIA
+    // ---------------------------------------------
+
+    let mediaHtml = "";
+
+    if (
+        comment.media_url &&
+        comment.media_type === "image"
+    ) {
+
+        mediaHtml = `
+            <div style="
+                margin-top:9px;
+            ">
+                <img
+                    src="${escapeHtml(
+                        comment.media_url
+                    )}"
+                    onclick="
+                        event.stopPropagation();
+
+                        openMediaViewer(
+                            '${escapeHtml(
+                                comment.media_url
+                            )}',
+                            'image'
+                        );
+                    "
+                    style="
+                        width:220px;
+                        max-height:300px;
+                        object-fit:cover;
+                        border-radius:14px;
+                        cursor:pointer;
+                    "
+                >
+            </div>
+        `;
+
+    } else if (
+        comment.media_url &&
+        comment.media_type === "video"
+    ) {
+
+        mediaHtml = `
+            <div style="
+                margin-top:9px;
+            ">
+                <video
+                    src="${escapeHtml(
+                        comment.media_url
+                    )}"
+                    controls
+                    playsinline
+                    style="
+                        width:220px;
+                        max-height:300px;
+                        border-radius:14px;
+                    "
+                ></video>
+            </div>
+        `;
+
+    } else if (
+        comment.media_url &&
+        comment.media_type === "voice"
+    ) {
+
+        mediaHtml = `
+            <div
+                class="profileMediaVoice"
+                style="
+                    margin-top:9px;
+                    display:flex;
+                    align-items:center;
+                    gap:10px;
+                    width:220px;
+                    padding:9px 12px;
+                    background:#202020;
+                    border-radius:18px;
+                "
+            >
+
+                <button
+                    type="button"
+                    id="profileMediaVoiceBtn-${comment.id}"
+                    onclick="
+                        event.stopPropagation();
+
+                        toggleProfileMediaVoice(
+                            '${comment.id}'
+                        );
+                    "
+                    style="
+                        width:36px;
+                        height:36px;
+                        border:0;
+                        border-radius:50%;
+                        background:#333;
+                        color:white;
+                        cursor:pointer;
+                    "
+                >
+                    ▶
+                </button>
+
+                <div style="
+                    flex:1;
+                ">
+
+                    <div style="
+                        height:4px;
+                        background:#444;
+                        border-radius:4px;
+                        overflow:hidden;
+                    ">
+                        <div
+                            id="profileMediaVoiceProgress-${comment.id}"
+                            style="
+                                width:0%;
+                                height:100%;
+                                background:white;
+                            "
+                        ></div>
+                    </div>
+
+                    <div
+                        id="profileMediaVoiceTime-${comment.id}"
+                        style="
+                            font-size:11px;
+                            color:#aaa;
+                            margin-top:4px;
+                        "
+                    >
+                        0:00
+                    </div>
+
+                </div>
+
+                <audio
+                    id="profileMediaVoice-${comment.id}"
+                    src="${escapeHtml(
+                        comment.media_url
+                    )}"
+                    preload="metadata"
+                    style="display:none;"
+                ></audio>
+
+            </div>
+        `;
+    }
+
+    // ---------------------------------------------
+    // REACTION DISPLAY
+    // ---------------------------------------------
+
+    let reactionHtml = "";
+
+    if (reactions.length) {
+
+        reactionHtml =
+            reactions
+                .map(
+                    reaction => `
+                        <span style="
+                            padding:4px 7px;
+                            background:#292929;
+                            border-radius:12px;
+                            font-size:13px;
+                        ">
+                            ${escapeHtml(
+                                reaction.emoji || "❤️"
+                            )}
+                        </span>
+                    `
+                )
+                .join("");
+
+    }
+
+    // ---------------------------------------------
+    // RETURN
+    // ---------------------------------------------
+
+    return `
+        <div
+            id="profile-media-comment-${comment.id}"
+            class="profileMediaCommentItem"
+            data-comment-id="${comment.id}"
+            data-user-id="${comment.user_id}"
+
+            onclick="
+                event.stopPropagation();
+
+                commentDoubleTap(
+                    '${comment.id}'
+                );
+            "
+
+            style="
+                display:flex;
+                gap:12px;
+                padding:14px;
+                margin:10px 14px;
+                background:#171717;
+                border:1px solid rgba(255,255,255,.05);
+                border-radius:18px;
+                color:white;
+            "
+        >
+
+            ${avatarHtml}
+
+            <div style="
+                flex:1;
+                min-width:0;
+            ">
+
+                <!-- USER -->
+
+                <div style="
+                    display:flex;
+                    align-items:center;
+                    gap:5px;
+                    flex-wrap:wrap;
+                ">
+
+                    <b
+                        onclick="
+                            event.stopPropagation();
+
+                            openProfile(
+                                '${comment.user_id}',
+                                ${JSON.stringify(name)}
+                            );
+                        "
+                        style="
+                            font-size:15px;
+                            cursor:pointer;
+                        "
+                    >
+                        ${safeName}
+                    </b>
+
+                    ${verified}
+
+                    ${
+                        comment.pinned
+                            ? `
+                                <span style="
+                                    color:#f5c542;
+                                    font-size:12px;
+                                ">
+                                    📌 Pinned
+                                </span>
+                            `
+                            : ""
+                    }
+
+                </div>
+
+                <!-- TIME -->
+
+                <div style="
+                    color:#777;
+                    font-size:11px;
+                    margin-top:2px;
+                ">
+                    ${formatCommentTime(
+                        comment.created_at
+                    )}
+
+                    ${
+                        comment.edited
+                            ? " • Edited"
+                            : ""
+                    }
+                </div>
+
+                <!-- CONTENT -->
+
+                ${
+                    comment.content
+                        ? `
+                            <div style="
+                                margin-top:7px;
+                                font-size:14px;
+                                line-height:1.55;
+                                word-break:break-word;
+                            ">
+                                ${safeContent}
+                            </div>
+                        `
+                        : ""
+                }
+
+                ${mediaHtml}
+
+                <!-- ACTIONS -->
+
+                <div style="
+                    display:flex;
+                    align-items:center;
+                    gap:8px;
+                    margin-top:10px;
+                    flex-wrap:wrap;
+                ">
+
+                    <!-- LIKE -->
+
+                    <button
+                        type="button"
+                        id="profileMediaCommentLike-${comment.id}"
+                        onclick="
+                            event.preventDefault();
+                            event.stopPropagation();
+
+                            likeProfileMediaComment(
+                                '${comment.id}'
+                            );
+                        "
+                        style="
+                            border:0;
+                            background:${liked
+                                ? "#ff3040"
+                                : "#232323"};
+                            color:white;
+                            border-radius:15px;
+                            padding:6px 10px;
+                            cursor:pointer;
+                            font-size:12px;
+                        "
+                    >
+                        ❤️
+                        <span
+                            id="profileMediaCommentLikeCount-${comment.id}"
+                        >
+                            ${likes.length}
+                        </span>
+                    </button>
+
+                    <!-- REPLY -->
+
+                    <button
+                        type="button"
+                        onclick="
+                            event.preventDefault();
+                            event.stopPropagation();
+
+                            replyToProfileMediaComment(
+                                '${comment.id}',
+                                ${JSON.stringify(name)},
+                                '${comment.user_id}'
+                            );
+                        "
+                        style="
+                            border:0;
+                            background:#232323;
+                            color:#aaa;
+                            border-radius:15px;
+                            padding:6px 10px;
+                            cursor:pointer;
+                            font-size:12px;
+                        "
+                    >
+                        💬 Reply
+                    </button>
+
+                </div>
+
+                <!-- REACTIONS -->
+
+                <div
+                    id="profileMediaCommentReactions-${comment.id}"
+                    style="
+                        display:flex;
+                        gap:5px;
+                        flex-wrap:wrap;
+                        margin-top:7px;
+                    "
+                >
+                    ${reactionHtml}
+                </div>
+
+            </div>
+
+        </div>
+    `;
+};
+
+// =====================================================
+// PROFILE MEDIA COMMENT LIKE
+// =====================================================
+
+window.likeProfileMediaComment = async function(commentId) {
+
+    if (!commentId) return;
+
+    const {
+        data: { session }
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+
+        alert(
+            "Please log in to like this comment."
+        );
+
+        return;
+    }
+
+    const userId =
+        session.user.id;
+
+    const button =
+        document.getElementById(
+            "profileMediaCommentLike-" +
+            commentId
+        );
+
+    const countElement =
+        document.getElementById(
+            "profileMediaCommentLikeCount-" +
+            commentId
+        );
+
+    if (!button) return;
+
+    button.disabled = true;
+
+    try {
+
+        // ---------------------------------------------
+        // CHECK EXISTING LIKE
+        // ---------------------------------------------
+
+        const {
+            data: existing,
+            error: checkError
+        } = await supabase
+            .from("profile_media_comment_likes")
+            .select("id")
+            .eq(
+                "comment_id",
+                commentId
+            )
+            .eq(
+                "user_id",
+                userId
+            )
+            .maybeSingle();
+
+        if (checkError) {
+            throw checkError;
+        }
+
+        // ---------------------------------------------
+        // REMOVE
+        // ---------------------------------------------
+
+        if (existing) {
+
+            const {
+                error
+            } = await supabase
+                .from(
+                    "profile_media_comment_likes"
+                )
+                .delete()
+                .eq(
+                    "comment_id",
+                    commentId
+                )
+                .eq(
+                    "user_id",
+                    userId
+                );
+
+            if (error) {
+                throw error;
+            }
+
+        }
+
+        // ---------------------------------------------
+        // ADD
+        // ---------------------------------------------
+
+        else {
+
+            const {
+                error
+            } = await supabase
+                .from(
+                    "profile_media_comment_likes"
+                )
+                .insert({
+                    comment_id:
+                        commentId,
+
+                    user_id:
+                        userId
+                });
+
+            if (error) {
+                throw error;
+            }
+        }
+
+        // ---------------------------------------------
+        // GET NEW COUNT
+        // ---------------------------------------------
+
+        const {
+            count,
+            error: countError
+        } = await supabase
+            .from(
+                "profile_media_comment_likes"
+            )
+            .select("id", {
+                count: "exact",
+                head: true
+            })
+            .eq(
+                "comment_id",
+                commentId
+            );
+
+        if (countError) {
+            throw countError;
+        }
+
+        const newCount =
+            count || 0;
+
+        if (countElement) {
+
+            countElement.textContent =
+                newCount;
+        }
+
+        button.style.background =
+            existing
+                ? "#232323"
+                : "#ff3040";
+
+    } catch (error) {
+
+        console.error(
+            "❌ PROFILE MEDIA COMMENT LIKE ERROR:",
+            error
+        );
+
+    } finally {
+
+        button.disabled = false;
+    }
+};
+
+// =====================================================
+// PROFILE MEDIA REPLIES
+// =====================================================
+
+window.loadProfileMediaReplies = async function(
+    parentId,
+    mediaId
+) {
+
+    console.log(
+        "📥 Loading profile media replies:",
+        {
+            parentId,
+            mediaId
+        }
+    );
+
+
+    const container =
+        document.getElementById(
+            "profile-replies-" + parentId
+        );
+
+
+    if (!container) {
+
+        console.error(
+            "❌ Profile reply container missing:",
+            parentId
+        );
+
+        return;
+    }
+
+
+    container.style.display =
+        "block";
+
+
+    container.innerHTML = `
+        <div style="
+            padding:8px;
+            color:#888;
+            font-size:12px;
+        ">
+            Loading replies...
+        </div>
+    `;
+
+
+    const {
+        data: { session }
+    } = await supabase.auth.getSession();
+
+
+    const myId =
+        session?.user?.id || null;
+
+
+    // ==============================================
+    // LOAD REPLIES
+    // ==============================================
+
+    const {
+        data,
+        error
+    } = await supabase
+        .from("profile_media_comments")
+        .select("*")
+        .eq("media_id", mediaId)
+        .eq("parent_id", parentId)
+        .eq("hidden", false)
+        .order("created_at", {
+            ascending: true
+        });
+
+
+    if (error) {
+
+        console.error(
+            "❌ Profile media replies error:",
+            error
+        );
+
+        container.innerHTML = `
+            <div style="
+                padding:8px;
+                color:#ff6b6b;
+                font-size:12px;
+            ">
+                Failed to load replies.
+            </div>
+        `;
+
+        return;
+    }
+
+
+    if (!data || data.length === 0) {
+
+        container.innerHTML = `
+            <div style="
+                padding:8px;
+                color:#777;
+                font-size:12px;
+            ">
+                No replies yet.
+            </div>
+        `;
+
+        return;
+    }
+
+
+    // ==============================================
+    // LOAD USERS
+    // ==============================================
+
+    const userIds = [
+        ...new Set(
+            data
+                .map(row => row.user_id)
+                .filter(Boolean)
+        )
+    ];
+
+
+    let profiles = [];
+
+
+    if (userIds.length) {
+
+        const {
+            data: profileData,
+            error: profileError
+        } = await supabase
+            .from("profiles")
+            .select(`
+                id,
+                name,
+                avatar_url,
+                verified
+            `)
+            .in("id", userIds);
+
+
+        if (profileError) {
+
+            console.error(
+                "❌ Reply profile lookup failed:",
+                profileError
+            );
+
+        } else {
+
+            profiles =
+                profileData || [];
+        }
+    }
+
+
+    const profileMap =
+        new Map(
+            profiles.map(profile => [
+                profile.id,
+                profile
+            ])
+        );
+
+
+    // ==============================================
+    // NORMALIZE
+    // ==============================================
+
+    const normalized =
+        data.map(reply => {
+
+            const profile =
+                profileMap.get(
+                    reply.user_id
+                ) || {
+                    id: reply.user_id,
+                    name: "Unknown User",
+                    avatar_url: null,
+                    verified: false
+                };
+
+
+            return {
+
+                ...reply,
+
+                profiles: profile,
+
+                comment_user: profile,
+
+                comment_likes: [],
+
+                comment_reactions: [],
+
+                comment_reads: []
+
+            };
+
+        });
+
+
+    // ==============================================
+    // RENDER
+    // ==============================================
+
+    container.innerHTML =
+        normalized.map(reply => {
+
+            return renderReply(
+                reply
+            );
+
+        }).join("");
+
+
+    console.log(
+        "✅ Profile media replies rendered:",
+        normalized.length
+    );
+
+
+    // ==============================================
+    // UPDATE BUTTON
+    // ==============================================
+
+    const button =
+        document.getElementById(
+            "profileReplyToggle-" +
+            parentId
+        );
+
+
+    if (button) {
+
+        button.textContent =
+            "Hide replies";
+
+
+        button.onclick =
+            function(event) {
+
+                event.stopPropagation();
+
+                if (
+                    container.style.display ===
+                    "none"
+                ) {
+
+                    container.style.display =
+                        "block";
+
+                    button.textContent =
+                        "Hide replies";
+
+                } else {
+
+                    container.style.display =
+                        "none";
+
+                    button.textContent =
+                        `💬 View ${normalized.length} ${
+                            normalized.length === 1
+                                ? "reply"
+                                : "replies"
+                        }`;
+                }
+
+            };
+    }
+};
+
+window.replyToProfileMediaComment = function (
+    commentId,
+    userId,
+    name
+) {
+
+    console.log(
+        "↩️ REPLY TO PROFILE MEDIA COMMENT:",
+        commentId
+    );
+
+    window.replyingToProfileMediaComment =
+        commentId;
+
+    window.replyingToUserId =
+        userId;
+
+    const input =
+        document.getElementById("panelInput");
+
+    if (!input) {
+        console.error("❌ panelInput not found");
+        return;
+    }
+
+    input.placeholder =
+        `Reply to ${name}...`;
+
+    input.focus();
+
+};
+
+// =====================================================
+// ENSURE COMMENTS SCREEN EXISTS
+// =====================================================
+
+window.ensureCommentsScreen = function () {
+
+    // Already exists
+    let screen =
+        document.getElementById("commentsScreen");
+
+    if (screen) {
+
+        console.log(
+            "✅ COMMENTS SCREEN ALREADY EXISTS"
+        );
+
+        return screen;
+    }
+
+
+    // Restore the ORIGINAL DOM element
+    if (window.savedCommentsScreenElement) {
+
+        console.log(
+            "♻️ RESTORING SAVED COMMENTS SCREEN"
+        );
+
+        document.body.appendChild(
+            window.savedCommentsScreenElement
+        );
+
+        screen =
+            document.getElementById("commentsScreen");
+
+        if (screen) {
+
+            console.log(
+                "✅ COMMENTS SCREEN RESTORED:",
+                screen
+            );
+
+            return screen;
+        }
+    }
+
+
+    // Nothing available to restore
+    console.error(
+        "❌ COMMENTS SCREEN CANNOT BE RESTORED"
+    );
+
+    return null;
+};
+
+function getActiveCommentContext() {
+
+    if (window.currentProfileMediaCommentId) {
+
+        return {
+            type: "profile_media",
+            id: window.currentProfileMediaCommentId
+        };
+
+    }
+
+    if (window.currentPostId) {
+
+        return {
+            type: "post",
+            id: window.currentPostId
+        };
+
+    }
+
+    return null;
+}
 
 // CLOSE MEDIA
 window.closeMedia = function () {
@@ -23840,7 +26255,7 @@ window.closeMedia = function () {
 let openedProfileFromNotification = false;
 let openedFollowRequestsFromNotification = false;
 let openedCommentsFromNotification = false;
-
+let openedLikedPostFromNotification = false;
 
 // =====================================================
 // CURRENT PROFILE DATA FOR NOTIFICATIONS
@@ -24192,9 +26607,11 @@ async function(id) {
 
     if (data.post_id) {
 
-        openedCommentsFromNotification = true;
+        openedLikedPostFromNotification = true;
 
-        openComments(data.post_id);
+        openExactPostFromNotification(
+            data.post_id
+        );
     }
 
     return;
@@ -25583,6 +28000,221 @@ function appendReplies(data) {
     html
   );
 
+}
+
+async function openExactPostFromNotification(postId) {
+
+    console.log("❤️ OPENING EXACT LIKED POST:", postId);
+
+    // ------------------------------------------
+    // REMEMBER WE CAME FROM NOTIFICATIONS
+    // ------------------------------------------
+
+    openedLikedPostFromNotification = true;
+
+    // ------------------------------------------
+    // HIDE NOTIFICATIONS
+    // ------------------------------------------
+
+    const notificationsScreen =
+        document.getElementById("notificationsScreen");
+
+    if (notificationsScreen) {
+        notificationsScreen.style.display = "none";
+    }
+
+    // ------------------------------------------
+    // SHOW MAIN APP
+    // ------------------------------------------
+
+    const app =
+        document.getElementById("app");
+
+    if (app) {
+        app.style.display = "";
+    }
+
+    document.body.style.overflow = "";
+
+    // ------------------------------------------
+    // CHECK IF EXACT POST IS ALREADY RENDERED
+    // ------------------------------------------
+
+    let postElement =
+        document.getElementById(`post-${postId}`);
+
+    if (postElement) {
+
+        console.log(
+            "✅ EXACT LIKED POST ALREADY EXISTS"
+        );
+
+        postElement.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
+
+        highlightExactPost(postElement);
+
+        return;
+    }
+
+    // ------------------------------------------
+    // POST IS NOT IN CURRENT FEED
+    // LOAD IT
+    // ------------------------------------------
+
+    console.log(
+        "📥 EXACT POST NOT IN CURRENT FEED:",
+        postId
+    );
+
+    const { data: post, error } =
+        await supabase
+            .from("posts")
+            .select("*")
+            .eq("id", postId)
+            .single();
+
+    if (error || !post) {
+
+        console.error(
+            "❌ COULD NOT LOAD EXACT LIKED POST:",
+            error
+        );
+
+        return;
+    }
+
+    // ------------------------------------------
+    // LOAD PROFILE
+    // ------------------------------------------
+
+    if (post.user_id) {
+
+        const { data: profile } =
+            await supabase
+                .from("profiles")
+                .select(`
+                    id,
+                    name,
+                    username,
+                    avatar_url,
+                    cover_url,
+                    verified
+                `)
+                .eq("id", post.user_id)
+                .maybeSingle();
+
+        post.profile = profile || null;
+    }
+
+    // ------------------------------------------
+    // LOAD SAVED STATE
+    // ------------------------------------------
+
+    if (session?.user?.id) {
+
+        const { data: saved } =
+            await supabase
+                .from("saved_posts")
+                .select("id")
+                .eq("user_id", session.user.id)
+                .eq("post_id", postId)
+                .maybeSingle();
+
+        post.saved = !!saved;
+    }
+
+    // ------------------------------------------
+    // ADD POST TO POSTS STATE
+    // ------------------------------------------
+
+    if (!window.postsState) {
+        window.postsState = [];
+    }
+
+    const existingIndex =
+        window.postsState.findIndex(
+            p => String(p.id) === String(postId)
+        );
+
+    if (existingIndex >= 0) {
+
+        window.postsState[existingIndex] = {
+            ...window.postsState[existingIndex],
+            ...post
+        };
+
+    } else {
+
+        window.postsState.unshift(post);
+    }
+
+    // ------------------------------------------
+    // RENDER FEED
+    // ------------------------------------------
+
+    renderFeed(window.postsState);
+
+    // ------------------------------------------
+    // FIND EXACT POST AFTER RENDER
+    // ------------------------------------------
+
+    requestAnimationFrame(() => {
+
+        const exactPost =
+            document.getElementById(
+                `post-${postId}`
+            );
+
+        if (!exactPost) {
+
+            console.error(
+                "❌ EXACT POST STILL NOT FOUND:",
+                postId
+            );
+
+            return;
+        }
+
+        console.log(
+            "🎯 FOUND EXACT LIKED POST:",
+            exactPost.id
+        );
+
+        exactPost.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
+
+        highlightExactPost(exactPost);
+
+    });
+}
+
+function highlightExactPost(postElement) {
+
+    console.log(
+        "✨ HIGHLIGHTING:",
+        postElement.id
+    );
+
+    postElement.style.transition =
+        "box-shadow 0.3s ease, transform 0.3s ease";
+
+    postElement.style.boxShadow =
+        "0 0 0 3px #ff3040";
+
+    postElement.style.transform =
+        "scale(1.01)";
+
+    setTimeout(() => {
+
+        postElement.style.boxShadow = "";
+        postElement.style.transform = "";
+
+    }, 2500);
 }
 // ========================
 // GLOBAL HOME PAGE 
