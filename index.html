@@ -7405,6 +7405,10 @@ selectedCommentUserId = null;
     // LOAD POST
     // ==========================================
 
+const {
+    data: { session }
+} = await supabase.auth.getSession();
+
     const {
         data: post,
         error: postError
@@ -7763,12 +7767,17 @@ if (postLikeArea) {
 
 if (targetCommentId) {
 
+    await new Promise(resolve =>
+        requestAnimationFrame(() =>
+            requestAnimationFrame(resolve)
+        )
+    );
+
     await highlightNotificationComment(
         targetCommentId
     );
 
 }
-
 
     // ==========================================
     // WAIT FOR DOM
@@ -8213,18 +8222,21 @@ async function highlightNotificationComment(commentId) {
     );
 
     if (!commentId) {
-        notificationDebug("❌ NO COMMENT ID");
+
+        notificationDebug(
+            "❌ NO COMMENT ID"
+        );
+
         return;
     }
 
     const targetId =
         `comment-${commentId}`;
 
-    /*
-     * -------------------------------------------------
-     * FIRST: SEE IF ALREADY RENDERED
-     * -------------------------------------------------
-     */
+
+    // =====================================================
+    // 1. CHECK TARGET ALREADY IN DOM
+    // =====================================================
 
     let commentElement =
         document.getElementById(targetId);
@@ -8232,7 +8244,7 @@ async function highlightNotificationComment(commentId) {
     notificationDebug(
         "2️⃣ INITIAL DOM CHECK",
         {
-            targetId,
+            targetId: targetId,
             found: !!commentElement
         }
     );
@@ -8251,11 +8263,10 @@ async function highlightNotificationComment(commentId) {
         return;
     }
 
-    /*
-     * -------------------------------------------------
-     * GET TARGET COMMENT
-     * -------------------------------------------------
-     */
+
+    // =====================================================
+    // 2. GET TARGET COMMENT
+    // =====================================================
 
     const {
         data: targetComment,
@@ -8263,381 +8274,305 @@ async function highlightNotificationComment(commentId) {
     } = await supabase
         .from("comments")
         .select(`
-            id,
-            parent_id,
-            post_id
+            *,
+            comment_user:profiles!comments_user_id_fkey(
+                id,
+                name,
+                avatar_url,
+                verified
+            ),
+            reply_to_user:profiles!comments_reply_to_user_id_fkey(
+                id,
+                name
+            ),
+            comment_likes(
+                id,
+                user_id
+            ),
+            comment_reactions(
+                id,
+                user_id,
+                emoji
+            ),
+            comment_reads(
+                user_id
+            )
         `)
-        .eq("id", commentId)
+        .eq(
+            "id",
+            commentId
+        )
         .maybeSingle();
+
 
     notificationDebug(
         "3️⃣ DATABASE RESULT",
         {
-            targetComment,
-            error
+            targetComment: targetComment,
+            error: error
         }
     );
+
 
     if (error || !targetComment) {
 
         notificationDebug(
-            "❌ DATABASE COMMENT NOT FOUND"
+            "❌ TARGET COMMENT NOT FOUND",
+            {
+                commentId: commentId,
+                error: error
+            }
         );
 
         return;
     }
 
-    /*
-     * -------------------------------------------------
-     * NORMAL TOP-LEVEL COMMENT
-     * -------------------------------------------------
-     */
+
+    // =====================================================
+    // 3. TOP LEVEL COMMENT
+    // =====================================================
 
     if (!targetComment.parent_id) {
 
         notificationDebug(
-            "4️⃣ NORMAL COMMENT",
+            "4️⃣ TOP LEVEL COMMENT",
             {
-                commentId
+                commentId: commentId
             }
         );
 
-        commentElement =
-            document.getElementById(targetId);
 
-        if (!commentElement) {
+        const container =
+            document.getElementById(
+                "panelComments"
+            );
+
+
+        if (!container) {
 
             notificationDebug(
-                "❌ NORMAL COMMENT NOT RENDERED"
+                "❌ panelComments NOT FOUND"
             );
 
             return;
         }
+
+
+        const myId =
+            window.currentUserId ||
+            currentUser?.id ||
+            null;
+
+
+        // Do not duplicate
+        if (
+            !document.getElementById(
+                targetId
+            )
+        ) {
+
+            container.insertAdjacentHTML(
+                "afterbegin",
+                renderComment(
+                    targetComment,
+                    myId
+                )
+            );
+
+        }
+
+
+        commentElement =
+            document.getElementById(
+                targetId
+            );
+
+
+        if (!commentElement) {
+
+            notificationDebug(
+                "❌ FAILED TO RENDER TOP LEVEL COMMENT"
+            );
+
+            return;
+        }
+
+
+        await loadNestedReplyButton(
+            targetComment.id
+        );
+
 
         commentElement.scrollIntoView({
             behavior: "smooth",
             block: "center"
         });
 
+
         highlightNotificationElement(
             commentElement
         );
 
+
         return;
     }
 
-    /*
-     * -------------------------------------------------
-     * TARGET IS A REPLY
-     * -------------------------------------------------
-     */
+
+    // =====================================================
+    // 4. TARGET IS A REPLY
+    // =====================================================
 
     const parentId =
         targetComment.parent_id;
+
 
     notificationDebug(
         "4️⃣ REPLY DETECTED",
         {
             replyId: commentId,
-            parentId
+            parentId: parentId
         }
     );
 
-    /*
-     * -------------------------------------------------
-     * FIND PARENT
-     * -------------------------------------------------
-     */
 
-    const parentElement =
-        document.getElementById(
-            `comment-${parentId}`
+    // =====================================================
+    // 5. ENSURE PARENT IS IN DOM
+    // =====================================================
+
+    let parentElement =
+        await window.ensureCommentInDOM(
+            parentId
         );
 
+
     notificationDebug(
-        "5️⃣ PARENT DOM CHECK",
+        "5️⃣ PARENT ENSURE RESULT",
         {
-            parentId,
+            parentId: parentId,
             parentFound: !!parentElement
         }
     );
 
+
     if (!parentElement) {
 
         notificationDebug(
-            "⚠️ PARENT NOT CURRENTLY IN DOM"
+            "❌ PARENT COULD NOT BE LOADED"
         );
 
-        /*
-         * The parent should normally already be
-         * rendered by openComments().
-         *
-         * Give the comments UI a moment to finish.
-         */
-
-        let parentWait = 0;
-
-        while (
-            !document.getElementById(
-                `comment-${parentId}`
-            ) &&
-            parentWait < 20
-        ) {
-
-            parentWait++;
-
-            await new Promise(
-                resolve =>
-                    setTimeout(
-                        resolve,
-                        100
-                    )
-            );
-
-        }
-
-        if (
-            !document.getElementById(
-                `comment-${parentId}`
-            )
-        ) {
-
-            notificationDebug(
-                "❌ PARENT STILL NOT FOUND"
-            );
-
-            return;
-        }
+        return;
     }
 
-    /*
-     * -------------------------------------------------
-     * MAKE SURE REPLIES CONTAINER EXISTS
-     * -------------------------------------------------
-     */
 
-    let repliesContainer =
+    // =====================================================
+    // 6. ENSURE TARGET REPLY IS IN DOM
+    // =====================================================
+
+    commentElement =
+        await window.ensureCommentInDOM(
+            commentId
+        );
+
+
+    notificationDebug(
+        "6️⃣ TARGET REPLY ENSURE RESULT",
+        {
+            commentId: commentId,
+            found: !!commentElement
+        }
+    );
+
+
+    if (!commentElement) {
+
+        notificationDebug(
+            "❌ TARGET REPLY COULD NOT BE LOADED"
+        );
+
+        return;
+    }
+
+
+    // =====================================================
+    // 7. GET REPLIES CONTAINER
+    // =====================================================
+
+    const repliesContainer =
         document.getElementById(
             `replies-${parentId}`
         );
 
+
     if (!repliesContainer) {
 
         notificationDebug(
-            "⚠️ REPLIES CONTAINER MISSING"
+            "❌ REPLIES CONTAINER STILL MISSING",
+            {
+                parentId: parentId
+            }
         );
 
-        const parent =
-            document.getElementById(
-                `comment-${parentId}`
-            );
-
-        if (!parent) {
-
-            notificationDebug(
-                "❌ CANNOT CREATE REPLIES CONTAINER"
-            );
-
-            return;
-        }
-
-        repliesContainer =
-            document.createElement(
-                "div"
-            );
-
-        repliesContainer.id =
-            `replies-${parentId}`;
-
-        repliesContainer.className =
-            "nestedReplies";
-
-        repliesContainer.style.cssText = `
-            display:none;
-            margin-left:8px;
-            margin-top:3px;
-            border-left:1px solid #292929;
-            padding-left:8px;
-        `;
-
-        parent.appendChild(
-            repliesContainer
-        );
+        return;
     }
 
-    /*
-     * -------------------------------------------------
-     * INITIALIZE REPLY STATE
-     * -------------------------------------------------
-     */
 
-    window.replyPages =
-        window.replyPages || {};
+    // =====================================================
+    // 8. OPEN THREAD
+    // =====================================================
 
     window.expandedReplies =
-        window.expandedReplies || new Set();
+        window.expandedReplies ||
+        new Set();
 
-    /*
-     * IMPORTANT:
-     *
-     * Start from page 0 for notification navigation.
-     * This guarantees that the target reply is searched
-     * from the beginning.
-     */
-
-    window.replyPages[parentId] = 0;
 
     window.expandedReplies.add(
         parentId
     );
 
+
     repliesContainer.style.display =
         "block";
 
-    /*
-     * -------------------------------------------------
-     * LOAD REPLIES UNTIL TARGET IS FOUND
-     * -------------------------------------------------
-     */
 
-    let found = false;
-    let safety = 0;
+    // =====================================================
+    // 9. SHOW THREAD BUTTON
+    // =====================================================
 
-    while (
-        !found &&
-        safety < 50
-    ) {
-
-        safety++;
-
-        const page =
-            window.replyPages[parentId] || 0;
-
-        notificationDebug(
-            "📥 LOADING REPLY PAGE",
-            {
-                parentId,
-                page,
-                attempt: safety,
-                targetId
-            }
+    const threadButton =
+        document.getElementById(
+            `threadBtn-${parentId}`
         );
 
-        /*
-         * Check before loading.
-         */
 
-        commentElement =
-            document.getElementById(
-                targetId
-            );
+    if (threadButton) {
 
-        if (commentElement) {
+        threadButton.style.display =
+            "block";
 
-            found = true;
-            break;
-        }
+        threadButton.textContent =
+            "Hide replies";
 
-        /*
-         * Load this page.
-         */
-
-        if (
-            typeof window.loadReplies !==
-            "function"
-        ) {
-
-            notificationDebug(
-                "❌ loadReplies IS MISSING"
-            );
-
-            return;
-        }
-
-        const beforePage =
-            window.replyPages[parentId] || 0;
-
-        await window.loadReplies(
-            parentId
-        );
-
-        /*
-         * Give the browser a chance to commit
-         * inserted HTML to the DOM.
-         */
-
-        await new Promise(
-            resolve =>
-                requestAnimationFrame(
-                    () =>
-                        requestAnimationFrame(
-                            resolve
-                        )
-                )
-        );
-
-        /*
-         * Check target again.
-         */
-
-        commentElement =
-            document.getElementById(
-                targetId
-            );
-
-        const afterPage =
-            window.replyPages[parentId] || 0;
-
-        notificationDebug(
-            "📦 REPLY PAGE RESULT",
-            {
-                beforePage,
-                afterPage,
-                found: !!commentElement
-            }
-        );
-
-        if (commentElement) {
-
-            found = true;
-            break;
-        }
-
-        /*
-         * loadReplies() did not advance.
-         * There are no more pages.
-         */
-
-        if (
-            afterPage <= beforePage
-        ) {
-
-            notificationDebug(
-                "🛑 NO MORE REPLY PAGES"
-            );
-
-            break;
-        }
     }
 
-    /*
-     * -------------------------------------------------
-     * FINAL CHECK
-     * -------------------------------------------------
-     */
+
+    // =====================================================
+    // 10. FINAL CHECK
+    // =====================================================
 
     commentElement =
         document.getElementById(
             targetId
         );
 
+
     notificationDebug(
-        "🏁 FINAL CHECK",
+        "🏁 FINAL REPLY CHECK",
         {
-            targetId,
+            targetId: targetId,
             found: !!commentElement
         }
     );
+
 
     if (!commentElement) {
 
@@ -8648,38 +8583,25 @@ async function highlightNotificationComment(commentId) {
         return;
     }
 
-    /*
-     * -------------------------------------------------
-     * SUCCESS
-     * -------------------------------------------------
-     */
+
+    // =====================================================
+    // 11. SUCCESS
+    // =====================================================
 
     notificationDebug(
-        "✅ EXACT COMMENT FOUND",
+        "✅ EXACT REPLY FOUND",
         {
-            id: commentElement.id
+            id: commentElement.id,
+            parentId: parentId
         }
     );
 
-    /*
-     * Make sure thread is visible.
-     */
-
-    repliesContainer.style.display =
-        "block";
-
-    /*
-     * Scroll to exact reply.
-     */
 
     commentElement.scrollIntoView({
         behavior: "smooth",
         block: "center"
     });
 
-    /*
-     * Highlight exact reply.
-     */
 
     highlightNotificationElement(
         commentElement
@@ -8688,14 +8610,406 @@ async function highlightNotificationComment(commentId) {
 
 
 // =====================================================
-// HIGHLIGHT
+// ENSURE COMMENT / REPLY IS IN DOM
+// =====================================================
+
+window.ensureCommentInDOM =
+async function(commentId) {
+
+    if (!commentId) {
+        return null;
+    }
+
+
+    // =====================================================
+    // ALREADY IN DOM
+    // =====================================================
+
+    let element =
+        document.getElementById(
+            `comment-${commentId}`
+        );
+
+
+    if (element) {
+
+        notificationDebug(
+            "✅ COMMENT ALREADY IN DOM",
+            {
+                commentId: commentId
+            }
+        );
+
+        return element;
+    }
+
+
+    notificationDebug(
+        "🔎 ENSURING COMMENT IN DOM",
+        {
+            commentId: commentId
+        }
+    );
+
+
+    // =====================================================
+    // GET COMMENT
+    // =====================================================
+
+    const {
+        data: comment,
+        error
+    } = await supabase
+        .from("comments")
+        .select(`
+            *,
+            comment_user:profiles!comments_user_id_fkey(
+                id,
+                name,
+                avatar_url,
+                verified
+            ),
+            reply_to_user:profiles!comments_reply_to_user_id_fkey(
+                id,
+                name
+            ),
+            comment_likes(
+                id,
+                user_id
+            ),
+            comment_reactions(
+                id,
+                user_id,
+                emoji
+            ),
+            comment_reads(
+                user_id
+            )
+        `)
+        .eq(
+            "id",
+            commentId
+        )
+        .maybeSingle();
+
+
+    if (error || !comment) {
+
+        notificationDebug(
+            "❌ ensureCommentInDOM DATABASE FAILED",
+            {
+                commentId: commentId,
+                error: error
+            }
+        );
+
+        return null;
+    }
+
+
+    const myId =
+        window.currentUserId ||
+        currentUser?.id ||
+        null;
+
+
+    // =====================================================
+    // TOP LEVEL COMMENT
+    // =====================================================
+
+    if (!comment.parent_id) {
+
+        const container =
+            document.getElementById(
+                "panelComments"
+            );
+
+
+        if (!container) {
+
+            notificationDebug(
+                "❌ panelComments NOT FOUND"
+            );
+
+            return null;
+        }
+
+
+        // Avoid duplicate
+        if (
+            !document.getElementById(
+                `comment-${comment.id}`
+            )
+        ) {
+
+            container.insertAdjacentHTML(
+                "afterbegin",
+                renderComment(
+                    comment,
+                    myId
+                )
+            );
+
+        }
+
+
+        element =
+            document.getElementById(
+                `comment-${comment.id}`
+            );
+
+
+        if (!element) {
+
+            notificationDebug(
+                "❌ TOP LEVEL COMMENT FAILED TO RENDER",
+                {
+                    commentId: comment.id
+                }
+            );
+
+            return null;
+        }
+
+
+        await loadNestedReplyButton(
+            comment.id
+        );
+
+
+        notificationDebug(
+            "✅ TOP LEVEL COMMENT LOADED",
+            {
+                commentId: comment.id
+            }
+        );
+
+
+        return element;
+    }
+
+
+    // =====================================================
+    // REPLY
+    // =====================================================
+
+    const parentId =
+        comment.parent_id;
+
+
+    notificationDebug(
+        "↪️ LOADING REPLY",
+        {
+            replyId: comment.id,
+            parentId: parentId
+        }
+    );
+
+
+    // =====================================================
+    // ENSURE PARENT EXISTS
+    // =====================================================
+
+    let parentElement =
+        document.getElementById(
+            `comment-${parentId}`
+        );
+
+
+    if (!parentElement) {
+
+        notificationDebug(
+            "⚠️ PARENT ALSO NEEDS LOADING",
+            {
+                parentId: parentId
+            }
+        );
+
+
+        parentElement =
+            await window.ensureCommentInDOM(
+                parentId
+            );
+
+    }
+
+
+    if (!parentElement) {
+
+        notificationDebug(
+            "❌ PARENT COULD NOT BE LOADED",
+            {
+                parentId: parentId
+            }
+        );
+
+        return null;
+    }
+
+
+    // =====================================================
+    // CREATE REPLIES CONTAINER
+    // =====================================================
+
+    let parentReplies =
+        document.getElementById(
+            `replies-${parentId}`
+        );
+
+
+    if (!parentReplies) {
+
+        notificationDebug(
+            "🛠️ CREATING REPLIES CONTAINER",
+            {
+                parentId: parentId
+            }
+        );
+
+
+        parentReplies =
+            document.createElement(
+                "div"
+            );
+
+
+        parentReplies.id =
+            `replies-${parentId}`;
+
+
+        parentReplies.className =
+            "nestedReplies";
+
+
+        parentReplies.style.cssText = `
+            display:block;
+            margin-left:8px;
+            margin-top:3px;
+            border-left:1px solid #292929;
+            padding-left:8px;
+        `;
+
+
+        parentElement.appendChild(
+            parentReplies
+        );
+
+    }
+
+
+    // =====================================================
+    // INSERT REPLY
+    // =====================================================
+
+    element =
+        document.getElementById(
+            `comment-${comment.id}`
+        );
+
+
+    if (!element) {
+
+        parentReplies.insertAdjacentHTML(
+            "beforeend",
+            renderReply(comment)
+        );
+
+    }
+
+
+    // =====================================================
+    // GET ELEMENT AGAIN
+    // =====================================================
+
+    element =
+        document.getElementById(
+            `comment-${comment.id}`
+        );
+
+
+    if (!element) {
+
+        notificationDebug(
+            "❌ REPLY FAILED TO RENDER",
+            {
+                replyId: comment.id,
+                parentId: parentId
+            }
+        );
+
+        return null;
+    }
+
+
+    // =====================================================
+    // OPEN THREAD
+    // =====================================================
+
+    parentReplies.style.display =
+        "block";
+
+
+    window.expandedReplies =
+        window.expandedReplies ||
+        new Set();
+
+
+    window.expandedReplies.add(
+        parentId
+    );
+
+
+    // =====================================================
+    // UPDATE REPLY BUTTON
+    // =====================================================
+
+    await loadNestedReplyButton(
+        parentId
+    );
+
+
+    const threadButton =
+        document.getElementById(
+            `threadBtn-${parentId}`
+        );
+
+
+    if (threadButton) {
+
+        threadButton.style.display =
+            "block";
+
+        threadButton.textContent =
+            "Hide replies";
+
+    }
+
+
+    notificationDebug(
+        "✅ REPLY LOADED INTO DOM",
+        {
+            replyId: comment.id,
+            parentId: parentId
+        }
+    );
+
+
+    return element;
+};
+
+
+// =====================================================
+// HIGHLIGHT ELEMENT
 // =====================================================
 
 function highlightNotificationElement(
     commentElement
 ) {
 
-    if (!commentElement) return;
+    if (!commentElement) {
+        return;
+    }
+
 
     const oldTransition =
         commentElement.style.transition;
@@ -8706,16 +9020,25 @@ function highlightNotificationElement(
     const oldBoxShadow =
         commentElement.style.boxShadow;
 
+
     commentElement.style.transition =
         "background 0.3s ease, box-shadow 0.3s ease";
+
 
     commentElement.style.background =
         "rgba(0,149,246,0.18)";
 
+
     commentElement.style.boxShadow =
         "0 0 0 3px #0095f6";
 
+
     setTimeout(() => {
+
+        if (!commentElement) {
+            return;
+        }
+
 
         commentElement.style.transition =
             oldTransition;
@@ -8728,6 +9051,7 @@ function highlightNotificationElement(
 
     }, 3000);
 }
+
 
 function renderCommentsList(data, myId) {
 
@@ -25096,9 +25420,9 @@ if (data.type === "comment_reply") {
         );
 
         await openComments(
-    data.post_id,
-    data.comment_id
-);
+            data.post_id,
+            data.comment_id
+        );
 
     }
 
