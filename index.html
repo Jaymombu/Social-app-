@@ -8143,7 +8143,10 @@ if (data.length === COMMENTS_PER_PAGE) {
 
   }
   listenToCommentTyping();
-  loadingComments = false;
+
+loadingComments = false;
+
+return true;
 }
 
 function notificationDebug(message, data = null) {
@@ -8214,11 +8217,14 @@ async function highlightNotificationComment(commentId) {
         return;
     }
 
-    const targetId = `comment-${commentId}`;
+    const targetId =
+        `comment-${commentId}`;
 
-    // =====================================================
-    // CHECK IF ALREADY RENDERED
-    // =====================================================
+    /*
+     * -------------------------------------------------
+     * FIRST: SEE IF ALREADY RENDERED
+     * -------------------------------------------------
+     */
 
     let commentElement =
         document.getElementById(targetId);
@@ -8226,7 +8232,7 @@ async function highlightNotificationComment(commentId) {
     notificationDebug(
         "2️⃣ INITIAL DOM CHECK",
         {
-            targetId: targetId,
+            targetId,
             found: !!commentElement
         }
     );
@@ -8245,9 +8251,11 @@ async function highlightNotificationComment(commentId) {
         return;
     }
 
-    // =====================================================
-    // GET COMMENT
-    // =====================================================
+    /*
+     * -------------------------------------------------
+     * GET TARGET COMMENT
+     * -------------------------------------------------
+     */
 
     const {
         data: targetComment,
@@ -8265,8 +8273,8 @@ async function highlightNotificationComment(commentId) {
     notificationDebug(
         "3️⃣ DATABASE RESULT",
         {
-            targetComment: targetComment,
-            error: error
+            targetComment,
+            error
         }
     );
 
@@ -8279,28 +8287,23 @@ async function highlightNotificationComment(commentId) {
         return;
     }
 
-    // =====================================================
-    // NORMAL COMMENT
-    // =====================================================
+    /*
+     * -------------------------------------------------
+     * NORMAL TOP-LEVEL COMMENT
+     * -------------------------------------------------
+     */
 
     if (!targetComment.parent_id) {
 
         notificationDebug(
             "4️⃣ NORMAL COMMENT",
             {
-                commentId: commentId
+                commentId
             }
         );
 
         commentElement =
             document.getElementById(targetId);
-
-        notificationDebug(
-            "5️⃣ NORMAL COMMENT DOM CHECK",
-            {
-                found: !!commentElement
-            }
-        );
 
         if (!commentElement) {
 
@@ -8311,214 +8314,327 @@ async function highlightNotificationComment(commentId) {
             return;
         }
 
-    }
+        commentElement.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+        });
 
-    // =====================================================
-    // REPLY
-    // =====================================================
-
-    if (targetComment.parent_id) {
-
-        const parentId =
-            targetComment.parent_id;
-
-        notificationDebug(
-            "4️⃣ REPLY DETECTED",
-            {
-                replyId: commentId,
-                parentId: parentId
-            }
+        highlightNotificationElement(
+            commentElement
         );
 
-        // -------------------------------------------------
-        // CHECK PARENT
-        // -------------------------------------------------
+        return;
+    }
 
-        const parentElement =
+    /*
+     * -------------------------------------------------
+     * TARGET IS A REPLY
+     * -------------------------------------------------
+     */
+
+    const parentId =
+        targetComment.parent_id;
+
+    notificationDebug(
+        "4️⃣ REPLY DETECTED",
+        {
+            replyId: commentId,
+            parentId
+        }
+    );
+
+    /*
+     * -------------------------------------------------
+     * FIND PARENT
+     * -------------------------------------------------
+     */
+
+    const parentElement =
+        document.getElementById(
+            `comment-${parentId}`
+        );
+
+    notificationDebug(
+        "5️⃣ PARENT DOM CHECK",
+        {
+            parentId,
+            parentFound: !!parentElement
+        }
+    );
+
+    if (!parentElement) {
+
+        notificationDebug(
+            "⚠️ PARENT NOT CURRENTLY IN DOM"
+        );
+
+        /*
+         * The parent should normally already be
+         * rendered by openComments().
+         *
+         * Give the comments UI a moment to finish.
+         */
+
+        let parentWait = 0;
+
+        while (
+            !document.getElementById(
+                `comment-${parentId}`
+            ) &&
+            parentWait < 20
+        ) {
+
+            parentWait++;
+
+            await new Promise(
+                resolve =>
+                    setTimeout(
+                        resolve,
+                        100
+                    )
+            );
+
+        }
+
+        if (
+            !document.getElementById(
+                `comment-${parentId}`
+            )
+        ) {
+
+            notificationDebug(
+                "❌ PARENT STILL NOT FOUND"
+            );
+
+            return;
+        }
+    }
+
+    /*
+     * -------------------------------------------------
+     * MAKE SURE REPLIES CONTAINER EXISTS
+     * -------------------------------------------------
+     */
+
+    let repliesContainer =
+        document.getElementById(
+            `replies-${parentId}`
+        );
+
+    if (!repliesContainer) {
+
+        notificationDebug(
+            "⚠️ REPLIES CONTAINER MISSING"
+        );
+
+        const parent =
             document.getElementById(
                 `comment-${parentId}`
             );
 
-        notificationDebug(
-            "5️⃣ PARENT DOM CHECK",
-            {
-                parentId: parentId,
-                parentFound: !!parentElement
-            }
-        );
-
-        // -------------------------------------------------
-        // CHECK REPLIES CONTAINER
-        // -------------------------------------------------
-
-        const repliesContainer =
-            document.getElementById(
-                `replies-${parentId}`
-            );
-
-        notificationDebug(
-            "6️⃣ REPLIES CONTAINER CHECK",
-            {
-                containerId:
-                    `replies-${parentId}`,
-
-                containerFound:
-                    !!repliesContainer
-            }
-        );
-
-        // -------------------------------------------------
-        // CHECK TOGGLE FUNCTION
-        // -------------------------------------------------
-
-        notificationDebug(
-            "7️⃣ TOGGLE CHECK",
-            {
-                exists:
-                    typeof window.toggleReplies ===
-                    "function"
-            }
-        );
-
-        if (
-            typeof window.toggleReplies !==
-            "function"
-        ) {
+        if (!parent) {
 
             notificationDebug(
-                "❌ toggleReplies IS MISSING"
+                "❌ CANNOT CREATE REPLIES CONTAINER"
             );
 
             return;
         }
 
-        // -------------------------------------------------
-        // RESET THREAD STATE
-        // -------------------------------------------------
+        repliesContainer =
+            document.createElement(
+                "div"
+            );
 
-        window.expandedReplies =
-            window.expandedReplies || new Set();
+        repliesContainer.id =
+            `replies-${parentId}`;
 
-        window.replyPages =
-            window.replyPages || {};
+        repliesContainer.className =
+            "nestedReplies";
 
-        window.expandedReplies.delete(
-            parentId
+        repliesContainer.style.cssText = `
+            display:none;
+            margin-left:8px;
+            margin-top:3px;
+            border-left:1px solid #292929;
+            padding-left:8px;
+        `;
+
+        parent.appendChild(
+            repliesContainer
         );
+    }
+
+    /*
+     * -------------------------------------------------
+     * INITIALIZE REPLY STATE
+     * -------------------------------------------------
+     */
+
+    window.replyPages =
+        window.replyPages || {};
+
+    window.expandedReplies =
+        window.expandedReplies || new Set();
+
+    /*
+     * IMPORTANT:
+     *
+     * Start from page 0 for notification navigation.
+     * This guarantees that the target reply is searched
+     * from the beginning.
+     */
+
+    window.replyPages[parentId] = 0;
+
+    window.expandedReplies.add(
+        parentId
+    );
+
+    repliesContainer.style.display =
+        "block";
+
+    /*
+     * -------------------------------------------------
+     * LOAD REPLIES UNTIL TARGET IS FOUND
+     * -------------------------------------------------
+     */
+
+    let found = false;
+    let safety = 0;
+
+    while (
+        !found &&
+        safety < 50
+    ) {
+
+        safety++;
+
+        const page =
+            window.replyPages[parentId] || 0;
 
         notificationDebug(
-            "8️⃣ CALLING toggleReplies",
+            "📥 LOADING REPLY PAGE",
             {
-                parentId: parentId
+                parentId,
+                page,
+                attempt: safety,
+                targetId
             }
         );
 
-        // -------------------------------------------------
-        // OPEN THREAD
-        // -------------------------------------------------
-
-        await window.toggleReplies(
-            parentId
-        );
-
-        notificationDebug(
-            "9️⃣ toggleReplies FINISHED",
-            {
-                parentId: parentId
-            }
-        );
-
-        // -------------------------------------------------
-        // CHECK TARGET REPLY
-        // -------------------------------------------------
+        /*
+         * Check before loading.
+         */
 
         commentElement =
-            document.getElementById(targetId);
+            document.getElementById(
+                targetId
+            );
+
+        if (commentElement) {
+
+            found = true;
+            break;
+        }
+
+        /*
+         * Load this page.
+         */
+
+        if (
+            typeof window.loadReplies !==
+            "function"
+        ) {
+
+            notificationDebug(
+                "❌ loadReplies IS MISSING"
+            );
+
+            return;
+        }
+
+        const beforePage =
+            window.replyPages[parentId] || 0;
+
+        await window.loadReplies(
+            parentId
+        );
+
+        /*
+         * Give the browser a chance to commit
+         * inserted HTML to the DOM.
+         */
+
+        await new Promise(
+            resolve =>
+                requestAnimationFrame(
+                    () =>
+                        requestAnimationFrame(
+                            resolve
+                        )
+                )
+        );
+
+        /*
+         * Check target again.
+         */
+
+        commentElement =
+            document.getElementById(
+                targetId
+            );
+
+        const afterPage =
+            window.replyPages[parentId] || 0;
 
         notificationDebug(
-            "🔟 REPLY DOM CHECK",
+            "📦 REPLY PAGE RESULT",
             {
-                targetId: targetId,
+                beforePage,
+                afterPage,
                 found: !!commentElement
             }
         );
 
-        // -------------------------------------------------
-        // IF NOT FOUND, LOAD REPLIES
-        // -------------------------------------------------
+        if (commentElement) {
 
-        let safety = 0;
+            found = true;
+            break;
+        }
 
-        while (
-            !commentElement &&
-            safety < 50
+        /*
+         * loadReplies() did not advance.
+         * There are no more pages.
+         */
+
+        if (
+            afterPage <= beforePage
         ) {
 
-            safety++;
-
-            const beforePage =
-                window.replyPages[parentId] || 0;
-
             notificationDebug(
-                "📥 LOADING REPLY PAGE",
-                {
-                    parentId: parentId,
-                    page: beforePage,
-                    attempt: safety
-                }
+                "🛑 NO MORE REPLY PAGES"
             );
 
-            if (
-                typeof window.loadReplies !==
-                "function"
-            ) {
-
-                notificationDebug(
-                    "❌ loadReplies IS MISSING"
-                );
-
-                return;
-            }
-
-            await window.loadReplies(
-                parentId
-            );
-
-            commentElement =
-                document.getElementById(targetId);
-
-            const afterPage =
-                window.replyPages[parentId] || 0;
-
-            notificationDebug(
-                "📦 REPLY PAGE RESULT",
-                {
-                    beforePage: beforePage,
-                    afterPage: afterPage,
-                    found: !!commentElement
-                }
-            );
-
-            if (
-                afterPage <= beforePage
-            ) {
-
-                break;
-            }
+            break;
         }
     }
 
-    // =====================================================
-    // FINAL CHECK
-    // =====================================================
+    /*
+     * -------------------------------------------------
+     * FINAL CHECK
+     * -------------------------------------------------
+     */
 
     commentElement =
-        document.getElementById(targetId);
+        document.getElementById(
+            targetId
+        );
 
     notificationDebug(
         "🏁 FINAL CHECK",
         {
-            targetId: targetId,
+            targetId,
             found: !!commentElement
         }
     );
@@ -8532,9 +8648,11 @@ async function highlightNotificationComment(commentId) {
         return;
     }
 
-    // =====================================================
-    // SUCCESS
-    // =====================================================
+    /*
+     * -------------------------------------------------
+     * SUCCESS
+     * -------------------------------------------------
+     */
 
     notificationDebug(
         "✅ EXACT COMMENT FOUND",
@@ -8543,10 +8661,25 @@ async function highlightNotificationComment(commentId) {
         }
     );
 
+    /*
+     * Make sure thread is visible.
+     */
+
+    repliesContainer.style.display =
+        "block";
+
+    /*
+     * Scroll to exact reply.
+     */
+
     commentElement.scrollIntoView({
         behavior: "smooth",
         block: "center"
     });
+
+    /*
+     * Highlight exact reply.
+     */
 
     highlightNotificationElement(
         commentElement
@@ -24914,12 +25047,9 @@ async function(id) {
         openedCommentsFromNotification = true;
 
         await openComments(
-            data.post_id
-        );
-
-        await highlightNotificationComment(
-            data.comment_id
-        );
+    data.post_id,
+    data.comment_id
+);
 
     }
 
@@ -24937,12 +25067,9 @@ if (data.type === "comment_like") {
         openedCommentsFromNotification = true;
 
         await openComments(
-            data.post_id
-        );
-
-        await highlightNotificationComment(
-            data.comment_id
-        );
+    data.post_id,
+    data.comment_id
+);
 
     }
 
@@ -24969,12 +25096,9 @@ if (data.type === "comment_reply") {
         );
 
         await openComments(
-            data.post_id
-        );
-
-        await highlightNotificationComment(
-            data.comment_id
-        );
+    data.post_id,
+    data.comment_id
+);
 
     }
 
@@ -24992,12 +25116,9 @@ if (data.type === "comment_reaction") {
         openedCommentsFromNotification = true;
 
         await openComments(
-            data.post_id
-        );
-
-        await highlightNotificationComment(
-            data.comment_id
-        );
+    data.post_id,
+    data.comment_id
+);
 
     }
 
