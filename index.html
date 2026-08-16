@@ -8158,32 +8158,29 @@ async function highlightNotificationComment(commentId) {
     const targetId =
         `comment-${commentId}`;
 
-    // ------------------------------------------
-    // FIRST: SEE IF COMMENT IS ALREADY RENDERED
-    // ------------------------------------------
+    // ==========================================
+    // FIRST: ALREADY RENDERED?
+    // ==========================================
 
     let commentElement =
         document.getElementById(targetId);
 
-    // ------------------------------------------
-    // IF NOT FOUND, IT MAY BE A REPLY
-    // ------------------------------------------
+    // ==========================================
+    // IF NOT RENDERED, FIND ITS PARENT
+    // ==========================================
 
     if (!commentElement) {
 
-        console.log(
-            "↩️ TARGET MAY BE A REPLY:",
-            commentId
-        );
+        const {
+            data: target,
+            error
+        } = await supabase
+            .from("comments")
+            .select("id, parent_id")
+            .eq("id", commentId)
+            .maybeSingle();
 
-        const { data: reply, error } =
-            await supabase
-                .from("comments")
-                .select("id, parent_id")
-                .eq("id", commentId)
-                .maybeSingle();
-
-        if (error || !reply) {
+        if (error || !target) {
 
             console.error(
                 "❌ TARGET COMMENT NOT FOUND:",
@@ -8193,85 +8190,227 @@ async function highlightNotificationComment(commentId) {
             return;
         }
 
-        // --------------------------------------
-        // TARGET IS A REPLY
-        // --------------------------------------
+        // ======================================
+        // NORMAL COMMENT
+        // ======================================
 
-        if (reply.parent_id) {
+        if (!target.parent_id) {
+
+            console.warn(
+                "⚠️ Comment exists but is not rendered:",
+                commentId
+            );
+
+        }
+
+        // ======================================
+        // REPLY
+        // ======================================
+
+        if (target.parent_id) {
+
+            const parentId =
+                String(target.parent_id);
 
             console.log(
-                "↩️ REPLY PARENT:",
-                reply.parent_id
+                "↩️ TARGET REPLY:",
+                commentId,
+                "PARENT:",
+                parentId
             );
 
-            expandedReplies.add(
-                reply.parent_id
-            );
+            // ----------------------------------
+            // INITIALIZE STATE
+            // ----------------------------------
 
-            // Open the parent's replies
-            if (
-                typeof toggleReplies ===
-                "function"
-            ) {
+            window.expandedReplies =
+                window.expandedReplies || new Set();
 
-                await toggleReplies(
-                    reply.parent_id
+            window.replyPages =
+                window.replyPages || {};
+
+            // ----------------------------------
+            // OPEN THREAD IF CLOSED
+            // ----------------------------------
+
+            const parentReplies =
+                document.getElementById(
+                    "replies-" + parentId
+                );
+
+            const isOpen =
+                window.expandedReplies.has(
+                    parentId
+                );
+
+            if (!isOpen) {
+
+                await window.toggleReplies(
+                    parentId
                 );
 
             }
 
-            // Give the reply DOM time to render
-            await new Promise(resolve => {
+            // ----------------------------------
+            // KEEP LOADING PAGES UNTIL TARGET
+            // IS FOUND
+            // ----------------------------------
 
-                requestAnimationFrame(() => {
+            let attempts = 0;
 
-                    requestAnimationFrame(resolve);
+            const maxAttempts = 100;
 
-                });
+            while (
+                !document.getElementById(targetId) &&
+                attempts < maxAttempts
+            ) {
 
-            });
+                attempts++;
 
-            commentElement =
-                document.getElementById(
-                    targetId
+                commentElement =
+                    document.getElementById(
+                        targetId
+                    );
+
+                if (commentElement) {
+                    break;
+                }
+
+                // Make sure the container exists
+                const repliesContainer =
+                    document.getElementById(
+                        "replies-" + parentId
+                    );
+
+                if (!repliesContainer) {
+
+                    console.warn(
+                        "⚠️ Replies container missing:",
+                        parentId
+                    );
+
+                    break;
+                }
+
+                // ----------------------------------
+                // CHECK WHETHER MORE REPLIES EXIST
+                // ----------------------------------
+
+                const page =
+                    window.replyPages[parentId] || 0;
+
+                const from =
+                    page * REPLIES_PER_PAGE;
+
+                const to =
+                    from + REPLIES_PER_PAGE - 1;
+
+                const {
+                    data: moreReplies,
+                    error: moreError
+                } = await supabase
+                    .from("comments")
+                    .select("id")
+                    .eq(
+                        "parent_id",
+                        parentId
+                    )
+                    .order(
+                        "created_at",
+                        {
+                            ascending: true
+                        }
+                    )
+                    .range(
+                        from,
+                        to
+                    );
+
+                if (moreError) {
+
+                    console.error(
+                        "❌ Failed checking reply page:",
+                        moreError
+                    );
+
+                    break;
+                }
+
+                // ----------------------------------
+                // NO MORE PAGES
+                // ----------------------------------
+
+                if (
+                    !moreReplies ||
+                    moreReplies.length === 0
+                ) {
+
+                    console.warn(
+                        "⚠️ Target reply not found in thread:",
+                        commentId
+                    );
+
+                    break;
+                }
+
+                // ----------------------------------
+                // LOAD NEXT PAGE
+                // ----------------------------------
+
+                await window.loadReplies(
+                    parentId
                 );
 
-        }
+                // ----------------------------------
+                // CHECK AGAIN
+                // ----------------------------------
 
+                commentElement =
+                    document.getElementById(
+                        targetId
+                    );
+
+                if (commentElement) {
+                    break;
+                }
+            }
+        }
     }
 
-    // ------------------------------------------
-    // STILL NOT FOUND
-    // ------------------------------------------
+    // ==========================================
+    // FINAL LOOKUP
+    // ==========================================
+
+    commentElement =
+        document.getElementById(targetId);
 
     if (!commentElement) {
 
         console.warn(
-            "⚠️ COMMENT ELEMENT NOT FOUND:",
+            "⚠️ EXACT COMMENT ELEMENT NOT FOUND:",
             targetId
         );
 
         return;
-
     }
 
     console.log(
-        "✅ EXACT COMMENT FOUND:",
+        "✅ EXACT NOTIFICATION COMMENT FOUND:",
         commentElement
     );
 
-    // ------------------------------------------
-    // SCROLL TO EXACT COMMENT
-    // ------------------------------------------
+    // ==========================================
+    // SCROLL
+    // ==========================================
 
     commentElement.scrollIntoView({
         behavior: "smooth",
         block: "center"
     });
 
-    // ------------------------------------------
+    // ==========================================
     // HIGHLIGHT
-    // ------------------------------------------
+    // ==========================================
 
     const oldTransition =
         commentElement.style.transition;
@@ -8291,9 +8430,9 @@ async function highlightNotificationComment(commentId) {
     commentElement.style.boxShadow =
         "0 0 0 3px #0095f6";
 
-    // ------------------------------------------
+    // ==========================================
     // REMOVE HIGHLIGHT
-    // ------------------------------------------
+    // ==========================================
 
     setTimeout(() => {
 
@@ -24623,13 +24762,16 @@ async function(id) {
 
   if (data.type === "comment") {
 
-    if (data.post_id) {
+    if (data.post_id && data.comment_id) {
 
         openedCommentsFromNotification = true;
 
-        openComments(
-            data.post_id,
-            data.comment_id || null
+        await openComments(
+            data.post_id
+        );
+
+        await highlightNotificationComment(
+            data.comment_id
         );
 
     }
@@ -24637,27 +24779,28 @@ async function(id) {
     return;
 }
 
-
 // =====================================================
 // COMMENT LIKE
 // =====================================================
 
 if (data.type === "comment_like") {
 
-  if (data.post_id) {
+    if (data.post_id && data.comment_id) {
 
-    openedCommentsFromNotification = true;
+        openedCommentsFromNotification = true;
 
-    openComments(
-      data.post_id,
-      data.comment_id || null
-    );
+        await openComments(
+            data.post_id
+        );
 
-  }
+        await highlightNotificationComment(
+            data.comment_id
+        );
 
-  return;
+    }
+
+    return;
 }
-
 
 // =====================================================
 // COMMENT REPLY
@@ -24665,20 +24808,22 @@ if (data.type === "comment_like") {
 
 if (data.type === "comment_reply") {
 
-  if (data.post_id) {
+    if (data.post_id && data.comment_id) {
 
-    openedCommentsFromNotification = true;
+        openedCommentsFromNotification = true;
 
-    openComments(
-      data.post_id,
-      data.comment_id || null
-    );
+        await openComments(
+            data.post_id
+        );
 
-  }
+        await highlightNotificationComment(
+            data.comment_id
+        );
 
-  return;
+    }
+
+    return;
 }
-
 
 // =====================================================
 // COMMENT REACTION
@@ -24686,20 +24831,22 @@ if (data.type === "comment_reply") {
 
 if (data.type === "comment_reaction") {
 
-  if (data.post_id) {
+    if (data.post_id && data.comment_id) {
 
-    openedCommentsFromNotification = true;
+        openedCommentsFromNotification = true;
 
-    openComments(
-      data.post_id,
-      data.comment_id || null
-    );
+        await openComments(
+            data.post_id
+        );
 
-  }
+        await highlightNotificationComment(
+            data.comment_id
+        );
 
-  return;
+    }
+
+    return;
 }
-
 
   // =====================================================
   // FOLLOW
