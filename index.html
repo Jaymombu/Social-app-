@@ -8203,37 +8203,35 @@ function notificationDebug(message, data = null) {
 async function highlightNotificationComment(commentId) {
 
     notificationDebug(
-        "1️⃣ highlightNotificationComment START",
+        "1️⃣ START",
         {
             commentId: commentId
         }
     );
 
     if (!commentId) {
-
-        notificationDebug(
-            "❌ commentId is missing"
-        );
-
+        notificationDebug("❌ NO COMMENT ID");
         return;
     }
 
-    const targetId =
-        `comment-${commentId}`;
+    const targetId = `comment-${commentId}`;
 
     // =====================================================
-    // 1. CHECK IF ALREADY RENDERED
+    // CHECK IF ALREADY RENDERED
     // =====================================================
 
     let commentElement =
         document.getElementById(targetId);
 
-    if (commentElement) {
+    notificationDebug(
+        "2️⃣ INITIAL DOM CHECK",
+        {
+            targetId: targetId,
+            found: !!commentElement
+        }
+    );
 
-        console.log(
-            "✅ TARGET ALREADY RENDERED:",
-            commentId
-        );
+    if (commentElement) {
 
         commentElement.scrollIntoView({
             behavior: "smooth",
@@ -8247,9 +8245,8 @@ async function highlightNotificationComment(commentId) {
         return;
     }
 
-
     // =====================================================
-    // 2. GET THE EXACT COMMENT FROM SUPABASE
+    // GET COMMENT
     // =====================================================
 
     const {
@@ -8264,52 +8261,51 @@ async function highlightNotificationComment(commentId) {
         `)
         .eq("id", commentId)
         .maybeSingle();
-        
-        notificationDebug(
-    "2️⃣ TARGET COMMENT FROM DATABASE",
-    {
-        targetComment: targetComment,
-        error: error
-    }
-);
+
+    notificationDebug(
+        "3️⃣ DATABASE RESULT",
+        {
+            targetComment: targetComment,
+            error: error
+        }
+    );
 
     if (error || !targetComment) {
 
-        console.error(
-            "❌ EXACT NOTIFICATION COMMENT NOT FOUND:",
-            error
+        notificationDebug(
+            "❌ DATABASE COMMENT NOT FOUND"
         );
 
         return;
     }
 
-
-    console.log(
-        "🎯 EXACT COMMENT RECORD:",
-        targetComment
-    );
-
-
     // =====================================================
-    // 3. NORMAL COMMENT
+    // NORMAL COMMENT
     // =====================================================
 
     if (!targetComment.parent_id) {
 
-        console.log(
-            "💬 TARGET IS A NORMAL COMMENT:",
-            commentId
+        notificationDebug(
+            "4️⃣ NORMAL COMMENT",
+            {
+                commentId: commentId
+            }
         );
 
-        // It should already have been loaded by loadComments().
         commentElement =
             document.getElementById(targetId);
 
+        notificationDebug(
+            "5️⃣ NORMAL COMMENT DOM CHECK",
+            {
+                found: !!commentElement
+            }
+        );
+
         if (!commentElement) {
 
-            console.warn(
-                "⚠️ NORMAL COMMENT NOT CURRENTLY RENDERED:",
-                commentId
+            notificationDebug(
+                "❌ NORMAL COMMENT NOT RENDERED"
             );
 
             return;
@@ -8317,107 +8313,139 @@ async function highlightNotificationComment(commentId) {
 
     }
 
-
     // =====================================================
-    // 4. REPLY
+    // REPLY
     // =====================================================
 
     if (targetComment.parent_id) {
 
         const parentId =
             targetComment.parent_id;
-            
-            notificationDebug(
-    "3️⃣ TARGET IS A REPLY",
-    {
-        replyId: commentId,
-        parentId: targetComment.parent_id
-    }
-);
 
-        console.log(
-            "↩️ TARGET IS REPLY:",
+        notificationDebug(
+            "4️⃣ REPLY DETECTED",
             {
                 replyId: commentId,
                 parentId: parentId
             }
         );
 
+        // -------------------------------------------------
+        // CHECK PARENT
+        // -------------------------------------------------
 
-        // -----------------------------------------------
-        // Make sure parent's replies container exists
-        // -----------------------------------------------
+        const parentElement =
+            document.getElementById(
+                `comment-${parentId}`
+            );
 
-        let repliesContainer =
+        notificationDebug(
+            "5️⃣ PARENT DOM CHECK",
+            {
+                parentId: parentId,
+                parentFound: !!parentElement
+            }
+        );
+
+        // -------------------------------------------------
+        // CHECK REPLIES CONTAINER
+        // -------------------------------------------------
+
+        const repliesContainer =
             document.getElementById(
                 `replies-${parentId}`
             );
 
+        notificationDebug(
+            "6️⃣ REPLIES CONTAINER CHECK",
+            {
+                containerId:
+                    `replies-${parentId}`,
 
-        // -----------------------------------------------
-        // If parent exists, open its thread
-        // -----------------------------------------------
+                containerFound:
+                    !!repliesContainer
+            }
+        );
 
-        if (repliesContainer) {
+        // -------------------------------------------------
+        // CHECK TOGGLE FUNCTION
+        // -------------------------------------------------
 
-            window.expandedReplies =
-                window.expandedReplies || new Set();
+        notificationDebug(
+            "7️⃣ TOGGLE CHECK",
+            {
+                exists:
+                    typeof window.toggleReplies ===
+                    "function"
+            }
+        );
 
-            window.replyPages =
-                window.replyPages || {};
+        if (
+            typeof window.toggleReplies !==
+            "function"
+        ) {
 
-
-            // Make sure it is considered closed
-            // so toggleReplies() opens it.
-
-            window.expandedReplies.delete(
-                parentId
-            );
-
-notificationDebug(
-    "4️⃣ OPENING REPLY THREAD",
-    {
-        parentId: parentId
-    }
-);
-
-            await window.toggleReplies(
-                parentId
-            );
-
-notificationDebug(
-    "5️⃣ REPLY THREAD OPENED",
-    {
-        parentId: parentId,
-        replyFound: !!document.getElementById(
-            `comment-${commentId}`
-        )
-    }
-);
-
-        } else {
-
-            console.warn(
-                "⚠️ Parent replies container does not exist:",
-                parentId
+            notificationDebug(
+                "❌ toggleReplies IS MISSING"
             );
 
             return;
-
         }
 
+        // -------------------------------------------------
+        // RESET THREAD STATE
+        // -------------------------------------------------
 
-        // =================================================
-        // 5. SEARCH LOADED REPLIES
-        // =================================================
+        window.expandedReplies =
+            window.expandedReplies || new Set();
+
+        window.replyPages =
+            window.replyPages || {};
+
+        window.expandedReplies.delete(
+            parentId
+        );
+
+        notificationDebug(
+            "8️⃣ CALLING toggleReplies",
+            {
+                parentId: parentId
+            }
+        );
+
+        // -------------------------------------------------
+        // OPEN THREAD
+        // -------------------------------------------------
+
+        await window.toggleReplies(
+            parentId
+        );
+
+        notificationDebug(
+            "9️⃣ toggleReplies FINISHED",
+            {
+                parentId: parentId
+            }
+        );
+
+        // -------------------------------------------------
+        // CHECK TARGET REPLY
+        // -------------------------------------------------
 
         commentElement =
             document.getElementById(targetId);
 
+        notificationDebug(
+            "🔟 REPLY DOM CHECK",
+            {
+                targetId: targetId,
+                found: !!commentElement
+            }
+        );
 
-        // =================================================
-        // 6. IF NOT FOUND, LOAD MORE REPLY PAGES
-        // =================================================
+        // -------------------------------------------------
+        // IF NOT FOUND, LOAD REPLIES
+        // -------------------------------------------------
 
         let safety = 0;
 
@@ -8431,97 +8459,103 @@ notificationDebug(
             const beforePage =
                 window.replyPages[parentId] || 0;
 
-            console.log(
-                "📥 TARGET NOT FOUND — LOADING MORE REPLIES:",
+            notificationDebug(
+                "📥 LOADING REPLY PAGE",
                 {
-                    parentId,
-                    page: beforePage
+                    parentId: parentId,
+                    page: beforePage,
+                    attempt: safety
                 }
             );
 
+            if (
+                typeof window.loadReplies !==
+                "function"
+            ) {
+
+                notificationDebug(
+                    "❌ loadReplies IS MISSING"
+                );
+
+                return;
+            }
 
             await window.loadReplies(
                 parentId
             );
 
-
             commentElement =
-                document.getElementById(
-                    targetId
-                );
-
+                document.getElementById(targetId);
 
             const afterPage =
                 window.replyPages[parentId] || 0;
 
-
-            // No more pages were loaded
+            notificationDebug(
+                "📦 REPLY PAGE RESULT",
+                {
+                    beforePage: beforePage,
+                    afterPage: afterPage,
+                    found: !!commentElement
+                }
+            );
 
             if (
                 afterPage <= beforePage
             ) {
 
                 break;
-
             }
-
         }
-
     }
 
-
     // =====================================================
-    // 7. FINAL EXACT ELEMENT CHECK
+    // FINAL CHECK
     // =====================================================
 
     commentElement =
         document.getElementById(targetId);
 
+    notificationDebug(
+        "🏁 FINAL CHECK",
+        {
+            targetId: targetId,
+            found: !!commentElement
+        }
+    );
 
     if (!commentElement) {
 
-        console.warn(
-            "❌ EXACT COMMENT STILL NOT FOUND:",
-            {
-                commentId,
-                targetId
-            }
+        notificationDebug(
+            "❌ EXACT REPLY STILL NOT FOUND"
         );
 
         return;
-
     }
 
+    // =====================================================
+    // SUCCESS
+    // =====================================================
 
-    console.log(
-        "🎯 EXACT COMMENT FOUND:",
-        commentElement.id
+    notificationDebug(
+        "✅ EXACT COMMENT FOUND",
+        {
+            id: commentElement.id
+        }
     );
-
-
-    // =====================================================
-    // 8. SCROLL EXACT COMMENT INTO VIEW
-    // =====================================================
 
     commentElement.scrollIntoView({
         behavior: "smooth",
         block: "center"
     });
 
-
-    // =====================================================
-    // 9. HIGHLIGHT EXACT COMMENT
-    // =====================================================
-
     highlightNotificationElement(
         commentElement
     );
-
 }
 
 
 // =====================================================
-// HIGHLIGHT COMMENT ELEMENT
+// HIGHLIGHT
 // =====================================================
 
 function highlightNotificationElement(
@@ -8539,7 +8573,6 @@ function highlightNotificationElement(
     const oldBoxShadow =
         commentElement.style.boxShadow;
 
-
     commentElement.style.transition =
         "background 0.3s ease, box-shadow 0.3s ease";
 
@@ -8548,7 +8581,6 @@ function highlightNotificationElement(
 
     commentElement.style.boxShadow =
         "0 0 0 3px #0095f6";
-
 
     setTimeout(() => {
 
@@ -8562,7 +8594,6 @@ function highlightNotificationElement(
             oldBoxShadow;
 
     }, 3000);
-
 }
 
 function renderCommentsList(data, myId) {
