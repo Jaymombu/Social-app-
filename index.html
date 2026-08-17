@@ -6978,63 +6978,21 @@ if (commentsLikeBtn) {
   .eq("id", id);
   
   
-  // Create or update like notification
+// =====================================================
+// LIKE NOTIFICATIONS
+// Notify everyone involved in this post
+// =====================================================
+
 if (!isLiked) {
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, avatar_url")
-    .eq("id", session.user.id)
-    .single();
+    await notifyPostParticipants({
+        postId: id,
+        actorId: userId,
+        type: "like",
+        message:
+            "liked a post you were involved in"
+    });
 
-  const { data: postOwner } = await supabase
-    .from("posts")
-    .select("user_id")
-    .eq("id", id)
-    .single();
-
-  if (postOwner && postOwner.user_id !== session.user.id) {
-
-    const { data: existing } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", postOwner.user_id)
-      .eq("type", "like")
-      .eq("post_id", id)
-      .maybeSingle();
-
-    if (existing) {
-
-      await supabase
-        .from("notifications")
-        .update({
-          count: (existing.count || 1) + 1,
-          username: profile.name,
-          avatar_url: profile.avatar_url,
-          last_time: new Date()
-        })
-        .eq("id", existing.id);
-
-    } else {
-
-      await supabase
-        .from("notifications")
-        .insert({
-          user_id: postOwner.user_id,
-          sender_id: session.user.id,
-          username: profile.name,
-          avatar_url: profile.avatar_url,
-          type: "like",
-          post_id: id,
-          message: "liked your post",
-          count: 1,
-          created_at: new Date(),
-          last_time: new Date(),
-          read: false
-        });
-    }
-
-  }
 }
 
 upsertPost({
@@ -7766,17 +7724,9 @@ if (postLikeArea) {
   await loadComments(postId);
 
 if (targetCommentId) {
-
-    await new Promise(resolve =>
-        requestAnimationFrame(() =>
-            requestAnimationFrame(resolve)
-        )
-    );
-
     await highlightNotificationComment(
         targetCommentId
     );
-
 }
 
     // ==========================================
@@ -8178,8 +8128,8 @@ async function highlightNotificationComment(commentId) {
     if (commentElement) {
 
         commentElement.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
+           behavior: "auto",
+           block: "center"
         });
 
         highlightNotificationElement(
@@ -8292,8 +8242,8 @@ async function highlightNotificationComment(commentId) {
 
 
         commentElement.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
+    behavior: "auto",
+    block: "center"
         });
 
 
@@ -8416,9 +8366,9 @@ async function highlightNotificationComment(commentId) {
     // =====================================================
 
     commentElement.scrollIntoView({
-        behavior: "smooth",
-        block: "center"
-    });
+    behavior: "auto",
+    block: "center"
+});
 
 
     highlightNotificationElement(
@@ -13344,227 +13294,40 @@ window.selectCommentReaction = async function(emoji) {
             commentId
         );
 
-        /*
-         * -----------------------------------------
-         * GET COMMENT OWNER
-         * -----------------------------------------
-         */
+// =====================================================
+// COMMENT REACTION NOTIFICATIONS
+// =====================================================
 
-        const {
-            data: comment,
-            error: commentError
-        } = await supabase
-            .from("comments")
-            .select(`
-                user_id,
-                post_id
-            `)
-            .eq(
-                "id",
-                commentId
-            )
-            .single();
+const {
+    data: reactedComment,
+    error: reactedCommentError
+} = await supabase
+    .from("comments")
+    .select("post_id")
+    .eq("id", commentId)
+    .maybeSingle();
 
-        if (commentError) {
+if (reactedCommentError || !reactedComment) {
 
-            console.error(
-                "Get comment owner:",
-                commentError
-            );
+    console.error(
+        "Get comment for reaction notification:",
+        reactedCommentError
+    );
 
-            return;
-        }
+} else {
 
-        /*
-         * -----------------------------------------
-         * DON'T NOTIFY YOURSELF
-         * -----------------------------------------
-         */
+    await notifyPostParticipants({
+        postId: reactedComment.post_id,
+        actorId: userId,
+        type: "comment_reaction",
+        commentId: commentId,
+        message:
+            `reacted ${emoji} to a comment on a post you were involved in`
+    });
 
-        if (
-            !comment ||
-            comment.user_id === userId
-        ) {
-            return;
-        }
-
-        /*
-         * -----------------------------------------
-         * GET SENDER PROFILE
-         * -----------------------------------------
-         */
-
-        const {
-            data: profile,
-            error: profileError
-        } = await supabase
-            .from("profiles")
-            .select(`
-                name,
-                avatar_url
-            `)
-            .eq(
-                "id",
-                userId
-            )
-            .single();
-
-        if (profileError || !profile) {
-
-            console.error(
-                "Get reaction profile:",
-                profileError
-            );
-
-            return;
-        }
-
-        /*
-         * -----------------------------------------
-         * CHECK EXISTING NOTIFICATION
-         * -----------------------------------------
-         */
-
-        const {
-            data: existingNotif,
-            error: notifCheckError
-        } = await supabase
-            .from("notifications")
-            .select("*")
-            .eq(
-                "user_id",
-                comment.user_id
-            )
-            .eq(
-                "sender_id",
-                userId
-            )
-            .eq(
-                "type",
-                "comment_reaction"
-            )
-            .eq(
-                "comment_id",
-                commentId
-            )
-            .maybeSingle();
-
-        if (notifCheckError) {
-
-            console.error(
-                "Reaction notification check:",
-                notifCheckError
-            );
-        }
-
-        /*
-         * -----------------------------------------
-         * UPDATE NOTIFICATION
-         * -----------------------------------------
-         */
-
-        if (existingNotif) {
-
-            const {
-                error: notifUpdateError
-            } = await supabase
-                .from("notifications")
-                .update({
-
-                    count:
-                        (existingNotif.count || 1) + 1,
-
-                    username:
-                        profile.name,
-
-                    avatar_url:
-                        profile.avatar_url,
-
-                    message:
-                        `reacted ${emoji} to your comment`,
-
-                    last_time:
-                        new Date(),
-
-                    read:
-                        false
-                })
-                .eq(
-                    "id",
-                    existingNotif.id
-                );
-
-            if (notifUpdateError) {
-
-                console.error(
-                    "Update reaction notification:",
-                    notifUpdateError
-                );
-            }
-
-        }
-
-        /*
-         * -----------------------------------------
-         * CREATE NOTIFICATION
-         * -----------------------------------------
-         */
-
-        else {
-
-            const {
-                error: notifInsertError
-            } = await supabase
-                .from("notifications")
-                .insert({
-
-                    user_id:
-                        comment.user_id,
-
-                    sender_id:
-                        userId,
-
-                    username:
-                        profile.name,
-
-                    avatar_url:
-                        profile.avatar_url,
-
-                    type:
-                        "comment_reaction",
-
-                    comment_id:
-                        commentId,
-
-                    post_id:
-                        comment.post_id,
-
-                    message:
-                        `reacted ${emoji} to your comment`,
-
-                    count:
-                        1,
-
-                    created_at:
-                        new Date(),
-
-                    last_time:
-                        new Date(),
-
-                    read:
-                        false
-                });
-
-            if (notifInsertError) {
-
-                console.error(
-                    "Insert reaction notification:",
-                    notifInsertError
-                );
-            }
-        }
-
-    } finally {
+   }
+        
+ } finally {
 
         window.reactionProcessing[commentId] =
             false;
@@ -19618,23 +19381,11 @@ if (removeCommentMedia) {
 
   const panelBtn = document.getElementById("panelPostBtn");
   
-  commentDebug("COMMENT BUTTON FOUND", {
-    exists: !!panelBtn
-});
-  
   if (panelBtn) {
     panelBtn.onclick = async () => {
 
         const input = document.getElementById("panelInput");
         const text = input.value.trim();
-
-        commentDebug("COMMENT BUTTON PRESSED", {
-            currentPostId: currentPostId,
-            text: text,
-            selectedCommentMedia: selectedCommentMedia
-                ? selectedCommentMedia.name
-                : null
-        });
 
 if (!text && !selectedCommentMedia) {
     return;
@@ -19702,22 +19453,6 @@ const parentCommentId =
 const parentReplyUserId =
     window.replyingToUserId || null;
     
-    console.log("COMMENT FK CHECK:", {
-    post_id: currentPostId,
-    user_id: session.user.id,
-    parent_id: parentCommentId,
-    reply_to_user_id: parentReplyUserId
-});
-
-commentDebug("TRYING TO INSERT COMMENT", {
-    currentPostId: currentPostId,
-    text: text,
-    userId: session.user.id,
-    parentCommentId: parentCommentId,
-    parentReplyUserId: parentReplyUserId,
-    mediaType: mediaType
-});
-
 const { data: insertedComment, error } = await supabase
     .from("comments")
     .insert({
@@ -19760,14 +19495,7 @@ const { data: insertedComment, error } = await supabase
     .single();
 
 if (error) {
-
-    commentDebug("❌ COMMENT INSERT FAILED", {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-    });
-
+    
     console.error("Comment insert error:", error);
 
     showToast("Couldn't post comment.");
@@ -19777,23 +19505,12 @@ if (error) {
     return;
 }
 
-commentDebug("✅ COMMENT INSERTED", {
-    id: insertedComment?.id,
-    post_id: insertedComment?.post_id,
-    content: insertedComment?.content
-});
-
 try {
 
     await insertComment(insertedComment.id);
 
 } catch (err) {
-
-    commentDebug("❌ insertComment() FAILED", {
-        message: err?.message || String(err),
-        stack: err?.stack || null
-    });
-
+    
     panelBtn.disabled = false;
 
     return;
@@ -19840,109 +19557,21 @@ if (
 
 }
     
-  // Notify post owner
-const { data: post } = await supabase
-  .from("posts")
-  .select("user_id")
-  .eq("id", currentPostId)
-  .single();
+// =====================================================
+// COMMENT NOTIFICATIONS
+// =====================================================
 
-if (post && post.user_id !== session.user.id) {
-
-  const { data: existing } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("user_id", post.user_id)
-    .eq("type", "comment")
-    .eq("post_id", currentPostId)
-    .maybeSingle();
-
-  if (existing) {
-
-    await supabase
-      .from("notifications")
-      .update({
-        count: (existing.count || 1) + 1,
-        username: profile.name,
-        avatar_url: profile.avatar_url,
-        last_time: new Date(),
-        message: "commented on your post",
-        comment_id: insertedComment.id
-      })
-      .eq("id", existing.id);
-
-  } else {
-
-    await supabase
-      .from("notifications")
-      .insert({
-        user_id: post.user_id,
-        sender_id: session.user.id,
-        username: profile.name,
-        avatar_url: profile.avatar_url,
-        type: "comment",
-        post_id: currentPostId,
-        comment_id: insertedComment.id,
-        message: "commented on your post",
-        count: 1,
-        created_at: new Date(),
-        last_time: new Date(),
-        read: false
-      });
-
-  }
-}
-
-if (
-    parentReplyUserId &&
-    parentReplyUserId !== session.user.id
-) {
-
-    const { data: existingNotif } = await supabase
-        .from("notifications")
-        .select("*")
-        .eq("user_id", parentReplyUserId)
-        .eq("sender_id", session.user.id)
-        .eq("type", "comment_reply")
-        .eq("comment_id", parentCommentId)
-        .maybeSingle();
-
-    if (existingNotif) {
-
-        await supabase
-            .from("notifications")
-            .update({
-                count: (existingNotif.count || 1) + 1,
-                username: profile.name,
-                avatar_url: profile.avatar_url,
-                message: "replied to your comment",
-                last_time: new Date(),
-                read: false
-            })
-            .eq("id", existingNotif.id);
-
-    } else {
-
-        await supabase
-            .from("notifications")
-            .insert({
-                user_id: parentReplyUserId,
-                sender_id: session.user.id,
-                username: profile.name,
-                avatar_url: profile.avatar_url,
-                type: "comment_reply",
-                comment_id: insertedComment.id,
-                post_id: currentPostId,
-                message: "replied to your comment",
-                count: 1,
-                created_at: new Date(),
-                last_time: new Date(),
-                read: false
-            });
-
-    }
-
-}
+await notifyPostParticipants({
+    postId: currentPostId,
+    actorId: session.user.id,
+    type: parentCommentId
+        ? "comment_reply"
+        : "comment",
+    commentId: insertedComment.id,
+    message: parentCommentId
+        ? "replied to a comment on a post you were involved in"
+        : "commented on a post you were involved in"
+});
 
 input.value = "";
 
@@ -26586,6 +26215,486 @@ function appendReplies(data) {
     "beforeend",
     html
   );
+
+}
+
+// =====================================================
+// NOTIFY USERS INVOLVED IN A POST
+// =====================================================
+
+async function notifyPostParticipants({
+    postId,
+    actorId,
+    type,
+    commentId = null,
+    message = null
+}) {
+
+    if (!postId || !actorId || !type) {
+        return;
+    }
+
+
+    // =====================================================
+    // GET POST
+    // =====================================================
+
+    const {
+        data: post,
+        error: postError
+    } = await supabase
+        .from("posts")
+        .select(`
+            user_id,
+            liked_by
+        `)
+        .eq("id", postId)
+        .maybeSingle();
+
+
+    if (postError || !post) {
+
+        console.error(
+            "❌ Could not get post:",
+            postError
+        );
+
+        return;
+    }
+
+
+    // =====================================================
+    // PARTICIPANTS
+    // =====================================================
+
+    const participants =
+        new Set();
+
+
+    // =====================================================
+    // POST OWNER
+    // =====================================================
+
+    if (post.user_id) {
+
+        participants.add(
+            post.user_id
+        );
+
+    }
+
+
+    // =====================================================
+    // POST LIKERS
+    // =====================================================
+
+    const likedBy =
+        Array.isArray(post.liked_by)
+            ? post.liked_by
+            : [];
+
+
+    likedBy.forEach(userId => {
+
+        if (userId) {
+
+            participants.add(
+                userId
+            );
+
+        }
+
+    });
+
+
+    // =====================================================
+    // GET ALL COMMENTS
+    // =====================================================
+
+    const {
+        data: comments,
+        error: commentsError
+    } = await supabase
+        .from("comments")
+        .select(`
+            id,
+            user_id,
+            parent_id
+        `)
+        .eq(
+            "post_id",
+            postId
+        );
+
+
+    if (commentsError) {
+
+        console.error(
+            "❌ Could not get comments:",
+            commentsError
+        );
+
+    }
+
+
+    const commentList =
+        comments || [];
+
+
+    // =====================================================
+    // COMMENTERS + REPLIERS
+    // =====================================================
+
+    commentList.forEach(comment => {
+
+        if (comment.user_id) {
+
+            participants.add(
+                comment.user_id
+            );
+
+        }
+
+    });
+
+
+    // =====================================================
+    // COMMENT IDS
+    // =====================================================
+
+    const commentIds =
+        commentList
+            .map(comment => comment.id)
+            .filter(Boolean);
+
+
+    // =====================================================
+    // COMMENT LIKERS
+    // =====================================================
+
+    if (commentIds.length) {
+
+        const {
+            data: commentLikes,
+            error: likesError
+        } = await supabase
+            .from("comment_likes")
+            .select("user_id")
+            .in(
+                "comment_id",
+                commentIds
+            );
+
+
+        if (likesError) {
+
+            console.error(
+                "❌ Could not get comment likes:",
+                likesError
+            );
+
+        }
+
+
+        (commentLikes || []).forEach(like => {
+
+            if (like.user_id) {
+
+                participants.add(
+                    like.user_id
+                );
+
+            }
+
+        });
+
+    }
+
+
+    // =====================================================
+    // COMMENT REACTION USERS
+    // =====================================================
+
+    if (commentIds.length) {
+
+        const {
+            data: reactions,
+            error: reactionsError
+        } = await supabase
+            .from("comment_reactions")
+            .select("user_id")
+            .in(
+                "comment_id",
+                commentIds
+            );
+
+
+        if (reactionsError) {
+
+            console.error(
+                "❌ Could not get comment reactions:",
+                reactionsError
+            );
+
+        }
+
+
+        (reactions || []).forEach(reaction => {
+
+            if (reaction.user_id) {
+
+                participants.add(
+                    reaction.user_id
+                );
+
+            }
+
+        });
+
+    }
+
+
+    // =====================================================
+    // REMOVE ACTOR
+    // =====================================================
+
+    participants.delete(
+        actorId
+    );
+
+
+    // =====================================================
+    // NOTHING TO NOTIFY
+    // =====================================================
+
+    if (!participants.size) {
+        return;
+    }
+
+
+    // =====================================================
+    // GET ACTOR PROFILE
+    // =====================================================
+
+    const {
+        data: profile
+    } = await supabase
+        .from("profiles")
+        .select(`
+            name,
+            avatar_url
+        `)
+        .eq(
+            "id",
+            actorId
+        )
+        .maybeSingle();
+
+
+// =====================================================
+// CREATE / UPDATE NOTIFICATIONS
+// =====================================================
+
+const now =
+    new Date().toISOString();
+
+
+// =====================================================
+// PROCESS EACH PARTICIPANT
+// =====================================================
+
+for (
+    const recipientId of participants
+) {
+
+    // -------------------------------------------------
+    // CHECK EXISTING NOTIFICATION
+    // -------------------------------------------------
+
+    let notificationQuery =
+    supabase
+        .from("notifications")
+        .select(`
+            id,
+            count
+        `)
+        .eq(
+            "user_id",
+            recipientId
+        )
+        .eq(
+            "sender_id",
+            actorId
+        )
+        .eq(
+            "type",
+            type
+        )
+        .eq(
+            "post_id",
+            postId
+        );
+
+
+// =====================================================
+// COMMENT ID
+// =====================================================
+
+if (commentId) {
+
+    notificationQuery =
+        notificationQuery.eq(
+            "comment_id",
+            commentId
+        );
+
+} else {
+
+    notificationQuery =
+        notificationQuery.is(
+            "comment_id",
+            null
+        );
+
+}
+
+
+const {
+    data: existing,
+    error: existingError
+} = await notificationQuery
+    .maybeSingle();
+
+
+    if (existingError) {
+
+        console.error(
+            "❌ Check notification error:",
+            existingError
+        );
+
+        continue;
+    }
+
+
+    // =================================================
+    // UPDATE EXISTING
+    // =================================================
+
+    if (existing) {
+
+        const {
+            error: updateError
+        } = await supabase
+            .from("notifications")
+            .update({
+
+                count:
+                    (existing.count || 1) + 1,
+
+                username:
+                    profile?.name ||
+                    "User",
+
+                avatar_url:
+                    profile?.avatar_url ||
+                    null,
+
+                message:
+                    message ||
+                    "interacted with a post you were involved in",
+
+                last_time:
+                    now,
+
+                read:
+                    false
+
+            })
+            .eq(
+                "id",
+                existing.id
+            );
+
+
+        if (updateError) {
+
+            console.error(
+                "❌ Update notification error:",
+                updateError
+            );
+
+        }
+
+    }
+
+
+    // =================================================
+    // CREATE NEW
+    // =================================================
+
+    else {
+
+        const {
+            error: insertError
+        } = await supabase
+            .from("notifications")
+            .insert({
+
+                user_id:
+                    recipientId,
+
+                sender_id:
+                    actorId,
+
+                username:
+                    profile?.name ||
+                    "User",
+
+                avatar_url:
+                    profile?.avatar_url ||
+                    null,
+
+                type:
+                    type,
+
+                post_id:
+                    postId,
+
+                comment_id:
+                    commentId,
+
+                message:
+                    message ||
+                    "interacted with a post you were involved in",
+
+                count:
+                    1,
+
+                created_at:
+                    now,
+
+                last_time:
+                    now,
+
+                read:
+                    false
+
+            });
+
+
+        if (insertError) {
+
+            console.error(
+                "❌ Insert notification error:",
+                insertError
+            );
+
+         }
+
+     }
+
+  }
 
 }
 
