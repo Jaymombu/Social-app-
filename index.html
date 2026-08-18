@@ -13510,10 +13510,13 @@ window.toggleVoice = function (id) {
 };
 
 // =====================================================
-// UPLOAD VOICE COMMENT
+// POST RECORDED VOICE COMMENT
 // =====================================================
 
 window.uploadVoiceComment = async function (blob) {
+
+    console.log("📤 Posting voice comment...");
+
 
     // -------------------------------------------------
     // CHECK RECORDING
@@ -13521,7 +13524,7 @@ window.uploadVoiceComment = async function (blob) {
 
     if (!blob || blob.size === 0) {
 
-        console.warn("❌ No voice data");
+        console.warn("❌ No voice recording");
 
         if (typeof showToast === "function") {
             showToast("No voice recording.");
@@ -13532,58 +13535,33 @@ window.uploadVoiceComment = async function (blob) {
 
 
     // -------------------------------------------------
-    // GET SESSION
+    // CHECK SESSION
     // -------------------------------------------------
 
     const {
         data: {
             session
-        },
-        error: sessionError
+        }
     } = await supabase.auth.getSession();
-
-
-    if (sessionError) {
-
-        console.error(
-            "❌ Session error:",
-            sessionError
-        );
-
-        return false;
-    }
 
 
     if (!session) {
 
-        if (typeof showToast === "function") {
-            showToast(
-                "Login to post a voice comment."
-            );
-        }
+        showToast("Login to post a voice comment.");
 
         return false;
     }
 
 
     // -------------------------------------------------
-    // CURRENT POST CHECK
+    // CHECK POST
     // -------------------------------------------------
 
-    if (
-        typeof currentPostId === "undefined" ||
-        !currentPostId
-    ) {
+    if (!currentPostId) {
 
-        console.error(
-            "❌ No current post selected"
-        );
+        console.error("❌ No current post");
 
-        if (typeof showToast === "function") {
-            showToast(
-                "Open the comments first."
-            );
-        }
+        showToast("Could not find the post.");
 
         return false;
     }
@@ -13594,12 +13572,9 @@ window.uploadVoiceComment = async function (blob) {
     // -------------------------------------------------
 
     const mimeType =
-        blob.type || "audio/webm";
+        blob.type ||
+        "audio/webm";
 
-
-    // -------------------------------------------------
-    // FILE EXTENSION
-    // -------------------------------------------------
 
     let extension = "webm";
 
@@ -13619,7 +13594,6 @@ window.uploadVoiceComment = async function (blob) {
     else if (mimeType.includes("wav")) {
 
         extension = "wav";
-
     }
 
 
@@ -13638,32 +13612,23 @@ window.uploadVoiceComment = async function (blob) {
         extension;
 
 
-    console.log(
-        "📤 Uploading voice:",
-        fileName,
-        mimeType,
-        blob.size
-    );
-
-
     // -------------------------------------------------
-    // UPLOAD TO SUPABASE
+    // UPLOAD
     // -------------------------------------------------
 
     const {
         error: uploadError
-    } =
-        await supabase
-            .storage
-            .from("voice-notes")
-            .upload(
-                fileName,
-                blob,
-                {
-                    upsert: false,
-                    contentType: mimeType
-                }
-            );
+    } = await supabase
+        .storage
+        .from("voice-notes")
+        .upload(
+            fileName,
+            blob,
+            {
+                upsert: false,
+                contentType: mimeType
+            }
+        );
 
 
     if (uploadError) {
@@ -13673,14 +13638,18 @@ window.uploadVoiceComment = async function (blob) {
             uploadError
         );
 
-        if (typeof showToast === "function") {
-            showToast(
-                "Couldn't upload voice comment."
-            );
-        }
+        showToast(
+            "Couldn't upload voice comment."
+        );
 
         return false;
     }
+
+
+    console.log(
+        "✅ Voice uploaded:",
+        fileName
+    );
 
 
     // -------------------------------------------------
@@ -13689,13 +13658,10 @@ window.uploadVoiceComment = async function (blob) {
 
     const {
         data: urlData
-    } =
-        supabase
-            .storage
-            .from("voice-notes")
-            .getPublicUrl(
-                fileName
-            );
+    } = supabase
+        .storage
+        .from("voice-notes")
+        .getPublicUrl(fileName);
 
 
     if (
@@ -13704,14 +13670,12 @@ window.uploadVoiceComment = async function (blob) {
     ) {
 
         console.error(
-            "❌ Could not create voice URL"
+            "❌ Voice URL unavailable"
         );
 
-        if (typeof showToast === "function") {
-            showToast(
-                "Could not create voice URL."
-            );
-        }
+        showToast(
+            "Could not create voice URL."
+        );
 
         return false;
     }
@@ -13725,7 +13689,7 @@ window.uploadVoiceComment = async function (blob) {
         window.replyingToComment
             ? String(
                 window.replyingToComment
-            ).trim()
+            )
             : null;
 
 
@@ -13733,7 +13697,7 @@ window.uploadVoiceComment = async function (blob) {
         window.replyingToUserId
             ? String(
                 window.replyingToUserId
-            ).trim()
+            )
             : null;
 
 
@@ -13743,84 +13707,54 @@ window.uploadVoiceComment = async function (blob) {
 
     const {
         data: insertedComment,
-        error: commentError
-    } =
-        await supabase
-            .from("comments")
-            .insert({
+        error
+    } = await supabase
+        .from("comments")
+        .insert({
 
-                post_id:
-                    currentPostId,
+            post_id:
+                currentPostId,
 
-                user_id:
-                    session.user.id,
+            user_id:
+                session.user.id,
 
-                content:
-                    "",
+            content:
+                "",
 
-                media_url:
-                    urlData.publicUrl,
+            media_url:
+                urlData.publicUrl,
 
-                media_type:
-                    "voice",
+            media_type:
+                "voice",
 
-                parent_id:
-                    parentId,
+            parent_id:
+                parentId,
 
-                reply_to_user_id:
-                    replyUserId
+            reply_to_user_id:
+                replyUserId
 
-            })
-            .select()
-            .single();
+        })
+        .select()
+        .single();
 
 
-    // -------------------------------------------------
-    // INSERT ERROR
-    // -------------------------------------------------
-
-    if (commentError) {
+    if (error) {
 
         console.error(
             "❌ VOICE COMMENT INSERT ERROR:",
-            commentError
+            error
         );
 
-
-        // Try to remove uploaded file
-        try {
-
-            await supabase
-                .storage
-                .from("voice-notes")
-                .remove([
-                    fileName
-                ]);
-
-        }
-
-        catch (cleanupError) {
-
-            console.warn(
-                "⚠️ Could not remove failed upload:",
-                cleanupError
-            );
-
-        }
-
-
-        if (typeof showToast === "function") {
-            showToast(
-                "Couldn't post voice comment."
-            );
-        }
+        showToast(
+            "Couldn't post voice comment."
+        );
 
         return false;
     }
 
 
     console.log(
-        "✅ Voice comment inserted:",
+        "✅ VOICE COMMENT POSTED:",
         insertedComment
     );
 
@@ -13829,12 +13763,12 @@ window.uploadVoiceComment = async function (blob) {
     // NOTIFICATION
     // -------------------------------------------------
 
-    if (
-        typeof notifyPostParticipants ===
-        "function"
-    ) {
+    try {
 
-        try {
+        if (
+            typeof notifyPostParticipants ===
+            "function"
+        ) {
 
             await notifyPostParticipants({
 
@@ -13861,46 +13795,27 @@ window.uploadVoiceComment = async function (blob) {
 
         }
 
-        catch (notificationError) {
+    }
 
-            console.error(
-                "⚠️ Voice notification error:",
-                notificationError
-            );
+    catch (notificationError) {
 
-        }
+        console.error(
+            "⚠️ Voice notification error:",
+            notificationError
+        );
 
     }
 
 
     // -------------------------------------------------
-    // RESET REPLY STATE
+    // RESET REPLY
     // -------------------------------------------------
 
-    window.replyingToComment = null;
+    window.replyingToComment =
+        null;
 
-    window.replyingToUserId = null;
-
-
-    // Support existing non-window variables
-    if (
-        typeof replyingToComment !==
-        "undefined"
-    ) {
-
-        replyingToComment = null;
-
-    }
-
-
-    if (
-        typeof replyingToUserId !==
-        "undefined"
-    ) {
-
-        replyingToUserId = null;
-
-    }
+    window.replyingToUserId =
+        null;
 
 
     // -------------------------------------------------
@@ -13917,7 +13832,6 @@ window.uploadVoiceComment = async function (blob) {
 
         replyPreview.style.display =
             "none";
-
     }
 
 
@@ -13937,7 +13851,6 @@ window.uploadVoiceComment = async function (blob) {
 
         input.placeholder =
             "Add a comment...";
-
     }
 
 
@@ -13945,12 +13858,12 @@ window.uploadVoiceComment = async function (blob) {
     // REFRESH COMMENTS
     // -------------------------------------------------
 
-    if (
-        typeof loadComments ===
-        "function"
-    ) {
+    try {
 
-        try {
+        if (
+            typeof loadComments ===
+            "function"
+        ) {
 
             await loadComments(
                 currentPostId
@@ -13958,20 +13871,20 @@ window.uploadVoiceComment = async function (blob) {
 
         }
 
-        catch (refreshError) {
+    }
 
-            console.error(
-                "⚠️ Could not refresh comments:",
-                refreshError
-            );
+    catch (refreshError) {
 
-        }
+        console.error(
+            "⚠️ Comment refresh error:",
+            refreshError
+        );
 
     }
 
 
     console.log(
-        "✅ Voice comment posted successfully"
+        "🎉 Voice comment posting complete"
     );
 
 
@@ -23124,10 +23037,17 @@ padding:4px 10px;
 id="commentMediaPreview"
 style="
 display:none;
+position:fixed;
+left:0;
+right:0;
+bottom:74px;
 padding:12px 16px;
 background:#111;
 border-top:1px solid rgba(255,255,255,.08);
-">
+z-index:999997;
+box-sizing:border-box;
+"
+>
 
 <div style="
 position:relative;
@@ -23165,9 +23085,15 @@ font-weight:bold;
 id="voicePreview"
 style="
 display:none;
+position:fixed;
+left:0;
+right:0;
+bottom:74px;
 padding:10px 14px;
 background:#181818;
 border-top:1px solid rgba(255,255,255,.08);
+z-index:999998;
+box-sizing:border-box;
 "
 >
 
