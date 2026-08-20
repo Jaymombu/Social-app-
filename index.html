@@ -12078,6 +12078,9 @@ window.recordedVoiceBlob = null;
 
 window.recordedVoiceUrl = null;
 
+window.recordedVoiceDuration = 0;
+window.recordedVoiceStartTime = 0;
+
 // =====================================================
 // GET COMMENT VOICE BUTTON
 // =====================================================
@@ -12350,22 +12353,47 @@ window.showVoiceDebug = function(message) {
         // -------------------------------------------------
 
         recorder.onstop =
-            function () {
-              
-              const recordedDuration =
-    window.commentVoiceStartTime
-        ? (Date.now() - window.commentVoiceStartTime) / 1000
-        : 0;
+    function () {
 
-window.showVoiceDebug(
-    "HELD: " +
-    recordedDuration.toFixed(2) +
-    " seconds"
-);
+        // =================================================
+        // CAPTURE FINAL RECORDING DURATION
+        // =================================================
 
-                console.log(
-                    "🛑 COMMENT RECORDER STOPPED"
-                );
+        let recordedDuration = 0;
+
+        if (
+            window.commentVoiceStartTime
+        ) {
+
+            recordedDuration =
+                (
+                    Date.now() -
+                    window.commentVoiceStartTime
+                ) / 1000;
+        }
+
+        // Save the duration permanently for this recording.
+        window.recordedVoiceDuration =
+            Math.max(
+                0,
+                recordedDuration
+            );
+
+        console.log(
+            "⏱️ FINAL RECORDED DURATION:",
+            window.recordedVoiceDuration.toFixed(2),
+            "seconds"
+        );
+
+        window.showVoiceDebug(
+            "RECORDED DURATION: " +
+            window.recordedVoiceDuration.toFixed(2) +
+            " seconds"
+        );
+
+        console.log(
+            "🛑 COMMENT RECORDER STOPPED"
+        );
 
                 // Stop timer first
                 if (
@@ -12972,7 +13000,14 @@ window.startCommentVoiceTimer = function () {
         clearInterval(window.commentVoiceTimer);
     }
 
+    // IMPORTANT:
+    // This is the authoritative recording start time.
     window.commentVoiceStartTime = Date.now();
+
+    window.recordedVoiceStartTime =
+        window.commentVoiceStartTime;
+
+    window.recordedVoiceDuration = 0;
 
     const timeElement =
         document.getElementById(
@@ -12980,8 +13015,11 @@ window.startCommentVoiceTimer = function () {
         );
 
     if (timeElement) {
+
         timeElement.textContent = "0:00";
-        timeElement.style.display = "inline-block";
+
+        timeElement.style.display =
+            "inline-block";
     }
 
     window.commentVoiceTimer =
@@ -12992,15 +13030,24 @@ window.startCommentVoiceTimer = function () {
             }
 
             const elapsed =
-                (Date.now() -
-                    window.commentVoiceStartTime) / 1000;
+                (
+                    Date.now() -
+                    window.commentVoiceStartTime
+                ) / 1000;
+
+            window.recordedVoiceDuration =
+                elapsed;
 
             if (timeElement) {
+
                 timeElement.textContent =
-                    window.formatVoiceTime(elapsed);
+                    window.formatVoiceTime(
+                        elapsed
+                    );
             }
 
-        }, 250);
+        }, 100);
+
 };
 
 
@@ -13011,11 +13058,13 @@ window.startCommentVoiceTimer = function () {
 window.stopCommentVoiceTimer = function () {
 
     if (window.commentVoiceTimer) {
-        clearInterval(window.commentVoiceTimer);
+
+        clearInterval(
+            window.commentVoiceTimer
+        );
+
         window.commentVoiceTimer = null;
     }
-
-    window.commentVoiceStartTime = null;
 
     const timeElement =
         document.getElementById(
@@ -13023,13 +13072,21 @@ window.stopCommentVoiceTimer = function () {
         );
 
     if (timeElement) {
-        timeElement.textContent = "0:00";
-        timeElement.style.display = "none";
+
+        timeElement.style.display =
+            "none";
     }
+
+    // DO NOT erase recordedVoiceDuration here.
+    // It is needed by the preview and upload system.
+
+    window.commentVoiceStartTime = null;
+
 };
 
 // =====================================================
 // SHOW VOICE COMMENT PREVIEW
+// DURATION-SAFE VERSION
 // =====================================================
 
 window.showVoicePreview = function () {
@@ -13078,60 +13135,44 @@ window.showVoicePreview = function () {
 
 
     // =================================================
-    // LOAD AUDIO
+    // GET SAVED RECORDING DURATION
+    // =================================================
+
+    const recordedDuration =
+        Number(
+            window.recordedVoiceDuration
+        );
+
+    const safeRecordedDuration =
+        Number.isFinite(recordedDuration) &&
+        recordedDuration > 0
+            ? recordedDuration
+            : 0;
+
+
+    console.log(
+        "⏱️ PREVIEW RECORDED DURATION:",
+        safeRecordedDuration.toFixed(2),
+        "seconds"
+    );
+
+
+    // =================================================
+    // RESET AUDIO
     // =================================================
 
     audio.pause();
 
-    audio.pause();
+    audio.removeAttribute("src");
 
-audio.removeAttribute("src");
+    audio.load();
 
-audio.load();
+    audio.src =
+        window.recordedVoiceUrl;
 
-audio.src = window.recordedVoiceUrl;
+    audio.preload = "auto";
 
-audio.preload = "auto";
-
-audio.load();
-
-audio.onloadedmetadata = function () {
-
-    const duration = audio.duration;
-
-    window.showVoiceDebug(
-        "PREVIEW METADATA LOADED\n" +
-        "Duration: " +
-        (
-            Number.isFinite(duration)
-                ? duration.toFixed(2) + " seconds"
-                : "UNKNOWN"
-        ) +
-        "\nType: " +
-        (
-            window.recordedVoiceBlob
-                ? window.recordedVoiceBlob.type
-                : "unknown"
-        ) +
-        "\nSize: " +
-        (
-            window.recordedVoiceBlob
-                ? window.recordedVoiceBlob.size
-                : 0
-        ) +
-        " bytes"
-    );
-
-};
-
-audio.onerror = function () {
-
-    window.showVoiceDebug(
-        "❌ AUDIO LOAD ERROR\n" +
-        "The recorded audio cannot be decoded."
-    );
-
-};
+    audio.load();
 
 
     // =================================================
@@ -13150,13 +13191,76 @@ audio.onerror = function () {
 
     if (time) {
 
-        time.textContent = "0:00";
+        time.textContent =
+            window.formatVoiceTime(
+                safeRecordedDuration
+            );
 
     }
 
 
     // =================================================
-    // PLAY / PAUSE PREVIEW
+    // DEBUG METADATA
+    // =================================================
+
+    audio.onloadedmetadata =
+        function () {
+
+            console.log(
+                "🎧 BROWSER AUDIO DURATION:",
+                audio.duration
+            );
+
+            window.showVoiceDebug(
+                "PREVIEW\n" +
+                "Recorded: " +
+                safeRecordedDuration.toFixed(2) +
+                "s\n" +
+                "Browser metadata: " +
+                (
+                    Number.isFinite(audio.duration)
+                        ? audio.duration.toFixed(2) + "s"
+                        : "UNKNOWN"
+                ) +
+                "\nType: " +
+                (
+                    window.recordedVoiceBlob
+                        ? window.recordedVoiceBlob.type
+                        : "unknown"
+                ) +
+                "\nSize: " +
+                (
+                    window.recordedVoiceBlob
+                        ? window.recordedVoiceBlob.size
+                        : 0
+                ) +
+                " bytes"
+            );
+
+        };
+
+
+    // =================================================
+    // AUDIO ERROR
+    // =================================================
+
+    audio.onerror =
+        function () {
+
+            console.error(
+                "❌ Preview audio load error"
+            );
+
+            window.showVoiceDebug(
+                "❌ AUDIO LOAD ERROR\n" +
+                "The recorded audio cannot be decoded."
+            );
+
+        };
+
+
+    // =================================================
+    // PLAY / PAUSE
     // =================================================
 
     if (playBtn) {
@@ -13175,7 +13279,8 @@ audio.onerror = function () {
 
                         await audio.play();
 
-                        playBtn.innerHTML = "⏸";
+                        playBtn.innerHTML =
+                            "⏸";
 
                     }
 
@@ -13194,7 +13299,8 @@ audio.onerror = function () {
 
                     audio.pause();
 
-                    playBtn.innerHTML = "▶";
+                    playBtn.innerHTML =
+                        "▶";
 
                 }
 
@@ -13210,14 +13316,43 @@ audio.onerror = function () {
     audio.ontimeupdate =
         function () {
 
-            if (time) {
+            if (!time) {
+                return;
+            }
 
-                time.textContent =
-                    window.formatVoiceTime(
-                        audio.currentTime
+            let current =
+                Number(
+                    audio.currentTime
+                );
+
+            if (
+                !Number.isFinite(current) ||
+                current < 0
+            ) {
+
+                current = 0;
+
+            }
+
+
+            // Never display beyond our measured recording.
+            if (
+                safeRecordedDuration > 0
+            ) {
+
+                current =
+                    Math.min(
+                        current,
+                        safeRecordedDuration
                     );
 
             }
+
+
+            time.textContent =
+                window.formatVoiceTime(
+                    current
+                );
 
         };
 
@@ -13231,7 +13366,18 @@ audio.onerror = function () {
 
             if (playBtn) {
 
-                playBtn.innerHTML = "▶";
+                playBtn.innerHTML =
+                    "▶";
+
+            }
+
+
+            if (time) {
+
+                time.textContent =
+                    window.formatVoiceTime(
+                        safeRecordedDuration
+                    );
 
             }
 
@@ -13348,7 +13494,9 @@ audio.onerror = function () {
 
 
     console.log(
-        "🎧 Voice preview ready"
+        "🎧 Voice preview ready:",
+        safeRecordedDuration.toFixed(2),
+        "seconds"
     );
 
 
@@ -13419,7 +13567,10 @@ window.clearVoicePreview = function () {
     window.recordedVoiceUrl = null;
 
     window.recordedVoiceBlob = null;
-
+    
+    window.recordedVoiceDuration = 0;
+    
+    window.recordedVoiceStartTime = 0;
 
     // =================================================
     // HIDE PREVIEW
@@ -13470,29 +13621,63 @@ window.clearVoicePreview = function () {
 };
 
 // =====================================================
-// PLAY POSTED VOICE COMMENT — SYNCHRONIZED WAVEFORM
+// PLAY POSTED VOICE COMMENT
+// DATABASE DURATION AWARE
 // =====================================================
 
 window.toggleVoice = function(id) {
 
     const audio =
-        document.getElementById("voiceAudio-" + id);
+        document.getElementById(
+            "voiceAudio-" + id
+        );
 
     const btn =
-        document.getElementById("voiceBtn-" + id);
+        document.getElementById(
+            "voiceBtn-" + id
+        );
 
     const waveform =
-        document.getElementById("voiceWaveform-" + id);
+        document.getElementById(
+            "voiceWaveform-" + id
+        );
 
     const time =
-        document.getElementById("voiceTime-" + id);
+        document.getElementById(
+            "voiceTime-" + id
+        );
 
     const player =
-        document.getElementById("commentVoice-" + id);
+        document.getElementById(
+            "commentVoice-" + id
+        );
 
     if (!audio || !btn) {
         return;
     }
+
+
+    // =================================================
+    // GET DATABASE DURATION
+    // =================================================
+
+    const databaseDuration =
+        player
+            ? Number(
+                player.dataset.voiceDuration
+            )
+            : 0;
+
+    const knownDuration =
+        Number.isFinite(databaseDuration) &&
+        databaseDuration > 0
+            ? databaseDuration
+            : (
+                Number.isFinite(audio.duration) &&
+                audio.duration > 0
+                    ? audio.duration
+                    : 0
+            );
 
 
     // =================================================
@@ -13517,79 +13702,111 @@ window.toggleVoice = function(id) {
 
 
     // =================================================
-    // UPDATE PLAYBACK POSITION
+    // UPDATE PLAYBACK UI
     // =================================================
 
-    const updatePlaybackUI = function() {
+    const updatePlaybackUI =
+        function() {
 
-        const duration = audio.duration;
-
-        if (
-            !Number.isFinite(duration) ||
-            duration <= 0
-        ) {
-            return;
-        }
-
-        const current =
-            Math.min(
-                Math.max(audio.currentTime, 0),
-                duration
-            );
-
-        const progress =
-            current / duration;
-
-
-        // -------------------------------------------------
-        // EXACT PLAYBACK TIME
-        // -------------------------------------------------
-
-        if (time) {
-
-            time.textContent =
-                window.formatVoiceTime(current);
-
-        }
-
-
-        // -------------------------------------------------
-        // WAVEFORM PROGRESS
-        // -------------------------------------------------
-
-        if (waveform) {
-
-            const bars =
-                waveform.querySelectorAll(
-                    ".voiceWaveBar"
+            let current =
+                Number(
+                    audio.currentTime
                 );
 
-            const activeBars =
-                Math.floor(
-                    progress * bars.length
+            if (
+                !Number.isFinite(current) ||
+                current < 0
+            ) {
+                current = 0;
+            }
+
+
+            // Don't exceed known duration.
+            if (
+                knownDuration > 0
+            ) {
+
+                current =
+                    Math.min(
+                        current,
+                        knownDuration
+                    );
+
+            }
+
+
+            // -------------------------------------------------
+            // TIME
+            // -------------------------------------------------
+
+            if (time) {
+
+                time.textContent =
+                    window.formatVoiceTime(
+                        current
+                    );
+
+            }
+
+
+            // -------------------------------------------------
+            // WAVEFORM
+            // -------------------------------------------------
+
+            if (
+                waveform &&
+                knownDuration > 0
+            ) {
+
+                const bars =
+                    waveform.querySelectorAll(
+                        ".voiceWaveBar"
+                    );
+
+                const progress =
+                    Math.min(
+                        1,
+                        Math.max(
+                            0,
+                            current /
+                                knownDuration
+                        )
+                    );
+
+                const activeBars =
+                    Math.floor(
+                        progress *
+                        bars.length
+                    );
+
+                bars.forEach(
+                    function(bar, index) {
+
+                        if (
+                            index <
+                            activeBars
+                        ) {
+
+                            bar.classList.add(
+                                "played"
+                            );
+
+                        }
+
+                        else {
+
+                            bar.classList.remove(
+                                "played"
+                            );
+
+                        }
+
+                    }
                 );
 
-            bars.forEach(
-                function(bar, index) {
+            }
 
-                    if (index < activeBars) {
-
-                        bar.classList.add("played");
-
-                    }
-
-                    else {
-
-                        bar.classList.remove("played");
-
-                    }
-
-                }
-            );
-
-        }
-
-    };
+        };
 
 
     // =================================================
@@ -13597,128 +13814,136 @@ window.toggleVoice = function(id) {
     // =================================================
 
     document
-        .querySelectorAll(".commentVoice audio")
-        .forEach(function(otherAudio) {
+        .querySelectorAll(
+            ".commentVoice audio"
+        )
+        .forEach(
+            function(otherAudio) {
 
-            if (otherAudio === audio) {
-                return;
-            }
+                if (otherAudio === audio) {
+                    return;
+                }
 
-            otherAudio.pause();
-            otherAudio.currentTime = 0;
+                otherAudio.pause();
 
-
-            const otherId =
-                otherAudio.id.replace(
-                    "voiceAudio-",
-                    ""
-                );
+                otherAudio.currentTime = 0;
 
 
-            const otherBtn =
-                document.getElementById(
-                    "voiceBtn-" + otherId
-                );
-
-            if (otherBtn) {
-                otherBtn.innerHTML = "▶";
-            }
+                const otherId =
+                    otherAudio.id.replace(
+                        "voiceAudio-",
+                        ""
+                    );
 
 
-            const otherPlayer =
-                document.getElementById(
-                    "commentVoice-" + otherId
-                );
+                const otherBtn =
+                    document.getElementById(
+                        "voiceBtn-" + otherId
+                    );
 
-            if (otherPlayer) {
+                if (otherBtn) {
 
-                otherPlayer.classList.remove(
-                    "playing"
-                );
+                    otherBtn.innerHTML =
+                        "▶";
 
-            }
+                }
 
 
-            const otherWave =
-                document.getElementById(
-                    "voiceWaveform-" + otherId
-                );
+                const otherPlayer =
+                    document.getElementById(
+                        "commentVoice-" +
+                        otherId
+                    );
 
-            if (otherWave) {
+                if (otherPlayer) {
 
-                otherWave
-                    .querySelectorAll(
-                        ".voiceWaveBar"
-                    )
-                    .forEach(function(bar) {
+                    otherPlayer.classList.remove(
+                        "playing"
+                    );
 
-                        bar.classList.remove(
-                            "played"
+                }
+
+
+                const otherWave =
+                    document.getElementById(
+                        "voiceWaveform-" +
+                        otherId
+                    );
+
+                if (otherWave) {
+
+                    otherWave
+                        .querySelectorAll(
+                            ".voiceWaveBar"
+                        )
+                        .forEach(
+                            function(bar) {
+
+                                bar.classList.remove(
+                                    "played"
+                                );
+
+                            }
                         );
 
-                    });
+                }
+
+
+                const otherTime =
+                    document.getElementById(
+                        "voiceTime-" +
+                        otherId
+                    );
+
+                if (otherTime) {
+
+                    const otherDuration =
+                        Number(
+                            otherPlayer?.dataset
+                                ?.voiceDuration
+                        );
+
+                    otherTime.textContent =
+                        otherDuration > 0
+                            ? window.formatVoiceTime(
+                                otherDuration
+                            )
+                            : "0:00";
+
+                }
 
             }
+        );
 
 
-            const otherTime =
-                document.getElementById(
-                    "voiceTime-" + otherId
-                );
+    // =================================================
+    // EVENTS
+    // =================================================
 
-            if (otherTime) {
+    audio.ontimeupdate =
+        updatePlaybackUI;
 
-                otherTime.textContent =
-                    "0:00";
-
-            }
-
-        });
+    audio.onseeked =
+        updatePlaybackUI;
 
 
     // =================================================
     // LOAD METADATA
     // =================================================
 
-    audio.onloadedmetadata = function() {
+    audio.onloadedmetadata =
+        function() {
 
-        console.log(
-            "🎧 AUDIO DURATION:",
-            audio.duration
-        );
+            console.log(
+                "🎧 AUDIO METADATA:",
+                audio.duration,
+                "| DATABASE:",
+                knownDuration
+            );
 
-        if (
-            Number.isFinite(audio.duration)
-        ) {
+            updatePlaybackUI();
 
-            if (time) {
-
-                time.textContent =
-                    window.formatVoiceTime(
-                        audio.currentTime
-                    );
-
-            }
-
-        }
-
-    };
-
-
-    // =================================================
-    // PLAYBACK PROGRESS
-    // =================================================
-
-    audio.ontimeupdate =
-        updatePlaybackUI;
-
-
-    // =================================================
-    // SEEK / DURATION CHANGES
-    // =================================================
-
-    audio.onseeked =
-        updatePlaybackUI;
+        };
 
 
     // =================================================
@@ -13727,44 +13952,41 @@ window.toggleVoice = function(id) {
 
     if (audio.paused) {
 
-        // If already at the end, start from beginning
-        if (
-            audio.ended ||
-            (
-                Number.isFinite(audio.duration) &&
-                audio.currentTime >= audio.duration
-            )
-        ) {
+        if (audio.ended) {
 
             audio.currentTime = 0;
 
         }
 
-
         audio.play()
-            .then(function() {
+            .then(
+                function() {
 
-                btn.innerHTML = "⏸";
+                    btn.innerHTML =
+                        "⏸";
 
-                if (player) {
+                    if (player) {
 
-                    player.classList.add(
-                        "playing"
+                        player.classList.add(
+                            "playing"
+                        );
+
+                    }
+
+                    updatePlaybackUI();
+
+                }
+            )
+            .catch(
+                function(error) {
+
+                    console.error(
+                        "❌ Voice playback error:",
+                        error
                     );
 
                 }
-
-                updatePlaybackUI();
-
-            })
-            .catch(function(error) {
-
-                console.error(
-                    "❌ Voice playback error:",
-                    error
-                );
-
-            });
+            );
 
     }
 
@@ -13777,7 +13999,8 @@ window.toggleVoice = function(id) {
 
         audio.pause();
 
-        btn.innerHTML = "▶";
+        btn.innerHTML =
+            "▶";
 
         if (player) {
 
@@ -13794,90 +14017,104 @@ window.toggleVoice = function(id) {
     // PLAYBACK ENDED
     // =================================================
 
-    audio.onended = function() {
+    audio.onended =
+        function() {
 
-        console.log(
-            "✅ VOICE PLAYBACK FINISHED:",
-            id
-        );
-
-
-        const duration =
-            Number.isFinite(audio.duration)
-                ? audio.duration
-                : 0;
-
-
-        // -------------------------------------------------
-        // FORCE EXACT FINAL TIME
-        // -------------------------------------------------
-
-        if (time) {
-
-            time.textContent =
-                window.formatVoiceTime(
-                    duration
-                );
-
-        }
-
-
-        // -------------------------------------------------
-        // FORCE ALL WAVE BARS PLAYED
-        // -------------------------------------------------
-
-        if (waveform) {
-
-            waveform
-                .querySelectorAll(
-                    ".voiceWaveBar"
-                )
-                .forEach(function(bar) {
-
-                    bar.classList.add(
-                        "played"
-                    );
-
-                });
-
-        }
-
-
-        // -------------------------------------------------
-        // RESET BUTTON
-        // -------------------------------------------------
-
-        btn.innerHTML = "▶";
-
-
-        if (player) {
-
-            player.classList.remove(
-                "playing"
+            console.log(
+                "✅ VOICE PLAYBACK FINISHED:",
+                id
             );
 
-        }
 
-    };
+            if (time) {
+
+                time.textContent =
+                    knownDuration > 0
+                        ? window.formatVoiceTime(
+                            knownDuration
+                        )
+                        : window.formatVoiceTime(
+                            audio.currentTime
+                        );
+
+            }
+
+
+            if (waveform) {
+
+                waveform
+                    .querySelectorAll(
+                        ".voiceWaveBar"
+                    )
+                    .forEach(
+                        function(bar) {
+
+                            bar.classList.add(
+                                "played"
+                            );
+
+                        }
+                    );
+
+            }
+
+
+            btn.innerHTML =
+                "▶";
+
+
+            if (player) {
+
+                player.classList.remove(
+                    "playing"
+                );
+
+            }
+
+        };
 
 };
 
 // =====================================================
 // RENDER VOICE COMMENT PLAYER
+// DATABASE DURATION VERSION
 // =====================================================
 
 window.renderVoiceCommentPlayer = function(comment) {
 
-    if (!comment || !comment.id || !comment.media_url) {
+    if (
+        !comment ||
+        !comment.id ||
+        !comment.media_url
+    ) {
         return "";
     }
 
     const id = String(comment.id);
 
+    // -------------------------------------------------
+    // READ DURATION FROM DATABASE
+    // -------------------------------------------------
+
+    const databaseDuration =
+        Number(comment.voice_duration);
+
+    const safeDuration =
+        Number.isFinite(databaseDuration) &&
+        databaseDuration > 0
+            ? databaseDuration
+            : 0;
+
+    const initialTime =
+        safeDuration > 0
+            ? window.formatVoiceTime(safeDuration)
+            : "0:00";
+
     return `
         <div
             class="commentVoice"
             id="commentVoice-${id}"
+            data-voice-duration="${safeDuration}"
             style="
                 display:flex;
                 align-items:center;
@@ -13920,7 +14157,7 @@ window.renderVoiceCommentPlayer = function(comment) {
             <div
                 id="voiceTime-${id}"
                 class="voiceWaveTime"
-            >0:00</div>
+            >${initialTime}</div>
 
             <audio
                 id="voiceAudio-${id}"
@@ -13989,7 +14226,8 @@ window.createVoiceWaveform = function(id) {
 
 
 // =====================================================
-// ANIMATE VOICE WAVEFORM — FOLLOW REAL AUDIO PROGRESS
+// ANIMATE VOICE WAVEFORM
+// DATABASE DURATION AWARE
 // =====================================================
 
 window.animateVoiceWaveform = function(id, audio) {
@@ -13997,6 +14235,7 @@ window.animateVoiceWaveform = function(id, audio) {
     if (!audio) {
         return;
     }
+
 
     const waveform =
         document.getElementById(
@@ -14013,48 +14252,100 @@ window.animateVoiceWaveform = function(id, audio) {
             "voiceTime-" + id
         );
 
+
     if (!waveform) {
         return;
     }
+
 
     const bars =
         waveform.querySelectorAll(
             ".voiceWaveBar"
         );
 
-    // ---------------------------------------------
-    // UPDATE PLAYBACK PROGRESS
-    // ---------------------------------------------
+
+    // =================================================
+    // GET STORED DURATION
+    // =================================================
+
+    const databaseDuration =
+        player
+            ? Number(
+                player.dataset.voiceDuration
+            )
+            : 0;
+
+
+    const getDuration =
+        function() {
+
+            if (
+                Number.isFinite(databaseDuration) &&
+                databaseDuration > 0
+            ) {
+
+                return databaseDuration;
+
+            }
+
+
+            if (
+                Number.isFinite(audio.duration) &&
+                audio.duration > 0
+            ) {
+
+                return audio.duration;
+
+            }
+
+
+            return 0;
+
+        };
+
+
+    // =================================================
+    // UPDATE WAVEFORM
+    // =================================================
 
     function updateWave() {
 
         const duration =
-            Number(audio.duration);
+            getDuration();
 
-        const current =
-            Number(audio.currentTime);
 
-        let percent = 0;
+        let current =
+            Number(
+                audio.currentTime
+            );
+
 
         if (
-            Number.isFinite(duration) &&
-            duration > 0 &&
-            Number.isFinite(current)
+            !Number.isFinite(current) ||
+            current < 0
         ) {
 
-            percent =
-                Math.min(
-                    100,
-                    Math.max(
-                        0,
-                        (current / duration) * 100
-                    )
-                );
+            current = 0;
+
         }
 
-        // -----------------------------------------
+
+        if (
+            duration > 0
+        ) {
+
+            current =
+                Math.min(
+                    current,
+                    duration
+                );
+
+        }
+
+
+        // =================================================
         // TIMER
-        // -----------------------------------------
+        // =================================================
 
         if (time) {
 
@@ -14062,22 +14353,53 @@ window.animateVoiceWaveform = function(id, audio) {
                 window.formatVoiceTime(
                     current
                 );
+
         }
 
-        // -----------------------------------------
-        // WAVE
-        // -----------------------------------------
+
+        // =================================================
+        // WAVEFORM PROGRESS
+        // =================================================
+
+        let percent = 0;
+
+
+        if (
+            duration > 0
+        ) {
+
+            percent =
+                Math.min(
+                    100,
+                    Math.max(
+                        0,
+                        (
+                            current /
+                            duration
+                        ) * 100
+                    )
+                );
+
+        }
+
 
         const activeBars =
             Math.floor(
-                (percent / 100) *
+                (
+                    percent /
+                    100
+                ) *
                 bars.length
             );
+
 
         bars.forEach(
             function(bar, index) {
 
-                if (index < activeBars) {
+                if (
+                    index <
+                    activeBars
+                ) {
 
                     bar.classList.add(
                         "played"
@@ -14096,9 +14418,10 @@ window.animateVoiceWaveform = function(id, audio) {
             }
         );
 
-        // -----------------------------------------
+
+        // =================================================
         // PLAYING STATE
-        // -----------------------------------------
+        // =================================================
 
         if (
             !audio.paused &&
@@ -14126,63 +14449,78 @@ window.animateVoiceWaveform = function(id, audio) {
             }
 
         }
+
     }
 
-    // ---------------------------------------------
-    // LISTEN TO REAL AUDIO EVENTS
-    // ---------------------------------------------
+
+    // =================================================
+    // AUDIO EVENTS
+    // =================================================
 
     audio.addEventListener(
         "timeupdate",
         updateWave
     );
 
+
     audio.addEventListener(
         "loadedmetadata",
         updateWave
     );
+
 
     audio.addEventListener(
         "durationchange",
         updateWave
     );
 
+
     audio.addEventListener(
         "seeked",
         updateWave
     );
+
 
     audio.addEventListener(
         "play",
         updateWave
     );
 
+
     audio.addEventListener(
         "pause",
         updateWave
     );
 
+
     audio.addEventListener(
         "ended",
         function() {
+
+            const duration =
+                getDuration();
+
 
             if (time) {
 
                 time.textContent =
                     window.formatVoiceTime(
-                        audio.duration || 0
+                        duration
                     );
+
             }
+
 
             bars.forEach(
                 function(bar) {
 
-                    bar.classList.remove(
+                    bar.classList.add(
                         "played"
                     );
 
                 }
             );
+
 
             if (player) {
 
@@ -14195,8 +14533,13 @@ window.animateVoiceWaveform = function(id, audio) {
         }
     );
 
-    // Initial update
+
+    // =================================================
+    // INITIAL UPDATE
+    // =================================================
+
     updateWave();
+
 };
 
 
@@ -14272,24 +14615,53 @@ window.connectVoiceWaveforms = function() {
             return;
         }
 
-        // Create waveform first
+
+        // -------------------------------------------------
+        // GET ELEMENTS
+        // -------------------------------------------------
+
         const waveform =
             document.getElementById(
                 "voiceWaveform-" + id
             );
 
+        const audio =
+            document.getElementById(
+                "voiceAudio-" + id
+            );
+
+
+        if (!waveform || !audio) {
+            return;
+        }
+
+
+        // -------------------------------------------------
+        // CREATE WAVEFORM
+        // -------------------------------------------------
+
         if (
-            waveform &&
             !waveform.querySelector(
                 ".voiceWaveBar"
             )
         ) {
 
-            window.createVoiceWaveform(id);
+            if (
+                typeof window.createVoiceWaveform ===
+                "function"
+            ) {
+
+                window.createVoiceWaveform(id);
+
+            }
 
         }
 
-        // Connect seeking
+
+        // -------------------------------------------------
+        // CONNECT SEEKING
+        // -------------------------------------------------
+
         if (
             typeof window.setupVoiceWaveformSeek ===
             "function"
@@ -14299,7 +14671,36 @@ window.connectVoiceWaveforms = function() {
 
         }
 
+
+        // -------------------------------------------------
+        // CONNECT REAL AUDIO ANIMATION
+        // -------------------------------------------------
+
+        if (
+            typeof window.animateVoiceWaveform ===
+            "function"
+        ) {
+
+            // Prevent duplicate initialization
+            if (
+                audio.dataset.waveformAnimated !==
+                "true"
+            ) {
+
+                window.animateVoiceWaveform(
+                    id,
+                    audio
+                );
+
+                audio.dataset.waveformAnimated =
+                    "true";
+
+            }
+
+        }
+
     });
+
 
     console.log(
         "🎯 Voice waveform controls connected:",
@@ -14311,6 +14712,7 @@ window.connectVoiceWaveforms = function() {
 
 // =====================================================
 // CLICK WAVEFORM TO SEEK
+// DATABASE DURATION AWARE
 // =====================================================
 
 window.setupVoiceWaveformSeek = function(id) {
@@ -14325,40 +14727,100 @@ window.setupVoiceWaveformSeek = function(id) {
             "voiceAudio-" + id
         );
 
+    const player =
+        document.getElementById(
+            "commentVoice-" + id
+        );
+
     if (!waveform || !audio) {
         return;
     }
 
+
     waveform.onclick = function(event) {
 
+        // -------------------------------------------------
+        // GET STORED DATABASE DURATION
+        // -------------------------------------------------
+
+        const databaseDuration =
+            player
+                ? Number(
+                    player.dataset.voiceDuration
+                )
+                : 0;
+
+
+        const knownDuration =
+            Number.isFinite(databaseDuration) &&
+            databaseDuration > 0
+                ? databaseDuration
+                : (
+                    Number.isFinite(audio.duration) &&
+                    audio.duration > 0
+                        ? audio.duration
+                        : 0
+                );
+
+
+        // -------------------------------------------------
+        // CHECK DURATION
+        // -------------------------------------------------
+
         if (
-            !audio.duration ||
-            !isFinite(audio.duration)
+            !Number.isFinite(knownDuration) ||
+            knownDuration <= 0
         ) {
+
+            console.warn(
+                "⚠️ Voice duration unavailable for seek:",
+                id
+            );
+
             return;
         }
+
+
+        // -------------------------------------------------
+        // CALCULATE CLICK POSITION
+        // -------------------------------------------------
 
         const rect =
             waveform.getBoundingClientRect();
 
+
         const clickPosition =
-            event.clientX - rect.left;
+            event.clientX -
+            rect.left;
+
 
         const percentage =
             Math.max(
                 0,
                 Math.min(
                     1,
-                    clickPosition / rect.width
+                    clickPosition /
+                    rect.width
                 )
             );
 
+
+        // -------------------------------------------------
+        // SEEK
+        // -------------------------------------------------
+
         audio.currentTime =
-            percentage * audio.duration;
+            percentage *
+            knownDuration;
+
 
         console.log(
             "🎯 Voice seek:",
-            Math.round(percentage * 100) + "%"
+            Math.round(
+                percentage * 100
+            ) + "%",
+            "| Duration:",
+            knownDuration.toFixed(2) + "s"
         );
 
     };
@@ -14404,6 +14866,7 @@ if (
 
 // =====================================================
 // UPLOAD VOICE COMMENT
+// DURATION-AWARE VERSION
 // =====================================================
 
 window.uploadVoiceComment = async function(blob) {
@@ -14418,6 +14881,29 @@ window.uploadVoiceComment = async function(blob) {
 
         return false;
     }
+
+
+    // -------------------------------------------------
+    // GET SAVED RECORDING DURATION
+    // -------------------------------------------------
+
+    const duration =
+        Number(
+            window.recordedVoiceDuration
+        );
+
+    const safeDuration =
+        Number.isFinite(duration) &&
+        duration > 0
+            ? duration
+            : 0;
+
+
+    console.log(
+        "📤 VOICE UPLOAD DURATION:",
+        safeDuration.toFixed(2),
+        "seconds"
+    );
 
 
     // -------------------------------------------------
@@ -14499,6 +14985,7 @@ window.uploadVoiceComment = async function(blob) {
     else if (mimeType.includes("wav")) {
 
         extension = "wav";
+
     }
 
 
@@ -14646,6 +15133,9 @@ window.uploadVoiceComment = async function(blob) {
 
                     media_type:
                         "voice",
+                        
+                    voice_duration:
+                        safeDuration,    
 
                     parent_id:
                         parentId,
@@ -14690,6 +15180,33 @@ window.uploadVoiceComment = async function(blob) {
 
 
     // -------------------------------------------------
+    // SAVE DURATION LOCALLY FOR THIS COMMENT
+    // -------------------------------------------------
+
+    // The comments table currently does not appear
+    // to have a duration column, so we keep a local
+    // duration map for the current session.
+
+    if (!window.voiceCommentDurations) {
+
+        window.voiceCommentDurations = {};
+
+    }
+
+
+    if (
+        insertResult.data &&
+        insertResult.data.id
+    ) {
+
+        window.voiceCommentDurations[
+            String(insertResult.data.id)
+        ] = safeDuration;
+
+    }
+
+
+    // -------------------------------------------------
     // RESET REPLY
     // -------------------------------------------------
 
@@ -14707,6 +15224,7 @@ window.uploadVoiceComment = async function(blob) {
 
         replyPreview.style.display =
             "none";
+
     }
 
 
