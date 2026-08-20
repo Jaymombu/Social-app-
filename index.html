@@ -12117,6 +12117,36 @@ window.resetCommentVoiceButton = function () {
 
 window.startCommentVoiceRecording = async function () {
 
+window.showVoiceDebug = function(message) {
+
+    let box =
+        document.getElementById("voiceRecordingDebug");
+
+    if (!box) {
+
+        box = document.createElement("div");
+
+        box.id = "voiceRecordingDebug";
+
+        box.style =
+            "position:fixed;" +
+            "top:60px;" +
+            "left:10px;" +
+            "right:10px;" +
+            "background:#111;" +
+            "color:#00ff66;" +
+            "padding:10px;" +
+            "border-radius:10px;" +
+            "font-size:12px;" +
+            "z-index:999999999;" +
+            "font-family:monospace;";
+
+        document.body.appendChild(box);
+    }
+
+    box.textContent = message;
+};
+
     console.log("🎙️ START COMMENT VOICE");
 
     // -------------------------------------------------
@@ -12321,6 +12351,17 @@ window.startCommentVoiceRecording = async function () {
 
         recorder.onstop =
             function () {
+              
+              const recordedDuration =
+    window.commentVoiceStartTime
+        ? (Date.now() - window.commentVoiceStartTime) / 1000
+        : 0;
+
+window.showVoiceDebug(
+    "HELD: " +
+    recordedDuration.toFixed(2) +
+    " seconds"
+);
 
                 console.log(
                     "🛑 COMMENT RECORDER STOPPED"
@@ -12347,6 +12388,17 @@ window.startCommentVoiceRecording = async function () {
                                 "audio/webm"
                         }
                     );
+                    
+                    window.showVoiceDebug(
+    "HELD: " +
+    recordedDuration.toFixed(2) +
+    "s\n" +
+    "BLOB SIZE: " +
+    blob.size +
+    " bytes\n" +
+    "TYPE: " +
+    blob.type
+);
 
                 console.log(
                     "🎧 FINAL RECORDING:",
@@ -13033,6 +13085,20 @@ window.showVoicePreview = function () {
 
     audio.src =
         window.recordedVoiceUrl;
+        
+        audio.onloadedmetadata = function () {
+
+    window.showVoiceDebug(
+        "PREVIEW DURATION: " +
+        (
+            Number.isFinite(audio.duration)
+                ? audio.duration.toFixed(2)
+                : "unknown"
+        ) +
+        " seconds"
+    );
+
+};
 
     audio.currentTime = 0;
 
@@ -13373,36 +13439,25 @@ window.clearVoicePreview = function () {
 };
 
 // =====================================================
-// PLAY POSTED VOICE COMMENT — CLASSIC WAVEFORM
+// PLAY POSTED VOICE COMMENT — SYNCHRONIZED WAVEFORM
 // =====================================================
 
 window.toggleVoice = function(id) {
 
     const audio =
-        document.getElementById(
-            "voiceAudio-" + id
-        );
+        document.getElementById("voiceAudio-" + id);
 
     const btn =
-        document.getElementById(
-            "voiceBtn-" + id
-        );
+        document.getElementById("voiceBtn-" + id);
 
     const waveform =
-        document.getElementById(
-            "voiceWaveform-" + id
-        );
+        document.getElementById("voiceWaveform-" + id);
 
     const time =
-        document.getElementById(
-            "voiceTime-" + id
-        );
+        document.getElementById("voiceTime-" + id);
 
     const player =
-        document.getElementById(
-            "commentVoice-" + id
-        );
-
+        document.getElementById("commentVoice-" + id);
 
     if (!audio || !btn) {
         return;
@@ -13431,79 +13486,83 @@ window.toggleVoice = function(id) {
 
 
     // =================================================
-    // UPDATE WAVEFORM
+    // UPDATE PLAYBACK POSITION
     // =================================================
 
-    const updateWaveform = function() {
+    const updatePlaybackUI = function() {
 
-        if (!audio.duration || !isFinite(audio.duration)) {
+        const duration = audio.duration;
+
+        if (
+            !Number.isFinite(duration) ||
+            duration <= 0
+        ) {
             return;
         }
 
+        const current =
+            Math.min(
+                Math.max(audio.currentTime, 0),
+                duration
+            );
 
-        const percent =
-            (
-                audio.currentTime /
-                audio.duration
-            ) * 100;
+        const progress =
+            current / duration;
 
 
-        // TIME
+        // -------------------------------------------------
+        // EXACT PLAYBACK TIME
+        // -------------------------------------------------
 
         if (time) {
 
             time.textContent =
-                window.formatVoiceTime(
-                    audio.currentTime
-                );
+                window.formatVoiceTime(current);
 
         }
 
 
-        // WAVE BARS
+        // -------------------------------------------------
+        // WAVEFORM PROGRESS
+        // -------------------------------------------------
 
-        const bars =
-            waveform
-                ? waveform.querySelectorAll(
+        if (waveform) {
+
+            const bars =
+                waveform.querySelectorAll(
                     ".voiceWaveBar"
-                )
-                : [];
+                );
 
+            const activeBars =
+                Math.floor(
+                    progress * bars.length
+                );
 
-        const activeBars =
-            Math.floor(
-                (percent / 100) *
-                bars.length
+            bars.forEach(
+                function(bar, index) {
+
+                    if (index < activeBars) {
+
+                        bar.classList.add("played");
+
+                    }
+
+                    else {
+
+                        bar.classList.remove("played");
+
+                    }
+
+                }
             );
 
-
-        bars.forEach(
-            function(bar, index) {
-
-                if (index < activeBars) {
-
-                    bar.classList.add(
-                        "played"
-                    );
-
-                }
-
-                else {
-
-                    bar.classList.remove(
-                        "played"
-                    );
-
-                }
-
-            }
-        );
+        }
 
     };
 
 
     // =================================================
-    // STOP OTHER VOICE COMMENTS
+    // STOP OTHER AUDIO
     // =================================================
 
     document
@@ -13513,7 +13572,6 @@ window.toggleVoice = function(id) {
             if (otherAudio === audio) {
                 return;
             }
-
 
             otherAudio.pause();
             otherAudio.currentTime = 0;
@@ -13531,11 +13589,8 @@ window.toggleVoice = function(id) {
                     "voiceBtn-" + otherId
                 );
 
-
             if (otherBtn) {
-
                 otherBtn.innerHTML = "▶";
-
             }
 
 
@@ -13543,7 +13598,6 @@ window.toggleVoice = function(id) {
                 document.getElementById(
                     "commentVoice-" + otherId
                 );
-
 
             if (otherPlayer) {
 
@@ -13558,7 +13612,6 @@ window.toggleVoice = function(id) {
                 document.getElementById(
                     "voiceWaveform-" + otherId
                 );
-
 
             if (otherWave) {
 
@@ -13582,7 +13635,6 @@ window.toggleVoice = function(id) {
                     "voiceTime-" + otherId
                 );
 
-
             if (otherTime) {
 
                 otherTime.textContent =
@@ -13594,82 +13646,48 @@ window.toggleVoice = function(id) {
 
 
     // =================================================
-    // ATTACH EVENTS
+    // LOAD METADATA
     // =================================================
 
-    audio.ontimeupdate =
-        updateWaveform;
+    audio.onloadedmetadata = function() {
 
+        console.log(
+            "🎧 AUDIO DURATION:",
+            audio.duration
+        );
 
-    audio.onended =
-        function() {
-
-            console.log(
-                "✅ VOICE PLAYBACK FINISHED:",
-                id
-            );
-
-
-            // Keep exact final time
+        if (
+            Number.isFinite(audio.duration)
+        ) {
 
             if (time) {
 
                 time.textContent =
                     window.formatVoiceTime(
-                        audio.duration || 0
+                        audio.currentTime
                     );
 
             }
 
+        }
 
-            // Keep waveform FULLY PLAYED
-
-            const bars =
-                waveform
-                    ? waveform.querySelectorAll(
-                        ".voiceWaveBar"
-                    )
-                    : [];
+    };
 
 
-            bars.forEach(
-                function(bar) {
+    // =================================================
+    // PLAYBACK PROGRESS
+    // =================================================
 
-                    bar.classList.add(
-                        "played"
-                    );
-
-                }
-            );
+    audio.ontimeupdate =
+        updatePlaybackUI;
 
 
-            // Reset button
+    // =================================================
+    // SEEK / DURATION CHANGES
+    // =================================================
 
-            btn.innerHTML = "▶";
-
-
-            if (player) {
-
-                player.classList.remove(
-                    "playing"
-                );
-
-            }
-
-        };
-
-
-    audio.onloadedmetadata =
-        function() {
-
-            if (time) {
-
-                time.textContent =
-                    "0:00";
-
-            }
-
-        };
+    audio.onseeked =
+        updatePlaybackUI;
 
 
     // =================================================
@@ -13678,11 +13696,24 @@ window.toggleVoice = function(id) {
 
     if (audio.paused) {
 
+        // If already at the end, start from beginning
+        if (
+            audio.ended ||
+            (
+                Number.isFinite(audio.duration) &&
+                audio.currentTime >= audio.duration
+            )
+        ) {
+
+            audio.currentTime = 0;
+
+        }
+
+
         audio.play()
             .then(function() {
 
                 btn.innerHTML = "⏸";
-
 
                 if (player) {
 
@@ -13691,6 +13722,8 @@ window.toggleVoice = function(id) {
                     );
 
                 }
+
+                updatePlaybackUI();
 
             })
             .catch(function(error) {
@@ -13715,7 +13748,6 @@ window.toggleVoice = function(id) {
 
         btn.innerHTML = "▶";
 
-
         if (player) {
 
             player.classList.remove(
@@ -13725,6 +13757,77 @@ window.toggleVoice = function(id) {
         }
 
     }
+
+
+    // =================================================
+    // PLAYBACK ENDED
+    // =================================================
+
+    audio.onended = function() {
+
+        console.log(
+            "✅ VOICE PLAYBACK FINISHED:",
+            id
+        );
+
+
+        const duration =
+            Number.isFinite(audio.duration)
+                ? audio.duration
+                : 0;
+
+
+        // -------------------------------------------------
+        // FORCE EXACT FINAL TIME
+        // -------------------------------------------------
+
+        if (time) {
+
+            time.textContent =
+                window.formatVoiceTime(
+                    duration
+                );
+
+        }
+
+
+        // -------------------------------------------------
+        // FORCE ALL WAVE BARS PLAYED
+        // -------------------------------------------------
+
+        if (waveform) {
+
+            waveform
+                .querySelectorAll(
+                    ".voiceWaveBar"
+                )
+                .forEach(function(bar) {
+
+                    bar.classList.add(
+                        "played"
+                    );
+
+                });
+
+        }
+
+
+        // -------------------------------------------------
+        // RESET BUTTON
+        // -------------------------------------------------
+
+        btn.innerHTML = "▶";
+
+
+        if (player) {
+
+            player.classList.remove(
+                "playing"
+            );
+
+        }
+
+    };
 
 };
 
@@ -13855,27 +13958,214 @@ window.createVoiceWaveform = function(id) {
 
 
 // =====================================================
-// START VOICE WAVE ANIMATION
+// ANIMATE VOICE WAVEFORM — FOLLOW REAL AUDIO PROGRESS
 // =====================================================
 
 window.animateVoiceWaveform = function(id, audio) {
+
+    if (!audio) {
+        return;
+    }
+
+    const waveform =
+        document.getElementById(
+            "voiceWaveform-" + id
+        );
 
     const player =
         document.getElementById(
             "commentVoice-" + id
         );
 
-    if (!player || !audio) {
+    const time =
+        document.getElementById(
+            "voiceTime-" + id
+        );
+
+    if (!waveform) {
         return;
     }
 
-    if (audio.paused || audio.ended) {
-        player.classList.remove("playing");
-        return;
+    const bars =
+        waveform.querySelectorAll(
+            ".voiceWaveBar"
+        );
+
+    // ---------------------------------------------
+    // UPDATE PLAYBACK PROGRESS
+    // ---------------------------------------------
+
+    function updateWave() {
+
+        const duration =
+            Number(audio.duration);
+
+        const current =
+            Number(audio.currentTime);
+
+        let percent = 0;
+
+        if (
+            Number.isFinite(duration) &&
+            duration > 0 &&
+            Number.isFinite(current)
+        ) {
+
+            percent =
+                Math.min(
+                    100,
+                    Math.max(
+                        0,
+                        (current / duration) * 100
+                    )
+                );
+        }
+
+        // -----------------------------------------
+        // TIMER
+        // -----------------------------------------
+
+        if (time) {
+
+            time.textContent =
+                window.formatVoiceTime(
+                    current
+                );
+        }
+
+        // -----------------------------------------
+        // WAVE
+        // -----------------------------------------
+
+        const activeBars =
+            Math.floor(
+                (percent / 100) *
+                bars.length
+            );
+
+        bars.forEach(
+            function(bar, index) {
+
+                if (index < activeBars) {
+
+                    bar.classList.add(
+                        "played"
+                    );
+
+                }
+
+                else {
+
+                    bar.classList.remove(
+                        "played"
+                    );
+
+                }
+
+            }
+        );
+
+        // -----------------------------------------
+        // PLAYING STATE
+        // -----------------------------------------
+
+        if (
+            !audio.paused &&
+            !audio.ended
+        ) {
+
+            if (player) {
+
+                player.classList.add(
+                    "playing"
+                );
+
+            }
+
+        }
+
+        else {
+
+            if (player) {
+
+                player.classList.remove(
+                    "playing"
+                );
+
+            }
+
+        }
     }
 
-    player.classList.add("playing");
+    // ---------------------------------------------
+    // LISTEN TO REAL AUDIO EVENTS
+    // ---------------------------------------------
 
+    audio.addEventListener(
+        "timeupdate",
+        updateWave
+    );
+
+    audio.addEventListener(
+        "loadedmetadata",
+        updateWave
+    );
+
+    audio.addEventListener(
+        "durationchange",
+        updateWave
+    );
+
+    audio.addEventListener(
+        "seeked",
+        updateWave
+    );
+
+    audio.addEventListener(
+        "play",
+        updateWave
+    );
+
+    audio.addEventListener(
+        "pause",
+        updateWave
+    );
+
+    audio.addEventListener(
+        "ended",
+        function() {
+
+            if (time) {
+
+                time.textContent =
+                    window.formatVoiceTime(
+                        audio.duration || 0
+                    );
+            }
+
+            bars.forEach(
+                function(bar) {
+
+                    bar.classList.remove(
+                        "played"
+                    );
+
+                }
+            );
+
+            if (player) {
+
+                player.classList.remove(
+                    "playing"
+                );
+
+            }
+
+        }
+    );
+
+    // Initial update
+    updateWave();
 };
 
 
