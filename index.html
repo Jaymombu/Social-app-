@@ -12120,25 +12120,16 @@ window.startCommentVoiceRecording = async function () {
     console.log("🎙️ START COMMENT VOICE");
 
     // -------------------------------------------------
-    // ALREADY STARTING / RECORDING
+    // PREVENT DUPLICATE START
     // -------------------------------------------------
 
     if (
         window.commentRecording ||
         window.commentVoiceStarting
     ) {
-
-        console.log(
-            "⚠️ Comment voice already starting/recording"
-        );
-
+        console.log("⚠️ Already recording/starting");
         return;
     }
-
-
-    // -------------------------------------------------
-    // INITIAL STATE
-    // -------------------------------------------------
 
     window.commentVoiceStarting = true;
     window.commentRecording = false;
@@ -12147,70 +12138,51 @@ window.startCommentVoiceRecording = async function () {
     window.commentMediaRecorder = null;
     window.commentAudioChunks = [];
 
-
     const voiceBtn =
-        window.getCommentVoiceButton();
-
-
-    // -------------------------------------------------
-    // BUTTON UI
-    // -------------------------------------------------
+        window.getCommentVoiceButton
+            ? window.getCommentVoiceButton()
+            : document.getElementById("voiceBtn");
 
     if (voiceBtn) {
-
         voiceBtn.innerHTML = "⏳";
-
-        voiceBtn.style.background =
-            "#ff3040";
-
-        voiceBtn.style.transform =
-            "scale(1.08)";
+        voiceBtn.style.background = "#ff3040";
+        voiceBtn.style.transform = "scale(1.08)";
     }
-
 
     try {
 
         // -------------------------------------------------
-        // MICROPHONE API CHECK
+        // MICROPHONE CHECK
         // -------------------------------------------------
 
         if (
             !navigator.mediaDevices ||
             !navigator.mediaDevices.getUserMedia
         ) {
-
             throw new Error(
                 "Microphone API unavailable"
             );
         }
 
-
-        console.log(
-            "🎤 Requesting microphone permission..."
-        );
-
-
         // -------------------------------------------------
-        // REQUEST MICROPHONE
+        // GET MICROPHONE
         // -------------------------------------------------
 
         const stream =
             await navigator.mediaDevices.getUserMedia({
-                audio: true
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
             });
 
+        console.log("✅ Microphone granted");
 
-        console.log(
-            "✅ Microphone permission granted"
-        );
-
-
-        window.commentVoiceStream =
-            stream;
-
+        window.commentVoiceStream = stream;
 
         // -------------------------------------------------
-        // USER RELEASED DURING PERMISSION POPUP
+        // USER RELEASED WHILE PERMISSION WAS OPEN
         // -------------------------------------------------
 
         if (
@@ -12218,42 +12190,30 @@ window.startCommentVoiceRecording = async function () {
         ) {
 
             console.log(
-                "🛑 User released while permission was opening"
+                "🛑 Stop requested before recorder started"
             );
-
 
             stream
                 .getTracks()
-                .forEach(
-                    track => track.stop()
-                );
+                .forEach(track => track.stop());
 
-
-            window.commentVoiceStream =
-                null;
-
-            window.commentVoiceStarting =
-                false;
-
-            window.commentRecording =
-                false;
+            window.commentVoiceStream = null;
+            window.commentVoiceStarting = false;
+            window.commentRecording = false;
 
             window.resetCommentVoiceButton();
 
             return;
         }
 
-
         // -------------------------------------------------
-        // FIND SUPPORTED FORMAT
+        // FIND SUPPORTED AUDIO FORMAT
         // -------------------------------------------------
 
         let mimeType = "";
 
-
         if (
-            typeof MediaRecorder !==
-            "undefined"
+            typeof MediaRecorder !== "undefined"
         ) {
 
             if (
@@ -12291,49 +12251,35 @@ window.startCommentVoiceRecording = async function () {
 
         }
 
-
         // -------------------------------------------------
         // CREATE RECORDER
         // -------------------------------------------------
 
-        let recorder;
-
-
-        if (mimeType) {
-
-            recorder =
-                new MediaRecorder(
+        const recorder =
+            mimeType
+                ? new MediaRecorder(
                     stream,
                     {
-                        mimeType:
-                            mimeType
+                        mimeType: mimeType
                     }
-                );
-
-        }
-
-        else {
-
-            recorder =
-                new MediaRecorder(
-                    stream
-                );
-
-        }
-
+                )
+                : new MediaRecorder(stream);
 
         window.commentMediaRecorder =
             recorder;
-
 
         window.commentVoiceMimeType =
             recorder.mimeType ||
             mimeType ||
             "audio/webm";
 
+        console.log(
+            "🎧 Recorder MIME:",
+            window.commentVoiceMimeType
+        );
 
         // -------------------------------------------------
-        // DATA AVAILABLE
+        // AUDIO DATA
         // -------------------------------------------------
 
         recorder.ondataavailable =
@@ -12348,13 +12294,29 @@ window.startCommentVoiceRecording = async function () {
                         event.data
                     );
 
+                    console.log(
+                        "🎵 Audio chunk:",
+                        event.data.size
+                    );
                 }
+            };
+
+        // -------------------------------------------------
+        // RECORDER ERROR
+        // -------------------------------------------------
+
+        recorder.onerror =
+            function (event) {
+
+                console.error(
+                    "❌ MediaRecorder error:",
+                    event
+                );
 
             };
 
-
         // -------------------------------------------------
-        // RECORDER STOPPED
+        // RECORDER STOP
         // -------------------------------------------------
 
         recorder.onstop =
@@ -12364,7 +12326,17 @@ window.startCommentVoiceRecording = async function () {
                     "🛑 COMMENT RECORDER STOPPED"
                 );
 
+                // Stop timer first
+                if (
+                    typeof window.stopCommentVoiceTimer ===
+                    "function"
+                ) {
 
+                    window.stopCommentVoiceTimer();
+
+                }
+
+                // Create final audio
                 const blob =
                     new Blob(
                         window.commentAudioChunks,
@@ -12376,11 +12348,13 @@ window.startCommentVoiceRecording = async function () {
                         }
                     );
 
+                console.log(
+                    "🎧 FINAL RECORDING:",
+                    blob.size,
+                    blob.type
+                );
 
-                // -----------------------------------------
-                // STOP MICROPHONE
-                // -----------------------------------------
-
+                // Stop microphone
                 if (
                     window.commentVoiceStream
                 ) {
@@ -12393,55 +12367,45 @@ window.startCommentVoiceRecording = async function () {
 
                 }
 
+                // Clear recording state
+                window.commentVoiceStream = null;
+                window.commentMediaRecorder = null;
+                window.commentAudioChunks = [];
 
-                window.commentVoiceStream =
-                    null;
-
-                window.commentMediaRecorder =
-                    null;
-
-                window.commentAudioChunks =
-                    [];
-
-                window.commentRecording =
-                    false;
-
-                window.commentVoiceStarting =
-                    false;
-
+                window.commentRecording = false;
+                window.commentVoiceStarting = false;
+                window.commentVoiceStopRequested = false;
 
                 window.resetCommentVoiceButton();
 
-
-                // -----------------------------------------
-                // CHECK RECORDING
-                // -----------------------------------------
+                // -------------------------------------------------
+                // CHECK FINAL AUDIO
+                // -------------------------------------------------
 
                 if (
                     !blob ||
-                    blob.size === 0
+                    blob.size <= 0
                 ) {
 
                     console.warn(
-                        "⚠️ No audio recorded"
+                        "⚠️ Recording produced no audio"
+                    );
+
+                    showToast(
+                        "No audio was recorded."
                     );
 
                     return;
                 }
 
-
-                // -----------------------------------------
-                // SAVE BLOB
-                // -----------------------------------------
+                // -------------------------------------------------
+                // SAVE RECORDING
+                // -------------------------------------------------
 
                 window.recordedVoiceBlob =
                     blob;
 
-
-                // -----------------------------------------
-                // REMOVE OLD URL
-                // -----------------------------------------
-
+                // Remove previous URL
                 if (
                     window.recordedVoiceUrl
                 ) {
@@ -12452,27 +12416,16 @@ window.startCommentVoiceRecording = async function () {
 
                 }
 
-
-                // -----------------------------------------
-                // CREATE PREVIEW
-                // -----------------------------------------
-
                 window.recordedVoiceUrl =
-                    URL.createObjectURL(
-                        blob
-                    );
-
+                    URL.createObjectURL(blob);
 
                 console.log(
-                    "✅ VOICE READY:",
-                    blob.size,
-                    blob.type
+                    "✅ VOICE RECORDING READY"
                 );
 
-
-                // -----------------------------------------
+                // -------------------------------------------------
                 // SHOW PREVIEW
-                // -----------------------------------------
+                // -------------------------------------------------
 
                 if (
                     typeof window.showVoicePreview ===
@@ -12485,55 +12438,55 @@ window.startCommentVoiceRecording = async function () {
 
             };
 
-
         // -------------------------------------------------
-        // RECORDER ERROR
-        // -------------------------------------------------
-
-        recorder.onerror =
-            function (event) {
-
-                console.error(
-                    "❌ COMMENT RECORDER ERROR:",
-                    event
-                );
-
-            };
-
-
-        // -------------------------------------------------
-        // NOW RECORDING
+        // START RECORDER
         // -------------------------------------------------
 
-        window.commentVoiceStarting =
-            false;
+        recorder.start(100);
 
-        window.commentRecording =
-            true;
+        console.log(
+            "🎙️ recorder.start() called"
+        );
 
+        // -------------------------------------------------
+        // VERIFY RECORDER STATE
+        // -------------------------------------------------
+
+        if (
+            recorder.state !== "recording"
+        ) {
+
+            throw new Error(
+                "Recorder did not enter recording state."
+            );
+        }
+
+        // NOW mark as recording
+        window.commentVoiceStarting = false;
+        window.commentRecording = true;
 
         if (voiceBtn) {
 
-            voiceBtn.innerHTML =
-                "🔴";
+            voiceBtn.innerHTML = "🔴";
 
         }
 
+        // START TIMER ONLY NOW
+        if (
+            typeof window.startCommentVoiceTimer ===
+            "function"
+        ) {
 
-        // -------------------------------------------------
-        // START
-        // -------------------------------------------------
+            window.startCommentVoiceTimer();
 
-        recorder.start();
-
+        }
 
         console.log(
-            "🎙️ COMMENT RECORDER STARTED"
+            "🔴 COMMENT RECORDING ACTIVE"
         );
 
-
         // -------------------------------------------------
-        // RELEASE HAPPENED DURING STARTUP
+        // RELEASED DURING STARTUP
         // -------------------------------------------------
 
         if (
@@ -12544,10 +12497,8 @@ window.startCommentVoiceRecording = async function () {
                 "🛑 Stop requested immediately"
             );
 
-
             if (
-                recorder.state !==
-                "inactive"
+                recorder.state !== "inactive"
             ) {
 
                 recorder.stop();
@@ -12565,11 +12516,6 @@ window.startCommentVoiceRecording = async function () {
             error
         );
 
-
-        // -------------------------------------------------
-        // STOP STREAM
-        // -------------------------------------------------
-
         if (
             window.commentVoiceStream
         ) {
@@ -12582,67 +12528,45 @@ window.startCommentVoiceRecording = async function () {
 
         }
 
+        window.commentVoiceStream = null;
+        window.commentMediaRecorder = null;
+        window.commentAudioChunks = [];
 
-        // -------------------------------------------------
-        // RESET
-        // -------------------------------------------------
+        window.commentRecording = false;
+        window.commentVoiceStarting = false;
+        window.commentVoiceStopRequested = false;
 
-        window.commentVoiceStream =
-            null;
+        if (
+            typeof window.stopCommentVoiceTimer ===
+            "function"
+        ) {
 
-        window.commentMediaRecorder =
-            null;
+            window.stopCommentVoiceTimer();
 
-        window.commentAudioChunks =
-            [];
-
-        window.commentRecording =
-            false;
-
-        window.commentVoiceStarting =
-            false;
-
-        window.commentVoiceStopRequested =
-            false;
-
+        }
 
         window.resetCommentVoiceButton();
 
-
-        // -------------------------------------------------
-        // ERROR MESSAGE
-        // -------------------------------------------------
-
         if (
-            error.name ===
-            "NotAllowedError"
+            error.name === "NotAllowedError"
         ) {
 
-            if (
-                typeof showToast ===
-                "function"
-            ) {
-
-                showToast(
-                    "Microphone permission was denied."
-                );
-
-            }
+            showToast(
+                "Microphone permission was denied."
+            );
 
         }
 
         else {
 
-            if (
-                typeof showToast ===
-                "function"
-            ) {
+            console.error(
+                "Recording error:",
+                error
+            );
 
-                showToast(
-                    "Could not start voice recording."
-                );
-
-            }
+            showToast(
+                "Could not start voice recording."
+            );
 
         }
 
@@ -12650,39 +12574,22 @@ window.startCommentVoiceRecording = async function () {
 
 };
 
+
 // =====================================================
-// STOP COMMENT VOICE RECORDING
+// STOP COMMENT VOICE RECORDING — SAFE VERSION
 // =====================================================
 
 window.stopCommentVoiceRecording = function () {
 
     console.log(
-        "🛑 stopCommentVoiceRecording() called"
+        "🛑 stopCommentVoiceRecording()"
     );
 
-    // -------------------------------------------------
-    // NOTHING RECORDING
-    // -------------------------------------------------
-
-    if (!window.commentRecording) {
-
-        console.log(
-            "ℹ️ No comment recording active"
-        );
-
-        return;
-    }
-
-
-    // -------------------------------------------------
-    // TELL START FUNCTION TO STOP
-    // -------------------------------------------------
-
+    // Tell the start function that the user has released
     window.commentVoiceStopRequested = true;
 
-
     // -------------------------------------------------
-    // CHECK FOR RECORDER
+    // WAIT FOR RECORDER IF STILL STARTING
     // -------------------------------------------------
 
     const stopWhenReady = function () {
@@ -12690,29 +12597,33 @@ window.stopCommentVoiceRecording = function () {
         const recorder =
             window.commentMediaRecorder;
 
-
-        // ---------------------------------------------
-        // RECORDER STILL NOT READY
-        // ---------------------------------------------
-
+        // Recorder has not been created yet
         if (!recorder) {
 
-            console.log(
-                "⏳ Waiting for recorder..."
-            );
+            if (window.commentVoiceStarting) {
 
-            setTimeout(
-                stopWhenReady,
-                50
+                console.log(
+                    "⏳ Waiting for recorder to become ready..."
+                );
+
+                setTimeout(
+                    stopWhenReady,
+                    50
+                );
+
+                return;
+            }
+
+            console.log(
+                "ℹ️ No recorder available."
             );
 
             return;
         }
 
-
-        // ---------------------------------------------
-        // RECORDER ALREADY STOPPED
-        // ---------------------------------------------
+        // -------------------------------------------------
+        // ALREADY STOPPED
+        // -------------------------------------------------
 
         if (
             recorder.state === "inactive"
@@ -12725,10 +12636,9 @@ window.stopCommentVoiceRecording = function () {
             return;
         }
 
-
-        // ---------------------------------------------
-        // STOP RECORDER
-        // ---------------------------------------------
+        // -------------------------------------------------
+        // STOP RECORDING
+        // -------------------------------------------------
 
         try {
 
@@ -12744,14 +12654,13 @@ window.stopCommentVoiceRecording = function () {
         catch (error) {
 
             console.error(
-                "❌ Error stopping recorder:",
+                "❌ Stop recording error:",
                 error
             );
 
         }
 
     };
-
 
     stopWhenReady();
 
@@ -12987,29 +12896,11 @@ window.setupCommentVoiceButton = function () {
             passive: false
         }
     );
-
-
-    // =================================================
+    
+        // =================================================
     // FINGER RELEASED OUTSIDE BUTTON
     // =================================================
-
-    voiceBtn.addEventListener(
-        "pointerup",
-        function (event) {
-
-            if (pressStarted) {
-
-                stopRecording(event);
-
-            }
-
-        },
-        {
-            passive: false
-        }
-    );
-
-
+    
     console.log(
         "✅ COMMENT voice button connected"
     );
@@ -13017,6 +12908,72 @@ window.setupCommentVoiceButton = function () {
 
     return true;
 
+};
+    
+// =====================================================
+// COMMENT VOICE RECORDING TIMER
+// =====================================================
+
+window.startCommentVoiceTimer = function () {
+
+    if (window.commentVoiceTimer) {
+        clearInterval(window.commentVoiceTimer);
+    }
+
+    window.commentVoiceStartTime = Date.now();
+
+    const timeElement =
+        document.getElementById(
+            "commentVoiceRecordingTime"
+        );
+
+    if (timeElement) {
+        timeElement.textContent = "0:00";
+        timeElement.style.display = "inline-block";
+    }
+
+    window.commentVoiceTimer =
+        setInterval(function () {
+
+            if (!window.commentRecording) {
+                return;
+            }
+
+            const elapsed =
+                (Date.now() -
+                    window.commentVoiceStartTime) / 1000;
+
+            if (timeElement) {
+                timeElement.textContent =
+                    window.formatVoiceTime(elapsed);
+            }
+
+        }, 250);
+};
+
+
+// =====================================================
+// STOP COMMENT VOICE TIMER
+// =====================================================
+
+window.stopCommentVoiceTimer = function () {
+
+    if (window.commentVoiceTimer) {
+        clearInterval(window.commentVoiceTimer);
+        window.commentVoiceTimer = null;
+    }
+
+    window.commentVoiceStartTime = null;
+
+    const timeElement =
+        document.getElementById(
+            "commentVoiceRecordingTime"
+        );
+
+    if (timeElement) {
+        timeElement.textContent = "0:00";
+        timeElement.style.display = "none";
+    }
 };
 
 // =====================================================
@@ -13453,19 +13410,96 @@ window.toggleVoice = function(id) {
 
 
     // =================================================
-    // CREATE WAVEFORM IF NEEDED
+    // CREATE WAVEFORM
     // =================================================
 
     if (
         waveform &&
-        !waveform.querySelector(
-            ".voiceWaveBar"
-        )
+        !waveform.querySelector(".voiceWaveBar")
     ) {
 
-        window.createVoiceWaveform(id);
+        if (
+            typeof window.createVoiceWaveform ===
+            "function"
+        ) {
+
+            window.createVoiceWaveform(id);
+
+        }
 
     }
+
+
+    // =================================================
+    // UPDATE WAVEFORM
+    // =================================================
+
+    const updateWaveform = function() {
+
+        if (!audio.duration || !isFinite(audio.duration)) {
+            return;
+        }
+
+
+        const percent =
+            (
+                audio.currentTime /
+                audio.duration
+            ) * 100;
+
+
+        // TIME
+
+        if (time) {
+
+            time.textContent =
+                window.formatVoiceTime(
+                    audio.currentTime
+                );
+
+        }
+
+
+        // WAVE BARS
+
+        const bars =
+            waveform
+                ? waveform.querySelectorAll(
+                    ".voiceWaveBar"
+                )
+                : [];
+
+
+        const activeBars =
+            Math.floor(
+                (percent / 100) *
+                bars.length
+            );
+
+
+        bars.forEach(
+            function(bar, index) {
+
+                if (index < activeBars) {
+
+                    bar.classList.add(
+                        "played"
+                    );
+
+                }
+
+                else {
+
+                    bar.classList.remove(
+                        "played"
+                    );
+
+                }
+
+            }
+        );
+
+    };
 
 
     // =================================================
@@ -13473,81 +13507,169 @@ window.toggleVoice = function(id) {
     // =================================================
 
     document
-        .querySelectorAll(
-            ".commentVoice audio"
-        )
+        .querySelectorAll(".commentVoice audio")
         .forEach(function(otherAudio) {
 
-            if (otherAudio !== audio) {
-
-                otherAudio.pause();
-
-                otherAudio.currentTime = 0;
+            if (otherAudio === audio) {
+                return;
+            }
 
 
-                const otherId =
-                    otherAudio.id.replace(
-                        "voiceAudio-",
-                        ""
-                    );
+            otherAudio.pause();
+            otherAudio.currentTime = 0;
 
 
-                const otherBtn =
-                    document.getElementById(
-                        "voiceBtn-" + otherId
-                    );
+            const otherId =
+                otherAudio.id.replace(
+                    "voiceAudio-",
+                    ""
+                );
 
 
-                if (otherBtn) {
-
-                    otherBtn.innerHTML =
-                        "▶";
-
-                }
+            const otherBtn =
+                document.getElementById(
+                    "voiceBtn-" + otherId
+                );
 
 
-                const otherPlayer =
-                    document.getElementById(
-                        "commentVoice-" + otherId
-                    );
+            if (otherBtn) {
+
+                otherBtn.innerHTML = "▶";
+
+            }
 
 
-                if (otherPlayer) {
-
-                    otherPlayer.classList.remove(
-                        "playing"
-                    );
-
-                }
+            const otherPlayer =
+                document.getElementById(
+                    "commentVoice-" + otherId
+                );
 
 
-                const otherWave =
-                    document.getElementById(
-                        "voiceWaveform-" + otherId
-                    );
+            if (otherPlayer) {
+
+                otherPlayer.classList.remove(
+                    "playing"
+                );
+
+            }
 
 
-                if (otherWave) {
+            const otherWave =
+                document.getElementById(
+                    "voiceWaveform-" + otherId
+                );
 
-                    otherWave
-                        .querySelectorAll(
-                            ".voiceWaveBar"
-                        )
-                        .forEach(
-                            function(bar) {
 
-                                bar.classList.remove(
-                                    "played"
-                                );
+            if (otherWave) {
 
-                            }
+                otherWave
+                    .querySelectorAll(
+                        ".voiceWaveBar"
+                    )
+                    .forEach(function(bar) {
+
+                        bar.classList.remove(
+                            "played"
                         );
 
-                }
+                    });
+
+            }
+
+
+            const otherTime =
+                document.getElementById(
+                    "voiceTime-" + otherId
+                );
+
+
+            if (otherTime) {
+
+                otherTime.textContent =
+                    "0:00";
 
             }
 
         });
+
+
+    // =================================================
+    // ATTACH EVENTS
+    // =================================================
+
+    audio.ontimeupdate =
+        updateWaveform;
+
+
+    audio.onended =
+        function() {
+
+            console.log(
+                "✅ VOICE PLAYBACK FINISHED:",
+                id
+            );
+
+
+            // Keep exact final time
+
+            if (time) {
+
+                time.textContent =
+                    window.formatVoiceTime(
+                        audio.duration || 0
+                    );
+
+            }
+
+
+            // Keep waveform FULLY PLAYED
+
+            const bars =
+                waveform
+                    ? waveform.querySelectorAll(
+                        ".voiceWaveBar"
+                    )
+                    : [];
+
+
+            bars.forEach(
+                function(bar) {
+
+                    bar.classList.add(
+                        "played"
+                    );
+
+                }
+            );
+
+
+            // Reset button
+
+            btn.innerHTML = "▶";
+
+
+            if (player) {
+
+                player.classList.remove(
+                    "playing"
+                );
+
+            }
+
+        };
+
+
+    audio.onloadedmetadata =
+        function() {
+
+            if (time) {
+
+                time.textContent =
+                    "0:00";
+
+            }
+
+        };
 
 
     // =================================================
@@ -13559,8 +13681,7 @@ window.toggleVoice = function(id) {
         audio.play()
             .then(function() {
 
-                btn.innerHTML =
-                    "⏸";
+                btn.innerHTML = "⏸";
 
 
                 if (player) {
@@ -13570,12 +13691,6 @@ window.toggleVoice = function(id) {
                     );
 
                 }
-
-
-                window.animateVoiceWaveform(
-                    id,
-                    audio
-                );
 
             })
             .catch(function(error) {
@@ -13598,8 +13713,7 @@ window.toggleVoice = function(id) {
 
         audio.pause();
 
-        btn.innerHTML =
-            "▶";
+        btn.innerHTML = "▶";
 
 
         if (player) {
@@ -13611,129 +13725,6 @@ window.toggleVoice = function(id) {
         }
 
     }
-
-
-    // =================================================
-    // PROGRESS
-    // =================================================
-
-    audio.ontimeupdate =
-        function() {
-
-            const percent =
-                audio.duration &&
-                isFinite(audio.duration)
-
-                    ? (
-                        audio.currentTime /
-                        audio.duration
-                    ) * 100
-
-                    : 0;
-
-
-            if (time) {
-
-                time.textContent =
-                    window.formatVoiceTime(
-                        audio.currentTime
-                    );
-
-            }
-
-
-            const bars =
-                waveform
-                    ? waveform.querySelectorAll(
-                        ".voiceWaveBar"
-                    )
-                    : [];
-
-
-            const activeBars =
-                Math.floor(
-                    (percent / 100) *
-                    bars.length
-                );
-
-
-            bars.forEach(
-                function(bar, index) {
-
-                    if (
-                        index <
-                        activeBars
-                    ) {
-
-                        bar.classList.add(
-                            "played"
-                        );
-
-                    }
-
-                    else {
-
-                        bar.classList.remove(
-                            "played"
-                        );
-
-                    }
-
-                }
-            );
-
-        };
-
-
-    // =================================================
-    // ENDED
-    // =================================================
-
-    audio.onended =
-        function() {
-
-            btn.innerHTML =
-                "▶";
-
-
-            if (player) {
-
-                player.classList.remove(
-                    "playing"
-                );
-
-            }
-
-
-            if (time) {
-
-                time.textContent =
-                    window.formatVoiceTime(
-                        audio.duration || 0
-                    );
-
-            }
-
-
-            const bars =
-                waveform
-                    ? waveform.querySelectorAll(
-                        ".voiceWaveBar"
-                    )
-                    : [];
-
-
-            bars.forEach(
-                function(bar) {
-
-                    bar.classList.remove(
-                        "played"
-                    );
-
-                }
-            );
-
-        };
 
 };
 
@@ -23777,6 +23768,21 @@ cursor:pointer;
 📷
 </button>
 
+<span
+    id="commentVoiceRecordingTime"
+    style="
+        display:none;
+        min-width:38px;
+        color:#ff3040;
+        font-size:13px;
+        font-weight:600;
+        align-items:center;
+        justify-content:center;
+    "
+>
+    0:00
+</span>
+
 <button
 id="voiceBtn"
 type="button"
@@ -23797,6 +23803,19 @@ pointer-events:auto;
 ">
 🎤
 </button>
+
+<span
+id="commentVoiceRecordingTime"
+style="
+display:none;
+min-width:38px;
+font-size:13px;
+font-weight:600;
+color:#ff3040;
+align-self:center;
+">
+0:00
+</span>
 
 <button
 id="panelPostBtn"
