@@ -13083,24 +13083,55 @@ window.showVoicePreview = function () {
 
     audio.pause();
 
-    audio.src =
-        window.recordedVoiceUrl;
-        
-        audio.onloadedmetadata = function () {
+    audio.pause();
+
+audio.removeAttribute("src");
+
+audio.load();
+
+audio.src = window.recordedVoiceUrl;
+
+audio.preload = "auto";
+
+audio.load();
+
+audio.onloadedmetadata = function () {
+
+    const duration = audio.duration;
 
     window.showVoiceDebug(
-        "PREVIEW DURATION: " +
+        "PREVIEW METADATA LOADED\n" +
+        "Duration: " +
         (
-            Number.isFinite(audio.duration)
-                ? audio.duration.toFixed(2)
+            Number.isFinite(duration)
+                ? duration.toFixed(2) + " seconds"
+                : "UNKNOWN"
+        ) +
+        "\nType: " +
+        (
+            window.recordedVoiceBlob
+                ? window.recordedVoiceBlob.type
                 : "unknown"
         ) +
-        " seconds"
+        "\nSize: " +
+        (
+            window.recordedVoiceBlob
+                ? window.recordedVoiceBlob.size
+                : 0
+        ) +
+        " bytes"
     );
 
 };
 
-    audio.currentTime = 0;
+audio.onerror = function () {
+
+    window.showVoiceDebug(
+        "❌ AUDIO LOAD ERROR\n" +
+        "The recorded audio cannot be decoded."
+    );
+
+};
 
 
     // =================================================
