@@ -8131,12 +8131,24 @@ if (commentsPage === 0) {
 
 }
 
-// =====================================================
-// INITIALIZE VOICE COMMENT WAVEFORMS
-// =====================================================
+// Initialize newly rendered voice comments
+if (
+    typeof window.initVoiceCommentWaveforms ===
+    "function"
+) {
 
-window.initVoiceCommentWaveforms();
-window.connectVoiceWaveforms();
+    window.initVoiceCommentWaveforms();
+
+}
+
+if (
+    typeof window.connectVoiceWaveforms ===
+    "function"
+) {
+
+    window.connectVoiceWaveforms();
+
+}
 
 for (const comment of filtered) {
 
@@ -9018,34 +9030,70 @@ Replying to @${escapeHtml(c.reply_to_user.name)}
 ${
 c.media_type === "voice"
 ? `
-<div class="voice-message">
-
-<button
-onclick="toggleVoice('${c.id}')"
-id="voiceBtn-${c.id}"
-class="voicePlayBtn">
-▶
-</button>
-
-<div class="voiceProgress">
-
 <div
-id="voiceProgress-${c.id}"
-class="voiceProgressBar">
-</div>
+    class="commentVoice"
+    id="commentVoice-${c.id}"
+    style="
+        display:flex;
+        align-items:center;
+        gap:10px;
+        width:100%;
+        max-width:420px;
+        padding:9px 12px;
+        margin-top:8px;
+        background:#202020;
+        border-radius:18px;
+        box-sizing:border-box;
+    "
+>
 
-</div>
+    <button
+        id="voiceBtn-${c.id}"
+        type="button"
+        onclick="
+            event.stopPropagation();
+            toggleVoice('${c.id}');
+        "
+        style="
+            width:40px;
+            height:40px;
+            min-width:40px;
+            border:0;
+            border-radius:50%;
+            background:#0095f6;
+            color:#fff;
+            font-size:17px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            cursor:pointer;
+        "
+    >
+        ▶
+    </button>
 
-<span
-id="voiceTime-${c.id}"
-class="voiceTime">
-0:00
-</span>
+    <div
+        id="voiceWaveform-${c.id}"
+        class="voiceWaveform"
+        onclick="
+            event.stopPropagation();
+            toggleVoice('${c.id}');
+        "
+    ></div>
 
-<audio
-id="voiceAudio-${c.id}"
-src="${c.media_url}">
-</audio>
+    <div
+        id="voiceTime-${c.id}"
+        class="voiceWaveTime"
+    >
+        0:00
+    </div>
+
+    <audio
+        id="voiceAudio-${c.id}"
+        src="${escapeHtml(c.media_url)}"
+        preload="metadata"
+        style="display:none;"
+    ></audio>
 
 </div>
 `
@@ -9310,98 +9358,86 @@ window.renderReply = function(comment) {
 
     }
 
-    /*
-     * ------------------------------------------------
-     * VOICE COMMENT
-     * ------------------------------------------------
-     */
+/*
+ * ------------------------------------------------
+ * VOICE COMMENT — CLASSIC WAVEFORM
+ * ------------------------------------------------
+ */
 
-    else if (
-        comment.media_url &&
-        comment.media_type === "voice"
-    ) {
+else if (
+    comment.media_url &&
+    comment.media_type === "voice"
+) {
 
-        mediaHtml = `
-            <div
-                class="commentVoice"
+    mediaHtml = `
+        <div
+            class="commentVoice"
+            id="commentVoice-${comment.id}"
+            style="
+                margin-top:8px;
+                display:flex;
+                align-items:center;
+                gap:10px;
+                background:#202020;
+                padding:9px 12px;
+                border-radius:18px;
+                width:100%;
+                max-width:420px;
+                box-sizing:border-box;
+            "
+        >
+
+            <button
+                id="voiceBtn-${comment.id}"
+                type="button"
+                onclick="
+                    event.stopPropagation();
+                    toggleVoice('${comment.id}');
+                "
                 style="
-                    margin-top:8px;
+                    width:40px;
+                    height:40px;
+                    min-width:40px;
+                    border:0;
+                    border-radius:50%;
+                    background:#0095f6;
+                    color:white;
+                    font-size:17px;
                     display:flex;
                     align-items:center;
-                    gap:10px;
-                    background:#202020;
-                    padding:9px 12px;
-                    border-radius:18px;
-                    width:220px;
+                    justify-content:center;
+                    cursor:pointer;
                 "
             >
+                ▶
+            </button>
 
-                <button
-                    id="voiceBtn-${comment.id}"
-                    onclick="toggleVoice('${comment.id}')"
-                    style="
-                        width:36px;
-                        height:36px;
-                        border:0;
-                        border-radius:50%;
-                        background:#333;
-                        color:white;
-                        font-size:16px;
-                        cursor:pointer;
-                    "
-                >
-                    ▶
-                </button>
+            <div
+                id="voiceWaveform-${comment.id}"
+                class="voiceWaveform"
+                onclick="
+                    event.stopPropagation();
+                "
+            ></div>
 
-                <div
-                    style="
-                        flex:1;
-                        min-width:0;
-                    "
-                >
-
-                    <div
-                        style="
-                            height:4px;
-                            background:#444;
-                            border-radius:4px;
-                            overflow:hidden;
-                        "
-                    >
-                        <div
-                            id="voiceProgress-${comment.id}"
-                            style="
-                                width:0%;
-                                height:100%;
-                                background:#fff;
-                            "
-                        ></div>
-                    </div>
-
-                    <div
-                        id="voiceTime-${comment.id}"
-                        style="
-                            font-size:11px;
-                            color:#aaa;
-                            margin-top:4px;
-                        "
-                    >
-                        0:00
-                    </div>
-
-                </div>
-
-                <audio
-                    id="voiceAudio-${comment.id}"
-                    src="${escapeHtml(comment.media_url)}"
-                    preload="metadata"
-                    style="display:none;"
-                ></audio>
-
+            <div
+                id="voiceTime-${comment.id}"
+                class="voiceWaveTime"
+            >
+                0:00
             </div>
-        `;
 
-    }
+            <audio
+                id="voiceAudio-${comment.id}"
+                src="${escapeHtml(comment.media_url)}"
+                preload="metadata"
+                style="display:none;"
+            ></audio>
+
+        </div>
+    `;
+
+}
 
     /*
      * ------------------------------------------------
@@ -13828,26 +13864,25 @@ window.createVoiceWaveform = function(id) {
 
 
 // =====================================================
-// ANIMATE VOICE WAVEFORM WHILE PLAYING
+// START VOICE WAVE ANIMATION
 // =====================================================
 
 window.animateVoiceWaveform = function(id, audio) {
-
-    const waveform =
-        document.getElementById(
-            "voiceWaveform-" + id
-        );
 
     const player =
         document.getElementById(
             "commentVoice-" + id
         );
 
-    if (!waveform || !audio || !player) {
+    if (!player || !audio) {
         return;
     }
 
-    // CSS handles the classic wave animation
+    if (audio.paused || audio.ended) {
+        player.classList.remove("playing");
+        return;
+    }
+
     player.classList.add("playing");
 
 };
@@ -13925,7 +13960,32 @@ window.connectVoiceWaveforms = function() {
             return;
         }
 
-        window.setupVoiceWaveformSeek(id);
+        // Create waveform first
+        const waveform =
+            document.getElementById(
+                "voiceWaveform-" + id
+            );
+
+        if (
+            waveform &&
+            !waveform.querySelector(
+                ".voiceWaveBar"
+            )
+        ) {
+
+            window.createVoiceWaveform(id);
+
+        }
+
+        // Connect seeking
+        if (
+            typeof window.setupVoiceWaveformSeek ===
+            "function"
+        ) {
+
+            window.setupVoiceWaveformSeek(id);
+
+        }
 
     });
 
@@ -13992,6 +14052,42 @@ window.setupVoiceWaveformSeek = function(id) {
     };
 
 };
+
+// =====================================================
+// AUTO INITIALIZE VOICE WAVEFORMS
+// =====================================================
+
+window.initVoiceWaveformSystem = function() {
+
+    window.initVoiceCommentWaveforms();
+
+    window.connectVoiceWaveforms();
+
+};
+
+
+// =====================================================
+// START WHEN PAGE IS READY
+// =====================================================
+
+if (
+    document.readyState === "loading"
+) {
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        function() {
+
+            window.initVoiceWaveformSystem();
+
+        }
+    );
+
+} else {
+
+    window.initVoiceWaveformSystem();
+
+}
 
 
 // =====================================================
