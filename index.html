@@ -12495,296 +12495,162 @@ async function editComment(commentId) {
 }
 
 // =====================================================
-// DELETE ONE COMMENT ONLY
-// TREE-SAFE VERSION
+// DELETE COMMENT — VISIBLE DIAGNOSTIC VERSION
 // =====================================================
 
 window.deleteComment = async function (commentId) {
 
-    // =================================================
-    // NORMALIZE ID
-    // =================================================
+    closeCommentMenu();
 
-    const id =
-        Number(commentId);
+    const id = Number(commentId);
+
+    if (!Number.isFinite(id)) {
+        alert("Invalid comment ID");
+        return;
+    }
+
+    const ok = confirm("Delete this comment?");
+
+    if (!ok) return;
 
 
-    if (
-        !Number.isFinite(id) ||
-        id <= 0
-    ) {
+    // ---------------------------------------------
+    // GET COMMENT BEFORE DELETE
+    // ---------------------------------------------
 
-        console.error(
-            "❌ Invalid comment ID:",
-            commentId
+    const {
+        data: before,
+        error: beforeError
+    } = await supabase
+        .from("comments")
+        .select(`
+            id,
+            post_id,
+            parent_id
+        `)
+        .eq("id", id)
+        .maybeSingle();
+
+
+    if (beforeError) {
+
+        alert(
+            "Could not find comment:\n\n" +
+            beforeError.message
         );
 
-        return false;
-
+        return;
     }
 
 
-    // =================================================
-    // CLOSE MENU
-    // =================================================
+    if (!before) {
 
-    if (
-        typeof closeCommentMenu ===
-        "function"
-    ) {
-
-        closeCommentMenu();
-
-    }
-
-
-    // =================================================
-    // CONFIRM
-    // =================================================
-
-    const ok =
-        confirm(
-            "Delete this comment?"
+        alert(
+            "Comment not found:\n\n" +
+            id
         );
 
+        return;
+    }
 
-    if (!ok) {
 
-        return false;
+    const postId =
+        before.post_id;
+
+
+    // ---------------------------------------------
+    // DELETE ONLY THIS COMMENT
+    // ---------------------------------------------
+
+    const {
+        error: deleteError
+    } = await supabase
+        .from("comments")
+        .delete()
+        .eq("id", id);
+
+
+    if (deleteError) {
+
+        alert(
+            "Delete failed:\n\n" +
+            deleteError.message
+        );
+
+        return;
+    }
+
+
+    // ---------------------------------------------
+    // CHECK HOW MANY COMMENTS REMAIN
+    // ---------------------------------------------
+
+    const {
+        data: remaining,
+        error: checkError
+    } = await supabase
+        .from("comments")
+        .select("id")
+        .eq("post_id", postId);
+
+
+    if (checkError) {
+
+        alert(
+            "Comment deleted.\n\n" +
+            "Could not check remaining comments."
+        );
+
+    } else {
+
+        alert(
+            "Deleted comment ID: " +
+            id +
+            "\n\n" +
+
+            "Comments remaining in database: " +
+            (remaining?.length || 0)
+        );
 
     }
 
 
-    console.log(
-        "🗑️ Deleting ONLY comment:",
-        id
-    );
+    // ---------------------------------------------
+    // REMOVE ONLY SELECTED ELEMENT
+    // ---------------------------------------------
 
-
-    // =================================================
-    // FIND ELEMENT BEFORE DELETE
-    // =================================================
-
-    const commentElement =
+    const element =
         document.getElementById(
             "comment-" + id
         );
 
 
-    // =================================================
-    // REMEMBER PARENT
-    // =================================================
+    if (element) {
 
-    let parentId =
-        null;
-
-
-    if (commentElement) {
-
-        parentId =
-            commentElement.dataset.parentId ||
-            null;
-
-    }
-
-
-    // =================================================
-    // DELETE EXACT DATABASE ROW
-    // =================================================
-
-    const {
-        error
-    } =
-        await supabase
-            .from("comments")
-            .delete()
-            .eq("id", id);
-
-
-    if (error) {
-
-        console.error(
-            "❌ Delete comment failed:",
-            error
-        );
-
-
-        if (
-            typeof showToast ===
-            "function"
-        ) {
-
-            showToast(
-                "Couldn't delete comment."
-            );
-
-        }
-
-
-        return false;
-
-    }
-
-
-    console.log(
-        "✅ Database deleted ONLY comment:",
-        id
-    );
-
-
-    // =================================================
-    // REMOVE ONLY THIS DOM ELEMENT
-    // =================================================
-
-    if (commentElement) {
-
-        commentElement.style.transition =
+        element.style.transition =
             "opacity .25s ease, transform .25s ease";
 
-
-        commentElement.style.opacity =
+        element.style.opacity =
             "0";
 
-
-        commentElement.style.transform =
+        element.style.transform =
             "translateX(-20px)";
 
 
-        setTimeout(
-            function () {
+        setTimeout(() => {
 
-                // -------------------------------------
-                // IMPORTANT:
-                // remove() ONLY removes this element.
-                // It does NOT remove its parent tree.
-                // -------------------------------------
+            if (
+                element &&
+                element.parentNode
+            ) {
 
-                if (
-                    commentElement &&
-                    commentElement.parentNode
-                ) {
-
-                    commentElement.remove();
-
-                }
-
-
-                console.log(
-                    "✅ Removed DOM element:",
-                    id
-                );
-
-            },
-            250
-        );
-
-    }
-
-
-    // =================================================
-    // UPDATE PARENT REPLY COUNT
-    // WITHOUT RELOADING THE TREE
-    // =================================================
-
-    if (parentId) {
-
-        const parentElement =
-            document.getElementById(
-                "comment-" + parentId
-            );
-
-
-        if (parentElement) {
-
-            const threadButton =
-                document.getElementById(
-                    "threadBtn-" + parentId
-                );
-
-
-            if (threadButton) {
-
-                const repliesContainer =
-                    document.getElementById(
-                        "replies-" + parentId
-                    );
-
-
-                if (repliesContainer) {
-
-                    const remainingReplies =
-                        repliesContainer.querySelectorAll(
-                            ".commentCard.replyCard"
-                        ).length;
-
-
-                    if (
-                        remainingReplies <= 0
-                    ) {
-
-                        repliesContainer.style.display =
-                            "none";
-
-
-                        threadButton.style.display =
-                            "none";
-
-                    }
-
-                }
+                element.remove();
 
             }
 
-        }
+        }, 250);
 
     }
-
-
-    // =================================================
-    // RESET SELECTED COMMENT
-    // =================================================
-
-    if (
-        String(
-            window.selectedCommentId
-        ) === String(id)
-    ) {
-
-        window.selectedCommentId =
-            null;
-
-    }
-
-
-    if (
-        String(
-            window.currentSelectedCommentId
-        ) === String(id)
-    ) {
-
-        window.currentSelectedCommentId =
-            null;
-
-    }
-
-
-    // =================================================
-    // SUCCESS
-    // =================================================
-
-    if (
-        typeof showToast ===
-        "function"
-    ) {
-
-        showToast(
-            "Comment deleted."
-        );
-
-    }
-
-
-    return true;
 
 };
 
