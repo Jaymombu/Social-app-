@@ -12371,25 +12371,38 @@ let selectedCommentUserId = null;
 
 window.openCommentMenu = async function(commentId, userId) {
 
-    // Store selected comment immediately
-    selectedCommentId = String(commentId);
+    // =====================================================
+    // STORE THE EXACT COMMENT SELECTED
+    // =====================================================
+
+    const exactId = String(commentId);
+
+    selectedCommentId = exactId;
     selectedCommentUserId = String(userId || "");
 
-    reactionCommentId = selectedCommentId;
+    reactionCommentId = exactId;
 
-    const menu = document.getElementById("commentMenu");
+    console.log("🟢 COMMENT MENU SELECTED:", {
+        commentId: exactId,
+        userId: selectedCommentUserId
+    });
+
+    const menu =
+        document.getElementById("commentMenu");
 
     if (!menu) {
         console.warn("commentMenu not found");
         return;
     }
 
-    /*
-     * IMPORTANT:
-     * Keep the menu hidden while we determine ownership.
-     * This prevents the wrong buttons from flashing.
-     */
-    menu.style.transform = "translateY(100%)";
+    // Keep hidden while configuring buttons
+    menu.style.transform =
+        "translateY(100%)";
+
+
+    // =====================================================
+    // CURRENT USER
+    // =====================================================
 
     const {
         data: { session }
@@ -12400,15 +12413,18 @@ window.openCommentMenu = async function(commentId, userId) {
             ? String(session.user.id)
             : "";
 
+
+    // =====================================================
+    // EXACT OWNER
+    // =====================================================
+
     const commentOwnerId =
         String(userId || "");
 
     const postOwnerId =
         String(window.currentPostOwnerId || "");
 
-    /*
-     * Determine permissions BEFORE showing menu
-     */
+
     const isMine =
         !!currentUserId &&
         currentUserId === commentOwnerId;
@@ -12417,32 +12433,45 @@ window.openCommentMenu = async function(commentId, userId) {
         !!currentUserId &&
         currentUserId === postOwnerId;
 
-    /*
-     * Get menu buttons
-     */
+
+    // =====================================================
+    // GET BUTTONS
+    // =====================================================
+
     const copyBtn =
-        document.getElementById("commentCopyBtn");
+        document.getElementById(
+            "commentCopyBtn"
+        );
 
     const editBtn =
-        document.getElementById("commentEditBtn");
+        document.getElementById(
+            "commentEditBtn"
+        );
 
     const deleteBtn =
-        document.getElementById("commentDeleteBtn");
+        document.getElementById(
+            "commentDeleteBtn"
+        );
 
     const pinBtn =
-        document.getElementById("commentPinBtn");
+        document.getElementById(
+            "commentPinBtn"
+        );
 
     const hideBtn =
-        document.getElementById("commentHideBtn");
+        document.getElementById(
+            "commentHideBtn"
+        );
 
     const reportBtn =
-        document.getElementById("commentReportBtn");
+        document.getElementById(
+            "commentReportBtn"
+        );
 
 
-    /*
-     * Set ALL button visibility BEFORE
-     * making the menu visible.
-     */
+    // =====================================================
+    // VISIBILITY
+    // =====================================================
 
     if (copyBtn) {
         copyBtn.style.display = "block";
@@ -12450,22 +12479,76 @@ window.openCommentMenu = async function(commentId, userId) {
 
     if (editBtn) {
         editBtn.style.display =
-            isMine ? "block" : "none";
+            isMine
+                ? "block"
+                : "none";
     }
 
     if (deleteBtn) {
+
         deleteBtn.style.display =
-            isMine ? "block" : "none";
+            isMine
+                ? "block"
+                : "none";
+
+
+        // =================================================
+        // IMPORTANT FIX
+        //
+        // Bind the EXACT selected ID directly.
+        // Do not allow an old/stale ID to remain attached.
+        // =================================================
+
+        deleteBtn.onclick =
+            async function(event) {
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                const idToDelete =
+                    String(selectedCommentId || "");
+
+                console.log(
+                    "🗑️ DELETE BUTTON CLICKED:",
+                    idToDelete
+                );
+
+                if (
+                    !idToDelete ||
+                    idToDelete === "undefined" ||
+                    idToDelete === "null"
+                ) {
+
+                    console.error(
+                        "❌ No valid selected comment ID"
+                    );
+
+                    return;
+                }
+
+                // Close menu first
+                closeCommentMenu();
+
+                // Delete ONLY this exact comment
+                await deleteComment(
+                    idToDelete
+                );
+            };
     }
+
 
     if (pinBtn) {
         pinBtn.style.display =
-            isPostOwner ? "block" : "none";
+            isPostOwner
+                ? "block"
+                : "none";
     }
 
     if (hideBtn) {
         hideBtn.style.display =
-            isPostOwner ? "block" : "none";
+            isPostOwner
+                ? "block"
+                : "none";
     }
 
     if (reportBtn) {
@@ -12476,12 +12559,9 @@ window.openCommentMenu = async function(commentId, userId) {
     }
 
 
-    /*
-     * NOW show the menu.
-     *
-     * At this point all permissions have
-     * already been applied.
-     */
+    // =====================================================
+    // SHOW MENU
+    // =====================================================
 
     menu.style.transform =
         "translateY(0)";
