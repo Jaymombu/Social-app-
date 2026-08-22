@@ -7695,41 +7695,76 @@ if (postLikeArea) {
                     }
 
 
-                    if (
-                        payload.eventType === "UPDATE"
-                    ) {
+if (payload.eventType === "UPDATE") {
 
-                        await refreshComment(
-                            payload.new.id
-                        );
+    const updatedId =
+        payload.new?.id;
 
-                        return;
-                    }
+    if (!updatedId) return;
+
+    /*
+     * Soft-deleted comment
+     */
+    if (payload.new.hidden === true) {
+
+        const element =
+            document.getElementById(
+                "comment-" + updatedId
+            );
+
+        if (element) {
+            element.remove();
+        }
+
+        /*
+         * Update only this comment's
+         * parent reply counter.
+         */
+        if (payload.new.parent_id) {
+
+            await updateReplyCount(
+                payload.new.parent_id
+            );
+
+        }
+
+        return;
+    }
+
+    /*
+     * Normal comment update
+     */
+    await refreshComment(
+        updatedId
+    );
+
+    return;
+}
 
 
-                    if (
-                        payload.eventType === "DELETE"
-                    ) {
+if (payload.eventType === "DELETE") {
 
-                        document
-                            .getElementById(
-                                "comment-" +
-                                payload.old.id
-                            )
-                            ?.remove();
+    const deletedId =
+        payload.old?.id;
 
+    if (deletedId) {
 
-                        if (
-                            payload.old.parent_id
-                        ) {
+        document
+            .getElementById(
+                "comment-" + deletedId
+            )
+            ?.remove();
+    }
 
-                            await updateReplyCount(
-                                payload.old.parent_id
-                            );
+    if (payload.old?.parent_id) {
 
-                        }
+        await updateReplyCount(
+            payload.old.parent_id
+        );
+    }
 
-                    }
+    return;
+}
 
                 }
             )
@@ -11250,7 +11285,12 @@ async function insertComment(commentId) {
 
 }
 
-async function updateReplyCount(parentId) {
+// =====================================================
+// UPDATE REPLY COUNT
+// NEVER CLEAR THE REPLY TREE
+// =====================================================
+
+window.updateReplyCount = async function(parentId) {
 
     if (!parentId) return;
 
@@ -11263,10 +11303,7 @@ async function updateReplyCount(parentId) {
             count: "exact",
             head: true
         })
-        .eq(
-            "parent_id",
-            parentId
-        );
+        .eq("parent_id", parentId);
 
     if (error) {
 
@@ -11278,55 +11315,84 @@ async function updateReplyCount(parentId) {
         return;
     }
 
+    const replyCount =
+        Number(count) || 0;
+
     const button =
         document.getElementById(
             "threadBtn-" + parentId
         );
 
-    if (!count || count === 0) {
+
+    // ==========================================
+    // NO REPLIES
+    // ==========================================
+
+    if (replyCount === 0) {
 
         if (button) {
-            button.style.display = "none";
+
+            button.style.display =
+                "none";
+
+            button.textContent =
+                "View replies";
+        }
+
+        /*
+         * IMPORTANT:
+         *
+         * DO NOT DO THIS:
+         *
+         * replies.innerHTML = "";
+         *
+         * The realtime DELETE handler already
+         * removes the deleted reply.
+         *
+         * Clearing the container can wipe the
+         * entire visible reply tree.
+         */
+
+        if (
+            window.expandedReplies instanceof Set
+        ) {
+
+            window.expandedReplies.delete(
+                parentId
+            );
+
         }
 
         return;
     }
 
-    /*
-     * Keep the button visible
-     */
 
-    if (button) {
+    // ==========================================
+    // REPLIES STILL EXIST
+    // ==========================================
 
-        button.style.display =
-            "block";
-
-        const isOpen =
-            window.expandedReplies instanceof Set &&
-            window.expandedReplies.has(parentId);
-
-        button.textContent =
-            isOpen
-                ? "Hide replies"
-                : `View ${count} ${
-                    count === 1
-                        ? "reply"
-                        : "replies"
-                }`;
-
+    if (!button) {
         return;
     }
 
-    /*
-     * If the button does not exist yet,
-     * rebuild it using the existing helper.
-     */
+    button.style.display =
+        "block";
 
-    await loadNestedReplyButton(
-        parentId
-    );
 
-}
+    const isOpen =
+        window.expandedReplies instanceof Set &&
+        window.expandedReplies.has(parentId);
+
+
+    button.textContent =
+        isOpen
+            ? "Hide replies"
+            : `View ${replyCount} ${
+                replyCount === 1
+                    ? "reply"
+                    : "replies"
+            }`;
+};
 
 function flashComment(commentId) {
 
@@ -12494,18 +12560,17 @@ async function editComment(commentId) {
 
 }
 
-// =====================================================
-// DELETE COMMENT — VISIBLE DIAGNOSTIC VERSION
-// =====================================================
-
-window.deleteComment = async function (commentId) {
+async function deleteComment(commentId) {
 
     closeCommentMenu();
 
-    const id = Number(commentId);
+    const exactId = String(commentId);
 
-    if (!Number.isFinite(id)) {
-        alert("Invalid comment ID");
+    if (
+        !exactId ||
+        exactId === "undefined" ||
+        exactId === "null"
+    ) {
         return;
     }
 
@@ -12513,146 +12578,118 @@ window.deleteComment = async function (commentId) {
 
     if (!ok) return;
 
-
-    // ---------------------------------------------
-    // GET COMMENT BEFORE DELETE
-    // ---------------------------------------------
-
+    /*
+     * Find ONLY the selected comment.
+     */
     const {
-        data: before,
-        error: beforeError
+        data: comment,
+        error: findError
     } = await supabase
         .from("comments")
-        .select(`
-            id,
-            post_id,
-            parent_id
-        `)
-        .eq("id", id)
+        .select("id, parent_id, user_id, hidden")
+        .eq("id", exactId)
         .maybeSingle();
 
-
-    if (beforeError) {
-
-        alert(
-            "Could not find comment:\n\n" +
-            beforeError.message
+    if (findError) {
+        console.error(
+            "❌ Find comment failed:",
+            findError
         );
-
         return;
     }
 
-
-    if (!before) {
-
-        alert(
-            "Comment not found:\n\n" +
-            id
-        );
-
+    if (!comment) {
+        alert("Comment not found.");
         return;
     }
 
-
-    const postId =
-        before.post_id;
-
-
-    // ---------------------------------------------
-    // DELETE ONLY THIS COMMENT
-    // ---------------------------------------------
-
+    /*
+     * IMPORTANT:
+     * UPDATE instead of DELETE.
+     *
+     * This prevents:
+     * ON DELETE CASCADE
+     *
+     * and prevents the DELETE realtime event.
+     */
     const {
-        error: deleteError
+        data: updated,
+        error: updateError
     } = await supabase
         .from("comments")
-        .delete()
-        .eq("id", id);
+        .update({
+            hidden: true
+        })
+        .eq("id", exactId)
+        .select("id, parent_id, hidden")
+        .maybeSingle();
 
+    if (updateError) {
 
-    if (deleteError) {
+        console.error(
+            "❌ Comment soft-delete failed:",
+            updateError
+        );
 
-        alert(
-            "Delete failed:\n\n" +
-            deleteError.message
+        alert("Could not delete comment.");
+
+        return;
+    }
+
+    if (!updated) {
+
+        console.error(
+            "❌ No comment was updated:",
+            exactId
         );
 
         return;
     }
 
+    console.log(
+        "✅ SOFT DELETED ONLY:",
+        updated.id
+    );
 
-    // ---------------------------------------------
-    // CHECK HOW MANY COMMENTS REMAIN
-    // ---------------------------------------------
-
-    const {
-        data: remaining,
-        error: checkError
-    } = await supabase
-        .from("comments")
-        .select("id")
-        .eq("post_id", postId);
-
-
-    if (checkError) {
-
-        alert(
-            "Comment deleted.\n\n" +
-            "Could not check remaining comments."
-        );
-
-    } else {
-
-        alert(
-            "Deleted comment ID: " +
-            id +
-            "\n\n" +
-
-            "Comments remaining in database: " +
-            (remaining?.length || 0)
-        );
-
-    }
-
-
-    // ---------------------------------------------
-    // REMOVE ONLY SELECTED ELEMENT
-    // ---------------------------------------------
-
+    /*
+     * Remove ONLY the selected DOM element.
+     */
     const element =
         document.getElementById(
-            "comment-" + id
+            "comment-" + exactId
         );
-
 
     if (element) {
 
         element.style.transition =
             "opacity .25s ease, transform .25s ease";
 
-        element.style.opacity =
-            "0";
+        element.style.opacity = "0";
 
         element.style.transform =
             "translateX(-20px)";
 
-
         setTimeout(() => {
 
-            if (
-                element &&
-                element.parentNode
-            ) {
-
-                element.remove();
-
-            }
+            element.remove();
 
         }, 250);
 
     }
 
-};
+    /*
+     * If it was a reply, update
+     * ONLY its parent thread count.
+     */
+    if (updated.parent_id) {
+
+        await updateReplyCount(
+            updated.parent_id
+        );
+
+    }
+
+}
 
 function formatCommentTime(date) {
 
