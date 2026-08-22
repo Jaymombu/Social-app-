@@ -18400,7 +18400,12 @@ color:#8e8e8e;
     `;
 }
 
-window.renderCommentReactions = function(comment) {
+// =====================================================
+// RENDER COMMENT REACTIONS
+// CLICKABLE + DYNAMIC-SAFE + ALWAYS SHOW COUNT
+// =====================================================
+
+window.renderCommentReactions = function (comment) {
 
     if (
         !comment ||
@@ -18412,36 +18417,44 @@ window.renderCommentReactions = function(comment) {
 
     const grouped = {};
 
-    comment.comment_reactions.forEach(
-        reaction => {
+    comment.comment_reactions.forEach(reaction => {
 
-            if (
-                !reaction ||
-                !reaction.emoji
-            ) {
-                return;
-            }
-
-            if (
-                !grouped[reaction.emoji]
-            ) {
-                grouped[reaction.emoji] = [];
-            }
-
-            grouped[reaction.emoji].push(
-                reaction.user_id
-            );
+        if (
+            !reaction ||
+            !reaction.emoji
+        ) {
+            return;
         }
-    );
+
+        if (!grouped[reaction.emoji]) {
+            grouped[reaction.emoji] = [];
+        }
+
+        grouped[reaction.emoji].push(
+            reaction.user_id
+        );
+
+    });
 
     return Object.entries(grouped)
         .map(([emoji, users]) => {
 
+            const safeEmoji =
+                escapeHtml(emoji);
+
+            const safeCommentId =
+                String(comment.id);
+
+            const count =
+                users.length;
+
             return `
                 <span
                     class="commentReactionBadge"
-                    data-comment-id="${comment.id}"
-                    data-reaction-emoji="${escapeHtml(emoji)}"
+                    data-comment-id="${safeCommentId}"
+                    data-reaction-emoji="${safeEmoji}"
+                    role="button"
+                    tabindex="0"
                     style="
                         display:inline-flex;
                         align-items:center;
@@ -18453,18 +18466,31 @@ window.renderCommentReactions = function(comment) {
                         font-size:13px;
                         cursor:pointer;
                         user-select:none;
+                        position:relative;
+                        z-index:20;
+                        pointer-events:auto;
                     "
                 >
-                    ${escapeHtml(emoji)}
 
                     <span
                         style="
-                            color:#aaa;
-                            font-size:11px;
+                            pointer-events:none;
                         "
                     >
-                        ${users.length}
+                        ${safeEmoji}
                     </span>
+
+                    <span
+                        class="commentReactionCount"
+                        style="
+                            color:#aaa;
+                            font-size:11px;
+                            pointer-events:none;
+                        "
+                    >
+                        ${count}
+                    </span>
+
                 </span>
             `;
 
@@ -18472,38 +18498,101 @@ window.renderCommentReactions = function(comment) {
         .join("");
 };
 
-document.addEventListener(
-    "click",
-    function(event) {
+// =====================================================
+// REACTION BADGE CLICK HANDLER
+// ONE GLOBAL HANDLER
+// =====================================================
 
-        const badge =
-            event.target.closest(
-                ".commentReactionBadge"
+if (!window.commentReactionBadgeClickAttached) {
+
+    window.commentReactionBadgeClickAttached = true;
+
+    document.addEventListener(
+        "click",
+        async function (event) {
+
+            const badge =
+                event.target.closest(
+                    ".commentReactionBadge"
+                );
+
+            if (!badge) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            const commentId =
+                badge.getAttribute(
+                    "data-comment-id"
+                );
+
+            const emoji =
+                badge.getAttribute(
+                    "data-reaction-emoji"
+                );
+
+            console.log(
+                "😀 REACTION BADGE CLICKED:",
+                {
+                    commentId,
+                    emoji
+                }
             );
 
-        if (!badge) {
-            return;
-        }
+            if (!commentId || !emoji) {
 
-        event.preventDefault();
-        event.stopPropagation();
+                console.error(
+                    "❌ Reaction badge is missing data:",
+                    {
+                        commentId,
+                        emoji,
+                        badge
+                    }
+                );
 
-        const commentId =
-            badge.dataset.commentId;
+                return;
+            }
 
-        const emoji =
-            badge.dataset.reactionEmoji;
+            if (
+                typeof window.openReactionUsers !==
+                "function"
+            ) {
 
-        if (!commentId || !emoji) {
-            return;
-        }
+                console.error(
+                    "❌ window.openReactionUsers is NOT defined"
+                );
 
-        window.openReactionUsers(
-            commentId,
-            emoji
-        );
-    }
-);
+                return;
+            }
+
+            try {
+
+                await window.openReactionUsers(
+                    commentId,
+                    emoji,
+                    window.currentPostId ??
+                    currentPostId ??
+                    null
+                );
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "❌ Opening reaction users failed:",
+                    error
+                );
+
+            }
+
+        },
+        true
+    );
+
+}
 
 function openReactionPicker(commentId){
 
@@ -18531,462 +18620,631 @@ function openReactionPicker(commentId){
 
 }
 
-window.openReactionUsers = async function(commentId, emoji, postId, cachedUsers = null) {
-  
-  const actualPostId = postId ?? currentPostId;
-
-if (!commentId || !emoji) {
-    return;
-}
-
-// Prevent duplicate reaction popups
-if (window.openingReactionUsers) {
-    return;
-}
-
-window.openingReactionUsers = true;
-
-    /*
-     * Remove existing popup
-     */
-    document
-        .getElementById("reactionUsersPopup")
-        ?.remove();
-
-
-    /*
-     * -----------------------------------------
-     * LOAD REACTION USERS
-     * -----------------------------------------
-     */
-
-    let data = cachedUsers;
-
-if (!data) {
-
-    const result = await supabase
-        .from("comment_reactions")
-        .select(`
-            user_id,
-            emoji,
-            profiles:profiles!comment_reactions_user_id_fkey(
-                id,
-                name,
-                avatar_url,
-                verified
-            )
-        `)
-        .eq("comment_id", commentId)
-        .eq("emoji", emoji);
-
-    data = result.data;
-
-    if (result.error) {
-
-        console.error(
-            "Load reaction users:",
-            result.error
-        );
-
-        return;
-    }
-}
-
-
-    /*
-     * -----------------------------------------
-     * CREATE POPUP
-     * -----------------------------------------
-     */
-
-    const popup =
-        document.createElement("div");
-
-    popup.id =
-        "reactionUsersPopup";
-
-    popup.style.cssText = `
-        position:fixed;
-        left:50%;
-        top:50%;
-        transform:translate(-50%,-50%);
-        width:min(340px,90vw);
-        max-height:70vh;
-        overflow-y:auto;
-        background:#181818;
-        color:white;
-        border:1px solid #333;
-        border-radius:18px;
-        padding:16px;
-        z-index:9999999;
-        box-shadow:0 15px 50px rgba(0,0,0,.7);
-    `;
-
-
-    /*
-     * -----------------------------------------
-     * HEADER
-     * -----------------------------------------
-     */
-
-    const header =
-        document.createElement("div");
-
-    header.style.cssText = `
-        display:flex;
-        align-items:center;
-        justify-content:space-between;
-        margin-bottom:14px;
-    `;
-
-
-    const title =
-        document.createElement("div");
-
-    title.style.cssText = `
-        font-size:18px;
-        font-weight:700;
-    `;
-
-    title.textContent =
-    emoji + " Reactions · " + data.length;
-
-
-    const closeButton =
-        document.createElement("button");
-
-    closeButton.type =
-        "button";
-
-    closeButton.textContent =
-        "×";
-
-    closeButton.style.cssText = `
-        border:0;
-        background:#292929;
-        color:white;
-        width:32px;
-        height:32px;
-        border-radius:50%;
-        font-size:18px;
-        cursor:pointer;
-    `;
-
-    closeButton.addEventListener(
-        "click",
-        function(event) {
-
-            event.preventDefault();
-            event.stopPropagation();
-
-            popup.remove();
-
-            /*
-             * User intentionally closed the popup.
-             * Do not restore it later.
-             */
-            window.reactionProfileReturn = null;
-        }
-    );
-
-
-    header.appendChild(title);
-    header.appendChild(closeButton);
-
-    popup.appendChild(header);
-
-
-    /*
-     * -----------------------------------------
-     * USER LIST
-     * -----------------------------------------
-     */
-
-    const list =
-        document.createElement("div");
-
-    list.id =
-        "reactionUsersList";
-
-    popup.appendChild(list);
-
-    document.body.appendChild(popup);
-
-
-    /*
-     * -----------------------------------------
-     * NO USERS
-     * -----------------------------------------
-     */
-
-    if (
-        !data ||
-        data.length === 0
-    ) {
-
-        list.innerHTML = `
-    <div style="
-        text-align:center;
-        padding:30px 20px;
-        color:#888;
-    ">
-
-        <div style="
-            font-size:32px;
-            margin-bottom:8px;
-        ">
-            ${emoji}
-        </div>
-
-        <div style="
-            font-size:15px;
-            font-weight:600;
-            color:#aaa;
-        ">
-            No reactions yet
-        </div>
-
-    </div>
-`;
-
-        return;
-    }
-
-
-    /*
-     * -----------------------------------------
-     * RENDER USERS
-     * -----------------------------------------
-     */
-
-    data.forEach(reaction => {
-
-        const profile =
-            reaction.profiles || {};
-
-        const name =
-            profile.name || "User";
-
-        const avatar =
-            profile.avatar_url || "";
-
-
-        /*
-         * USER ROW
-         */
-
-        const row =
-            document.createElement("div");
-
-        row.style.cssText = `
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding:9px 4px;
-    cursor:pointer;
-    border-radius:10px;
-    transition:background .15s ease;
-`;
-
-row.addEventListener("mouseenter", () => {
-    row.style.background = "#292929";
-});
-
-row.addEventListener("mouseleave", () => {
-    row.style.background = "transparent";
-});
-
-        /*
-         * AVATAR
-         */
-
-        if (avatar) {
-
-            const img =
-                document.createElement("img");
-
-            img.src =
-                avatar;
-
-            img.alt =
-                name;
-
-            img.style.cssText = `
-                width:42px;
-                height:42px;
-                border-radius:50%;
-                object-fit:cover;
-                flex-shrink:0;
-            `;
-
-            row.appendChild(img);
-
-        } else {
-
-            const fallback =
-                document.createElement("div");
-
-            fallback.style.cssText = `
-                width:42px;
-                height:42px;
-                border-radius:50%;
-                background:#333;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                font-weight:bold;
-                flex-shrink:0;
-            `;
-
-            fallback.textContent =
-                name.charAt(0).toUpperCase();
-
-            row.appendChild(fallback);
-        }
-
-
-        /*
-         * NAME
-         */
-
-        const nameBox =
-            document.createElement("div");
-
-        nameBox.style.cssText = `
-            flex:1;
-            min-width:0;
-        `;
-
-
-        const nameText =
-            document.createElement("div");
-
-        nameText.style.cssText = `
-            font-size:14px;
-            font-weight:600;
-        `;
-
-        nameText.textContent =
-            name;
-
-
-        /*
-         * VERIFIED
-         */
-
-        if (profile.verified) {
-
-            const verified =
-                document.createElement("span");
-
-            verified.textContent =
-                " ✓";
-
-            verified.style.cssText = `
-                color:#3897f0;
-            `;
-
-            nameText.appendChild(
-                verified
-            );
-        }
-
-
-        nameBox.appendChild(
-            nameText
-        );
-
-        row.appendChild(
-            nameBox
-        );
-
-
-        /*
-         * EMOJI
-         */
-
-        const emojiBox =
-            document.createElement("span");
-
-        emojiBox.textContent =
-            emoji;
-
-        emojiBox.style.cssText = `
-            font-size:20px;
-        `;
-
-        row.appendChild(
-            emojiBox
-        );
-
-
-        /*
-         * -------------------------------------
-         * OPEN PROFILE
-         * -------------------------------------
-         */
-
-        row.addEventListener(
-            "click",
-            function(event) {
-
-                event.preventDefault();
-                event.stopPropagation();
-
-                /*
-                 * SAVE EXACT RETURN LOCATION
-                 */
-                
-const actualPostId = postId || currentPostId;
-
-console.log("Saving reaction return:", {
-    postId: actualPostId,
-    commentId,
-    emoji
-});
-
-window.reactionProfileReturn = {
-    postId: actualPostId,
+// =====================================================
+// OPEN REACTION USERS
+// SAFE / DUPLICATE-SAFE / PROFILE-RETURN SAFE
+// =====================================================
+
+window.openReactionUsers = async function (
     commentId,
     emoji,
-    users: data
-};
+    postId = null,
+    cachedUsers = null
+) {
 
-                /*
-                 * Remove reaction popup
-                 */
-                popup.remove();
+    // =================================================
+    // VALIDATE
+    // =================================================
 
-                /*
-                 * Open selected profile
-                 */
-                if (
-                    typeof window.openProfile ===
-                    "function"
-                ) {
+    if (!commentId || !emoji) {
+        console.warn(
+            "⚠️ Missing reaction information:",
+            {
+                commentId,
+                emoji
+            }
+        );
 
-                    window.openProfile(
-                        reaction.user_id,
-                        name
-                    );
+        return false;
+    }
 
-                } else {
 
-                    console.error(
-                        "openProfile function not found"
-                    );
+    // =================================================
+    // PREVENT DUPLICATE POPUPS
+    // =================================================
 
-                    window.reactionProfileReturn =
-                        null;
-                }
+    if (window.openingReactionUsers === true) {
+
+        console.log(
+            "⏳ Reaction users popup already opening"
+        );
+
+        return false;
+    }
+
+
+    window.openingReactionUsers = true;
+
+
+    try {
+
+        // =================================================
+        // DETERMINE POST
+        // =================================================
+
+        const actualPostId =
+            postId ??
+            window.currentPostId ??
+            currentPostId ??
+            null;
+
+
+        // =================================================
+        // REMOVE EXISTING POPUP
+        // =================================================
+
+        const existingPopup =
+            document.getElementById(
+                "reactionUsersPopup"
+            );
+
+        if (existingPopup) {
+            existingPopup.remove();
+        }
+
+
+        // =================================================
+        // LOAD REACTION USERS
+        // =================================================
+
+        let data = cachedUsers;
+
+
+        if (!Array.isArray(data)) {
+
+            const {
+                data: reactionUsers,
+                error
+            } = await supabase
+                .from("comment_reactions")
+                .select(`
+                    user_id,
+                    emoji,
+                    profiles:profiles!comment_reactions_user_id_fkey(
+                        id,
+                        name,
+                        avatar_url,
+                        verified
+                    )
+                `)
+                .eq(
+                    "comment_id",
+                    commentId
+                )
+                .eq(
+                    "emoji",
+                    emoji
+                );
+
+
+            if (error) {
+
+                console.error(
+                    "❌ Load reaction users failed:",
+                    error
+                );
+
+                return false;
+            }
+
+
+            data =
+                Array.isArray(reactionUsers)
+                    ? reactionUsers
+                    : [];
+
+        }
+
+
+        console.log(
+            "😀 REACTION USERS LOADED:",
+            {
+                commentId,
+                emoji,
+                postId: actualPostId,
+                count: data.length
             }
         );
 
 
-        list.appendChild(row);
+        // =================================================
+        // CREATE POPUP
+        // =================================================
 
-    });
-    window.openingReactionUsers = false;
+        const popup =
+            document.createElement("div");
+
+        popup.id =
+            "reactionUsersPopup";
+
+        popup.style.cssText = `
+            position:fixed;
+            left:50%;
+            top:50%;
+            transform:translate(-50%,-50%);
+            width:min(340px,90vw);
+            max-height:70vh;
+            overflow-y:auto;
+            background:#181818;
+            color:white;
+            border:1px solid #333;
+            border-radius:18px;
+            padding:16px;
+            z-index:9999999;
+            box-shadow:0 15px 50px rgba(0,0,0,.7);
+        `;
+
+
+        // =================================================
+        // HEADER
+        // =================================================
+
+        const header =
+            document.createElement("div");
+
+        header.style.cssText = `
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            margin-bottom:14px;
+        `;
+
+
+        const title =
+            document.createElement("div");
+
+        title.style.cssText = `
+            font-size:18px;
+            font-weight:700;
+        `;
+
+        title.textContent =
+            emoji +
+            " Reactions · " +
+            data.length;
+
+
+        const closeButton =
+            document.createElement("button");
+
+        closeButton.type =
+            "button";
+
+        closeButton.textContent =
+            "×";
+
+        closeButton.style.cssText = `
+            border:0;
+            background:#292929;
+            color:white;
+            width:32px;
+            height:32px;
+            border-radius:50%;
+            font-size:18px;
+            cursor:pointer;
+        `;
+
+
+        closeButton.addEventListener(
+            "click",
+            function (event) {
+
+                event.preventDefault();
+                event.stopPropagation();
+
+                popup.remove();
+
+                /*
+                 * User intentionally closed popup.
+                 */
+                window.reactionProfileReturn =
+                    null;
+
+            }
+        );
+
+
+        header.appendChild(title);
+        header.appendChild(closeButton);
+
+        popup.appendChild(header);
+
+
+        // =================================================
+        // USER LIST
+        // =================================================
+
+        const list =
+            document.createElement("div");
+
+        list.id =
+            "reactionUsersList";
+
+        popup.appendChild(list);
+
+        document.body.appendChild(popup);
+
+
+        // =================================================
+        // NO USERS
+        // =================================================
+
+        if (data.length === 0) {
+
+            list.innerHTML = `
+                <div style="
+                    text-align:center;
+                    padding:30px 20px;
+                    color:#888;
+                ">
+
+                    <div style="
+                        font-size:32px;
+                        margin-bottom:8px;
+                    ">
+                        ${escapeHtml(emoji)}
+                    </div>
+
+                    <div style="
+                        font-size:15px;
+                        font-weight:600;
+                        color:#aaa;
+                    ">
+                        No reactions yet
+                    </div>
+
+                </div>
+            `;
+
+            return true;
+        }
+
+
+        // =================================================
+        // RENDER USERS
+        // =================================================
+
+        data.forEach(
+            function (reaction) {
+
+                if (!reaction) {
+                    return;
+                }
+
+
+                const profile =
+                    reaction.profiles || {};
+
+
+                const name =
+                    profile.name ||
+                    "User";
+
+
+                const avatar =
+                    profile.avatar_url ||
+                    "";
+
+
+                // =========================================
+                // USER ROW
+                // =========================================
+
+                const row =
+                    document.createElement("div");
+
+                row.style.cssText = `
+                    display:flex;
+                    align-items:center;
+                    gap:12px;
+                    padding:9px 4px;
+                    cursor:pointer;
+                    border-radius:10px;
+                    transition:background .15s ease;
+                `;
+
+
+                row.addEventListener(
+                    "mouseenter",
+                    function () {
+
+                        row.style.background =
+                            "#292929";
+
+                    }
+                );
+
+
+                row.addEventListener(
+                    "mouseleave",
+                    function () {
+
+                        row.style.background =
+                            "transparent";
+
+                    }
+                );
+
+
+                // =========================================
+                // AVATAR
+                // =========================================
+
+                if (avatar) {
+
+                    const img =
+                        document.createElement("img");
+
+                    img.src =
+                        avatar;
+
+                    img.alt =
+                        name;
+
+                    img.style.cssText = `
+                        width:42px;
+                        height:42px;
+                        border-radius:50%;
+                        object-fit:cover;
+                        flex-shrink:0;
+                    `;
+
+                    row.appendChild(img);
+
+                }
+
+                else {
+
+                    const fallback =
+                        document.createElement("div");
+
+                    fallback.style.cssText = `
+                        width:42px;
+                        height:42px;
+                        border-radius:50%;
+                        background:#333;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                        font-weight:bold;
+                        flex-shrink:0;
+                    `;
+
+                    fallback.textContent =
+                        name
+                            .charAt(0)
+                            .toUpperCase();
+
+                    row.appendChild(
+                        fallback
+                    );
+
+                }
+
+
+                // =========================================
+                // NAME
+                // =========================================
+
+                const nameBox =
+                    document.createElement("div");
+
+                nameBox.style.cssText = `
+                    flex:1;
+                    min-width:0;
+                `;
+
+
+                const nameText =
+                    document.createElement("div");
+
+                nameText.style.cssText = `
+                    font-size:14px;
+                    font-weight:600;
+                `;
+
+                nameText.textContent =
+                    name;
+
+
+                // =========================================
+                // VERIFIED
+                // =========================================
+
+                if (profile.verified) {
+
+                    const verified =
+                        document.createElement("span");
+
+                    verified.textContent =
+                        " ✓";
+
+                    verified.style.cssText = `
+                        color:#3897f0;
+                    `;
+
+                    nameText.appendChild(
+                        verified
+                    );
+
+                }
+
+
+                nameBox.appendChild(
+                    nameText
+                );
+
+                row.appendChild(
+                    nameBox
+                );
+
+
+                // =========================================
+                // EMOJI
+                // =========================================
+
+                const emojiBox =
+                    document.createElement("span");
+
+                emojiBox.textContent =
+                    emoji;
+
+                emojiBox.style.cssText = `
+                    font-size:20px;
+                `;
+
+                row.appendChild(
+                    emojiBox
+                );
+
+
+                // =========================================
+                // OPEN PROFILE
+                // =========================================
+
+                row.addEventListener(
+                    "click",
+                    async function (event) {
+
+                        event.preventDefault();
+                        event.stopPropagation();
+
+
+                        const reactionUserId =
+                            reaction.user_id;
+
+
+                        if (!reactionUserId) {
+
+                            console.warn(
+                                "⚠️ Reaction has no user_id"
+                            );
+
+                            return;
+                        }
+
+
+                        // =================================
+                        // SAVE EXACT RETURN STATE
+                        // =================================
+
+                        window.reactionProfileReturn = {
+
+                            postId:
+                                actualPostId,
+
+                            commentId:
+                                String(commentId),
+
+                            emoji:
+                                emoji,
+
+                            users:
+                                data
+
+                        };
+
+
+                        console.log(
+                            "📌 SAVED REACTION RETURN:",
+                            window.reactionProfileReturn
+                        );
+
+
+                        // =================================
+                        // CLOSE POPUP
+                        // =================================
+
+                        popup.remove();
+
+
+                        // =================================
+                        // OPEN PROFILE
+                        // =================================
+
+                        if (
+                            typeof window.openProfile !==
+                            "function"
+                        ) {
+
+                            console.error(
+                                "❌ openProfile() not found"
+                            );
+
+                            window.reactionProfileReturn =
+                                null;
+
+                            return;
+                        }
+
+
+                        try {
+
+                            await window.openProfile(
+                                reactionUserId,
+                                name
+                            );
+
+                        }
+
+                        catch (error) {
+
+                            console.error(
+                                "❌ Could not open reaction user profile:",
+                                error
+                            );
+
+                            window.reactionProfileReturn =
+                                null;
+
+                        }
+
+                    }
+                );
+
+
+                list.appendChild(row);
+
+            }
+        );
+
+
+        return true;
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "❌ Reaction users popup failed:",
+            error
+        );
+
+        return false;
+
+    }
+
+    finally {
+
+        // =================================================
+        // CRITICAL:
+        // ALWAYS RELEASE LOCK
+        // =================================================
+
+        window.openingReactionUsers =
+            false;
+
+    }
 
 };
 
@@ -19694,9 +19952,20 @@ window.selectCommentReaction = async function(emoji) {
     closeCommentMenu();
 };
 
+/* =====================================================
+   REFRESH COMMENT REACTION UI
+   ===================================================== */
+
 window.refreshCommentReactionUI = async function(commentId) {
 
-    if (!commentId) return;
+    if (!commentId) {
+        return;
+    }
+
+
+    // =================================================
+    // LOAD REACTIONS
+    // =================================================
 
     const {
         data: reactions,
@@ -19713,51 +19982,63 @@ window.refreshCommentReactionUI = async function(commentId) {
             commentId
         );
 
+
     if (error) {
 
         console.error(
-            "Refresh reaction UI:",
+            "❌ Refresh reaction UI:",
             error
         );
 
         return;
     }
 
-    /*
-     * -----------------------------------------
-     * FIND COMMENT ELEMENT
-     * -----------------------------------------
-     */
+
+    // =================================================
+    // FIND COMMENT
+    // =================================================
 
     const comment =
         document.getElementById(
             "comment-" + commentId
         );
 
+
     if (!comment) {
+
+        console.warn(
+            "⚠️ Comment element not found:",
+            commentId
+        );
+
         return;
     }
 
-    /*
-     * -----------------------------------------
-     * FIND REACTION CONTAINER
-     * -----------------------------------------
-     */
 
-    let reactionContainer =
+    // =================================================
+    // FIND REACTION CONTAINER
+    // =================================================
+
+    const reactionContainer =
         comment.querySelector(
             ".commentReactions"
         );
 
+
     if (!reactionContainer) {
+
+        console.warn(
+            "⚠️ Reaction container not found:",
+            commentId
+        );
+
         return;
     }
 
-    /*
-     * -----------------------------------------
-     * EMPTY
-     * -----------------------------------------
-     */
+
+    // =================================================
+    // NO REACTIONS
+    // =================================================
 
     if (
         !Array.isArray(reactions) ||
@@ -19769,69 +20050,31 @@ window.refreshCommentReactionUI = async function(commentId) {
         return;
     }
 
-    /*
-     * -----------------------------------------
-     * GROUP REACTIONS
-     * -----------------------------------------
-     */
 
-    const grouped = {};
-
-    reactions.forEach(reaction => {
-
-        if (!reaction.emoji) {
-            return;
-        }
-
-        if (!grouped[reaction.emoji]) {
-
-            grouped[reaction.emoji] = 0;
-        }
-
-        grouped[reaction.emoji]++;
-    });
-
-    /*
-     * -----------------------------------------
-     * RENDER REACTIONS
-     * -----------------------------------------
-     */
+    // =================================================
+    // USE THE SAME RENDERER EVERYWHERE
+    // =================================================
 
     reactionContainer.innerHTML =
-        Object.entries(grouped)
-            .map(
-                ([emoji, count]) => `
-                    <span
-                        style="
-                            display:inline-flex;
-                            align-items:center;
-                            gap:4px;
-                            background:#232323;
-                            border-radius:14px;
-                            padding:4px 8px;
-                            font-size:13px;
-                        "
-                    >
-                        ${escapeHtml(emoji)}
+        window.renderCommentReactions({
 
-                        ${
-                            count > 1
-                            ? `
-                                <span
-                                    style="
-                                        color:#aaa;
-                                        font-size:11px;
-                                    "
-                                >
-                                    ${count}
-                                </span>
-                            `
-                            : ""
-                        }
-                    </span>
-                `
-            )
-            .join("");
+            id:
+                commentId,
+
+            comment_reactions:
+                reactions
+
+        });
+
+
+    console.log(
+        "✅ Reaction UI refreshed:",
+        {
+            commentId,
+            reactions: reactions.length
+        }
+    );
+
 };
 
 async function updateSingleComment(commentId) {
