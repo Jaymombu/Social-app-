@@ -9010,8 +9010,27 @@ class="commentItem"
 data-comment-id="${c.id}"
 data-user-id="${c.user_id}"
 data-user-name="${escapeHtml(commentName)}"
-onclick="commentDoubleTap('${c.id}')"
-oncontextmenu="event.preventDefault();openCommentMenu('${c.id}', '${c.user_id}')"
+onclick="
+    event.stopPropagation();
+
+    commentDoubleTap(
+        '${c.id}'
+    );
+
+    return false;
+"
+
+oncontextmenu="
+    event.preventDefault();
+    event.stopPropagation();
+
+    openCommentMenu(
+        '${c.id}',
+        '${c.user_id}'
+    );
+
+    return false;
+"
 
 style="
 display:flex;
@@ -10091,34 +10110,49 @@ window.renderReply = function (comment) {
         )}"
 
         onmousedown="
-            commentPressStart(
-                event,
-                '${comment.id}',
-                '${userId}'
-            )
-        "
+    event.stopPropagation();
 
-        onmouseup="
-            commentPressEnd()
-        "
+    commentPressStart(
+        event,
+        '${comment.id}',
+        '${userId}'
+    );
 
-        onmouseleave="
-            commentPressEnd()
-        "
+    return false;
+"
 
-        oncontextmenu="
-            commentPressStart(
-                event,
-                '${comment.id}',
-                '${userId}'
-            )
-        "
+onmouseup="
+    event.stopPropagation();
+    commentPressEnd(event);
+"
 
-        ondblclick="
-            commentDoubleTap(
-                '${comment.id}'
-            )
-        "
+onmouseleave="
+    event.stopPropagation();
+    commentPressEnd(event);
+"
+
+oncontextmenu="
+    event.preventDefault();
+    event.stopPropagation();
+
+    commentPressStart(
+        event,
+        '${comment.id}',
+        '${userId}'
+    );
+
+    return false;
+"
+
+ondblclick="
+    event.stopPropagation();
+
+    commentDoubleTap(
+        '${comment.id}'
+    );
+
+    return false;
+"
 
         style="
             position:relative;
@@ -10933,7 +10967,8 @@ if (!repliesContainer) {
             count: "exact",
             head: true
         })
-        .eq("parent_id", parentId);
+       .eq("parent_id", parentId)
+       .eq("hidden", false);
 
     if (error) {
 
@@ -11306,7 +11341,8 @@ window.updateReplyCount = async function(parentId) {
             count: "exact",
             head: true
         })
-        .eq("parent_id", parentId);
+        .eq("parent_id", parentId)
+        .eq("hidden", false);
 
     if (error) {
 
@@ -12069,37 +12105,71 @@ function commentDebug(message, data = null) {
 }
 
 let commentPressTimer = null;
+let commentPressTarget = null;
 
 function commentPressStart(event, commentId, userId) {
 
-    if (event.type === "contextmenu") {
-        event.preventDefault();
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (commentPressTimer) {
+        clearTimeout(commentPressTimer);
+        commentPressTimer = null;
     }
 
-    // Cancel any previous timer
-    clearTimeout(commentPressTimer);
+    const exactId = String(commentId);
+
+    if (
+        !exactId ||
+        exactId === "undefined" ||
+        exactId === "null"
+    ) {
+        return;
+    }
+
+    commentPressTarget =
+        event.currentTarget ||
+        event.target.closest(".commentCard");
 
     commentPressTimer = setTimeout(() => {
 
+        if (!commentPressTarget) {
+            commentPressTimer = null;
+            return;
+        }
+
+        // Make sure this is EXACTLY the selected card
+        if (
+            commentPressTarget.id !==
+            "comment-" + exactId
+        ) {
+            commentPressTimer = null;
+            return;
+        }
+
         openCommentMenu(
-            commentId,
-            userId
+            exactId,
+            String(userId || "")
         );
 
         commentPressTimer = null;
 
-    }, 800); // 800ms long press
+    }, 800);
 }
 
 
-function commentPressEnd() {
+function commentPressEnd(event) {
+
+    if (event) {
+        event.stopPropagation();
+    }
 
     if (commentPressTimer) {
-
         clearTimeout(commentPressTimer);
-
         commentPressTimer = null;
     }
+
+    commentPressTarget = null;
 }
 
 function commentDoubleTap(commentId) {
