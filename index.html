@@ -7747,20 +7747,23 @@ if (payload.eventType === "DELETE") {
     const deletedId =
         payload.old?.id;
 
-    if (deletedId) {
+    if (!deletedId) return;
 
-        document
-            .getElementById(
-                "comment-" + deletedId
-            )
-            ?.remove();
+    const element =
+        document.getElementById(
+            "comment-" + deletedId
+        );
+
+    if (element) {
+        element.remove();
     }
 
-    if (payload.old?.parent_id) {
+    if (payload.old.parent_id) {
 
         await updateReplyCount(
             payload.old.parent_id
         );
+
     }
 
     return;
@@ -12578,42 +12581,59 @@ async function deleteComment(commentId) {
 
     if (!ok) return;
 
-    /*
-     * Find ONLY the selected comment.
-     */
+    // ==========================================
+    // GET EXACT COMMENT
+    // ==========================================
+
     const {
         data: comment,
         error: findError
     } = await supabase
         .from("comments")
-        .select("id, parent_id, user_id, hidden")
+        .select(`
+            id,
+            parent_id,
+            user_id,
+            hidden
+        `)
         .eq("id", exactId)
         .maybeSingle();
 
     if (findError) {
+
         console.error(
-            "❌ Find comment failed:",
+            "❌ Could not find comment:",
             findError
         );
+
         return;
     }
 
     if (!comment) {
-        alert("Comment not found.");
+
+        console.error(
+            "❌ Comment does not exist:",
+            exactId
+        );
+
         return;
     }
 
-    /*
-     * IMPORTANT:
-     * UPDATE instead of DELETE.
-     *
-     * This prevents:
-     * ON DELETE CASCADE
-     *
-     * and prevents the DELETE realtime event.
-     */
+    console.log(
+        "🗑️ DELETING EXACT COMMENT:",
+        {
+            id: comment.id,
+            parent_id: comment.parent_id,
+            user_id: comment.user_id
+        }
+    );
+
+    // ==========================================
+    // SOFT DELETE
+    // ==========================================
+
     const {
-        data: updated,
+        data: updatedComment,
         error: updateError
     } = await supabase
         .from("comments")
@@ -12621,13 +12641,17 @@ async function deleteComment(commentId) {
             hidden: true
         })
         .eq("id", exactId)
-        .select("id, parent_id, hidden")
+        .select(`
+            id,
+            parent_id,
+            hidden
+        `)
         .maybeSingle();
 
     if (updateError) {
 
         console.error(
-            "❌ Comment soft-delete failed:",
+            "❌ DELETE FAILED:",
             updateError
         );
 
@@ -12636,10 +12660,10 @@ async function deleteComment(commentId) {
         return;
     }
 
-    if (!updated) {
+    if (!updatedComment) {
 
         console.error(
-            "❌ No comment was updated:",
+            "❌ Nothing was updated for:",
             exactId
         );
 
@@ -12647,13 +12671,14 @@ async function deleteComment(commentId) {
     }
 
     console.log(
-        "✅ SOFT DELETED ONLY:",
-        updated.id
+        "✅ ONLY THIS COMMENT WAS HIDDEN:",
+        updatedComment
     );
 
-    /*
-     * Remove ONLY the selected DOM element.
-     */
+    // ==========================================
+    // REMOVE ONLY SELECTED DOM NODE
+    // ==========================================
+
     const element =
         document.getElementById(
             "comment-" + exactId
@@ -12671,20 +12696,31 @@ async function deleteComment(commentId) {
 
         setTimeout(() => {
 
+            /*
+             * IMPORTANT:
+             *
+             * We remove ONLY this comment element.
+             *
+             * We DO NOT remove:
+             *
+             * replies-${exactId}
+             *
+             * because child replies must survive.
+             */
+
             element.remove();
 
         }, 250);
-
     }
 
-    /*
-     * If it was a reply, update
-     * ONLY its parent thread count.
-     */
-    if (updated.parent_id) {
+    // ==========================================
+    // UPDATE PARENT REPLY COUNT
+    // ==========================================
+
+    if (comment.parent_id) {
 
         await updateReplyCount(
-            updated.parent_id
+            comment.parent_id
         );
 
     }
