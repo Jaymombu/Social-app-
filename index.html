@@ -12494,37 +12494,299 @@ async function editComment(commentId) {
 
 }
 
-async function deleteComment(commentId) {
-  
-  closeCommentMenu();
+// =====================================================
+// DELETE ONE COMMENT ONLY
+// TREE-SAFE VERSION
+// =====================================================
 
-    const ok = confirm("Delete this comment?");
+window.deleteComment = async function (commentId) {
 
-    if (!ok) return;
+    // =================================================
+    // NORMALIZE ID
+    // =================================================
 
-    const { error } = await supabase
-        .from("comments")
-        .delete()
-        .eq("id", commentId);
+    const id =
+        Number(commentId);
 
-    if (error) {
-        console.log(error);
-        return;
+
+    if (
+        !Number.isFinite(id) ||
+        id <= 0
+    ) {
+
+        console.error(
+            "❌ Invalid comment ID:",
+            commentId
+        );
+
+        return false;
+
     }
 
-    const commentElement = document.getElementById("comment-" + commentId);
 
-if (commentElement) {
-    commentElement.style.transition = "all .25s ease";
-    commentElement.style.opacity = "0";
-    commentElement.style.transform = "translateX(-20px)";
+    // =================================================
+    // CLOSE MENU
+    // =================================================
 
-    setTimeout(() => {
-        commentElement.remove();
-    }, 250);
-}
+    if (
+        typeof closeCommentMenu ===
+        "function"
+    ) {
 
-}
+        closeCommentMenu();
+
+    }
+
+
+    // =================================================
+    // CONFIRM
+    // =================================================
+
+    const ok =
+        confirm(
+            "Delete this comment?"
+        );
+
+
+    if (!ok) {
+
+        return false;
+
+    }
+
+
+    console.log(
+        "🗑️ Deleting ONLY comment:",
+        id
+    );
+
+
+    // =================================================
+    // FIND ELEMENT BEFORE DELETE
+    // =================================================
+
+    const commentElement =
+        document.getElementById(
+            "comment-" + id
+        );
+
+
+    // =================================================
+    // REMEMBER PARENT
+    // =================================================
+
+    let parentId =
+        null;
+
+
+    if (commentElement) {
+
+        parentId =
+            commentElement.dataset.parentId ||
+            null;
+
+    }
+
+
+    // =================================================
+    // DELETE EXACT DATABASE ROW
+    // =================================================
+
+    const {
+        error
+    } =
+        await supabase
+            .from("comments")
+            .delete()
+            .eq("id", id);
+
+
+    if (error) {
+
+        console.error(
+            "❌ Delete comment failed:",
+            error
+        );
+
+
+        if (
+            typeof showToast ===
+            "function"
+        ) {
+
+            showToast(
+                "Couldn't delete comment."
+            );
+
+        }
+
+
+        return false;
+
+    }
+
+
+    console.log(
+        "✅ Database deleted ONLY comment:",
+        id
+    );
+
+
+    // =================================================
+    // REMOVE ONLY THIS DOM ELEMENT
+    // =================================================
+
+    if (commentElement) {
+
+        commentElement.style.transition =
+            "opacity .25s ease, transform .25s ease";
+
+
+        commentElement.style.opacity =
+            "0";
+
+
+        commentElement.style.transform =
+            "translateX(-20px)";
+
+
+        setTimeout(
+            function () {
+
+                // -------------------------------------
+                // IMPORTANT:
+                // remove() ONLY removes this element.
+                // It does NOT remove its parent tree.
+                // -------------------------------------
+
+                if (
+                    commentElement &&
+                    commentElement.parentNode
+                ) {
+
+                    commentElement.remove();
+
+                }
+
+
+                console.log(
+                    "✅ Removed DOM element:",
+                    id
+                );
+
+            },
+            250
+        );
+
+    }
+
+
+    // =================================================
+    // UPDATE PARENT REPLY COUNT
+    // WITHOUT RELOADING THE TREE
+    // =================================================
+
+    if (parentId) {
+
+        const parentElement =
+            document.getElementById(
+                "comment-" + parentId
+            );
+
+
+        if (parentElement) {
+
+            const threadButton =
+                document.getElementById(
+                    "threadBtn-" + parentId
+                );
+
+
+            if (threadButton) {
+
+                const repliesContainer =
+                    document.getElementById(
+                        "replies-" + parentId
+                    );
+
+
+                if (repliesContainer) {
+
+                    const remainingReplies =
+                        repliesContainer.querySelectorAll(
+                            ".commentCard.replyCard"
+                        ).length;
+
+
+                    if (
+                        remainingReplies <= 0
+                    ) {
+
+                        repliesContainer.style.display =
+                            "none";
+
+
+                        threadButton.style.display =
+                            "none";
+
+                    }
+
+                }
+
+            }
+
+        }
+
+    }
+
+
+    // =================================================
+    // RESET SELECTED COMMENT
+    // =================================================
+
+    if (
+        String(
+            window.selectedCommentId
+        ) === String(id)
+    ) {
+
+        window.selectedCommentId =
+            null;
+
+    }
+
+
+    if (
+        String(
+            window.currentSelectedCommentId
+        ) === String(id)
+    ) {
+
+        window.currentSelectedCommentId =
+            null;
+
+    }
+
+
+    // =================================================
+    // SUCCESS
+    // =================================================
+
+    if (
+        typeof showToast ===
+        "function"
+    ) {
+
+        showToast(
+            "Comment deleted."
+        );
+
+    }
+
+
+    return true;
+
+};
 
 function formatCommentTime(date) {
 
