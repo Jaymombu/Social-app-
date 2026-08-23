@@ -2744,6 +2744,23 @@ body:not(.dark) .edit-discard-btn{
     text-align:right;
 }
 
+html,
+body {
+  overscroll-behavior: none;
+}
+
+#chatScreen,
+#inboxScreen {
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+
+#chatMessages,
+#inboxList {
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+}
+
 </style>
 </head>
 <body class="dark">
@@ -27932,88 +27949,173 @@ window.openChat = async function(userId, name) {
     alert("Please login first");
     return;
   }
-  
+
+  // =========================================
+  // CHECK MESSAGE PERMISSION
+  // =========================================
+
   const { data: targetProfile } = await supabase
-  .from("profiles")
-  .select("allow_messages")
-  .eq("id", userId)
-  .single();
-  
+    .from("profiles")
+    .select("allow_messages")
+    .eq("id", userId)
+    .single();
+
   if (targetProfile?.allow_messages === "nobody") {
-  alert("This user is not accepting messages.");
-  return;
-}
-
-if (targetProfile?.allow_messages === "followers") {
-
-  const { data: follows } = await supabase
-    .from("follows")
-    .select("id")
-    .eq("follower_id", session.user.id)
-    .eq("following_id", userId)
-    .maybeSingle();
-
-  if (!follows) {
-    alert("Only followers can message this user.");
+    alert("This user is not accepting messages.");
     return;
   }
 
-}
+  if (targetProfile?.allow_messages === "followers") {
 
-currentChatUser = userId;
+    const { data: follows } = await supabase
+      .from("follows")
+      .select("id")
+      .eq("follower_id", session.user.id)
+      .eq("following_id", userId)
+      .maybeSingle();
 
-  document.getElementById("app").style.display = "none";
-  document.getElementById("chatScreen").style.display = "flex";
+    if (!follows) {
+      alert("Only followers can message this user.");
+      return;
+    }
+  }
 
-  document.getElementById("chatName").innerText = name;
+  // =========================================
+  // SET CURRENT CHAT
+  // =========================================
 
-  // GET PROFILE
+  currentChatUser = userId;
+
+  // =========================================
+  // HIDE APP / INBOX
+  // =========================================
+
+  const app =
+    document.getElementById("app");
+
+  if (app) {
+    app.style.display = "none";
+  }
+
+  const inboxScreen =
+    document.getElementById("inboxScreen");
+
+  if (inboxScreen) {
+    inboxScreen.style.display = "none";
+  }
+
+  // =========================================
+  // SHOW CHAT
+  // =========================================
+
+  const chatScreen =
+    document.getElementById("chatScreen");
+
+  if (chatScreen) {
+    chatScreen.style.display = "flex";
+  }
+
+  // =========================================
+  // KEEP BACKGROUND LOCKED
+  // =========================================
+
+  lockBackground();
+
+  // =========================================
+  // CHAT NAME
+  // =========================================
+
+  const chatName =
+    document.getElementById("chatName");
+
+  if (chatName) {
+    chatName.innerText = name;
+  }
+
+  // =========================================
+  // GET FULL PROFILE
+  // =========================================
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", userId)
     .maybeSingle();
 
-  // SET CHAT IMAGE
-  document.getElementById("chatAvatar").src =
-    profile?.avatar_url ||
-    "https://ui-avatars.com/api/?name=" +
-    encodeURIComponent(name);
+  // =========================================
+  // CHAT AVATAR
+  // =========================================
 
-  // ✅ SHOW ONLINE STATUS
- const status = document.getElementById("chatStatus");
+  const chatAvatar =
+    document.getElementById("chatAvatar");
 
-if(status){
+  if (chatAvatar) {
 
-  status.innerText =
-    profile?.online
-      ? "🟢 Online"
-      : profile?.last_seen
-        ? `Last seen ${formatLastSeen(profile.last_seen)}`
-        : "Offline";
+    chatAvatar.src =
+      profile?.avatar_url ||
+      "https://ui-avatars.com/api/?name=" +
+      encodeURIComponent(
+        profile?.name || name || "User"
+      );
 
-}
-        
-        await supabase
-  .from("messages")
-  .update({
-    seen: true,
-    seen_at: new Date(),
-    delivered: true
-  })
-  .eq("sender_id", userId)
-  .eq("receiver_id", session.user.id)
-  .eq("seen", false);
+  }
 
-await loadUnreadMessages();   // ← ADD THIS
+  // =========================================
+  // ONLINE STATUS
+  // =========================================
 
-loadMessages();
+  const status =
+    document.getElementById("chatStatus");
 
-listenToChatStatus(userId);
+  if (status) {
 
-listenTyping(userId);
+    status.innerText =
+      profile?.online
+        ? "🟢 Online"
+        : profile?.last_seen
+          ? `Last seen ${formatLastSeen(
+              profile.last_seen
+            )}`
+          : "Offline";
 
-listenForSeenMessages(userId);
+  }
+
+  // =========================================
+  // MARK MESSAGES AS SEEN
+  // =========================================
+
+  await supabase
+    .from("messages")
+    .update({
+      seen: true,
+      seen_at: new Date(),
+      delivered: true
+    })
+    .eq("sender_id", userId)
+    .eq("receiver_id", session.user.id)
+    .eq("seen", false);
+
+  // =========================================
+  // UPDATE BADGE
+  // =========================================
+
+  await loadUnreadMessages();
+
+  // =========================================
+  // LOAD CHAT
+  // =========================================
+
+  await loadMessages();
+
+  // =========================================
+  // START REALTIME LISTENERS
+  // =========================================
+
+  listenToChatStatus(userId);
+
+  listenTyping(userId);
+
+  listenForSeenMessages(userId);
 
 };
 
@@ -28092,17 +28194,43 @@ async function loadUnreadMessages() {
 }
 
 window.openInbox = async function () {
-  
-  setActiveTopButton("chatBtn");
 
-  document.getElementById(
-    "inboxScreen"
-  ).style.display = "flex";
+  // =========================================
+  // SHOW CHAT BUTTON AS ACTIVE
+  // =========================================
+
+  if (typeof setActiveTopButton === "function") {
+    setActiveTopButton("chatBtn");
+  }
+
+  // =========================================
+  // SHOW INBOX
+  // =========================================
+
+  const inboxScreen =
+    document.getElementById("inboxScreen");
+
+  if (inboxScreen) {
+    inboxScreen.style.display = "flex";
+  }
+
+  // LOCK EVERYTHING BEHIND INBOX
+  lockBackground();
+
+  // =========================================
+  // GET INBOX LIST
+  // =========================================
 
   const inbox =
     document.getElementById("inboxList");
 
+  if (!inbox) return;
+
   inbox.innerHTML = "Loading...";
+
+  // =========================================
+  // GET SESSION
+  // =========================================
 
   const { data: sessionData } =
     await supabase.auth.getSession();
@@ -28110,29 +28238,51 @@ window.openInbox = async function () {
   const userId =
     sessionData.session?.user?.id;
 
-  if (!userId) return;
+  if (!userId) {
+    inbox.innerHTML = "Please login first";
+    return;
+  }
 
+  // =========================================
   // GET MESSAGES
+  // =========================================
+
   const { data: messages, error } =
     await supabase
       .from("messages")
       .select("*")
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+      .or(
+        `sender_id.eq.${userId},receiver_id.eq.${userId}`
+      )
       .order("created_at", {
-        ascending:false
+        ascending: false
       });
-      
+
   if (error) {
-    inbox.innerHTML = "Error loading chats";
+
+    console.error("Inbox error:", error);
+
+    inbox.innerHTML =
+      "Error loading chats";
+
     return;
   }
+
+  // =========================================
+  // NO CHATS
+  // =========================================
 
   if (!messages || messages.length === 0) {
+
     inbox.innerHTML = "No chats yet";
+
     return;
   }
 
-  // REMOVE DUPLICATES
+  // =========================================
+  // REMOVE DUPLICATE USERS
+  // =========================================
+
   const uniqueUsers = {};
 
   messages.forEach(msg => {
@@ -28141,13 +28291,6 @@ window.openInbox = async function () {
       msg.sender_id === userId
         ? msg.receiver_id
         : msg.sender_id;
-        
-        const unreadCount = messages.filter(
-  m =>
-    m.sender_id === otherUser &&
-    m.receiver_id === userId &&
-    !m.seen
-).length;
 
     if (!uniqueUsers[otherUser]) {
       uniqueUsers[otherUser] = msg;
@@ -28160,6 +28303,10 @@ window.openInbox = async function () {
 
   inbox.innerHTML = "";
 
+  // =========================================
+  // BUILD CHAT LIST
+  // =========================================
+
   for (const msg of chats) {
 
     const otherUser =
@@ -28167,18 +28314,39 @@ window.openInbox = async function () {
         ? msg.receiver_id
         : msg.sender_id;
 
+    // =======================================
+    // UNREAD COUNT
+    // =======================================
+
+    const unreadCount =
+      messages.filter(m =>
+        m.sender_id === otherUser &&
+        m.receiver_id === userId &&
+        !m.seen
+      ).length;
+
+    // =======================================
     // GET PROFILE
+    // =======================================
+
     const { data: profile } =
-  await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", otherUser)
-    .maybeSingle();
+      await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", otherUser)
+        .maybeSingle();
+
+    // =======================================
+    // CREATE CHAT ROW
+    // =======================================
 
     const div =
       document.createElement("div");
 
+    // =======================================
     // LONG PRESS
+    // =======================================
+
     let pressTimer;
 
     div.ontouchstart = () => {
@@ -28208,114 +28376,151 @@ window.openInbox = async function () {
       clearTimeout(pressTimer);
     };
 
+    div.ontouchmove = () => {
+      clearTimeout(pressTimer);
+    };
+
+    // =======================================
+    // CLICK CHAT
+    // =======================================
+
     div.onclick = async () => {
 
-  // Forwarding mode
-  if (window.forwardingMessages) {
+      // =====================================
+      // FORWARD MULTIPLE MESSAGES
+      // =====================================
 
-  for (const msg of window.forwardingMessages) {
+      if (window.forwardingMessages) {
 
-    const { error } = await supabase
-      .from("messages")
-      .insert({
-        sender_id: userId,
-        receiver_id: otherUser,
-        content: msg.content,
-        media_url: msg.media_url,
-        media_type: msg.media_type,
-        forwarded: true
-      });
+        for (
+          const forwardedMsg
+          of window.forwardingMessages
+        ) {
 
-    if (error) {
-      alert(error.message);
-      return;
-    }
+          const { error } =
+            await supabase
+              .from("messages")
+              .insert({
+                sender_id: userId,
+                receiver_id: otherUser,
+                content: forwardedMsg.content,
+                media_url: forwardedMsg.media_url,
+                media_type: forwardedMsg.media_type,
+                forwarded: true
+              });
 
-  }
+          if (error) {
 
-  window.forwardingMessages = null;
+            alert(error.message);
+            return;
 
-  alert("Messages forwarded");
+          }
 
-  openInbox();
+        }
 
-  return;
+        window.forwardingMessages = null;
 
-} else if (window.forwardingMessage) {
+        alert("Messages forwarded");
 
-  const { error } = await supabase
-    .from("messages")
-    .insert({
-      sender_id: userId,
-      receiver_id: otherUser,
-      content: window.forwardingMessage.content,
-      media_url: window.forwardingMessage.media_url,
-      media_type: window.forwardingMessage.media_type,
-      forwarded: true
-    });
+        openInbox();
 
-  if (error) {
-    alert(error.message);
-    return;
-  }
+        return;
+      }
 
-  window.forwardingMessage = null;
+      // =====================================
+      // FORWARD SINGLE MESSAGE
+      // =====================================
 
-  alert("Message forwarded");
+      if (window.forwardingMessage) {
 
-  openInbox();
+        const { error } =
+          await supabase
+            .from("messages")
+            .insert({
+              sender_id: userId,
+              receiver_id: otherUser,
+              content: window.forwardingMessage.content,
+              media_url: window.forwardingMessage.media_url,
+              media_type: window.forwardingMessage.media_type,
+              forwarded: true
+            });
 
-  return;
+        if (error) {
 
-}
+          alert(error.message);
+          return;
 
-  // Normal chat
-  openChat(
-    otherUser,
-    profile?.name || "User"
-  );
+        }
 
-  document.getElementById(
-    "inboxScreen"
-  ).style.display = "none";
+        window.forwardingMessage = null;
 
-};
+        alert("Message forwarded");
+
+        openInbox();
+
+        return;
+      }
+
+      // =====================================
+      // NORMAL CHAT
+      // =====================================
+
+      inboxScreen.style.display = "none";
+
+      openChat(
+        otherUser,
+        profile?.name || "User"
+      );
+
+    };
+
+    // =======================================
+    // CHAT ROW STYLE
+    // =======================================
 
     div.style = `
-  display:flex;
-  align-items:flex-start;
-  gap:12px;
-  padding:15px;
-  border-bottom:1px solid #222;
-  cursor:pointer;
-`;
+      display:flex;
+      align-items:flex-start;
+      gap:12px;
+      padding:15px;
+      border-bottom:1px solid #222;
+      cursor:pointer;
+    `;
+
+    // =======================================
+    // CHAT ROW HTML
+    // =======================================
 
     div.innerHTML = `
 
-     <img
-  src="${
-    profile?.avatar_url ||
-    'https://ui-avatars.com/api/?name=' +
-    encodeURIComponent(profile?.name || 'U')
-  }"
+      <img
+        src="${
+          profile?.avatar_url ||
+          'https://ui-avatars.com/api/?name=' +
+          encodeURIComponent(
+            profile?.name || 'U'
+          )
+        }"
 
-  onclick="
-    openMedia(
-      this.src,
-      'image'
-    )
-  "
+        onclick="
+          event.stopPropagation();
 
-  style="
-    width:55px;
-    height:55px;
-    border-radius:50%;
-    object-fit:cover;
-    background:#222;
-    display:block;
-    cursor:pointer;
-  "
-/>
+          openMedia(
+            this.src,
+            'image'
+          );
+        "
+
+        style="
+          width:55px;
+          height:55px;
+          border-radius:50%;
+          object-fit:cover;
+          background:#222;
+          display:block;
+          cursor:pointer;
+        "
+      >
 
       <div style="flex:1;">
 
@@ -28324,49 +28529,58 @@ window.openInbox = async function () {
           font-weight:bold;
           font-size:16px;
         ">
-          ${escapeHtml(profile?.name || "User")}
+          ${escapeHtml(
+            profile?.name || "User"
+          )}
         </div>
 
         <div style="
-display:flex;
-justify-content:space-between;
-align-items:center;
-margin-top:4px;
-">
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          margin-top:4px;
+        ">
 
-<div style="
-color:#aaa;
-font-size:14px;
-white-space:nowrap;
-overflow:hidden;
-text-overflow:ellipsis;
-flex:1;
-">
-${escapeHtml(msg.content || "")}
-</div>
+          <div style="
+            color:#aaa;
+            font-size:14px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            flex:1;
+          ">
+            ${escapeHtml(
+              msg.content || ""
+            )}
+          </div>
 
-${
-  unreadCount > 0
-    ? `
-<div style="
-background:#1877f2;
-color:white;
-min-width:22px;
-height:22px;
-border-radius:50%;
-display:flex;
-align-items:center;
-justify-content:center;
-font-size:12px;
-font-weight:bold;
-margin-left:10px;
-">
-${unreadCount > 99 ? "99+" : unreadCount}
-</div>
-`
-    : ""
-}
-</div>
+          ${
+            unreadCount > 0
+              ? `
+                <div style="
+                  background:#1877f2;
+                  color:white;
+                  min-width:22px;
+                  height:22px;
+                  border-radius:50%;
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+                  font-size:12px;
+                  font-weight:bold;
+                  margin-left:10px;
+                ">
+                  ${
+                    unreadCount > 99
+                      ? "99+"
+                      : unreadCount
+                  }
+                </div>
+              `
+              : ""
+          }
+
+        </div>
 
       </div>
 
@@ -30288,12 +30502,41 @@ window.deleteMessage = async function(messageId) {
 
 };
 
+// =====================================================
+// SCREEN BACKGROUND SCROLL LOCK
+// =====================================================
+
+window.lockBackground = function () {
+
+  document.body.style.overflow = "hidden";
+  document.documentElement.style.overflow = "hidden";
+
+  document.body.style.touchAction = "none";
+  document.documentElement.style.touchAction = "none";
+
+};
+
+window.unlockBackground = function () {
+
+  document.body.style.overflow = "";
+  document.documentElement.style.overflow = "";
+
+  document.body.style.touchAction = "";
+  document.documentElement.style.touchAction = "";
+
+};
+
+
+// =====================================================
+// CLOSE CHAT → BACK TO INBOX
+// =====================================================
+
 window.closeChat = async function () {
 
   console.log("CLOSING CHAT");
 
   // =========================================
-  // STOP CHAT-RELATED STATUS
+  // STOP TYPING
   // =========================================
 
   if (session?.user && currentChatUser) {
@@ -30351,7 +30594,58 @@ window.closeChat = async function () {
   }
 
   // =========================================
-  // HIDE SEARCH
+  // SEARCH MUST STAY CLOSED
+  // =========================================
+
+  const searchScreen =
+    document.getElementById("searchScreen");
+
+  if (searchScreen) {
+    searchScreen.style.display = "none";
+  }
+
+  // =========================================
+  // KEEP BACKGROUND LOCKED
+  // =========================================
+  // We are still inside Inbox.
+
+  lockBackground();
+
+};
+
+
+// =====================================================
+// CLOSE INBOX → BACK TO HOME
+// =====================================================
+
+window.closeInbox = function () {
+
+  console.log("CLOSING INBOX");
+
+  // =========================================
+  // HIDE INBOX
+  // =========================================
+
+  const inboxScreen =
+    document.getElementById("inboxScreen");
+
+  if (inboxScreen) {
+    inboxScreen.style.display = "none";
+  }
+
+  // =========================================
+  // MAKE SURE CHAT IS CLOSED
+  // =========================================
+
+  const chatScreen =
+    document.getElementById("chatScreen");
+
+  if (chatScreen) {
+    chatScreen.style.display = "none";
+  }
+
+  // =========================================
+  // SEARCH MUST NOT OPEN
   // =========================================
 
   const searchScreen =
@@ -30390,7 +30684,7 @@ window.closeChat = async function () {
   }
 
   // =========================================
-  // RESTORE HOME BUTTON
+  // HOME BUTTON
   // =========================================
 
   if (typeof setActiveTopButton === "function") {
@@ -30398,76 +30692,15 @@ window.closeChat = async function () {
   }
 
   // =========================================
-  // LOAD POSTS AGAIN
+  // UNLOCK BACKGROUND
   // =========================================
 
-  requestAnimationFrame(() => {
+  unlockBackground();
 
-    if (typeof loadPosts === "function") {
-      loadPosts();
-    }
+  // =========================================
+  // LOAD POSTS
+  // =========================================
 
-  });
-
-};
-
-window.closeInbox = function () {
-
-  console.log("CLOSING INBOX");
-
-  // Hide inbox
-  const inboxScreen =
-    document.getElementById("inboxScreen");
-
-  if (inboxScreen) {
-    inboxScreen.style.display = "none";
-  }
-
-  // Make sure chat is hidden
-  const chatScreen =
-    document.getElementById("chatScreen");
-
-  if (chatScreen) {
-    chatScreen.style.display = "none";
-  }
-
-  // IMPORTANT:
-  // Search must NOT open when closing inbox
-  const searchScreen =
-    document.getElementById("searchScreen");
-
-  if (searchScreen) {
-    searchScreen.style.display = "none";
-  }
-
-  // Restore app
-  const app =
-    document.getElementById("app");
-
-  if (app) {
-    app.style.display = "block";
-    app.style.visibility = "visible";
-  }
-
-  // Restore top bar
-  const topBar =
-    document.getElementById("topBar");
-
-  if (topBar) {
-
-    topBar.style.display = "flex";
-    topBar.style.visibility = "visible";
-    topBar.style.opacity = "1";
-    topBar.style.zIndex = "9999999";
-
-  }
-
-  // Restore home button
-  if (typeof setActiveTopButton === "function") {
-    setActiveTopButton("homeBtn");
-  }
-
-  // Reload posts
   requestAnimationFrame(() => {
 
     if (typeof loadPosts === "function") {
