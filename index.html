@@ -30292,54 +30292,71 @@ window.deleteMessage = async function(messageId) {
 
 window.closeChat = async function () {
 
-  // hide current chat
-  document.getElementById(
-    "chatScreen"
-  ).style.display = "none";
+  // Stop typing status
+  if (session?.user && currentChatUser) {
 
-  // show inbox
-  document.getElementById(
-    "inboxScreen"
-  ).style.display = "flex";
+    await supabase
+      .from("typing_status")
+      .upsert({
+        user_id: session.user.id,
+        receiver_id: currentChatUser,
+        typing: false,
+        updated_at: new Date()
+      });
 
-  // show home/feed again
-  document.getElementById(
-    "app"
-  ).style.display = "block";
-  
-  document.getElementById("searchScreen").style.display = "flex";
-  document.getElementById("userSearchInput").focus();
-  
-  requestAnimationFrame(() => {
-  loadPosts();
-});
+  }
 
-// ✅ Stop typing when leaving the chat
-if (session?.user && currentChatUser) {
-  await supabase
-    .from("typing_status")
-    .upsert({
-      user_id: session.user.id,
-      receiver_id: currentChatUser,
-      typing: false,
-      updated_at: new Date()
-    });
-}
+  // Remove chat realtime listeners
+  if (window.chatStatusChannel) {
+    supabase.removeChannel(window.chatStatusChannel);
+    window.chatStatusChannel = null;
+  }
 
-if (window.chatStatusChannel) {
-  supabase.removeChannel(window.chatStatusChannel);
-  window.chatStatusChannel = null;
-}
+  if (window.typingChannel) {
+    supabase.removeChannel(window.typingChannel);
+    window.typingChannel = null;
+  }
 
-if (window.typingChannel) {
-  supabase.removeChannel(window.typingChannel);
-  window.typingChannel = null;
-}
+  if (window.messageSeenChannel) {
+    supabase.removeChannel(window.messageSeenChannel);
+    window.messageSeenChannel = null;
+  }
 
-if (window.messageSeenChannel) {
-  supabase.removeChannel(window.messageSeenChannel);
-  window.messageSeenChannel = null;
-}
+  // Close chat
+  const chatScreen =
+    document.getElementById("chatScreen");
+
+  if (chatScreen) {
+    chatScreen.style.display = "none";
+  }
+
+  // Return to inbox
+  const inboxScreen =
+    document.getElementById("inboxScreen");
+
+  if (inboxScreen) {
+    inboxScreen.style.display = "flex";
+  }
+
+  // Keep the main app hidden while inbox is open
+  const app =
+    document.getElementById("app");
+
+  if (app) {
+    app.style.display = "none";
+  }
+
+  // IMPORTANT:
+  // Do NOT open the search screen
+  const searchScreen =
+    document.getElementById("searchScreen");
+
+  if (searchScreen) {
+    searchScreen.style.display = "none";
+  }
+
+  // Clear current chat
+  currentChatUser = null;
 
 };
 
