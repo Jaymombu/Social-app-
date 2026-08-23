@@ -28255,8 +28255,16 @@ window.openInbox = async function () {
   // =========================================
 
   if (typeof setActiveTopButton === "function") {
-    setActiveTopButton("chatBtn");
-  }
+  setActiveTopButton("chatBtn");
+}
+
+requestAnimationFrame(() => {
+  restoreTopBar();
+
+  requestAnimationFrame(() => {
+    restoreTopBar();
+  });
+});
 
   // =========================================
   // CLOSE OTHER FULL-SCREEN SCREENS
@@ -30734,25 +30742,35 @@ window.closeChat = async function () {
 
   }
 
-  // =========================================
-  // RESTORE TOP BAR
-  // =========================================
+// =========================================
+// 🔥 FORCE RESTORE TOP BAR
+// =========================================
 
-  const topBar =
-    document.getElementById("topBar");
+requestAnimationFrame(() => {
 
-  if (topBar) {
-
-    topBar.style.display = "flex";
-    topBar.style.visibility = "visible";
-    topBar.style.opacity = "1";
-    topBar.style.pointerEvents = "auto";
-    topBar.style.zIndex = "9999999";
-
-    // Force browser repaint
-    void topBar.offsetHeight;
-
+  if (typeof restoreTopBar === "function") {
+    restoreTopBar();
   }
+
+  // setActiveTopButton may hide/change the bar,
+  // so restore it AGAIN after the button changes
+  requestAnimationFrame(() => {
+
+    if (typeof setActiveTopButton === "function") {
+      setActiveTopButton("chatBtn");
+    }
+
+    requestAnimationFrame(() => {
+
+      if (typeof restoreTopBar === "function") {
+        restoreTopBar();
+      }
+
+    });
+
+  });
+
+});
 
   // =========================================
   // KEEP BACKGROUND LOCKED
@@ -30780,6 +30798,58 @@ window.closeChat = async function () {
     "CHAT CLOSED → INBOX → TOPBAR RESTORED"
   );
 
+};
+
+// =====================================================
+// FORCE TOP BAR VISIBLE
+// =====================================================
+
+window.restoreTopBar = function () {
+
+  const topBar =
+    document.getElementById("topBar");
+
+  if (!topBar) {
+    console.log("TOP BAR NOT FOUND");
+    return;
+  }
+
+  topBar.hidden = false;
+
+  topBar.style.setProperty(
+    "display",
+    "flex",
+    "important"
+  );
+
+  topBar.style.setProperty(
+    "visibility",
+    "visible",
+    "important"
+  );
+
+  topBar.style.setProperty(
+    "opacity",
+    "1",
+    "important"
+  );
+
+  topBar.style.setProperty(
+    "pointer-events",
+    "auto",
+    "important"
+  );
+
+  topBar.style.setProperty(
+    "z-index",
+    "99999999",
+    "important"
+  );
+
+  // Force browser repaint
+  void topBar.offsetHeight;
+
+  console.log("TOP BAR RESTORED");
 };
 
 
