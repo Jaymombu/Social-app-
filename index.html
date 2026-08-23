@@ -27954,11 +27954,16 @@ window.openChat = async function(userId, name) {
   // CHECK MESSAGE PERMISSION
   // =========================================
 
-  const { data: targetProfile } = await supabase
-    .from("profiles")
-    .select("allow_messages")
-    .eq("id", userId)
-    .single();
+  const { data: targetProfile, error: permissionError } =
+    await supabase
+      .from("profiles")
+      .select("allow_messages")
+      .eq("id", userId)
+      .single();
+
+  if (permissionError) {
+    console.log("Message permission check:", permissionError);
+  }
 
   if (targetProfile?.allow_messages === "nobody") {
     alert("This user is not accepting messages.");
@@ -27987,15 +27992,9 @@ window.openChat = async function(userId, name) {
   currentChatUser = userId;
 
   // =========================================
-  // HIDE APP / INBOX
+  // HIDE ONLY INBOX
+  // DO NOT GO HOME
   // =========================================
-
-  const app =
-    document.getElementById("app");
-
-  if (app) {
-    app.style.display = "none";
-  }
 
   const inboxScreen =
     document.getElementById("inboxScreen");
@@ -28005,18 +28004,49 @@ window.openChat = async function(userId, name) {
   }
 
   // =========================================
-  // SHOW CHAT
+  // KEEP APP HIDDEN
+  // =========================================
+  // The app is already hidden while inside
+  // messaging. Do NOT restore it here.
+
+  const app =
+    document.getElementById("app");
+
+  if (app) {
+    app.style.display = "none";
+  }
+
+  // =========================================
+  // HIDE TOP BAR
+  // =========================================
+  // Chat has its own header.
+
+  const topBar =
+    document.getElementById("topBar");
+
+  if (topBar) {
+    topBar.style.display = "none";
+  }
+
+  // =========================================
+  // SHOW CHAT DIRECTLY
   // =========================================
 
   const chatScreen =
     document.getElementById("chatScreen");
 
   if (chatScreen) {
+
     chatScreen.style.display = "flex";
+
+    // Make absolutely sure it is above everything
+    chatScreen.style.zIndex = "5000";
+    chatScreen.style.visibility = "visible";
+    chatScreen.style.opacity = "1";
   }
 
   // =========================================
-  // KEEP BACKGROUND LOCKED
+  // LOCK BACKGROUND
   // =========================================
 
   lockBackground();
@@ -28029,18 +28059,19 @@ window.openChat = async function(userId, name) {
     document.getElementById("chatName");
 
   if (chatName) {
-    chatName.innerText = name;
+    chatName.innerText = name || "User";
   }
 
   // =========================================
   // GET FULL PROFILE
   // =========================================
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .maybeSingle();
+  const { data: profile } =
+    await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
 
   // =========================================
   // CHAT AVATAR
@@ -28057,7 +28088,6 @@ window.openChat = async function(userId, name) {
       encodeURIComponent(
         profile?.name || name || "User"
       );
-
   }
 
   // =========================================
@@ -28077,7 +28107,6 @@ window.openChat = async function(userId, name) {
               profile.last_seen
             )}`
           : "Offline";
-
   }
 
   // =========================================
@@ -28096,7 +28125,7 @@ window.openChat = async function(userId, name) {
     .eq("seen", false);
 
   // =========================================
-  // UPDATE BADGE
+  // UPDATE MESSAGE BADGE
   // =========================================
 
   await loadUnreadMessages();
@@ -28461,18 +28490,16 @@ window.openInbox = async function () {
         return;
       }
 
-      // =====================================
-      // NORMAL CHAT
-      // =====================================
+// =====================================
+// NORMAL CHAT → DIRECTLY OPEN CHAT
+// =====================================
 
-      inboxScreen.style.display = "none";
+openChat(
+  otherUser,
+  profile?.name || "User"
+   );
 
-      openChat(
-        otherUser,
-        profile?.name || "User"
-      );
-
-    };
+};
 
     // =======================================
     // CHAT ROW STYLE
