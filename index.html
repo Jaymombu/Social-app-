@@ -27945,6 +27945,8 @@ let currentChatUser = null;
 
 window.openChat = async function(userId, name) {
 
+  console.log("OPENING CHAT:", userId);
+
   if (!session?.user) {
     alert("Please login first");
     return;
@@ -27954,16 +27956,11 @@ window.openChat = async function(userId, name) {
   // CHECK MESSAGE PERMISSION
   // =========================================
 
-  const { data: targetProfile, error: permissionError } =
-    await supabase
-      .from("profiles")
-      .select("allow_messages")
-      .eq("id", userId)
-      .single();
-
-  if (permissionError) {
-    console.log("Message permission check:", permissionError);
-  }
+  const { data: targetProfile } = await supabase
+    .from("profiles")
+    .select("allow_messages")
+    .eq("id", userId)
+    .single();
 
   if (targetProfile?.allow_messages === "nobody") {
     alert("This user is not accepting messages.");
@@ -27992,57 +27989,49 @@ window.openChat = async function(userId, name) {
   currentChatUser = userId;
 
   // =========================================
-  // HIDE ONLY INBOX
-  // DO NOT GO HOME
+  // CLOSE OTHER SCREENS
   // =========================================
+
+  const app =
+    document.getElementById("app");
 
   const inboxScreen =
     document.getElementById("inboxScreen");
 
-  if (inboxScreen) {
-    inboxScreen.style.display = "none";
-  }
+  const searchScreen =
+    document.getElementById("searchScreen");
 
-  // =========================================
-  // KEEP APP HIDDEN
-  // =========================================
-  // The app is already hidden while inside
-  // messaging. Do NOT restore it here.
-
-  const app =
-    document.getElementById("app");
+  const chatScreen =
+    document.getElementById("chatScreen");
 
   if (app) {
     app.style.display = "none";
   }
 
-  // =========================================
-  // HIDE TOP BAR
-  // =========================================
-  // Chat has its own header.
+  if (inboxScreen) {
+    inboxScreen.style.display = "none";
+    inboxScreen.style.visibility = "hidden";
+    inboxScreen.style.pointerEvents = "none";
+  }
 
-  const topBar =
-    document.getElementById("topBar");
-
-  if (topBar) {
-    topBar.style.display = "none";
+  if (searchScreen) {
+    searchScreen.style.display = "none";
+    searchScreen.style.visibility = "hidden";
+    searchScreen.style.pointerEvents = "none";
   }
 
   // =========================================
-  // SHOW CHAT DIRECTLY
+  // OPEN CHAT FRESH
   // =========================================
-
-  const chatScreen =
-    document.getElementById("chatScreen");
 
   if (chatScreen) {
 
     chatScreen.style.display = "flex";
-
-    // Make absolutely sure it is above everything
-    chatScreen.style.zIndex = "5000";
     chatScreen.style.visibility = "visible";
     chatScreen.style.opacity = "1";
+    chatScreen.style.pointerEvents = "auto";
+    chatScreen.style.zIndex = "5000";
+
   }
 
   // =========================================
@@ -28066,15 +28055,14 @@ window.openChat = async function(userId, name) {
   // GET FULL PROFILE
   // =========================================
 
-  const { data: profile } =
-    await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .maybeSingle();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", userId)
+    .maybeSingle();
 
   // =========================================
-  // CHAT AVATAR
+  // AVATAR
   // =========================================
 
   const chatAvatar =
@@ -28088,6 +28076,7 @@ window.openChat = async function(userId, name) {
       encodeURIComponent(
         profile?.name || name || "User"
       );
+
   }
 
   // =========================================
@@ -28107,6 +28096,7 @@ window.openChat = async function(userId, name) {
               profile.last_seen
             )}`
           : "Offline";
+
   }
 
   // =========================================
@@ -28125,7 +28115,7 @@ window.openChat = async function(userId, name) {
     .eq("seen", false);
 
   // =========================================
-  // UPDATE MESSAGE BADGE
+  // UPDATE BADGE
   // =========================================
 
   await loadUnreadMessages();
@@ -28137,15 +28127,14 @@ window.openChat = async function(userId, name) {
   await loadMessages();
 
   // =========================================
-  // START REALTIME LISTENERS
+  // REALTIME
   // =========================================
 
   listenToChatStatus(userId);
-
   listenTyping(userId);
-
   listenForSeenMessages(userId);
 
+  console.log("CHAT OPENED:", userId);
 };
 
 function listenToChatStatus(userId) {
@@ -30643,7 +30632,7 @@ window.closeChat = async function () {
   }
 
   // =========================================
-  // REMOVE CHAT CHANNELS
+  // REMOVE CHANNELS
   // =========================================
 
   if (window.chatStatusChannel) {
@@ -30662,32 +30651,50 @@ window.closeChat = async function () {
   }
 
   // =========================================
-  // CLOSE CHAT SCREEN
+  // CLOSE CHAT
   // =========================================
 
   const chatScreen =
     document.getElementById("chatScreen");
 
   if (chatScreen) {
+
     chatScreen.style.display = "none";
+    chatScreen.style.visibility = "hidden";
+    chatScreen.style.opacity = "0";
+    chatScreen.style.pointerEvents = "none";
+
   }
 
   // =========================================
-  // SHOW INBOX
+  // OPEN INBOX
   // =========================================
 
   const inboxScreen =
     document.getElementById("inboxScreen");
 
   if (inboxScreen) {
+
     inboxScreen.style.display = "flex";
     inboxScreen.style.visibility = "visible";
     inboxScreen.style.opacity = "1";
-    inboxScreen.style.zIndex = "4000";
+    inboxScreen.style.pointerEvents = "auto";
+
   }
 
   // =========================================
-  // SEARCH MUST STAY CLOSED
+  // KEEP APP HIDDEN
+  // =========================================
+
+  const app =
+    document.getElementById("app");
+
+  if (app) {
+    app.style.display = "none";
+  }
+
+  // =========================================
+  // KEEP SEARCH CLOSED
   // =========================================
 
   const searchScreen =
@@ -30695,43 +30702,8 @@ window.closeChat = async function () {
 
   if (searchScreen) {
     searchScreen.style.display = "none";
-  }
-
-  // =========================================
-  // RESTORE APP
-  // =========================================
-
-  const app =
-    document.getElementById("app");
-
-  if (app) {
-    app.style.display = "block";
-    app.style.visibility = "visible";
-    app.style.opacity = "1";
-  }
-
-  // =========================================
-  // RESTORE TOP BAR
-  // =========================================
-
-  const topBar =
-    document.getElementById("topBar");
-
-  if (topBar) {
-
-    topBar.style.display = "flex";
-    topBar.style.visibility = "visible";
-    topBar.style.opacity = "1";
-    topBar.style.zIndex = "9999999";
-
-  }
-
-  // =========================================
-  // RESTORE TOP BAR BUTTON
-  // =========================================
-
-  if (typeof setActiveTopButton === "function") {
-    setActiveTopButton("chatBtn");
+    searchScreen.style.visibility = "hidden";
+    searchScreen.style.pointerEvents = "none";
   }
 
   // =========================================
@@ -30740,6 +30712,13 @@ window.closeChat = async function () {
 
   lockBackground();
 
+  // =========================================
+  // CHAT NO LONGER ACTIVE
+  // =========================================
+
+  currentChatUser = null;
+
+  console.log("CHAT CLOSED → INBOX");
 };
 
 
