@@ -30620,19 +30620,25 @@ window.closeChat = async function () {
 
   if (session?.user && currentChatUser) {
 
-    await supabase
-      .from("typing_status")
-      .upsert({
-        user_id: session.user.id,
-        receiver_id: currentChatUser,
-        typing: false,
-        updated_at: new Date()
-      });
+    try {
+
+      await supabase
+        .from("typing_status")
+        .upsert({
+          user_id: session.user.id,
+          receiver_id: currentChatUser,
+          typing: false,
+          updated_at: new Date()
+        });
+
+    } catch (err) {
+      console.log("Typing cleanup error:", err);
+    }
 
   }
 
   // =========================================
-  // REMOVE CHANNELS
+  // REMOVE CHAT CHANNELS
   // =========================================
 
   if (window.chatStatusChannel) {
@@ -30651,7 +30657,7 @@ window.closeChat = async function () {
   }
 
   // =========================================
-  // CLOSE CHAT
+  // HIDE CHAT
   // =========================================
 
   const chatScreen =
@@ -30667,7 +30673,7 @@ window.closeChat = async function () {
   }
 
   // =========================================
-  // OPEN INBOX
+  // SHOW INBOX
   // =========================================
 
   const inboxScreen =
@@ -30690,20 +30696,45 @@ window.closeChat = async function () {
     document.getElementById("app");
 
   if (app) {
+
     app.style.display = "none";
+    app.style.visibility = "visible";
+
   }
 
   // =========================================
-  // KEEP SEARCH CLOSED
+  // SEARCH MUST STAY CLOSED
   // =========================================
 
   const searchScreen =
     document.getElementById("searchScreen");
 
   if (searchScreen) {
+
     searchScreen.style.display = "none";
     searchScreen.style.visibility = "hidden";
     searchScreen.style.pointerEvents = "none";
+
+  }
+
+  // =========================================
+  // 🔥 RESTORE TOP BAR
+  // =========================================
+
+  const topBar =
+    document.getElementById("topBar");
+
+  if (topBar) {
+
+    topBar.style.display = "flex";
+    topBar.style.visibility = "visible";
+    topBar.style.opacity = "1";
+    topBar.style.pointerEvents = "auto";
+    topBar.style.zIndex = "9999999";
+
+    // Force browser to recalculate it
+    topBar.offsetHeight;
+
   }
 
   // =========================================
@@ -30713,12 +30744,21 @@ window.closeChat = async function () {
   lockBackground();
 
   // =========================================
-  // CHAT NO LONGER ACTIVE
+  // CHAT BUTTON ACTIVE
+  // =========================================
+
+  if (typeof setActiveTopButton === "function") {
+    setActiveTopButton("chatBtn");
+  }
+
+  // =========================================
+  // CLEAR CURRENT CHAT
   // =========================================
 
   currentChatUser = null;
 
-  console.log("CHAT CLOSED → INBOX");
+  console.log("CHAT CLOSED → INBOX → TOPBAR RESTORED");
+
 };
 
 
