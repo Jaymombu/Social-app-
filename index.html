@@ -28033,6 +28033,22 @@ window.openChat = async function(userId, name) {
     chatScreen.style.zIndex = "5000";
 
   }
+  
+  // =========================================
+// HIDE TOP BAR WHILE CHAT IS OPEN
+// =========================================
+
+const topBar =
+  document.getElementById("topBar");
+
+if (topBar) {
+
+  topBar.style.display = "none";
+  topBar.style.visibility = "hidden";
+  topBar.style.opacity = "0";
+  topBar.style.pointerEvents = "none";
+
+}
 
   // =========================================
   // LOCK BACKGROUND
@@ -30657,7 +30673,7 @@ window.closeChat = async function () {
   }
 
   // =========================================
-  // HIDE CHAT
+  // HIDE CHAT COMPLETELY
   // =========================================
 
   const chatScreen =
@@ -30685,6 +30701,7 @@ window.closeChat = async function () {
     inboxScreen.style.visibility = "visible";
     inboxScreen.style.opacity = "1";
     inboxScreen.style.pointerEvents = "auto";
+    inboxScreen.style.zIndex = "5000";
 
   }
 
@@ -30698,7 +30715,6 @@ window.closeChat = async function () {
   if (app) {
 
     app.style.display = "none";
-    app.style.visibility = "visible";
 
   }
 
@@ -30713,12 +30729,13 @@ window.closeChat = async function () {
 
     searchScreen.style.display = "none";
     searchScreen.style.visibility = "hidden";
+    searchScreen.style.opacity = "0";
     searchScreen.style.pointerEvents = "none";
 
   }
 
   // =========================================
-  // 🔥 RESTORE TOP BAR
+  // RESTORE TOP BAR
   // =========================================
 
   const topBar =
@@ -30732,8 +30749,8 @@ window.closeChat = async function () {
     topBar.style.pointerEvents = "auto";
     topBar.style.zIndex = "9999999";
 
-    // Force browser to recalculate it
-    topBar.offsetHeight;
+    // Force browser repaint
+    void topBar.offsetHeight;
 
   }
 
@@ -30748,7 +30765,9 @@ window.closeChat = async function () {
   // =========================================
 
   if (typeof setActiveTopButton === "function") {
+
     setActiveTopButton("chatBtn");
+
   }
 
   // =========================================
@@ -30757,7 +30776,9 @@ window.closeChat = async function () {
 
   currentChatUser = null;
 
-  console.log("CHAT CLOSED → INBOX → TOPBAR RESTORED");
+  console.log(
+    "CHAT CLOSED → INBOX → TOPBAR RESTORED"
+  );
 
 };
 
