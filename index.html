@@ -3169,20 +3169,18 @@ pointer-events:auto;
     Chats
   </div>
 
-  <button
-    onclick="
-      document.getElementById('inboxScreen').style.display='none'
-    "
-    style="
-      background:none;
-      border:none;
-      color:white;
-      font-size:24px;
-      cursor:pointer;
-    "
-  >
-    ✕
-  </button>
+<button
+  onclick="closeInbox()"
+  style="
+    background:none;
+    border:none;
+    color:white;
+    font-size:24px;
+    cursor:pointer;
+  "
+>
+  ✕
+</button>
 
 </div>
 
@@ -30292,9 +30290,8 @@ window.deleteMessage = async function(messageId) {
 
 window.closeChat = async function () {
 
-  // Stop typing status
+  // Stop typing
   if (session?.user && currentChatUser) {
-
     await supabase
       .from("typing_status")
       .upsert({
@@ -30303,10 +30300,9 @@ window.closeChat = async function () {
         typing: false,
         updated_at: new Date()
       });
-
   }
 
-  // Remove chat realtime listeners
+  // Stop chat listeners
   if (window.chatStatusChannel) {
     supabase.removeChannel(window.chatStatusChannel);
     window.chatStatusChannel = null;
@@ -30322,32 +30318,28 @@ window.closeChat = async function () {
     window.messageSeenChannel = null;
   }
 
-  // Close chat
-  const chatScreen =
-    document.getElementById("chatScreen");
+  // Hide chat
+  const chatScreen = document.getElementById("chatScreen");
 
   if (chatScreen) {
     chatScreen.style.display = "none";
   }
 
-  // Return to inbox
-  const inboxScreen =
-    document.getElementById("inboxScreen");
+  // Show inbox
+  const inboxScreen = document.getElementById("inboxScreen");
 
   if (inboxScreen) {
     inboxScreen.style.display = "flex";
   }
 
-  // Keep the main app hidden while inbox is open
-  const app =
-    document.getElementById("app");
+  // Keep app hidden because inbox is open
+  const app = document.getElementById("app");
 
   if (app) {
     app.style.display = "none";
   }
 
-  // IMPORTANT:
-  // Do NOT open the search screen
+  // Search must stay closed
   const searchScreen =
     document.getElementById("searchScreen");
 
@@ -30355,8 +30347,64 @@ window.closeChat = async function () {
     searchScreen.style.display = "none";
   }
 
-  // Clear current chat
+  // Make sure top bar is visible
+  const topBar =
+    document.getElementById("topBar");
+
+  if (topBar) {
+    topBar.style.display = "flex";
+  }
+
   currentChatUser = null;
+
+};
+
+window.closeInbox = async function () {
+
+  // Hide inbox
+  const inboxScreen =
+    document.getElementById("inboxScreen");
+
+  if (inboxScreen) {
+    inboxScreen.style.display = "none";
+  }
+
+  // Hide chat if somehow still open
+  const chatScreen =
+    document.getElementById("chatScreen");
+
+  if (chatScreen) {
+    chatScreen.style.display = "none";
+  }
+
+  // Show main app / posts
+  const app =
+    document.getElementById("app");
+
+  if (app) {
+    app.style.display = "block";
+  }
+
+  // Make sure search is NOT opened
+  const searchScreen =
+    document.getElementById("searchScreen");
+
+  if (searchScreen) {
+    searchScreen.style.display = "none";
+  }
+
+  // Keep top bar visible
+  const topBar =
+    document.getElementById("topBar");
+
+  if (topBar) {
+    topBar.style.display = "flex";
+  }
+
+  // Reload posts
+  if (typeof loadPosts === "function") {
+    await loadPosts();
+  }
 
 };
 
