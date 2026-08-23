@@ -1,4 +1,4 @@
-const CACHE_NAME = "social-app-v167";
+const CACHE_NAME = "social-app-v168";
 
 const urlsToCache = [
   "./",
