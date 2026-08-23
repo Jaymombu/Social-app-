@@ -28222,7 +28222,28 @@ async function loadUnreadMessages() {
 
 }
 
+// =====================================================
+// OPEN INBOX
+// =====================================================
+
 window.openInbox = async function () {
+
+  console.log("OPENING INBOX");
+
+  // =========================================
+  // RESTORE TOP BAR
+  // =========================================
+
+  const topBar =
+    document.getElementById("topBar");
+
+  if (topBar) {
+    topBar.style.display = "flex";
+    topBar.style.visibility = "visible";
+    topBar.style.opacity = "1";
+    topBar.style.pointerEvents = "auto";
+    topBar.style.zIndex = "9999999";
+  }
 
   // =========================================
   // SHOW CHAT BUTTON AS ACTIVE
@@ -28233,17 +28254,57 @@ window.openInbox = async function () {
   }
 
   // =========================================
+  // CLOSE OTHER FULL-SCREEN SCREENS
+  // =========================================
+
+  const chatScreen =
+    document.getElementById("chatScreen");
+
+  if (chatScreen) {
+    chatScreen.style.display = "none";
+  }
+
+  const searchScreen =
+    document.getElementById("searchScreen");
+
+  if (searchScreen) {
+    searchScreen.style.display = "none";
+  }
+
+  // =========================================
+  // RESTORE APP
+  // =========================================
+
+  const app =
+    document.getElementById("app");
+
+  if (app) {
+    app.style.display = "block";
+    app.style.visibility = "visible";
+    app.style.opacity = "1";
+  }
+
+  // =========================================
   // SHOW INBOX
   // =========================================
 
   const inboxScreen =
     document.getElementById("inboxScreen");
 
-  if (inboxScreen) {
-    inboxScreen.style.display = "flex";
+  if (!inboxScreen) {
+    console.error("❌ inboxScreen not found");
+    return;
   }
 
-  // LOCK EVERYTHING BEHIND INBOX
+  inboxScreen.style.display = "flex";
+  inboxScreen.style.visibility = "visible";
+  inboxScreen.style.opacity = "1";
+  inboxScreen.style.pointerEvents = "auto";
+
+  // =========================================
+  // LOCK BACKGROUND
+  // =========================================
+
   lockBackground();
 
   // =========================================
@@ -28253,7 +28314,10 @@ window.openInbox = async function () {
   const inbox =
     document.getElementById("inboxList");
 
-  if (!inbox) return;
+  if (!inbox) {
+    console.error("❌ inboxList not found");
+    return;
+  }
 
   inbox.innerHTML = "Loading...";
 
@@ -28416,7 +28480,7 @@ window.openInbox = async function () {
     div.onclick = async () => {
 
       // =====================================
-      // FORWARD MULTIPLE MESSAGES
+      // FORWARD MULTIPLE
       // =====================================
 
       if (window.forwardingMessages) {
@@ -28439,10 +28503,8 @@ window.openInbox = async function () {
               });
 
           if (error) {
-
             alert(error.message);
             return;
-
           }
 
         }
@@ -28457,7 +28519,7 @@ window.openInbox = async function () {
       }
 
       // =====================================
-      // FORWARD SINGLE MESSAGE
+      // FORWARD SINGLE
       // =====================================
 
       if (window.forwardingMessage) {
@@ -28475,10 +28537,8 @@ window.openInbox = async function () {
             });
 
         if (error) {
-
           alert(error.message);
           return;
-
         }
 
         window.forwardingMessage = null;
@@ -28490,16 +28550,19 @@ window.openInbox = async function () {
         return;
       }
 
-// =====================================
-// NORMAL CHAT → DIRECTLY OPEN CHAT
-// =====================================
+      // =====================================
+      // NORMAL CHAT
+      // =====================================
+      // DO NOT call closeInbox()
+      // DO NOT call goHome()
+      // DO NOT loadPosts()
 
-openChat(
-  otherUser,
-  profile?.name || "User"
-   );
+      openChat(
+        otherUser,
+        profile?.name || "User"
+      );
 
-};
+    };
 
     // =======================================
     // CHAT ROW STYLE
@@ -30700,6 +30763,7 @@ window.closeInbox = function () {
     inboxScreen.style.display = "none";
     inboxScreen.style.visibility = "hidden";
     inboxScreen.style.opacity = "0";
+    inboxScreen.style.pointerEvents = "none";
 
   }
 
@@ -30714,6 +30778,7 @@ window.closeInbox = function () {
 
     chatScreen.style.display = "none";
     chatScreen.style.visibility = "hidden";
+    chatScreen.style.pointerEvents = "none";
 
   }
 
@@ -30728,6 +30793,7 @@ window.closeInbox = function () {
 
     searchScreen.style.display = "none";
     searchScreen.style.visibility = "hidden";
+    searchScreen.style.pointerEvents = "none";
 
   }
 
@@ -30743,6 +30809,7 @@ window.closeInbox = function () {
     app.style.display = "block";
     app.style.visibility = "visible";
     app.style.opacity = "1";
+    app.style.pointerEvents = "auto";
 
   }
 
@@ -30758,6 +30825,7 @@ window.closeInbox = function () {
     topBar.style.display = "flex";
     topBar.style.visibility = "visible";
     topBar.style.opacity = "1";
+    topBar.style.pointerEvents = "auto";
     topBar.style.zIndex = "9999999";
 
   }
@@ -30767,7 +30835,9 @@ window.closeInbox = function () {
   // =========================================
 
   if (typeof setActiveTopButton === "function") {
+
     setActiveTopButton("homeBtn");
+
   }
 
   // =========================================
@@ -30776,17 +30846,7 @@ window.closeInbox = function () {
 
   unlockBackground();
 
-  // =========================================
-  // LOAD POSTS
-  // =========================================
-
-  requestAnimationFrame(() => {
-
-    if (typeof loadPosts === "function") {
-      loadPosts();
-    }
-
-  });
+  console.log("INBOX CLOSED → HOME RESTORED");
 
 };
 
