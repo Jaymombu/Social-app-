@@ -30572,7 +30572,7 @@ window.closeChat = async function () {
   }
 
   // =========================================
-  // HIDE CHAT
+  // CLOSE CHAT SCREEN
   // =========================================
 
   const chatScreen =
@@ -30591,6 +30591,9 @@ window.closeChat = async function () {
 
   if (inboxScreen) {
     inboxScreen.style.display = "flex";
+    inboxScreen.style.visibility = "visible";
+    inboxScreen.style.opacity = "1";
+    inboxScreen.style.zIndex = "4000";
   }
 
   // =========================================
@@ -30605,9 +30608,45 @@ window.closeChat = async function () {
   }
 
   // =========================================
+  // RESTORE APP
+  // =========================================
+
+  const app =
+    document.getElementById("app");
+
+  if (app) {
+    app.style.display = "block";
+    app.style.visibility = "visible";
+    app.style.opacity = "1";
+  }
+
+  // =========================================
+  // RESTORE TOP BAR
+  // =========================================
+
+  const topBar =
+    document.getElementById("topBar");
+
+  if (topBar) {
+
+    topBar.style.display = "flex";
+    topBar.style.visibility = "visible";
+    topBar.style.opacity = "1";
+    topBar.style.zIndex = "9999999";
+
+  }
+
+  // =========================================
+  // RESTORE TOP BAR BUTTON
+  // =========================================
+
+  if (typeof setActiveTopButton === "function") {
+    setActiveTopButton("chatBtn");
+  }
+
+  // =========================================
   // KEEP BACKGROUND LOCKED
   // =========================================
-  // We are still inside Inbox.
 
   lockBackground();
 
@@ -30630,7 +30669,11 @@ window.closeInbox = function () {
     document.getElementById("inboxScreen");
 
   if (inboxScreen) {
+
     inboxScreen.style.display = "none";
+    inboxScreen.style.visibility = "hidden";
+    inboxScreen.style.opacity = "0";
+
   }
 
   // =========================================
@@ -30641,7 +30684,10 @@ window.closeInbox = function () {
     document.getElementById("chatScreen");
 
   if (chatScreen) {
+
     chatScreen.style.display = "none";
+    chatScreen.style.visibility = "hidden";
+
   }
 
   // =========================================
@@ -30652,7 +30698,10 @@ window.closeInbox = function () {
     document.getElementById("searchScreen");
 
   if (searchScreen) {
+
     searchScreen.style.display = "none";
+    searchScreen.style.visibility = "hidden";
+
   }
 
   // =========================================
@@ -30663,8 +30712,11 @@ window.closeInbox = function () {
     document.getElementById("app");
 
   if (app) {
+
     app.style.display = "block";
     app.style.visibility = "visible";
+    app.style.opacity = "1";
+
   }
 
   // =========================================
@@ -30684,7 +30736,7 @@ window.closeInbox = function () {
   }
 
   // =========================================
-  // HOME BUTTON
+  // RESTORE HOME BUTTON
   // =========================================
 
   if (typeof setActiveTopButton === "function") {
@@ -30710,6 +30762,7 @@ window.closeInbox = function () {
   });
 
 };
+
 
 window.toggleChatSearch = function () {
 
