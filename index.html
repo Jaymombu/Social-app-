@@ -30290,7 +30290,12 @@ window.deleteMessage = async function(messageId) {
 
 window.closeChat = async function () {
 
-  // Stop typing
+  console.log("CLOSING CHAT");
+
+  // =========================================
+  // STOP CHAT-RELATED STATUS
+  // =========================================
+
   if (session?.user && currentChatUser) {
 
     await supabase
@@ -30304,7 +30309,10 @@ window.closeChat = async function () {
 
   }
 
-  // Stop chat listeners
+  // =========================================
+  // REMOVE CHAT CHANNELS
+  // =========================================
+
   if (window.chatStatusChannel) {
     supabase.removeChannel(window.chatStatusChannel);
     window.chatStatusChannel = null;
@@ -30320,7 +30328,10 @@ window.closeChat = async function () {
     window.messageSeenChannel = null;
   }
 
-  // Hide chat
+  // =========================================
+  // HIDE CHAT
+  // =========================================
+
   const chatScreen =
     document.getElementById("chatScreen");
 
@@ -30328,7 +30339,10 @@ window.closeChat = async function () {
     chatScreen.style.display = "none";
   }
 
-  // Show inbox
+  // =========================================
+  // SHOW INBOX
+  // =========================================
+
   const inboxScreen =
     document.getElementById("inboxScreen");
 
@@ -30336,11 +30350,10 @@ window.closeChat = async function () {
     inboxScreen.style.display = "flex";
   }
 
-  // IMPORTANT:
-  // Do NOT hide #app here.
-  // The topBar may be inside #app.
+  // =========================================
+  // HIDE SEARCH
+  // =========================================
 
-  // Close search
   const searchScreen =
     document.getElementById("searchScreen");
 
@@ -30348,22 +30361,59 @@ window.closeChat = async function () {
     searchScreen.style.display = "none";
   }
 
-  // Make sure top bar is visible
+  // =========================================
+  // RESTORE APP
+  // =========================================
+
+  const app =
+    document.getElementById("app");
+
+  if (app) {
+    app.style.display = "block";
+    app.style.visibility = "visible";
+  }
+
+  // =========================================
+  // RESTORE TOP BAR
+  // =========================================
+
   const topBar =
     document.getElementById("topBar");
 
   if (topBar) {
+
     topBar.style.display = "flex";
     topBar.style.visibility = "visible";
     topBar.style.opacity = "1";
-    topBar.style.zIndex = "999999";
+    topBar.style.zIndex = "9999999";
+
   }
 
-  currentChatUser = null;
+  // =========================================
+  // RESTORE HOME BUTTON
+  // =========================================
+
+  if (typeof setActiveTopButton === "function") {
+    setActiveTopButton("homeBtn");
+  }
+
+  // =========================================
+  // LOAD POSTS AGAIN
+  // =========================================
+
+  requestAnimationFrame(() => {
+
+    if (typeof loadPosts === "function") {
+      loadPosts();
+    }
+
+  });
 
 };
 
-window.closeInbox = async function () {
+window.closeInbox = function () {
+
+  console.log("CLOSING INBOX");
 
   // Hide inbox
   const inboxScreen =
@@ -30373,7 +30423,7 @@ window.closeInbox = async function () {
     inboxScreen.style.display = "none";
   }
 
-  // Hide chat if somehow still open
+  // Make sure chat is hidden
   const chatScreen =
     document.getElementById("chatScreen");
 
@@ -30381,15 +30431,8 @@ window.closeInbox = async function () {
     chatScreen.style.display = "none";
   }
 
-  // Show main app / posts
-  const app =
-    document.getElementById("app");
-
-  if (app) {
-    app.style.display = "block";
-  }
-
-  // Make sure search is NOT opened
+  // IMPORTANT:
+  // Search must NOT open when closing inbox
   const searchScreen =
     document.getElementById("searchScreen");
 
@@ -30397,18 +30440,41 @@ window.closeInbox = async function () {
     searchScreen.style.display = "none";
   }
 
-  // Keep top bar visible
+  // Restore app
+  const app =
+    document.getElementById("app");
+
+  if (app) {
+    app.style.display = "block";
+    app.style.visibility = "visible";
+  }
+
+  // Restore top bar
   const topBar =
     document.getElementById("topBar");
 
   if (topBar) {
+
     topBar.style.display = "flex";
+    topBar.style.visibility = "visible";
+    topBar.style.opacity = "1";
+    topBar.style.zIndex = "9999999";
+
+  }
+
+  // Restore home button
+  if (typeof setActiveTopButton === "function") {
+    setActiveTopButton("homeBtn");
   }
 
   // Reload posts
-  if (typeof loadPosts === "function") {
-    await loadPosts();
-  }
+  requestAnimationFrame(() => {
+
+    if (typeof loadPosts === "function") {
+      loadPosts();
+    }
+
+  });
 
 };
 
