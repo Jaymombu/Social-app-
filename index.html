@@ -30292,6 +30292,7 @@ window.closeChat = async function () {
 
   // Stop typing
   if (session?.user && currentChatUser) {
+
     await supabase
       .from("typing_status")
       .upsert({
@@ -30300,6 +30301,7 @@ window.closeChat = async function () {
         typing: false,
         updated_at: new Date()
       });
+
   }
 
   // Stop chat listeners
@@ -30319,27 +30321,26 @@ window.closeChat = async function () {
   }
 
   // Hide chat
-  const chatScreen = document.getElementById("chatScreen");
+  const chatScreen =
+    document.getElementById("chatScreen");
 
   if (chatScreen) {
     chatScreen.style.display = "none";
   }
 
   // Show inbox
-  const inboxScreen = document.getElementById("inboxScreen");
+  const inboxScreen =
+    document.getElementById("inboxScreen");
 
   if (inboxScreen) {
     inboxScreen.style.display = "flex";
   }
 
-  // Keep app hidden because inbox is open
-  const app = document.getElementById("app");
+  // IMPORTANT:
+  // Do NOT hide #app here.
+  // The topBar may be inside #app.
 
-  if (app) {
-    app.style.display = "none";
-  }
-
-  // Search must stay closed
+  // Close search
   const searchScreen =
     document.getElementById("searchScreen");
 
@@ -30353,6 +30354,9 @@ window.closeChat = async function () {
 
   if (topBar) {
     topBar.style.display = "flex";
+    topBar.style.visibility = "visible";
+    topBar.style.opacity = "1";
+    topBar.style.zIndex = "999999";
   }
 
   currentChatUser = null;
