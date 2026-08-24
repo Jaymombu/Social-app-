@@ -3636,10 +3636,14 @@ pointer-events:auto;
   style="
     display:none;
     position:fixed;
-    inset:0;
+    top:60px;
+    left:0;
+    right:0;
+    bottom:0;
     background:#000;
-    z-index:999999;
+    z-index:9000;
     flex-direction:column;
+    overflow:hidden;
   "
 >
 
@@ -3656,11 +3660,17 @@ pointer-events:auto;
     display:flex;
     align-items:center;
   ">
-    <button onclick="
-      document.getElementById('notificationsScreen').style.display='none'
-    ">
-      ←
-    </button>
+<button onclick="
+  document.getElementById('notificationsScreen').style.display='none';
+  if (typeof restoreTopBar === 'function') {
+    restoreTopBar();
+  }
+  if (typeof setActiveTopButton === 'function') {
+    setActiveTopButton('homeBtn');
+  }
+">
+  ←
+</button>
 
     <div style="margin-left:10px;">
       Notifications
@@ -27034,126 +27044,191 @@ function formatSearchTime(date) {
 }
 
 // =====================================================
+// CREATE TOP BAR OUTSIDE APP
+// =====================================================
+
+const app = document.getElementById("app");
+
+if (!app) {
+  console.error("❌ #app not found");
+}
+
+// =====================================================
+// CREATE TOP BAR
+// =====================================================
+
+let topBar = document.getElementById("topBar");
+
+if (!topBar) {
+
+  topBar = document.createElement("div");
+
+  topBar.id = "topBar";
+
+  topBar.innerHTML = `
+
+    <button
+      id="homeBtn"
+      onclick="goHome()"
+    >
+      🏠
+    </button>
+
+    <button
+      id="searchBtn"
+      onclick="openSearch()"
+    >
+      🔍
+    </button>
+
+    <button
+      id="chatBtn"
+      onclick="openInbox()"
+    >
+      💬
+
+      <span id="chatBadge">0</span>
+
+    </button>
+
+    <button
+      id="notificationBtn"
+      onclick="openNotifications()"
+    >
+      🔔
+
+      <span id="notificationBadge">0</span>
+
+    </button>
+
+  `;
+
+  document.body.appendChild(topBar);
+}
+
+// =====================================================
+// TOP BAR STYLE
+// =====================================================
+
+topBar.style.cssText = `
+  position:fixed;
+  top:0;
+  left:0;
+  right:0;
+  height:60px;
+  display:flex;
+  align-items:center;
+  justify-content:space-evenly;
+  background:#18191a;
+  border-bottom:1px solid #333;
+  z-index:99999999;
+  visibility:visible;
+  opacity:1;
+  pointer-events:auto;
+`;
+
+// =====================================================
+// TOP BAR BUTTON STYLE
+// =====================================================
+
+topBar.querySelectorAll("button").forEach(button => {
+
+  button.style.cssText = `
+    background:none;
+    border:none;
+    color:white;
+    font-size:26px;
+    width:44px;
+    height:44px;
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0;
+  `;
+
+});
+
+// =====================================================
+// BADGE STYLE
+// =====================================================
+
+[
+  "chatBadge",
+  "notificationBadge"
+].forEach(id => {
+
+  const badge = document.getElementById(id);
+
+  if (!badge) return;
+
+  badge.style.cssText = `
+    display:none;
+    position:absolute;
+    top:-4px;
+    right:-6px;
+    background:#ff3b30;
+    color:white;
+    font-size:10px;
+    min-width:16px;
+    height:16px;
+    border-radius:50%;
+    align-items:center;
+    justify-content:center;
+    padding:0 3px;
+    box-sizing:border-box;
+  `;
+
+});
+
+// =====================================================
 // APPLICATION STARTUP
 // =====================================================
 
-// ✅ START APP FUNCTION (you were missing this too)
 let postsEl = null;
 let scrollTimeout;
 
 window.startApp = async function () {
-  
+
   const t0 = performance.now();
 
-console.log(new Error("startApp called").stack);
+  console.log(
+    new Error("startApp called").stack
+  );
 
-    console.log("START APP CALLED");
-    
-    
-  document.getElementById("app").innerHTML = `
+  console.log("START APP CALLED");
+
+  const app = document.getElementById("app");
+
+  if (!app) {
+  console.error("❌ #app not found");
+  return;
+  }
+
+  // =====================================================
+  // RESTORE TOP BAR
+  // =====================================================
+
+  const topBar = document.getElementById("topBar");
+
+  if (topBar) {
+
+    topBar.style.display = "flex";
+    topBar.style.visibility = "visible";
+    topBar.style.opacity = "1";
+    topBar.style.pointerEvents = "auto";
+    topBar.style.zIndex = "99999999";
+
+  }
+
+  // =====================================================
+  // APP CONTENT
+  // =====================================================
+
+  app.innerHTML = `
     <div style="padding:70px 10px 10px;">
     
-    <div id="topBar" style="
-position:fixed;
-top:0;
-left:0;
-right:0;
-height:60px;
-display:flex;
-align-items:center;
-justify-content:space-evenly;
-background:#18191a;
-border-bottom:1px solid #333;
-z-index:999999;
-">
 
-<button id="homeBtn" onclick="goHome()" style="
-background:none;
-border:none;
-color:white;
-font-size:26px;
-width:44px;
-height:44px;
-">🏠</button>
-
-<button id="searchBtn" onclick="openSearch()" style="
-background:none;
-border:none;
-color:white;
-font-size:26px;
-width:44px;
-height:44px;
-">🔍</button>
-
-<button id="chatBtn" onclick="openInbox()" style="
-background:none;
-width:44px;
-height:44px;
-border:none;
-color:white;
-font-size:26px;
-position:relative;
-display:flex;
-align-items:center;
-justify-content:center;
-">
-💬
-<span id="chatBadge" style="
-display:none;
-position:absolute;
-top:-4px;
-right:-6px;
-background:#ff3b30;
-color:white;
-font-size:10px;
-min-width:16px;
-height:16px;
-border-radius:50%;
-display:flex;
-align-items:center;
-justify-content:center;
-padding:0 3px;
-box-sizing:border-box;
-">
-0
-</span>
-</button>
-
-<button id="notificationBtn" onclick="openNotifications()" style="
-background:none;
-width:44px;
-height:44px;
-border:none;
-color:white;
-font-size:26px;
-position:relative;
-display:flex;
-align-items:center;
-justify-content:center;
-">
-🔔
-<span id="notificationBadge" style="
-display:none;
-position:absolute;
-top:-4px;
-right:-6px;
-background:#ff3b30;
-color:white;
-font-size:10px;
-min-width:16px;
-height:16px;
-border-radius:50%;
-display:flex;
-align-items:center;
-justify-content:center;
-padding:0 3px;
-box-sizing:border-box;
-">
-0
-</span>
-</button>
-
-</div>
 
       <div id="tabs" style="
         display:flex;
@@ -27866,66 +27941,186 @@ box-shadow:0 4px 20px rgba(0,0,0,.4);
 </div>
   `;
 
+  // ===================================================
+  // GET POSTS ELEMENT
+  // ===================================================
+
   postsEl = document.getElementById("posts");
 
-console.time("loadPosts");
-await loadPosts();
-console.timeEnd("loadPosts");
+  if (!postsEl) {
+    console.error("❌ posts element not found");
+    return;
+  }
 
-console.time("loadStories");
-await loadStories();
-console.timeEnd("loadStories");
 
-setupScrollSnap();
-adjustStoryBar();
+  // ===================================================
+  // LOAD POSTS
+  // ===================================================
 
-if (session && currentUser) {
+  console.time("loadPosts");
+
+  try {
+    await loadPosts();
+  } catch (err) {
+    console.error("❌ loadPosts failed:", err);
+  }
+
+  console.timeEnd("loadPosts");
+
+
+  // ===================================================
+  // LOAD STORIES
+  // ===================================================
+
+  console.time("loadStories");
+
+  try {
+    await loadStories();
+  } catch (err) {
+    console.error("❌ loadStories failed:", err);
+  }
+
+  console.timeEnd("loadStories");
+
+
+  // ===================================================
+  // SETUP UI
+  // ===================================================
+
+  try {
+    setupScrollSnap();
+  } catch (err) {
+    console.log("setupScrollSnap error:", err);
+  }
+
+  try {
+    adjustStoryBar();
+  } catch (err) {
+    console.log("adjustStoryBar error:", err);
+  }
+
+
+  // ===================================================
+  // ONLINE / PUSH / BADGES
+  // ===================================================
+
+  if (session && currentUser) {
 
     console.time("updateOnlineStatus");
+
     try {
-        await updateOnlineStatus(true);
+      await updateOnlineStatus(true);
     } catch (err) {
-        console.log(err);
+      console.log("Online status error:", err);
     }
+
     console.timeEnd("updateOnlineStatus");
 
+
     console.time("registerPush");
+
     try {
-        await registerPush();
+      await registerPush();
     } catch (err) {
-        console.log("Push registration failed:", err);
+      console.log("Push registration failed:", err);
     }
+
     console.timeEnd("registerPush");
 
+
     console.time("loadUnreadCount");
-    await loadUnreadCount();
+
+    try {
+      await loadUnreadCount();
+    } catch (err) {
+      console.log("Unread notification count error:", err);
+    }
+
     console.timeEnd("loadUnreadCount");
 
+
     console.time("loadUnreadMessages");
-    await loadUnreadMessages();
+
+    try {
+      await loadUnreadMessages();
+    } catch (err) {
+      console.log("Unread message count error:", err);
+    }
+
     console.timeEnd("loadUnreadMessages");
 
-}
+  }
 
-setTimeout(attachEvents, 0);
 
-setActiveTopButton("homeBtn");
+  // ===================================================
+  // ATTACH EVENTS
+  // ===================================================
 
-console.log(
+  setTimeout(() => {
+
+    try {
+      attachEvents();
+    } catch (err) {
+      console.error("❌ attachEvents error:", err);
+    }
+
+  }, 0);
+
+
+  // ===================================================
+  // HOME ACTIVE
+  // ===================================================
+
+  if (typeof setActiveTopButton === "function") {
+    setActiveTopButton("homeBtn");
+  }
+
+
+  // ===================================================
+  // FORCE TOP BAR VISIBLE ON START
+  // ===================================================
+
+  if (typeof restoreTopBar === "function") {
+    restoreTopBar();
+  }
+
+
+  // ===================================================
+  // FINISHED
+  // ===================================================
+
+  console.log(
     "startApp finished in",
     Math.round(performance.now() - t0),
     "ms"
-);
+  );
 
-}
+};
+
+
+// =====================================================
+// APP CLOSE / PAGE EXIT
+// =====================================================
 
 window.addEventListener("beforeunload", () => {
-    try {
-        updateOnlineStatus(false);
-    } catch (err) {
-        console.log(err);
+
+  try {
+
+    if (typeof updateOnlineStatus === "function") {
+      updateOnlineStatus(false);
     }
+
+  } catch (err) {
+
+    console.log(
+      "beforeunload error:",
+      err
+    );
+
+  }
+
 });
+
 
 // =====================================================
 // CHAT
@@ -27943,43 +28138,93 @@ let selectionMode = false;
 
 let currentChatUser = null;
 
-window.openChat = async function(userId, name) {
 
-  console.log("OPENING CHAT:", userId);
+// =====================================================
+// OPEN CHAT
+// =====================================================
+
+window.openChat = async function (
+  userId,
+  name
+) {
+
+  console.log(
+    "OPENING CHAT:",
+    userId
+  );
 
   if (!session?.user) {
+
     alert("Please login first");
     return;
+
   }
 
   // =========================================
   // CHECK MESSAGE PERMISSION
   // =========================================
 
-  const { data: targetProfile } = await supabase
+  const {
+    data: targetProfile,
+    error: permissionError
+  } = await supabase
     .from("profiles")
     .select("allow_messages")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
 
-  if (targetProfile?.allow_messages === "nobody") {
-    alert("This user is not accepting messages.");
-    return;
+  if (permissionError) {
+
+    console.log(
+      "Permission check error:",
+      permissionError
+    );
+
   }
 
-  if (targetProfile?.allow_messages === "followers") {
+  if (
+    targetProfile?.allow_messages ===
+    "nobody"
+  ) {
 
-    const { data: follows } = await supabase
+    alert(
+      "This user is not accepting messages."
+    );
+
+    return;
+
+  }
+
+  if (
+    targetProfile?.allow_messages ===
+    "followers"
+  ) {
+
+    const {
+      data: follows
+    } = await supabase
       .from("follows")
       .select("id")
-      .eq("follower_id", session.user.id)
-      .eq("following_id", userId)
+      .eq(
+        "follower_id",
+        session.user.id
+      )
+      .eq(
+        "following_id",
+        userId
+      )
       .maybeSingle();
 
     if (!follows) {
-      alert("Only followers can message this user.");
+
+      alert(
+        "Only followers can message this user."
+      );
+
       return;
+
     }
+
   }
 
   // =========================================
@@ -27989,7 +28234,7 @@ window.openChat = async function(userId, name) {
   currentChatUser = userId;
 
   // =========================================
-  // CLOSE OTHER SCREENS
+  // GET ELEMENTS
   // =========================================
 
   const app =
@@ -28004,24 +28249,47 @@ window.openChat = async function(userId, name) {
   const chatScreen =
     document.getElementById("chatScreen");
 
+  // =========================================
+  // HIDE HOME
+  // =========================================
+
   if (app) {
+
     app.style.display = "none";
-  }
+    app.style.visibility = "hidden";
+    app.style.opacity = "0";
+    app.style.pointerEvents = "none";
 
-  if (inboxScreen) {
-    inboxScreen.style.display = "none";
-    inboxScreen.style.visibility = "hidden";
-    inboxScreen.style.pointerEvents = "none";
-  }
-
-  if (searchScreen) {
-    searchScreen.style.display = "none";
-    searchScreen.style.visibility = "hidden";
-    searchScreen.style.pointerEvents = "none";
   }
 
   // =========================================
-  // OPEN CHAT FRESH
+  // HIDE INBOX
+  // =========================================
+
+  if (inboxScreen) {
+
+    inboxScreen.style.display = "none";
+    inboxScreen.style.visibility = "hidden";
+    inboxScreen.style.opacity = "0";
+    inboxScreen.style.pointerEvents = "none";
+
+  }
+
+  // =========================================
+  // HIDE SEARCH
+  // =========================================
+
+  if (searchScreen) {
+
+    searchScreen.style.display = "none";
+    searchScreen.style.visibility = "hidden";
+    searchScreen.style.opacity = "0";
+    searchScreen.style.pointerEvents = "none";
+
+  }
+
+  // =========================================
+  // SHOW CHAT
   // =========================================
 
   if (chatScreen) {
@@ -28033,22 +28301,12 @@ window.openChat = async function(userId, name) {
     chatScreen.style.zIndex = "5000";
 
   }
-  
+
   // =========================================
-// HIDE TOP BAR WHILE CHAT IS OPEN
-// =========================================
+  // HIDE TOP BAR
+  // =========================================
 
-const topBar =
-  document.getElementById("topBar");
-
-if (topBar) {
-
-  topBar.style.display = "none";
-  topBar.style.visibility = "hidden";
-  topBar.style.opacity = "0";
-  topBar.style.pointerEvents = "none";
-
-}
+  hideTopBar();
 
   // =========================================
   // LOCK BACKGROUND
@@ -28064,14 +28322,19 @@ if (topBar) {
     document.getElementById("chatName");
 
   if (chatName) {
-    chatName.innerText = name || "User";
+
+    chatName.innerText =
+      name || "User";
+
   }
 
   // =========================================
   // GET FULL PROFILE
   // =========================================
 
-  const { data: profile } = await supabase
+  const {
+    data: profile
+  } = await supabase
     .from("profiles")
     .select("*")
     .eq("id", userId)
@@ -28090,7 +28353,9 @@ if (topBar) {
       profile?.avatar_url ||
       "https://ui-avatars.com/api/?name=" +
       encodeURIComponent(
-        profile?.name || name || "User"
+        profile?.name ||
+        name ||
+        "User"
       );
 
   }
@@ -28126,9 +28391,18 @@ if (topBar) {
       seen_at: new Date(),
       delivered: true
     })
-    .eq("sender_id", userId)
-    .eq("receiver_id", session.user.id)
-    .eq("seen", false);
+    .eq(
+      "sender_id",
+      userId
+    )
+    .eq(
+      "receiver_id",
+      session.user.id
+    )
+    .eq(
+      "seen",
+      false
+    );
 
   // =========================================
   // UPDATE BADGE
@@ -28150,7 +28424,11 @@ if (topBar) {
   listenTyping(userId);
   listenForSeenMessages(userId);
 
-  console.log("CHAT OPENED:", userId);
+  console.log(
+    "CHAT OPENED:",
+    userId
+  );
+
 };
 
 function listenToChatStatus(userId) {
@@ -28236,65 +28514,118 @@ window.openInbox = async function () {
   console.log("OPENING INBOX");
 
   // =========================================
-  // RESTORE TOP BAR
+  // STOP TYPING
   // =========================================
 
-  const topBar =
-    document.getElementById("topBar");
+  if (
+    session?.user &&
+    currentChatUser
+  ) {
 
-  if (topBar) {
-    topBar.style.display = "flex";
-    topBar.style.visibility = "visible";
-    topBar.style.opacity = "1";
-    topBar.style.pointerEvents = "auto";
-    topBar.style.zIndex = "9999999";
+    try {
+
+      await supabase
+        .from("typing_status")
+        .upsert({
+          user_id: session.user.id,
+          receiver_id: currentChatUser,
+          typing: false,
+          updated_at: new Date()
+        });
+
+    } catch (err) {
+
+      console.log(
+        "Typing cleanup error:",
+        err
+      );
+
+    }
+
   }
 
   // =========================================
-  // SHOW CHAT BUTTON AS ACTIVE
+  // REMOVE CHAT CHANNELS
   // =========================================
 
-  if (typeof setActiveTopButton === "function") {
-  setActiveTopButton("chatBtn");
-}
+  if (window.chatStatusChannel) {
 
-requestAnimationFrame(() => {
-  restoreTopBar();
+    supabase.removeChannel(
+      window.chatStatusChannel
+    );
 
-  requestAnimationFrame(() => {
-    restoreTopBar();
-  });
-});
+    window.chatStatusChannel = null;
+
+  }
+
+  if (window.typingChannel) {
+
+    supabase.removeChannel(
+      window.typingChannel
+    );
+
+    window.typingChannel = null;
+
+  }
+
+  if (window.messageSeenChannel) {
+
+    supabase.removeChannel(
+      window.messageSeenChannel
+    );
+
+    window.messageSeenChannel = null;
+
+  }
+
+  currentChatUser = null;
 
   // =========================================
-  // CLOSE OTHER FULL-SCREEN SCREENS
+  // HIDE CHAT
   // =========================================
 
   const chatScreen =
     document.getElementById("chatScreen");
 
   if (chatScreen) {
+
     chatScreen.style.display = "none";
+    chatScreen.style.visibility = "hidden";
+    chatScreen.style.opacity = "0";
+    chatScreen.style.pointerEvents = "none";
+
   }
+
+  // =========================================
+  // HIDE SEARCH
+  // =========================================
 
   const searchScreen =
     document.getElementById("searchScreen");
 
   if (searchScreen) {
+
     searchScreen.style.display = "none";
+    searchScreen.style.visibility = "hidden";
+    searchScreen.style.opacity = "0";
+    searchScreen.style.pointerEvents = "none";
+
   }
 
   // =========================================
-  // RESTORE APP
+  // KEEP HOME HIDDEN
   // =========================================
 
   const app =
     document.getElementById("app");
 
   if (app) {
-    app.style.display = "block";
-    app.style.visibility = "visible";
-    app.style.opacity = "1";
+
+    app.style.display = "none";
+    app.style.visibility = "hidden";
+    app.style.opacity = "0";
+    app.style.pointerEvents = "none";
+
   }
 
   // =========================================
@@ -28305,20 +28636,51 @@ requestAnimationFrame(() => {
     document.getElementById("inboxScreen");
 
   if (!inboxScreen) {
-    console.error("❌ inboxScreen not found");
+
+    console.error(
+      "❌ inboxScreen not found"
+    );
+
     return;
+
   }
 
   inboxScreen.style.display = "flex";
   inboxScreen.style.visibility = "visible";
   inboxScreen.style.opacity = "1";
   inboxScreen.style.pointerEvents = "auto";
+  inboxScreen.style.zIndex = "5000";
 
   // =========================================
   // LOCK BACKGROUND
   // =========================================
 
   lockBackground();
+
+  // =========================================
+  // CHAT BUTTON ACTIVE
+  // =========================================
+
+  if (
+    typeof setActiveTopButton ===
+    "function"
+  ) {
+
+    setActiveTopButton(
+      "chatBtn"
+    );
+
+  }
+
+  // =========================================
+  // RESTORE TOP BAR
+  // =========================================
+
+  requestAnimationFrame(() => {
+
+    restoreTopBar();
+
+  });
 
   // =========================================
   // GET INBOX LIST
@@ -28328,8 +28690,13 @@ requestAnimationFrame(() => {
     document.getElementById("inboxList");
 
   if (!inbox) {
-    console.error("❌ inboxList not found");
+
+    console.error(
+      "❌ inboxList not found"
+    );
+
     return;
+
   }
 
   inbox.innerHTML = "Loading...";
@@ -28338,51 +28705,70 @@ requestAnimationFrame(() => {
   // GET SESSION
   // =========================================
 
-  const { data: sessionData } =
-    await supabase.auth.getSession();
+  const {
+    data: sessionData
+  } = await supabase.auth.getSession();
 
   const userId =
     sessionData.session?.user?.id;
 
   if (!userId) {
-    inbox.innerHTML = "Please login first";
+
+    inbox.innerHTML =
+      "Please login first";
+
     return;
+
   }
 
   // =========================================
   // GET MESSAGES
   // =========================================
 
-  const { data: messages, error } =
-    await supabase
-      .from("messages")
-      .select("*")
-      .or(
-        `sender_id.eq.${userId},receiver_id.eq.${userId}`
-      )
-      .order("created_at", {
+  const {
+    data: messages,
+    error
+  } = await supabase
+    .from("messages")
+    .select("*")
+    .or(
+      `sender_id.eq.${userId},receiver_id.eq.${userId}`
+    )
+    .order(
+      "created_at",
+      {
         ascending: false
-      });
+      }
+    );
 
   if (error) {
 
-    console.error("Inbox error:", error);
+    console.error(
+      "Inbox error:",
+      error
+    );
 
     inbox.innerHTML =
       "Error loading chats";
 
     return;
+
   }
 
   // =========================================
   // NO CHATS
   // =========================================
 
-  if (!messages || messages.length === 0) {
+  if (
+    !messages ||
+    messages.length === 0
+  ) {
 
-    inbox.innerHTML = "No chats yet";
+    inbox.innerHTML =
+      "No chats yet";
 
     return;
+
   }
 
   // =========================================
@@ -28399,7 +28785,10 @@ requestAnimationFrame(() => {
         : msg.sender_id;
 
     if (!uniqueUsers[otherUser]) {
-      uniqueUsers[otherUser] = msg;
+
+      uniqueUsers[otherUser] =
+        msg;
+
     }
 
   });
@@ -28420,10 +28809,6 @@ requestAnimationFrame(() => {
         ? msg.receiver_id
         : msg.sender_id;
 
-    // =======================================
-    // UNREAD COUNT
-    // =======================================
-
     const unreadCount =
       messages.filter(m =>
         m.sender_id === otherUser &&
@@ -28431,20 +28816,16 @@ requestAnimationFrame(() => {
         !m.seen
       ).length;
 
-    // =======================================
-    // GET PROFILE
-    // =======================================
-
-    const { data: profile } =
-      await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", otherUser)
-        .maybeSingle();
-
-    // =======================================
-    // CREATE CHAT ROW
-    // =======================================
+    const {
+      data: profile
+    } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq(
+        "id",
+        otherUser
+      )
+      .maybeSingle();
 
     const div =
       document.createElement("div");
@@ -28457,33 +28838,45 @@ requestAnimationFrame(() => {
 
     div.ontouchstart = () => {
 
-      pressTimer = setTimeout(async () => {
+      pressTimer =
+        setTimeout(async () => {
 
-        const confirmDelete =
-          confirm("Delete this chat?");
+          const confirmDelete =
+            confirm(
+              "Delete this chat?"
+            );
 
-        if (!confirmDelete) return;
+          if (!confirmDelete)
+            return;
 
-        await supabase
-          .from("messages")
-          .delete()
-          .or(`
-            and(sender_id.eq.${userId},receiver_id.eq.${otherUser}),
-            and(sender_id.eq.${otherUser},receiver_id.eq.${userId})
-          `);
+          await supabase
+            .from("messages")
+            .delete()
+            .or(`
+              and(sender_id.eq.${userId},receiver_id.eq.${otherUser}),
+              and(sender_id.eq.${otherUser},receiver_id.eq.${userId})
+            `);
 
-        openInbox();
+          openInbox();
 
-      }, 700);
+        }, 700);
 
     };
 
     div.ontouchend = () => {
-      clearTimeout(pressTimer);
+
+      clearTimeout(
+        pressTimer
+      );
+
     };
 
     div.ontouchmove = () => {
-      clearTimeout(pressTimer);
+
+      clearTimeout(
+        pressTimer
+      );
+
     };
 
     // =======================================
@@ -28496,79 +28889,100 @@ requestAnimationFrame(() => {
       // FORWARD MULTIPLE
       // =====================================
 
-      if (window.forwardingMessages) {
+      if (
+        window.forwardingMessages
+      ) {
 
         for (
           const forwardedMsg
           of window.forwardingMessages
         ) {
 
-          const { error } =
-            await supabase
-              .from("messages")
-              .insert({
-                sender_id: userId,
-                receiver_id: otherUser,
-                content: forwardedMsg.content,
-                media_url: forwardedMsg.media_url,
-                media_type: forwardedMsg.media_type,
-                forwarded: true
-              });
+          const {
+            error
+          } = await supabase
+            .from("messages")
+            .insert({
+              sender_id: userId,
+              receiver_id: otherUser,
+              content:
+                forwardedMsg.content,
+              media_url:
+                forwardedMsg.media_url,
+              media_type:
+                forwardedMsg.media_type,
+              forwarded: true
+            });
 
           if (error) {
+
             alert(error.message);
             return;
+
           }
 
         }
 
-        window.forwardingMessages = null;
+        window.forwardingMessages =
+          null;
 
-        alert("Messages forwarded");
+        alert(
+          "Messages forwarded"
+        );
 
         openInbox();
 
         return;
+
       }
 
       // =====================================
       // FORWARD SINGLE
       // =====================================
 
-      if (window.forwardingMessage) {
+      if (
+        window.forwardingMessage
+      ) {
 
-        const { error } =
-          await supabase
-            .from("messages")
-            .insert({
-              sender_id: userId,
-              receiver_id: otherUser,
-              content: window.forwardingMessage.content,
-              media_url: window.forwardingMessage.media_url,
-              media_type: window.forwardingMessage.media_type,
-              forwarded: true
-            });
+        const {
+          error
+        } = await supabase
+          .from("messages")
+          .insert({
+            sender_id: userId,
+            receiver_id: otherUser,
+            content:
+              window.forwardingMessage.content,
+            media_url:
+              window.forwardingMessage.media_url,
+            media_type:
+              window.forwardingMessage.media_type,
+            forwarded: true
+          });
 
         if (error) {
+
           alert(error.message);
           return;
+
         }
 
-        window.forwardingMessage = null;
+        window.forwardingMessage =
+          null;
 
-        alert("Message forwarded");
+        alert(
+          "Message forwarded"
+        );
 
         openInbox();
 
         return;
+
       }
 
       // =====================================
       // NORMAL CHAT
       // =====================================
-      // DO NOT call closeInbox()
-      // DO NOT call goHome()
-      // DO NOT loadPosts()
 
       openChat(
         otherUser,
@@ -28591,7 +29005,7 @@ requestAnimationFrame(() => {
     `;
 
     // =======================================
-    // CHAT ROW HTML
+    // CHAT ROW
     // =======================================
 
     div.innerHTML = `
@@ -28607,11 +29021,7 @@ requestAnimationFrame(() => {
 
         onclick="
           event.stopPropagation();
-
-          openMedia(
-            this.src,
-            'image'
-          );
+          openMedia(this.src, 'image');
         "
 
         style="
@@ -28632,9 +29042,11 @@ requestAnimationFrame(() => {
           font-weight:bold;
           font-size:16px;
         ">
+
           ${escapeHtml(
             profile?.name || "User"
           )}
+
         </div>
 
         <div style="
@@ -28652,9 +29064,11 @@ requestAnimationFrame(() => {
             text-overflow:ellipsis;
             flex:1;
           ">
+
             ${escapeHtml(
               msg.content || ""
             )}
+
           </div>
 
           ${
@@ -28673,11 +29087,13 @@ requestAnimationFrame(() => {
                   font-weight:bold;
                   margin-left:10px;
                 ">
+
                   ${
                     unreadCount > 99
                       ? "99+"
                       : unreadCount
                   }
+
                 </div>
               `
               : ""
@@ -30631,176 +31047,6 @@ window.unlockBackground = function () {
 
 
 // =====================================================
-// CLOSE CHAT → BACK TO INBOX
-// =====================================================
-
-window.closeChat = async function () {
-
-  console.log("CLOSING CHAT");
-
-  // =========================================
-  // STOP TYPING
-  // =========================================
-
-  if (session?.user && currentChatUser) {
-
-    try {
-
-      await supabase
-        .from("typing_status")
-        .upsert({
-          user_id: session.user.id,
-          receiver_id: currentChatUser,
-          typing: false,
-          updated_at: new Date()
-        });
-
-    } catch (err) {
-      console.log("Typing cleanup error:", err);
-    }
-
-  }
-
-  // =========================================
-  // REMOVE CHAT CHANNELS
-  // =========================================
-
-  if (window.chatStatusChannel) {
-    supabase.removeChannel(window.chatStatusChannel);
-    window.chatStatusChannel = null;
-  }
-
-  if (window.typingChannel) {
-    supabase.removeChannel(window.typingChannel);
-    window.typingChannel = null;
-  }
-
-  if (window.messageSeenChannel) {
-    supabase.removeChannel(window.messageSeenChannel);
-    window.messageSeenChannel = null;
-  }
-
-  // =========================================
-  // HIDE CHAT COMPLETELY
-  // =========================================
-
-  const chatScreen =
-    document.getElementById("chatScreen");
-
-  if (chatScreen) {
-
-    chatScreen.style.display = "none";
-    chatScreen.style.visibility = "hidden";
-    chatScreen.style.opacity = "0";
-    chatScreen.style.pointerEvents = "none";
-
-  }
-
-  // =========================================
-  // SHOW INBOX
-  // =========================================
-
-  const inboxScreen =
-    document.getElementById("inboxScreen");
-
-  if (inboxScreen) {
-
-    inboxScreen.style.display = "flex";
-    inboxScreen.style.visibility = "visible";
-    inboxScreen.style.opacity = "1";
-    inboxScreen.style.pointerEvents = "auto";
-    inboxScreen.style.zIndex = "5000";
-
-  }
-
-  // =========================================
-  // KEEP APP HIDDEN
-  // =========================================
-
-  const app =
-    document.getElementById("app");
-
-  if (app) {
-
-    app.style.display = "none";
-
-  }
-
-  // =========================================
-  // SEARCH MUST STAY CLOSED
-  // =========================================
-
-  const searchScreen =
-    document.getElementById("searchScreen");
-
-  if (searchScreen) {
-
-    searchScreen.style.display = "none";
-    searchScreen.style.visibility = "hidden";
-    searchScreen.style.opacity = "0";
-    searchScreen.style.pointerEvents = "none";
-
-  }
-
-// =========================================
-// 🔥 FORCE RESTORE TOP BAR
-// =========================================
-
-requestAnimationFrame(() => {
-
-  if (typeof restoreTopBar === "function") {
-    restoreTopBar();
-  }
-
-  // setActiveTopButton may hide/change the bar,
-  // so restore it AGAIN after the button changes
-  requestAnimationFrame(() => {
-
-    if (typeof setActiveTopButton === "function") {
-      setActiveTopButton("chatBtn");
-    }
-
-    requestAnimationFrame(() => {
-
-      if (typeof restoreTopBar === "function") {
-        restoreTopBar();
-      }
-
-    });
-
-  });
-
-});
-
-  // =========================================
-  // KEEP BACKGROUND LOCKED
-  // =========================================
-
-  lockBackground();
-
-  // =========================================
-  // CHAT BUTTON ACTIVE
-  // =========================================
-
-  if (typeof setActiveTopButton === "function") {
-
-    setActiveTopButton("chatBtn");
-
-  }
-
-  // =========================================
-  // CLEAR CURRENT CHAT
-  // =========================================
-
-  currentChatUser = null;
-
-  console.log(
-    "CHAT CLOSED → INBOX → TOPBAR RESTORED"
-  );
-
-};
-
-// =====================================================
 // FORCE TOP BAR VISIBLE
 // =====================================================
 
@@ -30846,10 +31092,225 @@ window.restoreTopBar = function () {
     "important"
   );
 
-  // Force browser repaint
   void topBar.offsetHeight;
 
   console.log("TOP BAR RESTORED");
+
+};
+
+
+// =====================================================
+// HIDE TOP BAR
+// =====================================================
+
+window.hideTopBar = function () {
+
+  const topBar =
+    document.getElementById("topBar");
+
+  if (!topBar) return;
+
+  topBar.style.setProperty(
+    "display",
+    "none",
+    "important"
+  );
+
+  topBar.style.setProperty(
+    "visibility",
+    "hidden",
+    "important"
+  );
+
+  topBar.style.setProperty(
+    "opacity",
+    "0",
+    "important"
+  );
+
+  topBar.style.setProperty(
+    "pointer-events",
+    "none",
+    "important"
+  );
+
+};
+
+
+// =====================================================
+// CLOSE CHAT → BACK TO INBOX
+// =====================================================
+
+window.closeChat = async function () {
+
+  console.log("CLOSING CHAT");
+
+  // =========================================
+  // STOP TYPING
+  // =========================================
+
+  if (session?.user && currentChatUser) {
+
+    try {
+
+      await supabase
+        .from("typing_status")
+        .upsert({
+          user_id: session.user.id,
+          receiver_id: currentChatUser,
+          typing: false,
+          updated_at: new Date()
+        });
+
+    } catch (err) {
+
+      console.log(
+        "Typing cleanup error:",
+        err
+      );
+
+    }
+
+  }
+
+  // =========================================
+  // REMOVE CHAT CHANNELS
+  // =========================================
+
+  if (window.chatStatusChannel) {
+
+    supabase.removeChannel(
+      window.chatStatusChannel
+    );
+
+    window.chatStatusChannel = null;
+
+  }
+
+  if (window.typingChannel) {
+
+    supabase.removeChannel(
+      window.typingChannel
+    );
+
+    window.typingChannel = null;
+
+  }
+
+  if (window.messageSeenChannel) {
+
+    supabase.removeChannel(
+      window.messageSeenChannel
+    );
+
+    window.messageSeenChannel = null;
+
+  }
+
+  // =========================================
+  // HIDE CHAT
+  // =========================================
+
+  const chatScreen =
+    document.getElementById("chatScreen");
+
+  if (chatScreen) {
+
+    chatScreen.style.display = "none";
+    chatScreen.style.visibility = "hidden";
+    chatScreen.style.opacity = "0";
+    chatScreen.style.pointerEvents = "none";
+
+  }
+
+  // =========================================
+  // SHOW INBOX
+  // =========================================
+
+  const inboxScreen =
+    document.getElementById("inboxScreen");
+
+  if (inboxScreen) {
+
+    inboxScreen.style.display = "flex";
+    inboxScreen.style.visibility = "visible";
+    inboxScreen.style.opacity = "1";
+    inboxScreen.style.pointerEvents = "auto";
+    inboxScreen.style.zIndex = "5000";
+
+  }
+
+  // =========================================
+  // SEARCH MUST STAY CLOSED
+  // =========================================
+
+  const searchScreen =
+    document.getElementById("searchScreen");
+
+  if (searchScreen) {
+
+    searchScreen.style.display = "none";
+    searchScreen.style.visibility = "hidden";
+    searchScreen.style.opacity = "0";
+    searchScreen.style.pointerEvents = "none";
+
+  }
+
+  // =========================================
+  // APP / HOME STAYS HIDDEN
+  // =========================================
+
+  const app =
+    document.getElementById("app");
+
+  if (app) {
+
+    app.style.display = "none";
+    app.style.visibility = "hidden";
+    app.style.opacity = "0";
+    app.style.pointerEvents = "none";
+
+  }
+
+  // =========================================
+  // KEEP BACKGROUND LOCKED
+  // =========================================
+
+  lockBackground();
+
+  // =========================================
+  // CHAT BUTTON ACTIVE
+  // =========================================
+
+  if (
+    typeof setActiveTopButton ===
+    "function"
+  ) {
+
+    setActiveTopButton("chatBtn");
+
+  }
+
+  // =========================================
+  // CLEAR CURRENT CHAT
+  // =========================================
+
+  currentChatUser = null;
+
+  // =========================================
+  // RESTORE TOP BAR LAST
+  // =========================================
+
+  requestAnimationFrame(() => {
+
+    restoreTopBar();
+
+  });
+
+  console.log(
+    "CHAT CLOSED → INBOX → TOPBAR RESTORED"
+  );
+
 };
 
 
@@ -30878,7 +31339,7 @@ window.closeInbox = function () {
   }
 
   // =========================================
-  // MAKE SURE CHAT IS CLOSED
+  // HIDE CHAT
   // =========================================
 
   const chatScreen =
@@ -30888,12 +31349,13 @@ window.closeInbox = function () {
 
     chatScreen.style.display = "none";
     chatScreen.style.visibility = "hidden";
+    chatScreen.style.opacity = "0";
     chatScreen.style.pointerEvents = "none";
 
   }
 
   // =========================================
-  // SEARCH MUST NOT OPEN
+  // HIDE SEARCH
   // =========================================
 
   const searchScreen =
@@ -30903,12 +31365,13 @@ window.closeInbox = function () {
 
     searchScreen.style.display = "none";
     searchScreen.style.visibility = "hidden";
+    searchScreen.style.opacity = "0";
     searchScreen.style.pointerEvents = "none";
 
   }
 
   // =========================================
-  // RESTORE APP
+  // RESTORE HOME / APP
   // =========================================
 
   const app =
@@ -30927,24 +31390,16 @@ window.closeInbox = function () {
   // RESTORE TOP BAR
   // =========================================
 
-  const topBar =
-    document.getElementById("topBar");
-
-  if (topBar) {
-
-    topBar.style.display = "flex";
-    topBar.style.visibility = "visible";
-    topBar.style.opacity = "1";
-    topBar.style.pointerEvents = "auto";
-    topBar.style.zIndex = "9999999";
-
-  }
+  restoreTopBar();
 
   // =========================================
-  // RESTORE HOME BUTTON
+  // HOME BUTTON ACTIVE
   // =========================================
 
-  if (typeof setActiveTopButton === "function") {
+  if (
+    typeof setActiveTopButton ===
+    "function"
+  ) {
 
     setActiveTopButton("homeBtn");
 
@@ -30956,7 +31411,9 @@ window.closeInbox = function () {
 
   unlockBackground();
 
-  console.log("INBOX CLOSED → HOME RESTORED");
+  console.log(
+    "INBOX CLOSED → HOME RESTORED"
+  );
 
 };
 
