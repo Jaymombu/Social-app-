@@ -3636,7 +3636,7 @@ pointer-events:auto;
   style="
     display:none;
     position:fixed;
-    top:60px;
+    top:0;
     left:0;
     right:0;
     bottom:0;
@@ -7451,6 +7451,13 @@ console.log(
         panel
     );
 
+// ==========================================
+// HIDE TOP BAR INSIDE COMMENTS
+// ==========================================
+
+if (typeof hideTopBar === "function") {
+    hideTopBar();
+}
 
     panel.style.display = "flex";
 
@@ -20841,13 +20848,17 @@ window.openingReactionUsers = false;
             "notificationsScreen"
         );
 
-    if (notificationsScreen) {
-        notificationsScreen.style.display = "flex";
-    }
+if (notificationsScreen) {
+    notificationsScreen.style.display = "flex";
+}
 
-    await loadNotifications();
+if (typeof hideTopBar === "function") {
+    hideTopBar();
+}
 
-    return;
+await loadNotifications();
+
+return;
 }
   
   const stopTyping = async () => {
@@ -20926,9 +20937,15 @@ if (typeof expandedReplies !== "undefined") {
 }
 
 currentPostId = null;
+
+// ==========================================
+// RESTORE TOP BAR AFTER COMMENTS CLOSE
+// ==========================================
+
+if (typeof restoreTopBar === "function") {
+    restoreTopBar();
+  }
 }
-
-
 
 // =====================================================
 // PROFILE
@@ -20949,37 +20966,134 @@ let dragStartY = 0;
 
 let draggingPhoto = false;
 
+// =====================================================
+// PROFILE RETURN SOURCE
+// =====================================================
+
+window.profileOpenedFrom = null;
+
 window.closeProfile = async function () {
 
-    console.log("🔙 CLOSE PROFILE");
+  console.log("🔙 CLOSE PROFILE");
 
-    // ------------------------------------------------
-    // SAVE THE RETURN STATE BEFORE STARTAPP
-    // ------------------------------------------------
+  // ------------------------------------------------
+  // SAVE RETURN STATE
+  // ------------------------------------------------
 
-    const profileState = window._profileReturnState
-        ? { ...window._profileReturnState }
-        : null;
+  const profileState = window._profileReturnState
+    ? { ...window._profileReturnState }
+    : null;
 
-    const reactionState =
-        window.reactionProfileReturn
-            ? { ...window.reactionProfileReturn }
-            : null;
+  const reactionState =
+    window.reactionProfileReturn
+      ? { ...window.reactionProfileReturn }
+      : null;
 
-    console.log("📌 PROFILE STATE:", profileState);
-    console.log("📌 REACTION STATE:", reactionState
-      
-    );
-    
-    
-    // ------------------------------------------------
-// RETURN TO NOTIFICATIONS
-// ------------------------------------------------
+  console.log("📌 PROFILE STATE:", profileState);
+  console.log("📌 REACTION STATE:", reactionState);
 
-if (openedProfileFromNotification) {
+  // ------------------------------------------------
+  // RETURN TO SEARCH
+  // ------------------------------------------------
+
+  if (window.profileOpenedFrom === "search") {
+
+    console.log("🔍 PROFILE → RETURNING TO SEARCH");
+
+    // Hide profile
+    const profileScreen =
+      document.getElementById("profileScreen");
+
+    if (profileScreen) {
+      hideScreen("profileScreen");
+    }
+
+    // Make sure Home app stays hidden
+    const app =
+      document.getElementById("app");
+
+    if (app) {
+      app.style.display = "none";
+      app.style.visibility = "hidden";
+      app.style.opacity = "0";
+      app.style.pointerEvents = "none";
+    }
+
+    // Open search again
+    if (typeof showScreen === "function") {
+
+      showScreen("searchScreen");
+
+    } else {
+
+      const searchScreen =
+        document.getElementById("searchScreen");
+
+      if (searchScreen) {
+        searchScreen.style.display = "flex";
+      }
+
+    }
+
+    // Search becomes active
+    if (typeof setActiveTopButton === "function") {
+      setActiveTopButton("searchBtn");
+    }
+
+    // Search needs the top bar
+    if (typeof restoreTopBar === "function") {
+      restoreTopBar();
+    }
+
+    // Keep background locked while Search is open
+    if (typeof lockBackground === "function") {
+      lockBackground();
+    }
+
+    // Restore previous search text
+    const searchInput =
+      document.getElementById("userSearchInput");
+
+    const lastSearch =
+      localStorage.getItem("lastUserSearch") || "";
+
+    if (searchInput) {
+      searchInput.value = lastSearch;
+    }
+
+    // Re-render search results
+    try {
+
+      await window.searchUsers();
+
+    } catch (error) {
+
+      console.error(
+        "❌ SEARCH RESTORE FAILED:",
+        error
+      );
+
+    }
+
+    // Clear profile origin
+    window.profileOpenedFrom = null;
+    window._profileReturnState = null;
 
     console.log(
-        "🔔 RETURNING TO NOTIFICATIONS"
+      "✅ PROFILE → SEARCH RESTORED"
+    );
+
+    return;
+  }
+
+  // ------------------------------------------------
+  // RETURN TO NOTIFICATIONS
+  // ------------------------------------------------
+
+  if (openedProfileFromNotification) {
+
+    console.log(
+      "🔔 RETURNING TO NOTIFICATIONS"
     );
 
     openedProfileFromNotification = false;
@@ -20987,131 +21101,179 @@ if (openedProfileFromNotification) {
     document.body.style.overflow = "";
 
     const notificationsScreen =
-        document.getElementById("notificationsScreen");
+      document.getElementById("notificationsScreen");
 
     if (notificationsScreen) {
-        notificationsScreen.style.display = "flex";
+      notificationsScreen.style.display = "flex";
+    }
+
+    if (typeof restoreTopBar === "function") {
+      restoreTopBar();
+    }
+
+    if (typeof setActiveTopButton === "function") {
+      setActiveTopButton("notificationBtn");
     }
 
     await loadNotifications();
 
+    window.profileOpenedFrom = null;
+
     return;
-}
+  }
 
-    // ------------------------------------------------
-    // REACTION PROFILE RETURN
-    // ------------------------------------------------
+  // ------------------------------------------------
+  // REACTION PROFILE RETURN
+  // ------------------------------------------------
 
-console.log("fromReaction =", profileState?.fromReaction);
-console.log("postId =", reactionState?.postId);
-console.log("commentId =", reactionState?.commentId);
-console.log("emoji =", reactionState?.emoji);
+  console.log(
+    "fromReaction =",
+    profileState?.fromReaction
+  );
 
-    if (
-        profileState?.fromReaction &&
-        reactionState?.postId &&
-        reactionState?.commentId &&
-        reactionState?.emoji
-    ) {
+  console.log(
+    "postId =",
+    reactionState?.postId
+  );
 
-        console.log(
-            "💬 RETURNING TO EXACT COMMENT REACTION"
-        );
+  console.log(
+    "commentId =",
+    reactionState?.commentId
+  );
 
-        try {
+  console.log(
+    "emoji =",
+    reactionState?.emoji
+  );
 
-            // ------------------------------------------------
-            // RESTORE MAIN APP
-            // ------------------------------------------------
-
-            document.getElementById("app").innerHTML = window.savedAppHtml;
-
-attachEvents();
-            
-            console.log("AFTER STARTAPP:", window.reactionProfileReturn);
-
-window.reactionProfileReturn = {
-    postId: reactionState.postId,
-    commentId: reactionState.commentId,
-    emoji: reactionState.emoji,
-    users: reactionState.users
-};
-
-console.log("AFTER RESTORE:", window.reactionProfileReturn);
-
-            console.log(
-                "🏠 STARTAPP FINISHED"
-            );
-
-            // ------------------------------------------------
-            // RESTORE REACTION STATE AFTER STARTAPP
-            // ------------------------------------------------
-
-            window.reactionProfileReturn = {
-    postId: reactionState.postId,
-    commentId: reactionState.commentId,
-    emoji: reactionState.emoji,
-    users: reactionState.users
-};
-
-            console.log(
-                "📌 REACTION STATE RESTORED:",
-                window.reactionProfileReturn
-            );
-
-            // ------------------------------------------------
-            // RESTORE EXACT COMMENTS + REACTION USERS
-            // ------------------------------------------------
-
-            await window.restoreReactionUsers();
-
-            console.log(
-                "✅ COMMENT REACTION RETURN COMPLETE"
-            );
-
-        } catch (error) {
-
-            console.error(
-                "❌ PROFILE RETURN FAILED:",
-                error
-            );
-
-        }
-
-        return;
-    }
-
-    // ------------------------------------------------
-    // NORMAL PROFILE RETURN
-    // ------------------------------------------------
+  if (
+    profileState?.fromReaction &&
+    reactionState?.postId &&
+    reactionState?.commentId &&
+    reactionState?.emoji
+  ) {
 
     console.log(
-        "🏠 NORMAL PROFILE RETURN"
+      "💬 RETURNING TO EXACT COMMENT REACTION"
     );
 
-    document.body.style.overflow = "";
+    try {
 
-    await window.startApp();
+      document.getElementById("app").innerHTML =
+        window.savedAppHtml;
 
-    if (profileState?.scrollY != null) {
+      attachEvents();
 
-        requestAnimationFrame(() => {
+      window.reactionProfileReturn = {
+        postId: reactionState.postId,
+        commentId: reactionState.commentId,
+        emoji: reactionState.emoji,
+        users: reactionState.users
+      };
 
-            window.scrollTo(
-                0,
-                profileState.scrollY
-            );
+      await window.restoreReactionUsers();
 
-        });
+      console.log(
+        "✅ COMMENT REACTION RETURN COMPLETE"
+      );
+
+    } catch (error) {
+
+      console.error(
+        "❌ PROFILE RETURN FAILED:",
+        error
+      );
 
     }
 
-    window._profileReturnState = null;
+    if (typeof restoreTopBar === "function") {
+      restoreTopBar();
+    }
+
+    window.profileOpenedFrom = null;
+
+    return;
+  }
+
+  // ------------------------------------------------
+  // NORMAL PROFILE RETURN → HOME
+  // ------------------------------------------------
+
+  console.log(
+    "🏠 NORMAL PROFILE RETURN"
+  );
+
+  document.body.style.overflow = "";
+
+  if (typeof startApp === "function") {
+    await window.startApp();
+  }
+
+  if (typeof restoreTopBar === "function") {
+    restoreTopBar();
+  }
+
+  if (typeof setActiveTopButton === "function") {
+    setActiveTopButton("homeBtn");
+  }
+
+  if (profileState?.scrollY != null) {
+
+    requestAnimationFrame(() => {
+
+      window.scrollTo(
+        0,
+        profileState.scrollY
+      );
+
+    });
+
+  }
+
+  window.profileOpenedFrom = null;
+  window._profileReturnState = null;
+
 };
 
 window.openProfile = async (userId, name) => {
   
-  // =====================================================
+// =====================================================
+// REMEMBER WHERE PROFILE WAS OPENED FROM
+// =====================================================
+
+if (window.profileOpenedFrom !== "search") {
+
+  if (
+    document.getElementById("searchScreen")?.style.display === "flex"
+  ) {
+    window.profileOpenedFrom = "search";
+
+  } else if (
+    typeof openedProfileFromNotification !== "undefined" &&
+    openedProfileFromNotification
+  ) {
+    window.profileOpenedFrom = "notifications";
+
+  } else {
+    window.profileOpenedFrom = "home";
+  }
+
+}
+
+console.log(
+  "👤 PROFILE OPENED FROM:",
+  window.profileOpenedFrom
+);
+
+// =====================================================
+// HIDE TOP BAR INSIDE PROFILE
+// =====================================================
+
+if (typeof hideTopBar === "function") {
+  hideTopBar();
+}
+  
+// =====================================================
 // SAVE PROFILE RETURN STATE
 // DO NOT OVERWRITE AN EXISTING REACTION RETURN STATE
 // =====================================================
@@ -26706,13 +26868,18 @@ Clear All
   container.innerHTML +=
     recent.map(user => `
       <div
-        onclick="
-          closeSearch();
-          openProfile(
-       '${user.id}',
-       '${escapeHtml(user.name)}'
-         );
-        "
+onclick="
+  event.stopPropagation();
+  
+  window.profileOpenedFrom = 'search';
+
+  closeSearch();
+
+  openProfile(
+    ${JSON.stringify(user.id)},
+    ${JSON.stringify(user.name || "User")}
+  );
+"
         style="
           display:flex;
           align-items:center;
@@ -26873,19 +27040,28 @@ const results = [
   ...serverResults
 ];
 
-  document.getElementById("searchResults").innerHTML = results.map(user => `
+  document.getElementById("searchResults").innerHTML =
+  results.map(user => `
+
 <div
   onclick="
     saveRecentSearch(
-  '${user.id}',
-  '${escapeHtml(user.name)}',
-  '${user.avatar_url || user.avatar || ""}'
-   ${user.online},
-  '${user.last_seen || ""}',
-   ${user.verified}
-     );
+      ${JSON.stringify(user.id)},
+      ${JSON.stringify(user.name || "")},
+      ${JSON.stringify(user.avatar_url || user.avatar || "")},
+      ${user.online ? "true" : "false"},
+      ${JSON.stringify(user.last_seen || "")},
+      ${user.verified ? "true" : "false"}
+    );
+    
+    window.profileOpenedFrom = 'search';
+    
     closeSearch();
-    openProfile('${user.id}','${escapeHtml(user.name)}');
+    
+    openProfile(
+      ${JSON.stringify(user.id)},
+      ${JSON.stringify(user.name || "User")}
+    );
   "
   style="
     display:flex;
@@ -26898,101 +27074,134 @@ const results = [
 >
 
   <img
-    src="${user.avatar_url || user.avatar || 'https://via.placeholder.com/40'}"
+    src="${escapeHtml(
+      user.avatar_url ||
+      user.avatar ||
+      "https://via.placeholder.com/40"
+    )}"
     style="
       width:40px;
       height:40px;
       border-radius:50%;
       object-fit:cover;
+      flex-shrink:0;
     "
   >
-  
-  <div style="flex:1">
 
-<div style="
-display:flex;
-align-items:center;
-gap:4px;
-color:white;
-font-weight:bold;
-">
+  <div style="flex:1;min-width:0;">
 
-${escapeHtml(user.name).replace(
-  new RegExp(text, "ig"),
-  match => `<span style="color:#1d9bf0">${match}</span>`
-)}
+    <div style="
+      display:flex;
+      align-items:center;
+      gap:4px;
+      color:white;
+      font-weight:bold;
+    ">
 
-${user.verified ? `
-<span style="
-color:#1d9bf0;
-font-size:14px;
-">
-✔️
-</span>
-` : ""}
+      ${escapeHtml(user.name || "User").replace(
+        new RegExp(
+          text.replace(/[.*+?^${}()|[\]\\\\]/g, "\\\\$&"),
+          "ig"
+        ),
+        match =>
+          `<span style="color:#1d9bf0">${match}</span>`
+      )}
 
-</div>
+      ${
+        user.verified
+          ? `
+            <span style="
+              color:#1d9bf0;
+              font-size:14px;
+            ">
+              ✔️
+            </span>
+          `
+          : ""
+      }
 
-  <div
-    id="search-status-${user.id}"
-    style="color:#888;font-size:12px;"
-  >
+    </div>
+
+    <div
+      id="search-status-${user.id}"
+      style="
+        color:#888;
+        font-size:12px;
+      "
+    >
+      ${
+        user.online
+          ? "🟢 Online"
+          : user.last_seen
+            ? "Last seen " + formatLastSeen(user.last_seen)
+            : "Offline"
+      }
+    </div>
+
     ${
-      user.online
-        ? "🟢 Online"
-        : user.last_seen
-          ? "Last seen " + formatLastSeen(user.last_seen)
-          : "Offline"
+      user.searched_at
+        ? `
+          <div style="
+            color:#666;
+            font-size:11px;
+            margin-top:2px;
+          ">
+            ${formatSearchTime(user.searched_at)}
+          </div>
+        `
+        : ""
     }
+
   </div>
 
-  ${
-    user.searched_at
-      ? `
-      <div style="
-        color:#666;
-        font-size:11px;
-        margin-top:2px;
-      ">
-        ${formatSearchTime(user.searched_at)}
-      </div>
-      `
-      : ""
-  }
 
-</div>
-
-<button
-onclick="
-event.stopPropagation();
-togglePinnedSearch('${user.id}');
-"
-style="
-background:none;
-border:none;
-font-size:18px;
-cursor:pointer;
-margin-right:6px;
-">
-${isPinned(user.id) ? "📌" : "📍"}
-</button>
+  <!-- PIN -->
 
   <button
-       onclick="
-  event.stopPropagation();
+    type="button"
+    onclick="
+      event.stopPropagation();
+      togglePinnedSearch(
+        ${JSON.stringify(user.id)}
+      );
+    "
+    style="
+      background:none;
+      border:none;
+      font-size:18px;
+      cursor:pointer;
+      margin-right:6px;
+    "
+  >
+    ${isPinned(user.id) ? "📌" : "📍"}
+  </button>
 
-  saveRecentSearch(
-  '${user.id}',
-  '${escapeHtml(user.name)}',
-  '${user.avatar_url || user.avatar || ""}',
-   ${user.online},
-  '${user.last_seen || ""}',
-   ${user.verified}
-     );
 
-    closeSearch();
-    openChat('${user.id}','${escapeHtml(user.name)}');
-      "
+  <!-- MESSAGE -->
+
+  <button
+    type="button"
+    onclick="
+      event.stopPropagation();
+
+      saveRecentSearch(
+        ${JSON.stringify(user.id)},
+        ${JSON.stringify(user.name || "")},
+        ${JSON.stringify(user.avatar_url || user.avatar || "")},
+        ${user.online ? "true" : "false"},
+        ${JSON.stringify(user.last_seen || "")},
+        ${user.verified ? "true" : "false"}
+      );
+      
+      chatOpenedFrom = "search";
+      
+      closeSearch();
+      
+      openChat(
+        ${JSON.stringify(user.id)},
+        ${JSON.stringify(user.name || "User")}
+      );
+    "
     style="
       background:#0084ff;
       border:none;
@@ -27000,12 +27209,14 @@ ${isPinned(user.id) ? "📌" : "📍"}
       padding:8px 14px;
       border-radius:18px;
       cursor:pointer;
+      flex-shrink:0;
     "
   >
     Message
   </button>
 
 </div>
+
 `).join("");
 
 listenSearchStatus();
@@ -31436,6 +31647,33 @@ if (chatOpenedFrom === "notifications") {
     "notificationBtn"
   );
 
+} else if (chatOpenedFrom === "search") {
+
+  // =======================================
+  // CHAT CAME FROM SEARCH
+  // =======================================
+
+  console.log(
+    "↩️ CHAT → SEARCH"
+  );
+
+  if (!showScreen("searchScreen")) {
+
+    console.error(
+      "❌ Could not reopen searchScreen"
+    );
+
+    return;
+
+  }
+
+  setActiveTopButton(
+    "searchBtn"
+  );
+
+restoreTopBar();
+lockBackground();
+
 } else {
 
   // =======================================
@@ -32516,7 +32754,6 @@ let openedLikedPostFromNotification = false;
 window.notificationProfileCache =
   window.notificationProfileCache || new Map();
 
-
 window.loadNotificationProfiles = async function(notifications) {
 
   const senderIds = [
@@ -32558,7 +32795,6 @@ window.loadNotificationProfiles = async function(notifications) {
 
 };
 
-
 // =====================================================
 // LOAD NOTIFICATIONS
 // =====================================================
@@ -32587,16 +32823,14 @@ async function loadNotifications() {
       data || []
     );
 
-
   // Get latest sender profiles
   await loadNotificationProfiles(
     notificationCache
   );
 
-
-  // =====================================================
+// =====================================================
   // START FROM CACHE
-  // =====================================================
+// =====================================================
 
   let notifications =
     [...notificationCache].sort(
@@ -32609,10 +32843,9 @@ async function loadNotifications() {
         )
     );
 
-
-  // =====================================================
+// =====================================================
   // FILTER
-  // =====================================================
+// =====================================================
 
   if (notificationFilter !== "all") {
 
@@ -32636,10 +32869,9 @@ async function loadNotifications() {
 
   }
 
-
-  // =====================================================
+// =====================================================
   // SEARCH
-  // =====================================================
+// =====================================================
 
   const search =
     document
@@ -32688,9 +32920,9 @@ async function loadNotifications() {
 
   }
 
-  // =====================================================
+// =====================================================
   // RENDER
-  // =====================================================
+// =====================================================
 
   const list =
     document.getElementById(
@@ -32765,9 +32997,9 @@ if (screen) {
   hideScreen("notificationsScreen");
 }
 
-  // =====================================================
+// =====================================================
   // STORY REPLY
-  // =====================================================
+// =====================================================
 
   if (data.type === "story_reply") {
 
@@ -32780,10 +33012,8 @@ if (screen) {
       return;
     }
 
-
     window.__openingStory =
       data.story_id;
-
 
     window.openStoryById(
       data.story_id,
@@ -32792,7 +33022,6 @@ if (screen) {
         story_id: data.story_id
       }
     );
-
 
     setTimeout(() => {
 
@@ -32804,20 +33033,17 @@ if (screen) {
 
     }, 1000);
 
-
     return;
 
   }
 
-
-  // =====================================================
+// =====================================================
   // STORY REACTION
-  // =====================================================
+// =====================================================
 
   if (data.type === "story_reaction") {
 
     if (!data.story_id) return;
-
 
     window.openStoryById(
       data.story_id,
@@ -32827,15 +33053,13 @@ if (screen) {
       }
     );
 
-
     return;
 
   }
 
-
-  // =====================================================
+// =====================================================
   // LIKE
-  // =====================================================
+// =====================================================
 
   if (data.type === "like") {
 
@@ -32849,10 +33073,9 @@ if (screen) {
     return;
 }
 
-
-  // =====================================================
+// =====================================================
   // COMMENT
-  // =====================================================
+// =====================================================
 
   if (data.type === "comment") {
 
@@ -32930,9 +33153,9 @@ if (data.type === "comment_reaction") {
     return;
 }
 
-  // =====================================================
+// =====================================================
   // FOLLOW
-  // =====================================================
+// =====================================================
 
   if (data.type === "follow") {
 
@@ -32950,8 +33173,7 @@ if (data.type === "comment_reaction") {
     return;
 }
   
-  
-  // =====================================================
+// =====================================================
 // FOLLOW ACCEPTED
 // =====================================================
 
@@ -32972,10 +33194,9 @@ if (data.type === "follow_accept") {
   return;
 }
 
-
-  // =====================================================
+// =====================================================
   // MESSAGE
-  // =====================================================
+// =====================================================
 
 if (
   data.type === "message" ||
@@ -32997,9 +33218,9 @@ if (
 
 }
 
-  // =====================================================
+// =====================================================
   // PROFILE UPDATE
-  // =====================================================
+// =====================================================
 
   if (data.type === "profile_update") {
 
@@ -33007,7 +33228,6 @@ if (
 
       openedProfileFromNotification =
         true;
-
 
       openProfile(
         data.sender_id,
@@ -33019,7 +33239,6 @@ if (
     return;
 
   }
-
 
 // =====================================================
 // FOLLOW REQUEST
@@ -33034,11 +33253,8 @@ if (data.type === "follow_request") {
     return;
 }
 
-
   renderNotifications();
-
 };
-
 
 // =====================================================
 // DELETE ONE NOTIFICATION
@@ -33052,22 +33268,16 @@ async function(id) {
       "Delete this notification?"
     );
 
-
   if (!ok) return;
-
 
   await supabase
     .from("notifications")
     .delete()
     .eq("id", id);
 
-
   await loadNotifications();
-
   loadUnreadCount();
-
 };
-
 
 // =====================================================
 // CLEAR ALL NOTIFICATIONS
@@ -33078,15 +33288,12 @@ async function() {
 
   if (!currentUser) return;
 
-
   const ok =
     confirm(
       "Delete all notifications?"
     );
 
-
   if (!ok) return;
-
 
   const {
     error
@@ -33099,7 +33306,6 @@ async function() {
         currentUser.id
       );
 
-
   if (error) {
 
     console.log(error);
@@ -33107,7 +33313,6 @@ async function() {
     return;
 
   }
-
 
   notificationCache = [];
 
@@ -33119,7 +33324,6 @@ async function() {
 
 };
 
-
 // =====================================================
 // MARK ALL READ
 // =====================================================
@@ -33128,7 +33332,6 @@ window.markAllNotificationsRead =
 async function() {
 
   if (!currentUser) return;
-
 
   const {
     error
@@ -33147,7 +33350,6 @@ async function() {
         false
       );
 
-
   if (error) {
 
     console.log(error);
@@ -33156,13 +33358,11 @@ async function() {
 
   }
 
-
   notificationCache.forEach(
     n => {
       n.read = true;
     }
   );
-
 
   unreadCount = 0;
 
@@ -33173,7 +33373,6 @@ async function() {
   );
 
 };
-
 
 // =====================================================
 // FILTER
@@ -33252,13 +33451,13 @@ window.openNotifications = async function () {
 
   setActiveTopButton("notificationBtn");
 
-  // ===================================================
-  // KEEP TOP BAR VISIBLE
-  // ===================================================
+// ===================================================
+// HIDE TOP BAR INSIDE NOTIFICATIONS
+// ===================================================
 
-  if (typeof restoreTopBar === "function") {
-    restoreTopBar();
-  }
+if (typeof hideTopBar === "function") {
+  hideTopBar();
+}
 
   // ===================================================
   // LOCK BACKGROUND
@@ -33290,7 +33489,6 @@ window.openNotifications = async function () {
 window.openNotifications =
   openNotifications;
 
-
 // =====================================================
 // UNREAD BADGE
 // =====================================================
@@ -33298,7 +33496,6 @@ window.openNotifications =
 async function loadUnreadCount() {
 
   if (!currentUser) return;
-
 
   const {
     data,
@@ -33321,7 +33518,6 @@ async function loadUnreadCount() {
         false
       );
 
-
   if (error) {
 
     console.log(error);
@@ -33330,17 +33526,14 @@ async function loadUnreadCount() {
 
   }
 
-
   unreadCount =
     data
       ? data.length
       : 0;
 
-
   updateNotifBadge();
 
 }
-
 
 function updateNotifBadge() {
 
@@ -33349,9 +33542,7 @@ function updateNotifBadge() {
       "notificationBadge"
     );
 
-
   if (!badge) return;
-
 
   if (unreadCount > 0) {
 
@@ -33378,7 +33569,6 @@ function updateNotifBadge() {
 
 }
 
-
 // =====================================================
 // TOAST
 // =====================================================
@@ -33390,14 +33580,12 @@ function showToastNotification(n) {
       "div"
     );
 
-
   toast.innerText =
     "🔔 " +
     (
       n.message ||
       "New notification"
     );
-
 
   toast.style = `
     position:fixed;
@@ -33412,11 +33600,9 @@ function showToastNotification(n) {
     animation:fadeInOut 2s ease;
   `;
 
-
   document.body.appendChild(
     toast
   );
-
 
   setTimeout(
     () => toast.remove(),
@@ -33424,7 +33610,6 @@ function showToastNotification(n) {
   );
 
 }
-
 
 // =====================================================
 // MERGE NOTIFICATION
@@ -33436,7 +33621,6 @@ function mergeNotification(n) {
     notificationCache.findIndex(
       x => x.id === n.id
     );
-
 
   if (index >= 0) {
 
@@ -33454,7 +33638,6 @@ function mergeNotification(n) {
 
   }
 
-
   notificationCache.sort(
     (a, b) =>
       new Date(
@@ -33469,7 +33652,6 @@ function mergeNotification(n) {
 
 }
 
-
 // =====================================================
 // MERGE SERVER DATA
 // =====================================================
@@ -33482,7 +33664,6 @@ function mergeFromServer(
   const map =
     new Map();
 
-
   // Server data wins
   serverData.forEach(n => {
 
@@ -33494,7 +33675,6 @@ function mergeFromServer(
     );
 
   });
-
 
   // Keep local items not yet on server
   cache.forEach(n => {
@@ -33512,7 +33692,6 @@ function mergeFromServer(
 
   });
 
-
   return [
     ...map.values()
   ].sort(
@@ -33529,7 +33708,6 @@ function mergeFromServer(
 
 }
 
-
 // =====================================================
 // RENDER NOTIFICATIONS
 // =====================================================
@@ -33544,9 +33722,7 @@ function renderNotifications(
       "notificationsList"
     );
 
-
   if (!list) return;
-
 
   if (!notifications.length) {
 
@@ -33563,10 +33739,8 @@ function renderNotifications(
 
   }
 
-
   list.innerHTML =
     notifications.map(n => {
-
 
       const currentProfile =
         window
@@ -33575,12 +33749,10 @@ function renderNotifications(
             n.sender_id
           ) || {};
 
-
       const currentName =
         currentProfile.name ||
         currentProfile.username ||
         "User";
-
 
       const fallbackAvatar =
         "https://ui-avatars.com/api/?name=" +
@@ -33588,30 +33760,25 @@ function renderNotifications(
           currentName
         );
 
-
       const currentAvatar =
         currentProfile.avatar_url ||
         fallbackAvatar;
-
 
       const username =
         escapeHtml(
           currentName
         );
 
-
       const safeAvatar =
         escapeHtml(
           currentAvatar
         );
 
-
-      // =================================================
+// =================================================
       // ICON
-      // =================================================
+// =================================================
 
       let icon = "🔔";
-
 
       if (
         n.type ===
@@ -33619,13 +33786,11 @@ function renderNotifications(
       )
         icon = "💬";
 
-
       if (
         n.type ===
         "story_reaction"
       )
         icon = "😍";
-
 
       if (
         n.type ===
@@ -33633,13 +33798,11 @@ function renderNotifications(
       )
         icon = "❤️";
 
-
       if (
         n.type ===
         "comment"
       )
         icon = "📝";
-
 
       if (
         n.type ===
@@ -33647,13 +33810,11 @@ function renderNotifications(
       )
         icon = "❤️";
 
-
       if (
         n.type ===
         "comment_reply"
       )
         icon = "↩️";
-
 
       if (
         n.type ===
@@ -33661,13 +33822,11 @@ function renderNotifications(
       )
         icon = "😊";
 
-
       if (
         n.type ===
         "follow"
       )
         icon = "👤";
-
 
       if (
         n.type ===
@@ -33675,13 +33834,11 @@ function renderNotifications(
       )
         icon = "👥";
         
-        
         if (
           n.type ===
           "follow_accept"
       )
         icon = "✅";
-
 
       if (
         n.type ===
@@ -33689,13 +33846,11 @@ function renderNotifications(
       )
         icon = "📩";
 
-
       if (
         n.type ===
         "message_reaction"
       )
         icon = "😊";
-
 
       if (
         n.type ===
@@ -33703,27 +33858,23 @@ function renderNotifications(
       )
         icon = "✏️";
 
-
-      // =================================================
+// =================================================
       // TIME
-      // =================================================
-
+// =================================================
       const rawTime =
         n.last_time ||
         n.created_at ||
         new Date()
           .toISOString();
 
-
       const time =
         formatTime(
           rawTime
         );
 
-
-      // =================================================
+ // =================================================
       // MESSAGE
-      // =================================================
+ // =================================================
 
       let text =
         escapeHtml(
@@ -33733,10 +33884,9 @@ function renderNotifications(
           "<br>"
         );
 
-
-      // =================================================
+// =================================================
       // GROUPED NOTIFICATIONS
-      // =================================================
+// =================================================
 
       if (n.count > 1) {
 
@@ -33744,101 +33894,81 @@ function renderNotifications(
           n.type ===
           "like"
         ) {
-
           text =
             `${n.count} people liked your post`;
-
         }
 
         else if (
           n.type ===
           "comment"
         ) {
-
           text =
             `${n.count} people commented on your post`;
-
         }
 
         else if (
           n.type ===
           "comment_like"
         ) {
-
           text =
             `${n.count} people liked your comment`;
-
         }
 
         else if (
           n.type ===
           "comment_reply"
         ) {
-
           text =
             `${n.count} people replied to your comment`;
-
         }
 
         else if (
           n.type ===
           "comment_reaction"
         ) {
-
           text =
             `${n.count} people reacted to your comment`;
-
         }
 
         else if (
           n.type ===
           "message_reaction"
         ) {
-
           text =
             `${n.count} people reacted to your message`;
-
         }
 
         else if (
           n.type ===
           "follow"
         ) {
-
           text =
             `${n.count} people followed you`;
-
         }
 
         else if (
           n.type ===
           "story_reaction"
         ) {
-
           text =
             `${n.count} people reacted to your story`;
-
         }
 
         else {
-
           text =
             `${n.count} notifications`;
-
         }
 
       }
 
-
-      // =================================================
+// =================================================
       // READ / UNREAD
-      // =================================================
+// =================================================
 
 const bg =
   n.read === true
     ? "#151515"
     : "rgba(24,119,242,0.07)";
-
 
       return `
 
@@ -33870,7 +34000,6 @@ const bg =
             "
           />
 
-
           <div style="
             flex:1;
             min-width:0;
@@ -33888,7 +34017,6 @@ const bg =
               ${text}
 
             </div>
-
 
    <div style="
    
@@ -33923,7 +34051,6 @@ const bg =
 
 }
 
-
 // =====================================================
 // FORMAT TIME
 // =====================================================
@@ -33940,14 +34067,11 @@ function formatTime(dateString) {
       ) / 60000
     );
 
-
   if (mins < 1)
     return "now";
 
-
   if (mins < 60)
     return mins + "m";
-
 
   if (mins < 1440)
     return (
@@ -33955,7 +34079,6 @@ function formatTime(dateString) {
         mins / 60
       ) + "h"
     );
-
 
   return (
     Math.floor(
@@ -33975,7 +34098,6 @@ function getNotifKey(n) {
 
 }
 
-
 if (!window.notificationsSubscription) {
 
   window.notificationsSubscription =
@@ -33993,10 +34115,8 @@ if (!window.notificationsSubscription) {
         },
 
         async payload => {
-
           const n =
             payload.new;
-
 
           if (
             !currentUser ||
@@ -34008,10 +34128,8 @@ if (!window.notificationsSubscription) {
 
           }
 
-
           // Load latest sender profile
           if (n.sender_id) {
-
             const {
               data: profile
             } =
@@ -34029,7 +34147,6 @@ if (!window.notificationsSubscription) {
                 )
                 .maybeSingle();
 
-
             if (profile) {
 
               window
@@ -34043,10 +34160,8 @@ if (!window.notificationsSubscription) {
 
           }
 
-
           const key =
             getNotifKey(n);
-
 
           if (
             seenNotifications.has(
@@ -34058,11 +34173,9 @@ if (!window.notificationsSubscription) {
 
           }
 
-
           seenNotifications.add(
             key
           );
-
 
           // Sync other tab
           if (
@@ -34075,19 +34188,16 @@ if (!window.notificationsSubscription) {
 
           }
 
-
           mergeNotification(n);
 
           loadUnreadCount();
 
           showToastNotification(n);
 
-
           const screen =
             document.getElementById(
               "notificationsScreen"
             );
-
 
           if (
             screen &&
@@ -34240,7 +34350,6 @@ function renderReplies(data) {
 
 }
 
-
 async function loadMoreReplies(
   storyId
 ) {
@@ -34285,14 +34394,12 @@ async function loadMoreReplies(
 
   }
 
-
   replyOffset += 20;
 
 
   appendReplies(data);
 
 }
-
 
 function appendReplies(data) {
 
@@ -34301,9 +34408,7 @@ function appendReplies(data) {
       "storyReplies"
     );
 
-
   if (!box) return;
-
 
   const html =
     data.map(r => `
