@@ -3660,15 +3660,7 @@ pointer-events:auto;
     display:flex;
     align-items:center;
   ">
-<button onclick="
-  document.getElementById('notificationsScreen').style.display='none';
-  if (typeof restoreTopBar === 'function') {
-    restoreTopBar();
-  }
-  if (typeof setActiveTopButton === 'function') {
-    setActiveTopButton('homeBtn');
-  }
-">
+<button onclick="goHome(false)">
   ←
 </button>
 
@@ -6261,6 +6253,61 @@ if (
 
   loadPosts();
 }
+
+// =====================================================
+// 🆕 NEW POSTS → HOME BADGE
+// =====================================================
+
+window.setupNewPostListener = function () {
+
+  // Prevent duplicate listeners
+  if (window.newPostChannel) {
+
+    supabase.removeChannel(
+      window.newPostChannel
+    );
+
+    window.newPostChannel = null;
+
+  }
+
+  window.newPostChannel =
+    supabase
+      .channel("home-new-posts")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "posts"
+        },
+        payload => {
+
+          console.log(
+            "🆕 NEW POST DETECTED:",
+            payload.new
+          );
+
+          // Don't count your own post
+          if (
+            session?.user?.id &&
+            payload.new?.user_id ===
+            session.user.id
+          ) {
+            return;
+          }
+
+          // Increase badge
+          window.homeNewPostCount =
+            (window.homeNewPostCount || 0) + 1;
+
+          updateHomePostBadge();
+
+        }
+      )
+      .subscribe();
+
+};
 
 // ========================
 // AUTO SNAP
@@ -26452,28 +26499,111 @@ if (commentDeleteBtn) {
 
 } // END attachEvents
 
+// =====================================================
+// OPEN SEARCH
+// =====================================================
 
 window.openSearch = function () {
+  
+saveHomeScroll();
+
+  console.log("🔍 OPEN SEARCH");
+
+  // ===================================================
+  // CLOSE ALL COMPETING TOP-LEVEL SCREENS
+  // ===================================================
+
+  [
+    "notificationsScreen",
+    "inboxScreen",
+    "chatScreen",
+    "storyViewer",
+    "mediaViewer",
+    "commentsScreen"
+  ].forEach(id => {
+
+    if (document.getElementById(id)) {
+      hideScreen(id);
+    }
+
+  });
+
+  // ===================================================
+  // OPEN SEARCH
+  // ===================================================
+
+  if (!showScreen("searchScreen")) {
+    console.error("❌ Could not open searchScreen");
+    return;
+  }
+
+  // ===================================================
+  // SELECT SEARCH BUTTON
+  // ===================================================
 
   setActiveTopButton("searchBtn");
 
-  document.getElementById("searchScreen").style.display = "flex";
+  // ===================================================
+  // KEEP TOP BAR VISIBLE
+  // ===================================================
 
-  const input = document.getElementById("userSearchInput");
+  if (typeof restoreTopBar === "function") {
+    restoreTopBar();
+  }
 
-  const lastSearch =
-    localStorage.getItem("lastUserSearch") || "";
+  // ===================================================
+  // LOCK BACKGROUND
+  // ===================================================
 
-  input.value = lastSearch;
-  input.focus();
+  if (typeof lockBackground === "function") {
+    lockBackground();
+  }
 
-  // Always refresh the search screen
-  searchUsers();
+  // ===================================================
+  // FOCUS SEARCH
+  // ===================================================
+
+  setTimeout(() => {
+
+    const input =
+      document.getElementById("userSearchInput");
+
+    if (input) {
+      input.focus();
+    }
+
+  }, 100);
 
 };
 
+// =====================================================
+// CLOSE SEARCH
+// =====================================================
+
 window.closeSearch = function () {
-  document.getElementById("searchScreen").style.display = "none";
+
+  console.log("🔍 CLOSE SEARCH");
+
+  hideScreen("searchScreen");
+
+  // Clear search
+  const input =
+    document.getElementById("userSearchInput");
+
+  if (input) {
+    input.value = "";
+  }
+
+  const results =
+    document.getElementById("searchResults");
+
+  if (results) {
+    results.innerHTML = "";
+  }
+
+  // Return home
+  goHome(false);
+
 };
 
 window.saveRecentSearch = function (
@@ -27044,6 +27174,37 @@ function formatSearchTime(date) {
 }
 
 // =====================================================
+// HOME NEW POST COUNT
+// =====================================================
+
+window.homeNewPostCount = 0;
+
+window.updateHomePostBadge = function () {
+
+  const badge =
+    document.getElementById("homePostBadge");
+
+  if (!badge) return;
+
+  if (window.homeNewPostCount > 0) {
+
+    badge.textContent =
+      window.homeNewPostCount > 99
+        ? "99+"
+        : String(window.homeNewPostCount);
+
+    badge.style.display = "flex";
+
+  } else {
+
+    badge.textContent = "0";
+    badge.style.display = "none";
+
+  }
+
+};
+
+// =====================================================
 // CREATE TOP BAR OUTSIDE APP
 // =====================================================
 
@@ -27069,9 +27230,10 @@ if (!topBar) {
 
     <button
       id="homeBtn"
-      onclick="goHome()"
+      onclick="goHome(true)"
     >
       🏠
+     <span id="homePostBadge">0</span>
     </button>
 
     <button
@@ -27154,11 +27316,13 @@ topBar.querySelectorAll("button").forEach(button => {
 // =====================================================
 
 [
+  "homePostBadge",
   "chatBadge",
   "notificationBadge"
 ].forEach(id => {
 
-  const badge = document.getElementById(id);
+  const badge =
+    document.getElementById(id);
 
   if (!badge) return;
 
@@ -27177,9 +27341,12 @@ topBar.querySelectorAll("button").forEach(button => {
     justify-content:center;
     padding:0 3px;
     box-sizing:border-box;
+    z-index:10;
   `;
 
 });
+
+updateHomePostBadge();
 
 // =====================================================
 // APPLICATION STARTUP
@@ -27228,8 +27395,6 @@ window.startApp = async function () {
   app.innerHTML = `
     <div style="padding:70px 10px 10px;">
     
-
-
       <div id="tabs" style="
         display:flex;
         justify-content:space-around;
@@ -27999,6 +28164,22 @@ box-shadow:0 4px 20px rgba(0,0,0,.4);
     console.log("adjustStoryBar error:", err);
   }
 
+// =====================================================
+// NEW POST LISTENER
+// =====================================================
+
+try {
+
+  setupNewPostListener();
+
+} catch (err) {
+
+  console.log(
+    "❌ New post listener error:",
+    err
+  );
+
+}
 
   // ===================================================
   // ONLINE / PUSH / BADGES
@@ -28137,7 +28318,7 @@ let selectedMessages = [];
 let selectionMode = false;
 
 let currentChatUser = null;
-
+let chatOpenedFrom = null;
 
 // =====================================================
 // OPEN CHAT
@@ -28147,7 +28328,7 @@ window.openChat = async function (
   userId,
   name
 ) {
-
+  
   console.log(
     "OPENING CHAT:",
     userId
@@ -28233,74 +28414,63 @@ window.openChat = async function (
 
   currentChatUser = userId;
 
-  // =========================================
-  // GET ELEMENTS
-  // =========================================
+// =========================================
+// SCREEN NAVIGATION
+// =========================================
 
-  const app =
-    document.getElementById("app");
+// Hide all competing screens
 
-  const inboxScreen =
-    document.getElementById("inboxScreen");
+[
+  "inboxScreen",
+  "searchScreen",
+  "notificationsScreen",
+  "storyViewer",
+  "mediaViewer",
+  "commentsScreen"
+].forEach(id => {
 
-  const searchScreen =
-    document.getElementById("searchScreen");
-
-  const chatScreen =
-    document.getElementById("chatScreen");
-
-  // =========================================
-  // HIDE HOME
-  // =========================================
-
-  if (app) {
-
-    app.style.display = "none";
-    app.style.visibility = "hidden";
-    app.style.opacity = "0";
-    app.style.pointerEvents = "none";
-
+  if (document.getElementById(id)) {
+    hideScreen(id);
   }
 
-  // =========================================
-  // HIDE INBOX
-  // =========================================
+});
 
-  if (inboxScreen) {
+// =========================================
+// HIDE HOME
+// =========================================
 
-    inboxScreen.style.display = "none";
-    inboxScreen.style.visibility = "hidden";
-    inboxScreen.style.opacity = "0";
-    inboxScreen.style.pointerEvents = "none";
+const app =
+  document.getElementById("app");
 
-  }
+if (app) {
 
-  // =========================================
-  // HIDE SEARCH
-  // =========================================
+  app.style.display = "none";
+  app.style.visibility = "hidden";
+  app.style.opacity = "0";
+  app.style.pointerEvents = "none";
 
-  if (searchScreen) {
+}
 
-    searchScreen.style.display = "none";
-    searchScreen.style.visibility = "hidden";
-    searchScreen.style.opacity = "0";
-    searchScreen.style.pointerEvents = "none";
+// =========================================
+// SHOW CHAT
+// =========================================
 
-  }
+if (!showScreen("chatScreen")) {
 
-  // =========================================
-  // SHOW CHAT
-  // =========================================
+  console.error(
+    "❌ Could not open chatScreen"
+  );
 
-  if (chatScreen) {
+  return;
 
-    chatScreen.style.display = "flex";
-    chatScreen.style.visibility = "visible";
-    chatScreen.style.opacity = "1";
-    chatScreen.style.pointerEvents = "auto";
-    chatScreen.style.zIndex = "5000";
+}
 
-  }
+const chatScreen =
+  document.getElementById("chatScreen");
+
+if (chatScreen) {
+  chatScreen.style.zIndex = "5000";
+}
 
   // =========================================
   // HIDE TOP BAR
@@ -28510,6 +28680,8 @@ async function loadUnreadMessages() {
 // =====================================================
 
 window.openInbox = async function () {
+  
+  saveHomeScroll();
 
   console.log("OPENING INBOX");
 
@@ -28580,53 +28752,40 @@ window.openInbox = async function () {
 
   currentChatUser = null;
 
-  // =========================================
-  // HIDE CHAT
-  // =========================================
+// =========================================
+// CLOSE COMPETING SCREENS
+// =========================================
 
-  const chatScreen =
-    document.getElementById("chatScreen");
+[
+  "chatScreen",
+  "searchScreen",
+  "notificationsScreen",
+  "storyViewer",
+  "mediaViewer",
+  "commentsScreen"
+].forEach(id => {
 
-  if (chatScreen) {
-
-    chatScreen.style.display = "none";
-    chatScreen.style.visibility = "hidden";
-    chatScreen.style.opacity = "0";
-    chatScreen.style.pointerEvents = "none";
-
+  if (document.getElementById(id)) {
+    hideScreen(id);
   }
 
-  // =========================================
-  // HIDE SEARCH
-  // =========================================
+});
 
-  const searchScreen =
-    document.getElementById("searchScreen");
+// =========================================
+// KEEP MAIN APP HIDDEN
+// =========================================
 
-  if (searchScreen) {
+const app =
+  document.getElementById("app");
 
-    searchScreen.style.display = "none";
-    searchScreen.style.visibility = "hidden";
-    searchScreen.style.opacity = "0";
-    searchScreen.style.pointerEvents = "none";
+if (app) {
 
-  }
+  app.style.display = "none";
+  app.style.visibility = "hidden";
+  app.style.opacity = "0";
+  app.style.pointerEvents = "none";
 
-  // =========================================
-  // KEEP HOME HIDDEN
-  // =========================================
-
-  const app =
-    document.getElementById("app");
-
-  if (app) {
-
-    app.style.display = "none";
-    app.style.visibility = "hidden";
-    app.style.opacity = "0";
-    app.style.pointerEvents = "none";
-
-  }
+}
 
   // =========================================
   // SHOW INBOX
@@ -28645,11 +28804,12 @@ window.openInbox = async function () {
 
   }
 
-  inboxScreen.style.display = "flex";
-  inboxScreen.style.visibility = "visible";
-  inboxScreen.style.opacity = "1";
-  inboxScreen.style.pointerEvents = "auto";
-  inboxScreen.style.zIndex = "5000";
+if (!showScreen("inboxScreen")) {
+  console.error("❌ Could not open inboxScreen");
+  return;
+}
+
+inboxScreen.style.zIndex = "5000";
 
   // =========================================
   // LOCK BACKGROUND
@@ -28980,14 +29140,16 @@ window.openInbox = async function () {
 
       }
 
-      // =====================================
-      // NORMAL CHAT
-      // =====================================
+// =====================================
+ // NORMAL CHAT
+// =====================================
 
-      openChat(
-        otherUser,
-        profile?.name || "User"
-      );
+chatOpenedFrom = "inbox";
+
+openChat(
+  otherUser,
+  profile?.name || "User"
+);
 
     };
 
@@ -31207,70 +31369,105 @@ window.closeChat = async function () {
 
   }
 
-  // =========================================
-  // HIDE CHAT
-  // =========================================
+// =========================================
+// CLOSE CHAT
+// =========================================
 
-  const chatScreen =
-    document.getElementById("chatScreen");
+hideScreen("chatScreen");
 
-  if (chatScreen) {
+// =========================================
+// CLOSE COMPETING SCREENS
+// =========================================
 
-    chatScreen.style.display = "none";
-    chatScreen.style.visibility = "hidden";
-    chatScreen.style.opacity = "0";
-    chatScreen.style.pointerEvents = "none";
+[
+  "searchScreen",
+  "storyViewer",
+  "mediaViewer",
+  "commentsScreen"
+].forEach(id => {
+
+  if (document.getElementById(id)) {
+    hideScreen(id);
+  }
+
+});
+
+// =========================================
+// KEEP HOME HIDDEN
+// =========================================
+
+const app =
+  document.getElementById("app");
+
+if (app) {
+
+  app.style.display = "none";
+  app.style.visibility = "hidden";
+  app.style.opacity = "0";
+  app.style.pointerEvents = "none";
+
+}
+
+// =========================================
+// RETURN TO PREVIOUS SCREEN
+// =========================================
+
+if (chatOpenedFrom === "notifications") {
+
+  // =======================================
+  // CHAT CAME FROM NOTIFICATIONS
+  // =======================================
+
+  console.log(
+    "↩️ CHAT → NOTIFICATIONS"
+  );
+
+  if (!showScreen("notificationsScreen")) {
+
+    console.error(
+      "❌ Could not reopen notificationsScreen"
+    );
+
+    return;
 
   }
 
-  // =========================================
-  // SHOW INBOX
-  // =========================================
+  setActiveTopButton(
+    "notificationBtn"
+  );
+
+} else {
+
+  // =======================================
+  // NORMAL CHAT → INBOX
+  // =======================================
+
+  console.log(
+    "↩️ CHAT → INBOX"
+  );
+
+  if (!showScreen("inboxScreen")) {
+
+    console.error(
+      "❌ Could not open inboxScreen"
+    );
+
+    return;
+
+  }
 
   const inboxScreen =
     document.getElementById("inboxScreen");
 
   if (inboxScreen) {
-
-    inboxScreen.style.display = "flex";
-    inboxScreen.style.visibility = "visible";
-    inboxScreen.style.opacity = "1";
-    inboxScreen.style.pointerEvents = "auto";
     inboxScreen.style.zIndex = "5000";
-
   }
 
-  // =========================================
-  // SEARCH MUST STAY CLOSED
-  // =========================================
+  setActiveTopButton(
+    "chatBtn"
+  );
 
-  const searchScreen =
-    document.getElementById("searchScreen");
-
-  if (searchScreen) {
-
-    searchScreen.style.display = "none";
-    searchScreen.style.visibility = "hidden";
-    searchScreen.style.opacity = "0";
-    searchScreen.style.pointerEvents = "none";
-
-  }
-
-  // =========================================
-  // APP / HOME STAYS HIDDEN
-  // =========================================
-
-  const app =
-    document.getElementById("app");
-
-  if (app) {
-
-    app.style.display = "none";
-    app.style.visibility = "hidden";
-    app.style.opacity = "0";
-    app.style.pointerEvents = "none";
-
-  }
+}
 
   // =========================================
   // KEEP BACKGROUND LOCKED
@@ -31279,23 +31476,18 @@ window.closeChat = async function () {
   lockBackground();
 
   // =========================================
-  // CHAT BUTTON ACTIVE
+  // REMEMBER ORIGIN FOR LOGGING
   // =========================================
 
-  if (
-    typeof setActiveTopButton ===
-    "function"
-  ) {
-
-    setActiveTopButton("chatBtn");
-
-  }
+  const previousChatOrigin =
+    chatOpenedFrom;
 
   // =========================================
   // CLEAR CURRENT CHAT
   // =========================================
 
   currentChatUser = null;
+  chatOpenedFrom = null;
 
   // =========================================
   // RESTORE TOP BAR LAST
@@ -31308,11 +31500,11 @@ window.closeChat = async function () {
   });
 
   console.log(
-    "CHAT CLOSED → INBOX → TOPBAR RESTORED"
+    "CHAT CLOSED → RETURNED FROM:",
+    previousChatOrigin
   );
-
+  
 };
-
 
 // =====================================================
 // CLOSE INBOX → BACK TO HOME
@@ -31323,55 +31515,27 @@ window.closeInbox = function () {
   console.log("CLOSING INBOX");
 
   // =========================================
-  // HIDE INBOX
+  // CLOSE ALL SECONDARY SCREENS
   // =========================================
 
-  const inboxScreen =
-    document.getElementById("inboxScreen");
+  [
+    "inboxScreen",
+    "chatScreen",
+    "searchScreen",
+    "notificationsScreen",
+    "storyViewer",
+    "mediaViewer",
+    "commentsScreen"
+  ].forEach(id => {
 
-  if (inboxScreen) {
+    if (document.getElementById(id)) {
+      hideScreen(id);
+    }
 
-    inboxScreen.style.display = "none";
-    inboxScreen.style.visibility = "hidden";
-    inboxScreen.style.opacity = "0";
-    inboxScreen.style.pointerEvents = "none";
-
-  }
-
-  // =========================================
-  // HIDE CHAT
-  // =========================================
-
-  const chatScreen =
-    document.getElementById("chatScreen");
-
-  if (chatScreen) {
-
-    chatScreen.style.display = "none";
-    chatScreen.style.visibility = "hidden";
-    chatScreen.style.opacity = "0";
-    chatScreen.style.pointerEvents = "none";
-
-  }
+  });
 
   // =========================================
-  // HIDE SEARCH
-  // =========================================
-
-  const searchScreen =
-    document.getElementById("searchScreen");
-
-  if (searchScreen) {
-
-    searchScreen.style.display = "none";
-    searchScreen.style.visibility = "hidden";
-    searchScreen.style.opacity = "0";
-    searchScreen.style.pointerEvents = "none";
-
-  }
-
-  // =========================================
-  // RESTORE HOME / APP
+  // SHOW HOME / APP
   // =========================================
 
   const app =
@@ -31390,33 +31554,39 @@ window.closeInbox = function () {
   // RESTORE TOP BAR
   // =========================================
 
-  restoreTopBar();
+  if (typeof restoreTopBar === "function") {
+    restoreTopBar();
+  }
 
-  // =========================================
-  // HOME BUTTON ACTIVE
-  // =========================================
-
-  if (
-    typeof setActiveTopButton ===
-    "function"
-  ) {
-
+  if (typeof setActiveTopButton === "function") {
     setActiveTopButton("homeBtn");
-
   }
 
   // =========================================
   // UNLOCK BACKGROUND
   // =========================================
 
-  unlockBackground();
+  if (typeof unlockBackground === "function") {
+    unlockBackground();
+  }
 
   console.log(
-    "INBOX CLOSED → HOME RESTORED"
+    "↩️ INBOX → HOME WITHOUT RELOADING"
   );
 
-};
+  // =========================================
+  // RESTORE EXACT HOME POSITION
+  // =========================================
 
+  if (typeof restoreHomeScroll === "function") {
+
+    requestAnimationFrame(() => {
+      restoreHomeScroll();
+    });
+
+  }
+
+};
 
 window.toggleChatSearch = function () {
 
@@ -32478,7 +32648,6 @@ async function loadNotifications() {
       ?.toLowerCase()
       .trim() || "";
 
-
   if (search) {
 
     notifications =
@@ -32489,21 +32658,17 @@ async function loadNotifications() {
             n.sender_id
           ) || {};
 
-
         const currentName =
           profile.name ||
           profile.username ||
           "";
 
-
         const currentUsername =
           profile.username ||
           "";
 
-
         const message =
           n.message || "";
-
 
         return (
           currentName
@@ -32523,7 +32688,6 @@ async function loadNotifications() {
 
   }
 
-
   // =====================================================
   // RENDER
   // =====================================================
@@ -32532,7 +32696,6 @@ async function loadNotifications() {
     document.getElementById(
       "notificationsList"
     );
-
 
   if (!list) {
 
@@ -32544,13 +32707,11 @@ async function loadNotifications() {
 
   }
 
-
   renderNotifications(
     notifications
   );
 
 }
-
 
 // =====================================================
 // OPEN NOTIFICATION
@@ -32563,7 +32724,6 @@ async function(id) {
     "notificationBtn"
   );
 
-
   const {
     data,
     error
@@ -32574,9 +32734,7 @@ async function(id) {
       .eq("id", id)
       .single();
 
-
   if (error || !data) return;
-
 
   // Mark as read
   await supabase
@@ -32586,32 +32744,26 @@ async function(id) {
     })
     .eq("id", id);
 
-
   // Update cache
   const item =
     notificationCache.find(
       n => n.id === id
     );
 
-
   if (item) {
     item.read = true;
   }
 
-
   loadUnreadCount();
 
+const screen =
+  document.getElementById(
+    "notificationsScreen"
+  );
 
-  const screen =
-    document.getElementById(
-      "notificationsScreen"
-    );
-
-
-  if (screen) {
-    screen.style.display = "none";
-  }
-
+if (screen) {
+  hideScreen("notificationsScreen");
+}
 
   // =====================================================
   // STORY REPLY
@@ -32825,24 +32977,25 @@ if (data.type === "follow_accept") {
   // MESSAGE
   // =====================================================
 
-  if (
-    data.type === "message" ||
-    data.type === "message_reaction"
-  ) {
+if (
+  data.type === "message" ||
+  data.type === "message_reaction"
+) {
 
-    if (data.sender_id) {
+  if (data.sender_id) {
 
-      openChat(
-        data.sender_id,
-        data.username || "User"
-      );
+    chatOpenedFrom = "notifications";
 
-    }
-
-    return;
+    openChat(
+      data.sender_id,
+      data.username || "User"
+    );
 
   }
 
+  return;
+
+}
 
   // =====================================================
   // PROFILE UPDATE
@@ -33053,29 +33206,86 @@ function(button, type) {
 
 };
 
-
 // =====================================================
 // OPEN NOTIFICATIONS
 // =====================================================
 
-async function openNotifications() {
+window.openNotifications = async function () {
+  
+  saveHomeScroll();
 
-  const screen =
-    document.getElementById(
-      "notificationsScreen"
-    );
+  console.log("🔔 OPEN NOTIFICATIONS");
 
+  // ===================================================
+  // CLOSE COMPETING TOP-LEVEL SCREENS
+  // ===================================================
 
-  if (screen) {
-    screen.style.display =
-      "flex";
+  [
+    "searchScreen",
+    "inboxScreen",
+    "chatScreen",
+    "storyViewer",
+    "mediaViewer",
+    "commentsScreen"
+  ].forEach(id => {
+
+    if (document.getElementById(id)) {
+      hideScreen(id);
+    }
+
+  });
+
+  // ===================================================
+  // SHOW NOTIFICATIONS
+  // ===================================================
+
+  const opened = showScreen("notificationsScreen");
+
+  if (!opened) {
+    console.error("❌ Could not open notificationsScreen");
+    return;
   }
 
+  // ===================================================
+  // SELECT NOTIFICATIONS BUTTON
+  // ===================================================
 
-  await loadNotifications();
+  setActiveTopButton("notificationBtn");
 
-}
+  // ===================================================
+  // KEEP TOP BAR VISIBLE
+  // ===================================================
 
+  if (typeof restoreTopBar === "function") {
+    restoreTopBar();
+  }
+
+  // ===================================================
+  // LOCK BACKGROUND
+  // ===================================================
+
+  if (typeof lockBackground === "function") {
+    lockBackground();
+  }
+
+  // ===================================================
+  // LOAD NOTIFICATIONS
+  // ===================================================
+
+  try {
+
+    await loadNotifications();
+
+  } catch (error) {
+
+    console.error(
+      "❌ Failed to load notifications:",
+      error
+    );
+
+  }
+
+};
 
 window.openNotifications =
   openNotifications;
@@ -33624,10 +33834,10 @@ function renderNotifications(
       // READ / UNREAD
       // =================================================
 
-      const bg =
-        n.read === true
-          ? "#151515"
-          : "red";
+const bg =
+  n.read === true
+    ? "#151515"
+    : "rgba(24,119,242,0.07)";
 
 
       return `
@@ -33680,15 +33890,30 @@ function renderNotifications(
             </div>
 
 
-            <div style="
-              color:#888;
-              font-size:12px;
-              margin-top:4px;
-            ">
-              ${time}
-            </div>
+   <div style="
+   
+  color:#888;
+  font-size:12px;
+  margin-top:4px;
+  display:flex;
+  align-items:center;
+">
+  ${time}
 
-          </div>
+  ${!n.read ? `
+    <span style="
+      width:9px;
+      height:9px;
+      min-width:9px;
+      border-radius:50%;
+      background:#1877f2;
+      display:inline-block;
+      margin-left:8px;
+    "></span>
+  ` : ""}
+</div>
+
+   </div>
 
         </div>
 
@@ -34360,48 +34585,328 @@ function highlightExactPost(postElement) {
     }, 2500);
 }
 
-// ========================
-// GLOBAL HOME PAGE 
-// ========================
+// =====================================================
+// TOP BAR — SELECTED BUTTON
+// =====================================================
 
-function setActiveTopButton(id) {
+window.setActiveTopButton = function (id) {
 
-  document.querySelectorAll("#topBar button").forEach(btn => {
+  const buttons =
+    document.querySelectorAll("#topBar button");
+
+  buttons.forEach(btn => {
+
     btn.style.color = "white";
+    btn.style.background = "transparent";
     btn.style.borderBottom = "none";
+    btn.style.boxShadow = "none";
+
   });
 
-  const btn = document.getElementById(id);
+  const btn =
+    document.getElementById(id);
 
-  if (btn) {
-    btn.style.color = "#1877f2";
-    btn.style.borderBottom = "3px solid #1877f2";
+  if (!btn) {
+    console.warn(
+      "⚠️ Top bar button not found:",
+      id
+    );
+    return;
   }
 
-}
+  // Selected button
 
-window.goHome = function () {
-  
-  setActiveTopButton("homeBtn");
+  btn.style.color = "#1877f2";
+  btn.style.background =
+    "rgba(24,119,242,0.12)";
 
-  // Close any open screens
-  document.getElementById("chatScreen").style.display = "none";
-  document.getElementById("inboxScreen").style.display = "none";
-  document.getElementById("notificationsScreen").style.display = "none";
-  document.getElementById("searchScreen").style.display = "none";
-  document.getElementById("storyViewer").style.display = "none";
+  btn.style.borderRadius = "12px";
 
-  // Return to the main feed
-  document.getElementById("app").style.display = "block";
-
-  // Scroll to the top like Facebook
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+  btn.style.boxShadow =
+    "inset 0 -3px 0 #1877f2";
 
 };
 
+window.resetTopBarToHome = function () {
+  setActiveTopButton("homeBtn");
+};
+
+// =====================================================
+// SCREEN HELPERS
+// =====================================================
+
+window.hideScreen = function (id) {
+
+  const screen = document.getElementById(id);
+
+  if (!screen) return;
+
+  screen.style.display = "none";
+  screen.style.visibility = "hidden";
+  screen.style.opacity = "0";
+  screen.style.pointerEvents = "none";
+};
+
+
+window.showScreen = function (id, display = "flex") {
+
+  const screen = document.getElementById(id);
+
+  if (!screen) {
+    console.error("❌ Screen not found:", id);
+    return false;
+  }
+
+  screen.style.display = display;
+  screen.style.visibility = "visible";
+  screen.style.opacity = "1";
+  screen.style.pointerEvents = "auto";
+
+  return true;
+};
+
+window.goHome = async function (explicitClick = false) {
+
+  console.log(
+    "🏠 GO HOME:",
+    explicitClick
+      ? "EXPLICIT HOME CLICK"
+      : "RETURN TO HOME"
+  );
+
+  window.homeWasExplicitlyClicked =
+    explicitClick === true;
+
+  [
+    "chatScreen",
+    "inboxScreen",
+    "notificationsScreen",
+    "searchScreen",
+    "storyViewer",
+    "commentsScreen",
+    "mediaViewer"
+  ].forEach(id => {
+
+    if (document.getElementById(id)) {
+      hideScreen(id);
+    }
+
+  });
+
+  const app =
+    document.getElementById("app");
+
+  if (!app) {
+    console.warn("⚠️ #app not found");
+    return;
+  }
+
+  app.style.display = "block";
+  app.style.visibility = "visible";
+  app.style.opacity = "1";
+  app.style.pointerEvents = "auto";
+
+  setActiveTopButton("homeBtn");
+
+  if (typeof restoreTopBar === "function") {
+    restoreTopBar();
+  }
+
+  if (typeof unlockBackground === "function") {
+    unlockBackground();
+  }
+
+// ===============================================
+// HOME BUTTON → IMMEDIATELY REFRESH FEED
+// ===============================================
+
+if (explicitClick === true) {
+
+  console.log("🏠 HOME CLICKED → IMMEDIATE REFRESH");
+
+  // Clear new-post badge
+  window.homeNewPostCount = 0;
+
+  if (typeof updateHomePostBadge === "function") {
+    updateHomePostBadge();
+  }
+
+  // Reset saved position
+  window.homeScrollY = 0;
+  window.homeScrollPosition = 0;
+  window.homeScrollSaved = false;
+
+  // Make sure Home is visible immediately
+  app.style.display = "block";
+  app.style.visibility = "visible";
+  app.style.opacity = "1";
+  app.style.pointerEvents = "auto";
+
+  // Reload newest posts
+  try {
+
+    await window.loadPosts();
+
+    console.log("✅ HOME FEED REFRESHED");
+
+  } catch (error) {
+
+    console.error(
+      "❌ HOME FEED REFRESH FAILED:",
+      error
+    );
+
+  }
+
+  // Jump to newest post immediately
+  requestAnimationFrame(() => {
+
+    if (postsEl) {
+      postsEl.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "auto"
+      });
+    }
+
+    window.scrollTo({
+      top: 0,
+      left: 0,
+      behavior: "auto"
+    });
+
+  });
+
+  return;
+}
+
+  // ===============================================
+  // RETURN FROM ANOTHER SCREEN
+  // NO RELOAD
+  // ===============================================
+
+  console.log(
+    "↩️ RETURNING HOME → RESTORE:",
+    window.homeScrollY
+  );
+
+  restoreHomeScroll();
+
+};
+
+// =====================================================
+// HOME SCROLL MEMORY
+// =====================================================
+
+window.homeScrollElement = "window";
+window.homeScrollY = 0;
+window.homeWasExplicitlyClicked = false;
+
+
+// =====================================================
+// SAVE HOME SCROLL POSITION
+// =====================================================
+
+window.saveHomeScroll = function () {
+
+  const posts = document.getElementById("posts");
+
+  // If #posts is the actual scrolling container
+  if (
+    posts &&
+    posts.scrollHeight > posts.clientHeight
+  ) {
+
+    window.homeScrollElement = "posts";
+    window.homeScrollY = posts.scrollTop;
+
+  } else {
+
+    // Otherwise the page itself is scrolling
+    window.homeScrollElement = "window";
+
+    window.homeScrollY =
+      window.scrollY ||
+      document.documentElement.scrollTop ||
+      document.body.scrollTop ||
+      0;
+  }
+
+  console.log(
+    "💾 HOME POSITION SAVED:",
+    window.homeScrollElement,
+    window.homeScrollY
+  );
+};
+
+
+// =====================================================
+// RESTORE HOME SCROLL POSITION
+// =====================================================
+
+window.restoreHomeScroll = function () {
+
+  const y = window.homeScrollY || 0;
+
+  requestAnimationFrame(() => {
+
+    if (
+      window.homeScrollElement === "posts"
+    ) {
+
+      const posts =
+        document.getElementById("posts");
+
+      if (posts) {
+
+        posts.scrollTop = y;
+
+      }
+
+    } else {
+
+      window.scrollTo({
+        top: y,
+        left: 0,
+        behavior: "instant"
+      });
+
+    }
+
+    requestAnimationFrame(() => {
+
+      if (
+        window.homeScrollElement === "posts"
+      ) {
+
+        const posts =
+          document.getElementById("posts");
+
+        if (posts) {
+          posts.scrollTop = y;
+        }
+
+      } else {
+
+        window.scrollTo({
+          top: y,
+          left: 0,
+          behavior: "instant"
+        });
+
+      }
+
+    });
+
+  });
+
+  console.log(
+    "↩️ HOME POSITION RESTORED:",
+    window.homeScrollElement,
+    y
+  );
+
+};
 
 // ========================
 // GLOBAL FUNCTIONS
