@@ -665,8 +665,7 @@ linear-gradient(
 #storyContent,
 #storyContent img,
 #storyContent video,
-.story-card,
-#storyViewer{
+.story-card{
   will-change:
     transform,
     opacity,
@@ -678,6 +677,14 @@ linear-gradient(
   backface-visibility:hidden;
 
   perspective:1000px;
+}
+
+/* Never transform the story viewer itself. A transformed ancestor changes
+   the containing block of position:fixed descendants on Android Chrome. */
+#storyViewer{
+  transform:none !important;
+  will-change:auto !important;
+  contain:none !important;
 }
 
 #storyTopBar {
@@ -4006,34 +4013,45 @@ window.logout = async function () {
 function adjustStoryBar() {
   const viewer = document.getElementById("storyViewer");
   const bar = document.getElementById("storyReplyBar");
+  const replies = document.getElementById("storyReplies");
+  const mute = document.getElementById("storyMuteBtn");
 
-  if (!viewer || !window.visualViewport) return;
+  if (!viewer || !bar) return;
 
+  /* Android Chrome may keep the layout viewport taller than the visible
+     viewport while browser chrome is open. Use the actual visual viewport. */
   const vv = window.visualViewport;
+  const layoutBottom = window.innerHeight;
+  const visibleBottom = vv ? (vv.offsetTop + vv.height) : layoutBottom;
+  const browserBottom = Math.max(0, Math.round(layoutBottom - visibleBottom));
 
-  /*
-   * Android Chrome: window.innerHeight is the layout viewport while
-   * visualViewport.height is the actually visible viewport. The difference
-   * is the space currently occupied by Chrome's bottom browser UI (or the
-   * keyboard). Use the same proven calculation as the earlier working
-   * story viewer and apply the result DIRECTLY to the reply bar.
-   */
-  const browserBottom = Math.max(0,
-    Math.round(window.innerHeight - vv.height)
-  );
+  /* Keep a minimum gap, while moving the entire control group above the
+     browser/keyboard area whenever visualViewport reports one. */
+  const bottom = browserBottom + 16;
 
   viewer.style.setProperty("--story-browser-bottom", browserBottom + "px");
+  viewer.style.setProperty("--story-reply-bottom", bottom + "px");
 
-  if (bar) {
-    /* Inline !important is intentional: the viewer has several legacy CSS
-       rules with !important, so a normal inline bottom value can lose. */
-    bar.style.setProperty(
-      "bottom",
-      (browserBottom + 16) + "px",
-      "important"
-    );
+  bar.style.setProperty("position", "fixed", "important");
+  bar.style.setProperty("bottom", bottom + "px", "important");
+  bar.style.setProperty("left", "12px", "important");
+  bar.style.setProperty("right", "12px", "important");
+  bar.style.setProperty("z-index", "10000000", "important");
+
+  if (replies) {
+    const h = Math.max(52, bar.getBoundingClientRect().height || 52);
+    replies.style.setProperty("position", "fixed", "important");
+    replies.style.setProperty("bottom", (bottom + h + 10) + "px", "important");
+    replies.style.setProperty("z-index", "9999999", "important");
+  }
+
+  if (mute) {
+    mute.style.setProperty("position", "fixed", "important");
+    mute.style.setProperty("bottom", (bottom + 62) + "px", "important");
+    mute.style.setProperty("z-index", "10000001", "important");
   }
 }
+
 
 window.addEventListener("load", adjustStoryBar, { passive: true });
 
@@ -4470,7 +4488,7 @@ setStories(window.currentGroup.stories);
   viewer.style.position = "fixed";
   viewer.style.inset = "0";
   viewer.style.width = "100vw";
-  viewer.style.height = "100vh";
+  viewer.style.height = "100dvh";
   viewer.style.zIndex = "999999";
   viewer.style.background = "black";
   viewer.style.touchAction = "none";
@@ -4498,6 +4516,8 @@ setStories(window.currentGroup.stories);
   requestAnimationFrame(() => {
     adjustStoryBar();
     setTimeout(adjustStoryBar, 80);
+    setTimeout(adjustStoryBar, 250);
+    setTimeout(adjustStoryBar, 600);
   });
 
   requestAnimationFrame(() => {
@@ -4590,7 +4610,7 @@ window.openStoryAt = function(groupIndex, storyIndex, context = null) {
   viewer.style.position = "fixed";
   viewer.style.inset = "0";
   viewer.style.width = "100vw";
-  viewer.style.height = "100vh";
+  viewer.style.height = "100dvh";
   viewer.style.zIndex = "999999";
   viewer.style.background = "black";
   viewer.style.touchAction = "none";
@@ -39965,6 +39985,8 @@ window.lockBackground = function () {
   requestAnimationFrame(() => {
     adjustStoryBar();
     setTimeout(adjustStoryBar, 80);
+    setTimeout(adjustStoryBar, 250);
+    setTimeout(adjustStoryBar, 600);
   });
 
   document.body.style.touchAction = "none";
