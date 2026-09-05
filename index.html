@@ -30869,7 +30869,7 @@ window.openProfileSettings = async function (addHistory = true) {
     }
 
     // -------------------------------------------------
-    // CREATE SCREEN ONCE
+    // CREATE ONCE / REUSE WITHOUT REBUILDING
     // -------------------------------------------------
 
     let settingsScreen = document.getElementById("profileSettingsScreen");
@@ -30896,6 +30896,61 @@ window.openProfileSettings = async function (addHistory = true) {
         document.body.appendChild(settingsScreen);
     }
 
+    // IMPORTANT: Profile restoration hides Settings with display + visibility
+    // + opacity. Merely setting display:block later leaves it invisible.
+    // Always restore the complete visibility state before navigation.
+    if (typeof window.hideScreen === "function") {
+        [
+            "app", "commentsScreen", "profileScreen", "searchScreen",
+            "notificationsScreen", "inboxScreen", "chatScreen",
+            "storyViewer", "mediaViewer", "editProfileScreen",
+            "languageSettingsScreen", "privacySettingsScreen",
+            "followRequestsScreen", "savedPostsScreen"
+        ].forEach(id => window.hideScreen(id));
+    }
+
+    if (typeof window.showScreen === "function") {
+        window.showScreen("profileSettingsScreen", "block");
+    } else {
+        settingsScreen.style.display = "block";
+        settingsScreen.style.visibility = "visible";
+        settingsScreen.style.opacity = "1";
+        settingsScreen.style.pointerEvents = "auto";
+    }
+
+    document.body.style.overflow = "hidden";
+
+    if (typeof window.hideTopBar === "function") {
+        window.hideTopBar();
+    }
+    if (typeof window.lockBackground === "function") {
+        window.lockBackground();
+    }
+
+    // If Settings was already rendered, reuse it. Do not rebuild the DOM
+    // merely because the user navigated away and opened Settings again.
+    if (settingsScreen.dataset.rendered === "true") {
+        if (typeof window.navigateToScreen === "function") {
+            window.navigateToScreen(
+                "profileSettingsScreen",
+                {
+                    userId,
+                    source: "profile",
+                    returnScreen: "profileScreen",
+                    returnData: { ...(history.state?.data || {}) },
+                    returnScrollY: profileScrollY
+                },
+                addHistory
+            );
+        }
+
+        requestAnimationFrame(() => {
+            if (settingsScreen) settingsScreen.scrollTop = profileScrollY;
+        });
+
+        return true;
+    }
+
     // -------------------------------------------------
     // CENTRAL NAVIGATION
     // -------------------------------------------------
@@ -30916,43 +30971,8 @@ window.openProfileSettings = async function (addHistory = true) {
     }
 
     // -------------------------------------------------
-    // HIDE OTHER TOP-LEVEL SCREENS
+    // VISIBILITY IS ALREADY NORMALIZED ABOVE
     // -------------------------------------------------
-
-    [
-        "app",
-        "commentsScreen",
-        "profileScreen",
-        "searchScreen",
-        "notificationsScreen",
-        "inboxScreen",
-        "chatScreen",
-        "storyViewer",
-        "mediaViewer",
-        "editProfileScreen",
-        "languageSettingsScreen",
-        "privacySettingsScreen",
-        "followRequestsScreen"
-    ].forEach(id => {
-
-        const el = document.getElementById(id);
-
-        if (el && id !== "profileSettingsScreen") {
-            el.style.display = "none";
-        }
-    });
-
-    // -------------------------------------------------
-    // SHOW SETTINGS
-    // -------------------------------------------------
-
-    settingsScreen.style.display = "block";
-
-    document.body.style.overflow = "hidden";
-
-    if (typeof window.hideTopBar === "function") {
-        window.hideTopBar();
-    }
 
     // -------------------------------------------------
     // RENDER
@@ -31251,6 +31271,8 @@ window.openProfileSettings = async function (addHistory = true) {
             </div>
         </div>
     `;
+
+    settingsScreen.dataset.rendered = "true";
 
     // -------------------------------------------------
     // BACK
