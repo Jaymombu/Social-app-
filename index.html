@@ -912,7 +912,13 @@ body:has(#storyViewer.active) #topBar{
   right:15px !important;
   bottom:82px !important;
   z-index:9999999 !important;
-  pointer-events:none !important;
+  pointer-events:auto !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  max-height:120px !important;
+  -webkit-overflow-scrolling:touch !important;
+  touch-action:pan-y !important;
+  overscroll-behavior:contain !important;
 }
 
 #storyViewer.active #storyTopBar{
@@ -5486,6 +5492,13 @@ window.storyViewChannel =
 
 window.storyReplyChannel =
   listenToStoryReplies(story.id);
+
+// REAL-TIME STORY REACTIONS
+if (window.storyReactionChannel) {
+  supabase.removeChannel(window.storyReactionChannel);
+  window.storyReactionChannel = null;
+}
+window.storyReactionChannel = listenToStoryReactions(story.id);
   
   console.log("Current story:", story);
   console.log("Story owner:", story.user_id);
@@ -5993,6 +6006,11 @@ window.closeStoryViewer = function () {
     window.storyReplyChannel = null;
   }
 
+  if (window.storyReactionChannel) {
+    supabase.removeChannel(window.storyReactionChannel);
+    window.storyReactionChannel = null;
+  }
+
   clearTimeout(window.storyTimer);
   clearTimeout(window.playBtnTimer);
   clearTimeout(uiHideTimer);
@@ -6437,6 +6455,7 @@ async function loadStoryReplies(storyId) {
   const { data, error } = await supabase
   .from("story_replies")
   .select(`
+    id,
     reply,
     created_at,
     sender_id,
@@ -6599,6 +6618,7 @@ function listenToStoryReplies(storyId) {
         const { data } = await supabase
           .from("story_replies")
           .select(`
+            id,
             reply,
             created_at,
             sender_id,
@@ -6616,7 +6636,57 @@ function listenToStoryReplies(storyId) {
 
       }
     )
-    .subscribe();
+     .subscribe();
+}
+
+function showLiveStoryReaction(emoji) {
+  const viewer = document.getElementById("storyViewer");
+  if (!viewer || !emoji) return;
+
+  const el = document.createElement("div");
+  el.textContent = emoji;
+  el.style.cssText = `
+    position:fixed;
+    left:${35 + Math.random() * 30}%;
+    bottom:180px;
+    font-size:42px;
+    z-index:10000020;
+    pointer-events:none;
+    animation:floatReact 1.2s ease forwards;
+  `;
+  viewer.appendChild(el);
+  setTimeout(() => el.remove(), 1300);
+}
+
+function listenToStoryReactions(storyId) {
+  return supabase
+    .channel("story_reactions_" + storyId)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "story_reactions",
+        filter: `story_id=eq.${storyId}`
+      },
+      async (payload) => {
+        const story = window.storyList?.[window.storyIndex];
+        if (!story || String(story.id) !== String(storyId)) return;
+
+        const { data: auth } = await supabase.auth.getUser();
+        const currentUser = auth?.user;
+
+        // The sender already gets the local animation.
+        // Incoming reactions are shown live to the story owner.
+        if (story.user_id !== currentUser?.id) return;
+        if (payload.new?.user_id === currentUser?.id) return;
+
+        showLiveStoryReaction(payload.new?.emoji || "❤️");
+      }
+    )
+    .subscribe(status => {
+      console.log("Story reactions realtime:", status);
+    });
 }
 
 // =====================================================
@@ -43963,9 +44033,10 @@ function appendReplies(data) {
   if (!box) return;
 
   const html =
-    data.map(r => `
+    data.filter(r => r && r.id && !box.querySelector(`[data-story-reply-id="${String(r.id).replace(/"/g, '&quot;')}"]`))
+      .map(r => `
 
-      <div style="
+      <div data-story-reply-id="${escapeHtml(String(r.id))}" style="
         display:flex;
         gap:10px;
         margin-bottom:10px;
@@ -44020,12 +44091,39 @@ function appendReplies(data) {
     `).join("");
 
 
+  if (!html) return;
+
   box.insertAdjacentHTML(
     "beforeend",
     html
   );
 
 }
+
+// Allow the reply list itself to scroll on touch devices. When the user
+// reaches the bottom, fetch the next page so older replies can be reached.
+(function setupStoryRepliesScroll() {
+  const box = document.getElementById("storyReplies");
+  if (!box || box.dataset.scrollReady === "1") return;
+
+  box.dataset.scrollReady = "1";
+  box.addEventListener("scroll", async function () {
+    const story = window.storyList?.[window.storyIndex];
+    if (!story || box.dataset.loadingMore === "1") return;
+
+    const nearBottom =
+      box.scrollTop + box.clientHeight >= box.scrollHeight - 24;
+
+    if (!nearBottom) return;
+
+    box.dataset.loadingMore = "1";
+    try {
+      await loadMoreReplies(story.id);
+    } finally {
+      box.dataset.loadingMore = "0";
+    }
+  }, { passive: true });
+})();
 
 async function openExactPostFromNotification(postId) {
 
@@ -47192,7 +47290,10 @@ window.addEventListener(
                     });
                 }
 
-                if (typeof window.restoreTopBar === "function") {
+                // The notifications screen owns a hidden top bar.
+                // Do not restore the main app top bar when a story returns there.
+                if (pendingStoryReturn.screen !== "notificationsScreen" &&
+                    typeof window.restoreTopBar === "function") {
                     window.restoreTopBar();
                 }
 
