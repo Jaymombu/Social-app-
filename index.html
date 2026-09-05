@@ -26716,6 +26716,48 @@ window.loadProfilePhotos = async function (userId) {
     }
 };
 
+// =====================================================
+// PROFILE VIDEO VIEWER — VISIBLE VIEWPORT / BROWSER BAR
+// =====================================================
+window.adjustProfileVideoViewerViewport = function () {
+    const viewer = document.getElementById("mediaViewer");
+    const feed = document.getElementById("profileVideoFeed");
+    if (!viewer || !feed || viewer.style.display === "none") return;
+    const vv = window.visualViewport;
+    const top = vv ? Math.max(0, Math.round(vv.offsetTop)) : 0;
+    const left = vv ? Math.max(0, Math.round(vv.offsetLeft)) : 0;
+    const width = vv ? Math.max(1, Math.round(vv.width)) : window.innerWidth;
+    const height = vv ? Math.max(1, Math.round(vv.height)) : window.innerHeight;
+    viewer.style.setProperty("top", top + "px", "important");
+    viewer.style.setProperty("left", left + "px", "important");
+    viewer.style.setProperty("right", "auto", "important");
+    viewer.style.setProperty("bottom", "auto", "important");
+    viewer.style.setProperty("width", width + "px", "important");
+    viewer.style.setProperty("height", height + "px", "important");
+    viewer.style.setProperty("max-height", height + "px", "important");
+    feed.style.setProperty("width", width + "px", "important");
+    feed.style.setProperty("height", height + "px", "important");
+    feed.style.setProperty("max-height", height + "px", "important");
+    feed.querySelectorAll(".profile-video-item").forEach(page => {
+        page.style.setProperty("height", height + "px", "important");
+        page.style.setProperty("min-height", height + "px", "important");
+        page.style.setProperty("max-height", height + "px", "important");
+        page.style.setProperty("width", width + "px", "important");
+        const video = page.querySelector("video");
+        if (video) {
+            video.style.setProperty("width", "100%", "important");
+            video.style.setProperty("height", "100%", "important");
+            video.style.setProperty("max-height", height + "px", "important");
+        }
+    });
+};
+window.addEventListener("resize", () => window.adjustProfileVideoViewerViewport?.(), {passive:true});
+window.addEventListener("orientationchange", () => setTimeout(() => window.adjustProfileVideoViewerViewport?.(), 100), {passive:true});
+if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", () => window.adjustProfileVideoViewerViewport?.(), {passive:true});
+    window.visualViewport.addEventListener("scroll", () => window.adjustProfileVideoViewerViewport?.(), {passive:true});
+}
+
 function createVideoPage(post, index) {
     const page = document.createElement("div");
 
@@ -26723,7 +26765,7 @@ function createVideoPage(post, index) {
     page.className = "profile-video-item";
 
     page.style.cssText = `
-        height:100vh;
+        height:100dvh;
         width:100%;
         position:relative;
         display:flex;
@@ -28506,6 +28548,14 @@ console.log(
 
     viewer.appendChild(feed);
 
+    if (typeof window.adjustProfileVideoViewerViewport === "function") {
+        window.adjustProfileVideoViewerViewport();
+        requestAnimationFrame(() => window.adjustProfileVideoViewerViewport());
+        setTimeout(() => window.adjustProfileVideoViewerViewport(), 80);
+        setTimeout(() => window.adjustProfileVideoViewerViewport(), 250);
+        setTimeout(() => window.adjustProfileVideoViewerViewport(), 600);
+    }
+
 // -----------------------------------------------------
     // SWIPE DOWN TO CLOSE
 // -----------------------------------------------------
@@ -28703,6 +28753,10 @@ console.log(
     }
 
     // -----------------------------------------------------
+    if (typeof window.adjustProfileVideoViewerViewport === "function") {
+        window.adjustProfileVideoViewerViewport();
+    }
+
     // OBSERVER
     // -----------------------------------------------------
 
