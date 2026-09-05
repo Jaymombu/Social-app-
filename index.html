@@ -46619,6 +46619,48 @@ if (
         "profileSettingsScreen"
     ) {
 
+        // Fast-path Back: Settings is already mounted underneath its child.
+        // Reveal it synchronously so closing a Settings child can never leave
+        // the app with every screen hidden while an async request is pending.
+        const existingSettings =
+            document.getElementById("profileSettingsScreen");
+
+        if (existingSettings) {
+            [
+                "editProfileScreen",
+                "languageSettingsScreen",
+                "privacySettingsScreen",
+                "followRequestsScreen",
+                "savedPostsScreen"
+            ].forEach(id => hideScreen(id));
+
+            showScreen("profileSettingsScreen", "block");
+
+            if (typeof window.hideTopBar === "function") {
+                window.hideTopBar();
+            }
+            if (typeof window.lockBackground === "function") {
+                window.lockBackground();
+            }
+
+            const settingsScroll =
+                existingSettings.querySelector("[data-settings-scroll]") ||
+                existingSettings.querySelector(".settings-scroll") ||
+                existingSettings;
+
+            const returnScroll = Number(
+                data.returnScrollY ?? data.scrollY ?? 0
+            ) || 0;
+
+            requestAnimationFrame(() => {
+                if (settingsScroll && "scrollTop" in settingsScroll) {
+                    settingsScroll.scrollTop = returnScroll;
+                }
+            });
+
+            return true;
+        }
+
         const userId =
             data.userId ||
             session?.user?.id ||
