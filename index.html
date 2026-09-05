@@ -4209,6 +4209,7 @@ function setStories(list) {
   window.storyIndex = 0;
   window.storyPaused = false;
   window.storyRemaining = 0;
+  window.__storyReturnPending = null;
   window.storyStartTime = 0;
 }
 
@@ -6029,22 +6030,98 @@ window.closeStoryViewer = function () {
   // The popstate handler restores it after the exact underlying screen is
   // restored, preventing the top bar from flashing over the story.
 
+  // -------------------------------------------------
+  // FULL STORY STATE RESET
+  // -------------------------------------------------
+  // Capture the return destination BEFORE clearing any story state.
+  // We reset appNavigation/session immediately so the app is no longer
+  // considered to be inside storyViewer even while history.back() is
+  // waiting for the browser to fire popstate.
+  const storyHistoryState = history.state?.appScreen === "storyViewer"
+    ? history.state
+    : null;
+
+  const returnState = window.storyReturnState
+    ? {
+        screen: window.storyReturnState.screen || "app",
+        data: { ...(window.storyReturnState.data || {}) },
+        scrollY: Number(window.storyReturnState.scrollY) || 0
+      }
+    : (storyHistoryState
+        ? {
+            screen: storyHistoryState.data?.sourceScreen || "app",
+            data: { ...(storyHistoryState.data?.sourceData || {}) },
+            scrollY: Number(storyHistoryState.data?.sourceScrollY) || 0
+          }
+        : { screen: "app", data: {}, scrollY: 0 });
+
+  // Clear every story-only runtime value.
+  window.storyReturnState = null;
+  window.storyOpenContext = null;
+  window.storyIndex = 0;
+  window.activeUserIndex = null;
+  window.currentGroup = null;
+  window.__storyOpen = false;
+
+  // Immediately make the underlying screen the navigation source of truth.
+  // This also updates sessionStorage, preventing a reload/back operation from
+  // seeing storyViewer as the current screen after the story has closed.
+  if (window.appNavigation) {
+    const resetState = {
+      screen: returnState.screen || "app",
+      data: { ...(returnState.data || {}) },
+      scrollY: Number(returnState.scrollY) || 0,
+      timestamp: Date.now()
+    };
+
+    window.appNavigation.current = resetState;
+
+    // Remove the story entry from the mirror stack as well.
+    if (Array.isArray(window.appNavigation.stack)) {
+      const last = window.appNavigation.stack[window.appNavigation.stack.length - 1];
+      if (last && last.screen === resetState.screen) {
+        window.appNavigation.stack.pop();
+      }
+    }
+
+    if (typeof window.syncNavigationSession === "function") {
+      window.syncNavigationSession(resetState);
+    }
+  }
+
+  // Remember the exact source screen for the pending browser-back event.
+  // This is especially important when a story reaches its final item and
+  // closes automatically: the browser history entry underneath the story
+  // can be stale, but the story's captured source is authoritative.
+  if (storyHistoryState) {
+    window.__storyReturnPending = {
+      screen: returnState.screen || "app",
+      data: { ...(returnState.data || {}) },
+      scrollY: Number(returnState.scrollY) || 0
+    };
+  } else {
+    window.__storyReturnPending = null;
+  }
+
   // If the story owns the current history entry, go back exactly one entry.
-  // The entry immediately underneath is the screen captured before the story
-  // opened, so Home -> Notifications -> Story closes back to Notifications.
-  if (history.state?.appScreen === "storyViewer" &&
-      !window.appNavigation?.restoring) {
+  // The popstate handler will use __storyReturnPending rather than trusting
+  // a stale underlying browser entry.
+  if (storyHistoryState && !window.appNavigation?.restoring) {
     history.back();
-  } else if (window.storyReturnState &&
-             typeof window.restoreNavigationState === "function") {
-    // Defensive fallback for cases where a story was opened without a story
-    // history entry. Restore the captured screen rather than guessing Home.
-    window.restoreNavigationState(window.storyReturnState);
+  } else if (typeof window.restoreNavigationState === "function") {
+    // Story was opened without its own history entry. Restore directly.
+    window.appNavigation = window.appNavigation || {};
+    window.appNavigation.restoring = true;
+    Promise.resolve(
+      window.restoreNavigationState(returnState)
+    ).finally(() => {
+      if (window.appNavigation) {
+        window.appNavigation.restoring = false;
+      }
+    });
   } else if (typeof window.restoreTopBar === "function") {
     window.restoreTopBar();
   }
-
-  window.storyReturnState = null;
 
   // Unlock a fresh open on the next event-loop turn.
   setTimeout(() => {
@@ -47026,6 +47103,55 @@ window.addEventListener(
 
 
         try {
+
+            // =================================================
+            // STORY RETURN — USE THE CAPTURED SOURCE
+            // =================================================
+            // A story can finish automatically. In that case the browser may
+            // land on an old/stale history entry (for example Notifications)
+            // even though the story was opened from Home, or vice versa.
+            // While returning from a story, the captured source is the
+            // authoritative destination.
+            const pendingStoryReturn = window.__storyReturnPending
+                ? {
+                    screen: window.__storyReturnPending.screen || "app",
+                    data: { ...(window.__storyReturnPending.data || {}) },
+                    scrollY: Number(window.__storyReturnPending.scrollY) || 0
+                  }
+                : null;
+
+            if (pendingStoryReturn) {
+                window.__storyReturnPending = null;
+
+                const storyViewer = document.getElementById("storyViewer");
+                if (storyViewer) {
+                    storyViewer.classList.remove("active");
+                    storyViewer.style.display = "none";
+                    storyViewer.style.visibility = "hidden";
+                    storyViewer.style.opacity = "0";
+                    storyViewer.style.pointerEvents = "none";
+                }
+
+                window.__storyOpen = false;
+                window.storyOpenContext = null;
+                window.storyIndex = 0;
+                window.activeUserIndex = null;
+                window.currentGroup = null;
+
+                await window.restoreNavigationState(pendingStoryReturn);
+
+                if (pendingStoryReturn.scrollY != null) {
+                    requestAnimationFrame(() => {
+                        window.scrollTo(0, pendingStoryReturn.scrollY);
+                    });
+                }
+
+                if (typeof window.restoreTopBar === "function") {
+                    window.restoreTopBar();
+                }
+
+                return;
+            }
 
             // =================================================
             // NORMAL APP HISTORY ENTRY
