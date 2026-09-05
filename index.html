@@ -7844,6 +7844,18 @@ window.openSavedPosts = async function (addHistory = true) {
 
     console.log("🔖 OPEN SAVED POSTS");
 
+    const existingSavedPosts = document.getElementById("savedPostsScreen");
+    if (existingSavedPosts) {
+        if (window.__reuseSettingsChildScreen(
+            "savedPostsScreen",
+            addHistory,
+            { userId: session?.user?.id || null, source: "profileSettings" }
+        )) {
+            console.log("♻️ REUSING EXISTING SAVED POSTS");
+            return true;
+        }
+    }
+
     if (!session?.user) {
         alert("Login first");
         return;
@@ -29311,9 +29323,60 @@ window.loadFollowingUsers = async function () {
 // DOES NOT DESTROY #app
 // =====================================================
 
+// Reuse an already-rendered Settings child immediately.
+// This prevents the second-open blank screen caused by waiting for
+// Supabase before revealing a screen that is already in the DOM.
+window.__reuseSettingsChildScreen = function (screenId, addHistory, data = {}) {
+    const screen = document.getElementById(screenId);
+    if (!screen) return false;
+
+    [
+        "profileSettingsScreen",
+        "editProfileScreen",
+        "languageSettingsScreen",
+        "privacySettingsScreen",
+        "followRequestsScreen",
+        "savedPostsScreen"
+    ].forEach(id => {
+        if (id !== screenId && typeof window.hideScreen === "function") {
+            window.hideScreen(id);
+        }
+    });
+
+    if (typeof window.showScreen === "function") {
+        window.showScreen(screenId, "block");
+    } else {
+        screen.style.display = "block";
+        screen.style.visibility = "visible";
+        screen.style.opacity = "1";
+        screen.style.pointerEvents = "auto";
+    }
+
+    if (typeof window.hideTopBar === "function") window.hideTopBar();
+    if (typeof window.lockBackground === "function") window.lockBackground();
+
+    if (typeof window.navigateToScreen === "function") {
+        window.navigateToScreen(screenId, data, addHistory);
+    }
+
+    return true;
+};
+
 window.openEditProfile = async function (addHistory = true) {
 
     console.log("✏️ OPEN EDIT PROFILE");
+
+    const existingEditProfile = document.getElementById("editProfileScreen");
+    if (existingEditProfile) {
+        if (window.__reuseSettingsChildScreen(
+            "editProfileScreen",
+            addHistory,
+            { userId: existingEditProfile.dataset.userId || session?.user?.id || null, source: "profileSettings" }
+        )) {
+            console.log("♻️ REUSING EXISTING EDIT PROFILE");
+            return true;
+        }
+    }
 
     // =================================================
     // AUTH
@@ -31532,6 +31595,18 @@ window.openLanguageSettings = async function (addHistory = true) {
 
     console.log("🌐 OPEN LANGUAGE SETTINGS");
 
+    const existingLanguage = document.getElementById("languageSettingsScreen");
+    if (existingLanguage) {
+        if (window.__reuseSettingsChildScreen(
+            "languageSettingsScreen",
+            addHistory,
+            { userId: session?.user?.id || null, source: "profileSettings" }
+        )) {
+            console.log("♻️ REUSING EXISTING LANGUAGE SETTINGS");
+            return true;
+        }
+    }
+
     const {
         data: { session }
     } = await supabase.auth.getSession();
@@ -32225,6 +32300,25 @@ window.openFollowRequests = async function (
     }
 
     const currentUserId = session.user.id;
+
+    const existingFollowRequests = document.getElementById("followRequestsScreen");
+    if (existingFollowRequests) {
+        const reuseSource =
+            source ||
+            (window.openedFollowRequestsFromNotification === true ? "notifications" :
+             window.openedFollowRequestsFromSettings === true ? "profileSettings" :
+             "profileSettings");
+
+        if (window.__reuseSettingsChildScreen(
+            "followRequestsScreen",
+            addHistory,
+            { userId: currentUserId, source: reuseSource }
+        )) {
+            window.currentFollowRequestsSource = reuseSource;
+            console.log("♻️ REUSING EXISTING FOLLOW REQUESTS");
+            return true;
+        }
+    }
 
     // =================================================
     // DETERMINE SOURCE
@@ -32940,6 +33034,18 @@ window.declineFollowRequest = async function(requestId){
 window.openPrivacySettings = async function (addHistory = true) {
 
     console.log("🔒 OPEN PRIVACY SETTINGS");
+
+    const existingPrivacy = document.getElementById("privacySettingsScreen");
+    if (existingPrivacy) {
+        if (window.__reuseSettingsChildScreen(
+            "privacySettingsScreen",
+            addHistory,
+            { userId: session?.user?.id || null, source: "profileSettings" }
+        )) {
+            console.log("♻️ REUSING EXISTING PRIVACY SETTINGS");
+            return true;
+        }
+    }
 
     if (!session?.user) {
         alert("Login first");
