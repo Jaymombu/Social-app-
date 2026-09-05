@@ -29988,23 +29988,33 @@ window.navigateToScreen(
     );
 
     // =================================================
-    // OPEN EXISTING COVER
+    // COVER IMAGE CLICK → CHANGE COVER
     // =================================================
+    // The cover itself should act as the change-cover control.
+    // Do not open the media viewer from the edit screen.
 
-    if (
-        coverPreview &&
-        profile.cover_url &&
-        typeof window.openMedia ===
-            "function"
-    ) {
-
+    if (coverPreview && coverInput) {
         coverPreview.onclick = () => {
-
-            window.openMedia(
-                profile.cover_url,
-                "image"
-            );
+            try {
+                coverInput.click();
+            } catch (error) {
+                console.error("❌ COVER INPUT CLICK FAILED:", error);
+            }
         };
+    }
+
+    const coverPlaceholder =
+        document.getElementById("editCoverPlaceholder");
+
+    if (coverPlaceholder && coverInput) {
+        coverPlaceholder.onclick = () => {
+            try {
+                coverInput.click();
+            } catch (error) {
+                console.error("❌ COVER INPUT CLICK FAILED:", error);
+            }
+        };
+        coverPlaceholder.style.cursor = "pointer";
     }
 
     // =================================================
@@ -30761,6 +30771,41 @@ window.openProfileSettings = async function (addHistory = true) {
     const userId = session.user.id;
 
     // -------------------------------------------------
+    // CAPTURE THE EXACT PROFILE RETURN STATE
+    // -------------------------------------------------
+    // Profile uses its own scroll container, so window.scrollY is not
+    // sufficient when Settings is opened from a scrolled profile.
+    // Preserve the current profile state before creating the Settings entry.
+    const profileScroll = document.getElementById("profileScroll");
+    const profileScrollY = profileScroll
+        ? Number(profileScroll.scrollTop) || 0
+        : (Number(window.appNavigation?.current?.scrollY) || Number(history.state?.scrollY) || 0);
+
+    if (history.state?.appScreen === "profileScreen") {
+        const profileHistoryState = {
+            ...(history.state || {}),
+            appScreen: "profileScreen",
+            data: { ...(history.state?.data || {}) },
+            scrollY: profileScrollY
+        };
+        try {
+            history.replaceState(profileHistoryState, "", location.href);
+        } catch (error) {}
+    }
+
+    if (window.appNavigation?.current?.screen === "profileScreen") {
+        window.appNavigation.current = {
+            ...window.appNavigation.current,
+            scrollY: profileScrollY
+        };
+        try {
+            if (typeof window.syncNavigationSession === "function") {
+                window.syncNavigationSession();
+            }
+        } catch (error) {}
+    }
+
+    // -------------------------------------------------
     // CREATE SCREEN ONCE
     // -------------------------------------------------
 
@@ -30798,7 +30843,10 @@ window.openProfileSettings = async function (addHistory = true) {
             "profileSettingsScreen",
             {
                 userId: userId,
-                source: "profile"
+                source: "profile",
+                returnScreen: "profileScreen",
+                returnData: { ...(history.state?.data || {}) },
+                returnScrollY: profileScrollY
             },
             addHistory
         );
@@ -31192,7 +31240,7 @@ window.openProfileSettings = async function (addHistory = true) {
             console.log("✏️ SETTINGS → EDIT PROFILE");
 
             if (typeof window.openEditProfile === "function") {
-                window.openEditProfile();
+                window.openEditProfile(true);
             }
         };
     }
@@ -31213,7 +31261,7 @@ window.openProfileSettings = async function (addHistory = true) {
             if (
                 typeof window.openLanguageSettings === "function"
             ) {
-                window.openLanguageSettings();
+                window.openLanguageSettings(true);
             }
         };
     }
@@ -31234,7 +31282,7 @@ window.openProfileSettings = async function (addHistory = true) {
             if (
                 typeof window.openPrivacySettings === "function"
             ) {
-                window.openPrivacySettings();
+                window.openPrivacySettings(true);
             }
         };
     }
@@ -31258,7 +31306,7 @@ window.openProfileSettings = async function (addHistory = true) {
             if (
                 typeof window.openFollowRequests === "function"
             ) {
-                window.openFollowRequests();
+                window.openFollowRequests(true, "profileSettings");
             }
         };
     }
@@ -31277,7 +31325,7 @@ window.openProfileSettings = async function (addHistory = true) {
             console.log("🔖 SETTINGS → SAVED POSTS");
 
             if (typeof window.openSavedPosts === "function") {
-                window.openSavedPosts();
+                window.openSavedPosts(true);
             }
         };
     }
@@ -32200,6 +32248,44 @@ window.openFollowRequests = async function (
     }
 
     // =================================================
+    // CAPTURE THE EXACT RETURN TARGET
+    // =================================================
+    // Notifications uses an inner scroll container, so the browser/window
+    // scroll position alone is not enough to restore where the user came from.
+    // Capture both navigation state and the notifications list position before
+    // replacing the visible screen.
+    const notificationScreenVisible =
+        source === "notifications" &&
+        document.getElementById("notificationsScreen") &&
+        document.getElementById("notificationsScreen").style.display !== "none";
+
+    const notificationList =
+        notificationScreenVisible
+            ? document.getElementById("notificationsList")
+            : null;
+
+    const notificationReturnState =
+        source === "notifications"
+            ? {
+                ...(window.appNavigation?.current?.screen === "notificationsScreen"
+                    ? (window.appNavigation.current.data || {})
+                    : (history.state?.appScreen === "notificationsScreen"
+                        ? (history.state.data || {})
+                        : {})),
+                notificationScrollY: notificationList
+                    ? Number(notificationList.scrollTop) || 0
+                    : 0
+              }
+            : {};
+
+    const notificationReturnScroll =
+        source === "notifications"
+            ? (notificationList
+                ? Number(notificationList.scrollTop) || 0
+                : (window.appNavigation?.current?.scrollY || history.state?.scrollY || 0))
+            : 0;
+
+    // =================================================
     // CENTRAL NAVIGATION
     // =================================================
 
@@ -32209,7 +32295,12 @@ window.openFollowRequests = async function (
             "followRequestsScreen",
             {
                 userId: currentUserId,
-                source: source
+                source: source,
+                returnScreen: source === "notifications"
+                    ? "notificationsScreen"
+                    : "profileSettingsScreen",
+                returnData: notificationReturnState,
+                returnScrollY: notificationReturnScroll
             },
             addHistory
         );
@@ -46920,6 +47011,25 @@ if (
                     "notificationsScreen"
                 );
             }
+
+            // Follow Requests → Notifications must restore the inner
+            // notifications list, not just the window scroll position.
+            const returnData = data || {};
+            const returnScroll = Number(
+                returnData.notificationScrollY ??
+                returnData.returnScrollY ??
+                0
+            ) || 0;
+
+            requestAnimationFrame(() => {
+                const list = document.getElementById("notificationsList");
+                if (list) {
+                    list.scrollTop = returnScroll;
+                    setTimeout(() => {
+                        list.scrollTop = returnScroll;
+                    }, 0);
+                }
+            });
 
             return true;
 
