@@ -4699,7 +4699,19 @@ window.openStoryAt = function(groupIndex, storyIndex, context = null) {
   window.__storyOpen = true;
 
   if (!window.appNavigation?.restoring && history.state?.appScreen !== "storyViewer") {
-    window.captureStoryReturnState();
+    // When a story is opened from a hidden screen (especially Notifications),
+    // the DOM may already have been hidden before this function runs. In that
+    // case the DOM-visible-screen heuristic is no longer reliable. An explicit
+    // source supplied by the caller is authoritative.
+    if (context?.sourceScreen) {
+      window.storyReturnState = {
+        screen: context.sourceScreen,
+        data: { ...(context.sourceData || {}) },
+        scrollY: Number(context.sourceScrollY) || 0
+      };
+    } else {
+      window.captureStoryReturnState();
+    }
   }
 
   if (!window.appNavigation?.restoring &&
@@ -42434,6 +42446,32 @@ window.openNotification = async function(id) {
   loadUnreadCount();
 
   // =====================================================
+  // CAPTURE NOTIFICATIONS AS THE EXACT STORY RETURN TARGET
+  // =====================================================
+  // Do this BEFORE hiding the notification screen. Otherwise the generic
+  // visible-screen detector can see #app and incorrectly record Home as the
+  // story's source.
+  const notificationReturnData = {
+    ...(window.appNavigation?.current?.screen === "notificationsScreen"
+      ? (window.appNavigation.current.data || {})
+      : (history.state?.appScreen === "notificationsScreen"
+          ? (history.state.data || {})
+          : {}))
+  };
+  const notificationReturnScroll =
+    window.appNavigation?.current?.screen === "notificationsScreen"
+      ? Number(window.appNavigation.current.scrollY) || 0
+      : (history.state?.appScreen === "notificationsScreen"
+          ? Number(history.state.scrollY) || 0
+          : 0);
+
+  const storySourceContext = {
+    sourceScreen: "notificationsScreen",
+    sourceData: notificationReturnData,
+    sourceScrollY: notificationReturnScroll
+  };
+
+  // =====================================================
   // HIDE NOTIFICATIONS SCREEN
   // =====================================================
 
@@ -42466,7 +42504,8 @@ window.openNotification = async function(id) {
       data.story_id,
       {
         type: "reply",
-        story_id: data.story_id
+        story_id: data.story_id,
+        ...storySourceContext
       }
     );
 
@@ -42492,7 +42531,8 @@ window.openNotification = async function(id) {
       data.story_id,
       {
         type: "reaction",
-        story_id: data.story_id
+        story_id: data.story_id,
+        ...storySourceContext
       }
     );
 
@@ -45219,13 +45259,19 @@ window.restoreNavigationState =
         // Restoration from popstate must not create another entry.
         if (!navigation.restoring && addHistory === true &&
             history.state?.appScreen !== "storyViewer") {
-            const returnState = window.captureStoryReturnState
-                ? window.captureStoryReturnState()
-                : {
-                    screen: previous?.screen || "app",
-                    data: { ...(previous?.data || {}) },
-                    scrollY: previous?.scrollY || 0
-                  };
+            const returnState = data?.sourceScreen
+                ? {
+                    screen: data.sourceScreen,
+                    data: { ...(data.sourceData || {}) },
+                    scrollY: Number(data.sourceScrollY) || 0
+                  }
+                : (window.captureStoryReturnState
+                    ? window.captureStoryReturnState()
+                    : {
+                        screen: previous?.screen || "app",
+                        data: { ...(previous?.data || {}) },
+                        scrollY: previous?.scrollY || 0
+                      });
 
             const storyState = {
                 appScreen: "storyViewer",
