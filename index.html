@@ -815,6 +815,7 @@ transform:scale(.95);
   background:black;
   z-index:999999;
   overflow:hidden;
+  --story-browser-bottom:0px;
 }
 
 #storyViewer.active{
@@ -856,14 +857,59 @@ transform:scale(.95);
   opacity:1 !important;
 }
 
-/* STORY VIEWER OWNS THE SCREEN — hide the normal app top bar. */
-body.story-view-open #topBar,
-#storyViewer.active ~ #topBar {
-  display:none !important;
-  visibility:hidden !important;
-  opacity:0 !important;
+
+/* =====================================================
+   STORY VIEWER FINAL LAYOUT / CONTROL ISOLATION
+   ===================================================== */
+#storyViewer.active #storyContent{
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  z-index:1 !important;
+}
+
+#storyViewer.active #storyReplyBar{
+  position:fixed !important;
+  left:12px !important;
+  right:12px !important;
+  /* JavaScript writes the final bottom value directly from visualViewport.
+     Keep only a small safe fallback here; JS overrides it with !important. */
+  bottom:16px !important;
+  width:auto !important;
+  min-height:52px !important;
+  display:flex !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  z-index:10000000 !important;
+}
+
+#storyViewer.active #storyMuteBtn{
+  position:fixed !important;
+  right:20px !important;
+  bottom:82px !important;
+  z-index:10000001 !important;
+}
+
+#storyViewer.active #storyReplies{
+  position:fixed !important;
+  left:15px !important;
+  right:15px !important;
+  bottom:82px !important;
+  z-index:9999999 !important;
   pointer-events:none !important;
 }
+
+#storyViewer.active #storyTopBar{
+  z-index:10000002 !important;
+  pointer-events:auto !important;
+}
+
+#storyViewer.active > button[type="button"]{
+  z-index:10000010 !important;
+  pointer-events:auto !important;
+}
+
 
 #topBar{
     position:fixed;
@@ -3958,82 +4004,43 @@ window.logout = async function () {
 // =====================================================
 
 function adjustStoryBar() {
+  const viewer = document.getElementById("storyViewer");
   const bar = document.getElementById("storyReplyBar");
 
-  if (!bar || !window.visualViewport) return;
+  if (!viewer || !window.visualViewport) return;
 
-  // Android Chrome: visualViewport becomes shorter when its bottom
-  // browser/navigation bar is visible. Keep the reply bar above it.
-  const offset = Math.max(0,
-    window.innerHeight - window.visualViewport.height
+  const vv = window.visualViewport;
+
+  /*
+   * Android Chrome: window.innerHeight is the layout viewport while
+   * visualViewport.height is the actually visible viewport. The difference
+   * is the space currently occupied by Chrome's bottom browser UI (or the
+   * keyboard). Use the same proven calculation as the earlier working
+   * story viewer and apply the result DIRECTLY to the reply bar.
+   */
+  const browserBottom = Math.max(0,
+    Math.round(window.innerHeight - vv.height)
   );
 
-  bar.style.setProperty(
-    "bottom",
-    (offset + 16) + "px",
-    "important"
-  );
+  viewer.style.setProperty("--story-browser-bottom", browserBottom + "px");
 
-  // Keep the other bottom story controls aligned with the reply bar.
-  const replies = document.getElementById("storyReplies");
-  if (replies) {
-    replies.style.setProperty(
+  if (bar) {
+    /* Inline !important is intentional: the viewer has several legacy CSS
+       rules with !important, so a normal inline bottom value can lose. */
+    bar.style.setProperty(
       "bottom",
-      (offset + 82) + "px",
-      "important"
-    );
-  }
-
-  const mute = document.getElementById("storyMuteBtn");
-  if (mute) {
-    mute.style.setProperty(
-      "bottom",
-      (offset + 82) + "px",
+      (browserBottom + 16) + "px",
       "important"
     );
   }
 }
 
-window.addEventListener("load", adjustStoryBar);
-window.visualViewport?.addEventListener("resize", adjustStoryBar);
-window.visualViewport?.addEventListener("scroll", adjustStoryBar);
-window.addEventListener("resize", adjustStoryBar);
-window.addEventListener("orientationchange", () => setTimeout(adjustStoryBar, 100));
+window.addEventListener("load", adjustStoryBar, { passive: true });
 
-// Keep the app top bar hidden for the entire lifetime of the story viewer.
-// This avoids races where navigation/startup restores #topBar after openStory().
-function syncStoryTopBarVisibility() {
-  const viewer = document.getElementById("storyViewer");
-  const topBar = document.getElementById("topBar");
-  const storyOpen = !!(viewer && viewer.classList.contains("active"));
-
-  document.body.classList.toggle("story-view-open", storyOpen);
-
-  if (!topBar) return;
-
-  if (storyOpen) {
-    topBar.setAttribute("data-story-hidden", "true");
-    topBar.style.setProperty("display", "none", "important");
-    topBar.style.setProperty("visibility", "hidden", "important");
-    topBar.style.setProperty("opacity", "0", "important");
-    topBar.style.setProperty("pointer-events", "none", "important");
-  } else {
-    topBar.removeAttribute("data-story-hidden");
-  }
-}
-
-window.syncStoryTopBarVisibility = syncStoryTopBarVisibility;
-
-window.addEventListener("load", syncStoryTopBarVisibility);
-
-if (document.body) {
-  const storyVisibilityObserver = new MutationObserver(syncStoryTopBarVisibility);
-  storyVisibilityObserver.observe(document.body, {
-    subtree: true,
-    attributes: true,
-    attributeFilter: ["class", "style"]
-  });
-}
+window.visualViewport?.addEventListener("resize", adjustStoryBar, { passive: true });
+window.visualViewport?.addEventListener("scroll", adjustStoryBar, { passive: true });
+window.addEventListener("resize", adjustStoryBar, { passive: true });
+window.addEventListener("orientationchange", () => setTimeout(adjustStoryBar, 100), { passive: true });
 
 // ======================
 // THEME
@@ -4405,6 +4412,8 @@ if (dbError) {
 
 window.openStory = function(index){
 
+  window.__storyClosing = false;
+
   if (!window.storyGroups || !window.storyGroups[index]) {
     console.error("Story group not ready");
     return;
@@ -4449,18 +4458,6 @@ setStories(window.currentGroup.stories);
   }
 
   const viewer = document.getElementById("storyViewer");
-  document.body.classList.add("story-view-open");
-  if (typeof window.syncStoryTopBarVisibility === "function") {
-    window.syncStoryTopBarVisibility();
-  }
-  setTimeout(adjustStoryBar, 0);
-  setTimeout(adjustStoryBar, 120);
-  document.body.classList.add("story-view-open");
-  if (typeof window.syncStoryTopBarVisibility === "function") {
-    window.syncStoryTopBarVisibility();
-  }
-  setTimeout(adjustStoryBar, 0);
-  setTimeout(adjustStoryBar, 120);
 
   viewer.classList.add("active");
   // closeStoryViewer() intentionally leaves the viewer fully hidden. Reset
@@ -4478,8 +4475,30 @@ setStories(window.currentGroup.stories);
   viewer.style.background = "black";
   viewer.style.touchAction = "none";
 
+  const replyBar = document.getElementById("storyReplyBar");
+  if (replyBar) {
+    replyBar.style.display = "flex";
+    replyBar.style.visibility = "visible";
+    replyBar.style.opacity = "1";
+    replyBar.style.pointerEvents = "auto";
+  }
+
+  const muteButton = document.getElementById("storyMuteBtn");
+  if (muteButton) {
+    muteButton.style.display = "flex";
+    muteButton.style.visibility = "visible";
+    muteButton.style.opacity = "1";
+    muteButton.style.pointerEvents = "auto";
+  }
+
   document.body.style.overflow = "hidden";
   document.documentElement.style.overflow = "hidden";
+
+  /* Recalculate after Chrome has had a chance to update visualViewport. */
+  requestAnimationFrame(() => {
+    adjustStoryBar();
+    setTimeout(adjustStoryBar, 80);
+  });
 
   requestAnimationFrame(() => {
   requestAnimationFrame(() => {
@@ -4518,6 +4537,8 @@ replyInput.onblur = resumeStory;
 };
 
 window.openStoryAt = function(groupIndex, storyIndex, context = null) {
+
+  window.__storyClosing = false;
 
   if (!window.storyGroups?.[groupIndex]) return;
 
@@ -4574,6 +4595,22 @@ window.openStoryAt = function(groupIndex, storyIndex, context = null) {
   viewer.style.background = "black";
   viewer.style.touchAction = "none";
   viewer.style.pointerEvents = "auto";
+
+  const replyBar = document.getElementById("storyReplyBar");
+  if (replyBar) {
+    replyBar.style.display = "flex";
+    replyBar.style.visibility = "visible";
+    replyBar.style.opacity = "1";
+    replyBar.style.pointerEvents = "auto";
+  }
+
+  const muteButton = document.getElementById("storyMuteBtn");
+  if (muteButton) {
+    muteButton.style.display = "flex";
+    muteButton.style.visibility = "visible";
+    muteButton.style.opacity = "1";
+    muteButton.style.pointerEvents = "auto";
+  }
 
   document.body.style.overflow = "hidden";
 
@@ -5111,7 +5148,9 @@ if (
     );
     
     
-   document.getElementById("storyTopBar").innerHTML = `
+   const storyHeader = document.getElementById("storyTopBar");
+   storyHeader.onclick = null;
+   storyHeader.innerHTML = `
   <img
     src="${
       story.avatar_url ||
@@ -5145,7 +5184,7 @@ if (
     story.user_id === currentUser?.id
       ? `
         <button
-          onclick="deleteStory('${story.id}')"
+          onclick="event.preventDefault(); event.stopPropagation(); deleteStory('${story.id}')"
           style="
             margin-left:auto;
             background:none;
@@ -5163,7 +5202,7 @@ if (
 
   <div
     id="storyViews"
-    onclick="toggleStoryViewers()"
+    onclick="event.preventDefault(); event.stopPropagation(); toggleStoryViewers()"
     style="
       margin-left:auto;
       color:white;
@@ -5686,7 +5725,6 @@ window.closeStoryViewer = function () {
   if (window.__storyClosing) return;
   window.__storyClosing = true;
   window.__storyOpen = false;
-  document.body.classList.remove("story-view-open");
 
   if (window.storyViewChannel) {
     supabase.removeChannel(window.storyViewChannel);
@@ -5742,6 +5780,13 @@ window.closeStoryViewer = function () {
   document.documentElement.style.overflow = "";
   document.body.style.touchAction = "";
   document.documentElement.style.touchAction = "";
+
+  // Restore the app chrome immediately. The navigation handler will also
+  // restore it after history.back(), but doing it here prevents a hidden
+  // top bar during the transition and makes close/reopen deterministic.
+  if (typeof window.restoreTopBar === "function") {
+    window.restoreTopBar();
+  }
 
   // If the story owns the current history entry, let popstate restore the
   // exact screen underneath it. Do not reload story data during this step.
@@ -39915,6 +39960,12 @@ window.lockBackground = function () {
 
   document.body.style.overflow = "hidden";
   document.documentElement.style.overflow = "hidden";
+
+  /* Recalculate after Chrome has had a chance to update visualViewport. */
+  requestAnimationFrame(() => {
+    adjustStoryBar();
+    setTimeout(adjustStoryBar, 80);
+  });
 
   document.body.style.touchAction = "none";
   document.documentElement.style.touchAction = "none";
