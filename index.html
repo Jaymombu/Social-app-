@@ -894,7 +894,7 @@ transform:scale(.95);
 #storyViewer.active #storyMuteBtn{
   position:fixed !important;
   right:20px !important;
-  bottom:82px !important;
+  bottom:132px !important;
   z-index:10000001 !important;
 }
 
@@ -908,7 +908,76 @@ transform:scale(.95);
 }
 
 #storyViewer.active #storyTopBar{
-  z-index:10000002 !important;
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:10px !important;
+  position:fixed !important;
+  top:50px !important;
+  left:15px !important;
+  right:80px !important;
+  width:auto !important;
+  height:45px !important;
+  min-height:45px !important;
+  padding:0 !important;
+  margin:0 !important;
+  box-sizing:border-box !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  pointer-events:auto !important;
+  overflow:visible !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  z-index:10000011 !important;
+}
+
+#storyViewer.active #storyTopBar > img{
+  flex:0 0 40px !important;
+  width:40px !important;
+  height:40px !important;
+}
+
+#storyViewer.active #storyTopBar > div{
+  flex:0 1 auto !important;
+  min-width:0 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:center !important;
+  align-items:flex-start !important;
+  line-height:normal !important;
+}
+
+#storyViewer.active #storyTopBar > button{
+  flex:0 0 auto !important;
+  margin-left:auto !important;
+  width:40px !important;
+  height:40px !important;
+  padding:0 !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+/* Story view count: independent of the hidden top bar and directly below
+   the close button. */
+#storyViewer.active #storyViews{
+  position:fixed !important;
+  top:102px !important;
+  right:24px !important;
+  display:block !important;
+  min-width:45px !important;
+  padding:5px 8px !important;
+  box-sizing:border-box !important;
+  color:white !important;
+  font-size:14px !important;
+  line-height:20px !important;
+  text-align:center !important;
+  white-space:nowrap !important;
+  background:rgba(0,0,0,.42) !important;
+  border-radius:14px !important;
+  z-index:10000012 !important;
+  cursor:pointer !important;
   pointer-events:auto !important;
 }
 
@@ -3360,11 +3429,13 @@ pointer-events:auto;
   id="storyTopBar"
   onclick="toggleStoryViewers()"
   style="
-    position:absolute;
-    top:40px;
+    position:fixed;
+    top:50px;
     left:15px;
-    right:15px;
+    right:80px;
+    height:45px;
     display:flex;
+    flex-direction:row;
     align-items:center;
     gap:10px;
     z-index:40;
@@ -4047,7 +4118,7 @@ function adjustStoryBar() {
 
   if (mute) {
     mute.style.setProperty("position", "fixed", "important");
-    mute.style.setProperty("bottom", (bottom + 62) + "px", "important");
+    mute.style.setProperty("bottom", (bottom + 112) + "px", "important");
     mute.style.setProperty("z-index", "10000001", "important");
   }
 }
@@ -5169,6 +5240,17 @@ if (
     
     
    const storyHeader = document.getElementById("storyTopBar");
+   if (storyHeader) {
+     storyHeader.style.setProperty("display", "flex", "important");
+     storyHeader.style.setProperty("visibility", "visible", "important");
+     storyHeader.style.setProperty("opacity", "1", "important");
+     storyHeader.style.setProperty("pointer-events", "auto", "important");
+     storyHeader.style.setProperty("width", "auto", "important");
+     storyHeader.style.setProperty("height", "auto", "important");
+     storyHeader.style.setProperty("overflow", "visible", "important");
+     storyHeader.style.setProperty("background", "transparent", "important");
+     storyHeader.style.setProperty("box-shadow", "none", "important");
+   }
    storyHeader.onclick = null;
    storyHeader.innerHTML = `
   <img
@@ -5220,19 +5302,22 @@ if (
       : ""
   }
 
-  <div
-    id="storyViews"
-    onclick="event.preventDefault(); event.stopPropagation(); toggleStoryViewers()"
-    style="
-      margin-left:auto;
-      color:white;
-      font-size:14px;
-      cursor:pointer;
-      min-width:40px;
-      text-align:right;
-    "
-  ></div>
 `;
+
+// Story user info remains visible without a background bar. The view-count control stays
+// outside the header so it remains independently positioned beneath the close button.
+let storyViews = document.getElementById("storyViews");
+if (!storyViews) {
+  storyViews = document.createElement("div");
+  storyViews.id = "storyViews";
+  storyViews.style.cssText = "position:fixed;top:102px;right:24px;display:block;color:white;font-size:14px;line-height:20px;padding:5px 8px;min-width:45px;text-align:center;white-space:nowrap;background:rgba(0,0,0,.42);border-radius:14px;z-index:10000012;cursor:pointer;pointer-events:auto;";
+  storyViews.onclick = function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleStoryViewers();
+  };
+  document.getElementById("storyViewer")?.appendChild(storyViews);
+}
 
 // REAL-TIME STORY VIEWS
 if (window.storyViewChannel) {
