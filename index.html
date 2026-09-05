@@ -829,6 +829,14 @@ transform:scale(.95);
   display:flex;
 }
 
+/* Never let the main app navigation bar appear behind/on top of a story. */
+body:has(#storyViewer.active) #topBar{
+  display:none !important;
+  visibility:hidden !important;
+  opacity:0 !important;
+  pointer-events:none !important;
+}
+
 #storyReplyInput::placeholder{
   color:white;
   opacity:1;
@@ -2853,6 +2861,17 @@ body {
 }
 
 </style>
+
+<style id="story-navigation-final-fix">
+/* While the story viewer owns the screen, the main application top bar is
+   never allowed to render over it. The story's own header is #storyTopBar. */
+body:has(#storyViewer.active) #topBar {
+  display:none !important;
+  visibility:hidden !important;
+  opacity:0 !important;
+  pointer-events:none !important;
+}
+</style>
 </head>
 <body class="dark">
   
@@ -4517,27 +4536,52 @@ setStories(window.currentGroup.stories);
   
   window.__storyOpen = true;
 
-  // Story is a real navigation state. Push exactly one entry so Back
-  // returns to the screen that opened the story.
+  // Story is a real navigation state. Capture the actual visible screen
+  // before navigation changes appNavigation.current, then push exactly one
+  // story entry. This preserves Home -> Notifications -> Story -> Notifications.
   if (!window.appNavigation?.restoring &&
       history.state?.appScreen !== "storyViewer" &&
       typeof window.navigateToScreen === "function") {
+    const returnState = window.captureStoryReturnState
+      ? window.captureStoryReturnState()
+      : {
+          screen: window.appNavigation?.current?.screen || history.state?.appScreen || "app",
+          data: window.appNavigation?.current?.data || history.state?.data || {},
+          scrollY: window.appNavigation?.current?.scrollY || history.state?.scrollY || window.scrollY || 0
+        };
+
+    // The browser history entry must match the screen that is actually
+    // visible before we create the story entry. Older navigation code could
+    // leave a stale notifications entry here even while Home was visible.
+    if (history.state?.appScreen !== returnState.screen) {
+      history.replaceState(
+        {
+          appScreen: returnState.screen,
+          data: { ...(returnState.data || {}) },
+          scrollY: returnState.scrollY || 0
+        },
+        "",
+        "#" + returnState.screen
+      );
+      if (window.appNavigation) {
+        window.appNavigation.current = {
+          screen: returnState.screen,
+          data: { ...(returnState.data || {}) },
+          scrollY: returnState.scrollY || 0,
+          timestamp: Date.now()
+        };
+      }
+    }
+
     window.navigateToScreen(
       "storyViewer",
       {
         groupIndex: index,
         storyIndex: 0,
         context: null,
-        sourceScreen:
-          window.appNavigation?.current?.screen ||
-          history.state?.appScreen ||
-          "app",
-        sourceData:
-          window.appNavigation?.current?.data ||
-          history.state?.data ||
-          {},
-        sourceScrollY:
-          window.appNavigation?.current?.scrollY || 0
+        sourceScreen: returnState.screen,
+        sourceData: { ...(returnState.data || {}) },
+        sourceScrollY: returnState.scrollY || 0
       },
       true
     );
@@ -4564,6 +4608,15 @@ setStories(window.currentGroup.stories);
   viewer.style.zIndex = "999999";
   viewer.style.background = "black";
   viewer.style.touchAction = "none";
+
+  // The story owns the viewport; the main app top bar must never be visible.
+  const appTopBar = document.getElementById("topBar");
+  if (appTopBar) {
+    appTopBar.style.setProperty("display", "none", "important");
+    appTopBar.style.setProperty("visibility", "hidden", "important");
+    appTopBar.style.setProperty("opacity", "0", "important");
+    appTopBar.style.setProperty("pointer-events", "none", "important");
+  }
 
   const replyBar = document.getElementById("storyReplyBar");
   if (replyBar) {
@@ -4644,49 +4697,49 @@ window.openStoryAt = function(groupIndex, storyIndex, context = null) {
   window.storyIndex = storyIndex;
   window.__storyOpen = true;
 
-  // Capture the exact screen that was underneath the story before the story
-  // navigation entry is pushed. This is especially important for:
-  // Home -> Notifications -> Story -> Close, which must return to Notifications.
   if (!window.appNavigation?.restoring && history.state?.appScreen !== "storyViewer") {
-    const returnScreen =
-      window.appNavigation?.current?.screen ||
-      history.state?.appScreen ||
-      "app";
-    const returnData =
-      window.appNavigation?.current?.data ||
-      history.state?.data ||
-      {};
-    const returnScrollY =
-      (window.appNavigation?.current?.scrollY ??
-      history.state?.scrollY ??
-      window.scrollY ?? 0);
-
-    window.storyReturnState = {
-      screen: returnScreen,
-      data: { ...returnData },
-      scrollY: Number(returnScrollY) || 0
-    };
+    window.captureStoryReturnState();
   }
 
   if (!window.appNavigation?.restoring &&
       history.state?.appScreen !== "storyViewer" &&
       typeof window.navigateToScreen === "function") {
+    // Synchronize the browser's current entry with the captured source
+    // before pushing the story entry. This prevents a stale Notifications
+    // history entry from becoming the return destination when Home is what
+    // the user is actually viewing.
+    const returnState = window.storyReturnState ||
+      window.captureStoryReturnState();
+
+    if (history.state?.appScreen !== returnState.screen) {
+      history.replaceState(
+        {
+          appScreen: returnState.screen,
+          data: { ...(returnState.data || {}) },
+          scrollY: returnState.scrollY || 0
+        },
+        "",
+        "#" + returnState.screen
+      );
+      if (window.appNavigation) {
+        window.appNavigation.current = {
+          screen: returnState.screen,
+          data: { ...(returnState.data || {}) },
+          scrollY: returnState.scrollY || 0,
+          timestamp: Date.now()
+        };
+      }
+    }
+
     window.navigateToScreen(
       "storyViewer",
       {
         groupIndex,
         storyIndex,
         context,
-        sourceScreen:
-          window.appNavigation?.current?.screen ||
-          history.state?.appScreen ||
-          "app",
-        sourceData:
-          window.appNavigation?.current?.data ||
-          history.state?.data ||
-          {},
-        sourceScrollY:
-          window.appNavigation?.current?.scrollY || 0
+        sourceScreen: returnState.screen,
+        sourceData: { ...(returnState.data || {}) },
+        sourceScrollY: returnState.scrollY || 0
       },
       true
     );
@@ -4984,6 +5037,63 @@ window.resumeStory = function() {
       nextStory,
       window.storyRemaining
     );
+};
+
+// =====================================================
+// STORY RETURN STATE — CAPTURE THE ACTUAL VISIBLE SCREEN
+// =====================================================
+window.captureStoryReturnState = function () {
+  const candidates = [
+    "notificationsScreen",
+    "inboxScreen",
+    "chatScreen",
+    "searchScreen",
+    "profileSettingsScreen",
+    "profileScreen",
+    "commentsScreen",
+    "app"
+  ];
+
+  const isVisible = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return false;
+    const cs = getComputedStyle(el);
+    return cs.display !== "none" && cs.visibility !== "hidden" && cs.opacity !== "0";
+  };
+
+  // The visible DOM is the strongest signal. This prevents stale
+  // appNavigation.current from sending Home -> Notifications -> Story
+  // back to Notifications (or another old screen).
+  let screen = candidates.find(isVisible) || null;
+  const nav = window.appNavigation?.current;
+
+  // Prefer a real non-story navigation state when it agrees with a visible
+  // screen. Do not ever use a stale storyViewer state as the return target.
+  if (nav?.screen && nav.screen !== "storyViewer") {
+    if (screen === nav.screen || !screen) screen = nav.screen;
+  }
+
+  if (!screen) screen = history.state?.appScreen && history.state.appScreen !== "storyViewer"
+    ? history.state.appScreen
+    : "app";
+
+  const sourceData =
+    (nav?.screen === screen ? nav.data : null) ||
+    (history.state?.appScreen === screen ? history.state.data : null) ||
+    {};
+
+  const sourceScrollY =
+    nav?.screen === screen
+      ? nav.scrollY
+      : (history.state?.appScreen === screen ? history.state.scrollY : window.scrollY);
+
+  window.storyReturnState = {
+    screen,
+    data: { ...(sourceData || {}) },
+    scrollY: Number(sourceScrollY) || 0
+  };
+
+  return window.storyReturnState;
 };
 
 function keepUIVisible() {
@@ -5915,12 +6025,9 @@ window.closeStoryViewer = function () {
   document.body.style.touchAction = "";
   document.documentElement.style.touchAction = "";
 
-  // Restore the app chrome immediately. The navigation handler will also
-  // restore it after history.back(), but doing it here prevents a hidden
-  // top bar during the transition and makes close/reopen deterministic.
-  if (typeof window.restoreTopBar === "function") {
-    window.restoreTopBar();
-  }
+  // Do NOT restore the main app top bar while the story is still active.
+  // The popstate handler restores it after the exact underlying screen is
+  // restored, preventing the top bar from flashing over the story.
 
   // If the story owns the current history entry, go back exactly one entry.
   // The entry immediately underneath is the screen captured before the story
@@ -45028,6 +45135,54 @@ window.restoreNavigationState =
         if (typeof window.openStoryAt !== "function") {
             console.error("❌ openStoryAt() NOT FOUND");
             return false;
+        }
+
+        // Normal story opens get ONE history entry whose previous entry is
+        // exactly the screen that was visible before the story opened.
+        // Restoration from popstate must not create another entry.
+        if (!navigation.restoring && addHistory === true &&
+            history.state?.appScreen !== "storyViewer") {
+            const returnState = window.captureStoryReturnState
+                ? window.captureStoryReturnState()
+                : {
+                    screen: previous?.screen || "app",
+                    data: { ...(previous?.data || {}) },
+                    scrollY: previous?.scrollY || 0
+                  };
+
+            const storyState = {
+                appScreen: "storyViewer",
+                data: {
+                    ...data,
+                    sourceScreen: returnState.screen,
+                    sourceData: { ...(returnState.data || {}) },
+                    sourceScrollY: returnState.scrollY || 0
+                },
+                scrollY: currentScrollY
+            };
+
+            navigation.stack.push({
+                screen: returnState.screen,
+                data: { ...(returnState.data || {}) },
+                scrollY: returnState.scrollY || 0,
+                timestamp: Date.now()
+            });
+
+            navigation.current = {
+                screen: "storyViewer",
+                data: storyState.data,
+                scrollY: currentScrollY,
+                timestamp: Date.now()
+            };
+            window.syncNavigationSession(navigation.current);
+
+            history.pushState(
+                storyState,
+                "",
+                "#storyViewer"
+            );
+
+            window.storyReturnState = returnState;
         }
 
         window.openStoryAt(
