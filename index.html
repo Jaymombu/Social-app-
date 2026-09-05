@@ -913,12 +913,15 @@ body:has(#storyViewer.active) #topBar{
   bottom:82px !important;
   z-index:9999999 !important;
   pointer-events:auto !important;
-  overflow-y:auto !important;
+  overflow-y:scroll !important;
   overflow-x:hidden !important;
-  max-height:120px !important;
+  height:auto !important;
+  max-height:min(35vh, 280px) !important;
   -webkit-overflow-scrolling:touch !important;
   touch-action:pan-y !important;
-  overscroll-behavior:contain !important;
+  overscroll-behavior-y:contain !important;
+  overscroll-behavior-x:none !important;
+  scrollbar-width:thin !important;
 }
 
 #storyViewer.active #storyTopBar{
@@ -44107,12 +44110,27 @@ function appendReplies(data) {
   if (!box || box.dataset.scrollReady === "1") return;
 
   box.dataset.scrollReady = "1";
+
+  // The story viewer itself handles horizontal swipe navigation. Keep all
+  // touches that begin inside the replies list dedicated to vertical scroll.
+  // Do NOT call preventDefault(): the browser must be allowed to perform the
+  // native momentum scroll on Android.
+  ["touchstart", "touchmove", "touchend", "touchcancel"].forEach(type => {
+    box.addEventListener(type, e => {
+      e.stopPropagation();
+    }, { passive: true });
+  });
+
+  box.addEventListener("wheel", e => {
+    e.stopPropagation();
+  }, { passive: true });
+
   box.addEventListener("scroll", async function () {
     const story = window.storyList?.[window.storyIndex];
     if (!story || box.dataset.loadingMore === "1") return;
 
     const nearBottom =
-      box.scrollTop + box.clientHeight >= box.scrollHeight - 24;
+      box.scrollTop + box.clientHeight >= box.scrollHeight - 40;
 
     if (!nearBottom) return;
 
