@@ -938,7 +938,7 @@ transform:scale(.95);
   height:40px !important;
 }
 
-#storyViewer.active #storyTopBar > div{
+#storyViewer.active #storyTopBar > div:not(#storyViews){
   flex:0 1 auto !important;
   min-width:0 !important;
   display:flex !important;
@@ -959,23 +959,24 @@ transform:scale(.95);
   justify-content:center !important;
 }
 
-/* Story view count: independent of the hidden top bar and directly below
-   the close button. */
+/* Story view count: keep it in the same horizontal control row as the
+   avatar/name/delete controls. It must never sit underneath the close button. */
 #storyViewer.active #storyViews{
-  position:fixed !important;
-  top:102px !important;
-  right:24px !important;
+  position:static !important;
+  flex:0 0 auto !important;
   display:block !important;
   min-width:45px !important;
-  padding:5px 8px !important;
+  height:32px !important;
+  margin:0 0 0 8px !important;
+  padding:4px 8px !important;
   box-sizing:border-box !important;
   color:white !important;
   font-size:14px !important;
-  line-height:20px !important;
+  line-height:24px !important;
   text-align:center !important;
   white-space:nowrap !important;
   background:rgba(0,0,0,.42) !important;
-  border-radius:14px !important;
+  border-radius:16px !important;
   z-index:10000012 !important;
   cursor:pointer !important;
   pointer-events:auto !important;
@@ -4643,6 +4644,30 @@ window.openStoryAt = function(groupIndex, storyIndex, context = null) {
   window.storyIndex = storyIndex;
   window.__storyOpen = true;
 
+  // Capture the exact screen that was underneath the story before the story
+  // navigation entry is pushed. This is especially important for:
+  // Home -> Notifications -> Story -> Close, which must return to Notifications.
+  if (!window.appNavigation?.restoring && history.state?.appScreen !== "storyViewer") {
+    const returnScreen =
+      window.appNavigation?.current?.screen ||
+      history.state?.appScreen ||
+      "app";
+    const returnData =
+      window.appNavigation?.current?.data ||
+      history.state?.data ||
+      {};
+    const returnScrollY =
+      (window.appNavigation?.current?.scrollY ??
+      history.state?.scrollY ??
+      window.scrollY ?? 0);
+
+    window.storyReturnState = {
+      screen: returnScreen,
+      data: { ...returnData },
+      scrollY: Number(returnScrollY) || 0
+    };
+  }
+
   if (!window.appNavigation?.restoring &&
       history.state?.appScreen !== "storyViewer" &&
       typeof window.navigateToScreen === "function") {
@@ -5304,20 +5329,24 @@ if (
 
 `;
 
-// Story user info remains visible without a background bar. The view-count control stays
-// outside the header so it remains independently positioned beneath the close button.
+// Story view count belongs in the same horizontal row as the story identity
+// controls. The close button remains separate at the far right.
 let storyViews = document.getElementById("storyViews");
 if (!storyViews) {
   storyViews = document.createElement("div");
   storyViews.id = "storyViews";
-  storyViews.style.cssText = "position:fixed;top:102px;right:24px;display:block;color:white;font-size:14px;line-height:20px;padding:5px 8px;min-width:45px;text-align:center;white-space:nowrap;background:rgba(0,0,0,.42);border-radius:14px;z-index:10000012;cursor:pointer;pointer-events:auto;";
   storyViews.onclick = function(e) {
     e.preventDefault();
     e.stopPropagation();
     toggleStoryViewers();
   };
-  document.getElementById("storyViewer")?.appendChild(storyViews);
 }
+if (storyViews.parentElement !== storyHeader) {
+  storyHeader.appendChild(storyViews);
+}
+storyViews.style.removeProperty("top");
+storyViews.style.removeProperty("right");
+storyViews.style.removeProperty("position");
 
 // REAL-TIME STORY VIEWS
 if (window.storyViewChannel) {
@@ -5893,14 +5922,22 @@ window.closeStoryViewer = function () {
     window.restoreTopBar();
   }
 
-  // If the story owns the current history entry, let popstate restore the
-  // exact screen underneath it. Do not reload story data during this step.
+  // If the story owns the current history entry, go back exactly one entry.
+  // The entry immediately underneath is the screen captured before the story
+  // opened, so Home -> Notifications -> Story closes back to Notifications.
   if (history.state?.appScreen === "storyViewer" &&
       !window.appNavigation?.restoring) {
     history.back();
+  } else if (window.storyReturnState &&
+             typeof window.restoreNavigationState === "function") {
+    // Defensive fallback for cases where a story was opened without a story
+    // history entry. Restore the captured screen rather than guessing Home.
+    window.restoreNavigationState(window.storyReturnState);
   } else if (typeof window.restoreTopBar === "function") {
     window.restoreTopBar();
   }
+
+  window.storyReturnState = null;
 
   // Unlock a fresh open on the next event-loop turn.
   setTimeout(() => {
