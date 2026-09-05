@@ -46330,7 +46330,6 @@ const existingProfileUserId =
 
 if (
     existingProfile &&
-    existingProfile.style.display !== "none" &&
     String(existingProfileUserId) ===
         String(userId)
 ) {
@@ -46345,6 +46344,32 @@ if (
     // ---------------------------------------------
     // RESTORE PROFILE VISIBILITY
     // ---------------------------------------------
+    // The profile is intentionally hidden while Settings
+    // or another child screen is open. When Back returns
+    // here, reuse that already-rendered profile instead of
+    // rebuilding it (which could leave a blank screen while
+    // async profile loading runs).
+
+    [
+        "profileSettingsScreen",
+        "editProfileScreen",
+        "languageSettingsScreen",
+        "privacySettingsScreen",
+        "followRequestsScreen",
+        "savedPostsScreen",
+        "notificationsScreen",
+        "inboxScreen",
+        "chatScreen",
+        "commentsScreen"
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.style.display = "none";
+            el.style.visibility = "hidden";
+            el.style.opacity = "0";
+            el.style.pointerEvents = "none";
+        }
+    });
 
     existingProfile.style.display =
         "block";
