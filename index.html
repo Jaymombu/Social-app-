@@ -3564,7 +3564,8 @@ pointer-events:auto;
 
 <!-- CLOSE -->
 <button
-  onclick="closeStoryViewer()"
+  type="button"
+  onclick="event.preventDefault(); event.stopPropagation(); closeStoryViewer();"
   style="
     position:absolute;
     top:50px;
@@ -3582,7 +3583,8 @@ pointer-events:auto;
     color:white;
     font-size:32px;
 
-    z-index:30;
+    z-index:10001;
+    pointer-events:auto;
   "
 >
   ✕
@@ -4004,17 +4006,18 @@ function setStories(list) {
     window.storyList.map(s => [String(s.id), s])
   );
   
-  // STORY VARIABLES
-window.currentStoryVideo = null;
+  // Story runtime variables are initialized once outside setStories().
+  // setStories() must not erase the active open/context state.
+  window.currentStoryVideo = window.currentStoryVideo || null;
+  window.storyTimer = window.storyTimer || null;
+  if (typeof window.storyOpenContext === "undefined") {
+    window.storyOpenContext = null;
+  }
+  if (typeof window.__storyOpen !== "boolean") {
+    window.__storyOpen = false;
+  }
 
-window.storyList = window.storyList || [];
-window.__storyMap = new Map();
-window.storyTimer = null;
-window.storyOpenContext = null;
-window.__storyOpen = false;
-
-
-  // ✅ RESET STORY STATE EVERY TIME USER OPENS STORIES
+  // Reset playback state for the newly selected list.
   window.storyIndex = 0;
   window.storyPaused = false;
   window.storyRemaining = 0;
@@ -4343,10 +4346,53 @@ setStories(window.currentGroup.stories);
   
   window.__storyOpen = true;
 
+  // Story is a real navigation state. Push exactly one entry so Back
+  // returns to the screen that opened the story.
+  if (!window.appNavigation?.restoring &&
+      history.state?.appScreen !== "storyViewer" &&
+      typeof window.navigateToScreen === "function") {
+    window.navigateToScreen(
+      "storyViewer",
+      {
+        groupIndex: index,
+        storyIndex: 0,
+        context: null,
+        sourceScreen:
+          window.appNavigation?.current?.screen ||
+          history.state?.appScreen ||
+          "app",
+        sourceData:
+          window.appNavigation?.current?.data ||
+          history.state?.data ||
+          {},
+        sourceScrollY:
+          window.appNavigation?.current?.scrollY || 0
+      },
+      true
+    );
+  }
+
+  if (typeof window.hideTopBar === "function") {
+    window.hideTopBar();
+  }
+
   const viewer = document.getElementById("storyViewer");
 
   viewer.classList.add("active");
+  // closeStoryViewer() intentionally leaves the viewer fully hidden. Reset
+  // every visibility property here so opening the same story again is a
+  // genuine fresh open rather than only hiding the top bar.
   viewer.style.display = "block";
+  viewer.style.visibility = "visible";
+  viewer.style.opacity = "1";
+  viewer.style.pointerEvents = "auto";
+  viewer.style.position = "fixed";
+  viewer.style.inset = "0";
+  viewer.style.width = "100vw";
+  viewer.style.height = "100vh";
+  viewer.style.zIndex = "999999";
+  viewer.style.background = "black";
+  viewer.style.touchAction = "none";
 
   document.body.style.overflow = "hidden";
   document.documentElement.style.overflow = "hidden";
@@ -4399,12 +4445,43 @@ window.openStoryAt = function(groupIndex, storyIndex, context = null) {
   setStories(window.currentGroup.stories);
 
   window.storyIndex = storyIndex;
+  window.__storyOpen = true;
+
+  if (!window.appNavigation?.restoring &&
+      history.state?.appScreen !== "storyViewer" &&
+      typeof window.navigateToScreen === "function") {
+    window.navigateToScreen(
+      "storyViewer",
+      {
+        groupIndex,
+        storyIndex,
+        context,
+        sourceScreen:
+          window.appNavigation?.current?.screen ||
+          history.state?.appScreen ||
+          "app",
+        sourceData:
+          window.appNavigation?.current?.data ||
+          history.state?.data ||
+          {},
+        sourceScrollY:
+          window.appNavigation?.current?.scrollY || 0
+      },
+      true
+    );
+  }
+
+  if (typeof window.hideTopBar === "function") {
+    window.hideTopBar();
+  }
 
   const viewer = document.getElementById("storyViewer");
 
   viewer.classList.add("active");
 
   viewer.style.display = "block";
+  viewer.style.visibility = "visible";
+  viewer.style.opacity = "1";
   viewer.style.position = "fixed";
   viewer.style.inset = "0";
   viewer.style.width = "100vw";
@@ -5518,86 +5595,82 @@ window.deleteStory = async function(storyId){
 
   closeStoryViewer();
 
-  if (typeof loadStories === "function") {
-    loadStories();
-  }
 };
 
 window.closeStoryViewer = function () {
-  
+
+  if (window.__storyClosing) return;
+  window.__storyClosing = true;
   window.__storyOpen = false;
-  
-  console.trace("closeStoryViewer fired");
-  
+
   if (window.storyViewChannel) {
-  supabase.removeChannel(
-    window.storyViewChannel
-  );
+    supabase.removeChannel(window.storyViewChannel);
+    window.storyViewChannel = null;
+  }
 
-  window.storyViewChannel =
-    null;
-}
-
-if (window.storyReplyChannel) {
-
-  supabase.removeChannel(
-    window.storyReplyChannel
-  );
-
-  window.storyReplyChannel = null;
-
-}
+  if (window.storyReplyChannel) {
+    supabase.removeChannel(window.storyReplyChannel);
+    window.storyReplyChannel = null;
+  }
 
   clearTimeout(window.storyTimer);
-  
-  const audio =
-  document.getElementById("storyAudio");
+  clearTimeout(window.playBtnTimer);
+  clearTimeout(uiHideTimer);
 
-if (audio) {
-  audio.pause();
-  audio.currentTime = 0;
-  audio.src = "";
-}
+  const video = document.getElementById("storyVideo");
+  if (video) {
+    try {
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    } catch (e) {}
+  }
+
+  const audio = document.getElementById("storyAudio");
+  if (audio) {
+    audio.pause();
+    audio.currentTime = 0;
+    audio.src = "";
+  }
+
+  const viewersPanel = document.getElementById("storyViewersPanel");
+  if (viewersPanel) {
+    viewersPanel.style.display = "none";
+  }
+
+  const viewer = document.getElementById("storyViewer");
+  if (viewer) {
+    viewer.classList.remove("active");
+    viewer.style.display = "none";
+    viewer.style.visibility = "hidden";
+    viewer.style.opacity = "0";
+    viewer.style.pointerEvents = "none";
+  }
+
+  const replyInput = document.getElementById("storyReplyInput");
+  if (replyInput) replyInput.value = "";
+
+  const content = document.getElementById("storyContent");
+  if (content) content.innerHTML = "";
 
   document.body.style.overflow = "";
+  document.documentElement.style.overflow = "";
+  document.body.style.touchAction = "";
+  document.documentElement.style.touchAction = "";
 
-  document.body.style.touchAction =
-    "";
+  // If the story owns the current history entry, let popstate restore the
+  // exact screen underneath it. Do not reload story data during this step.
+  if (history.state?.appScreen === "storyViewer" &&
+      !window.appNavigation?.restoring) {
+    history.back();
+  } else if (typeof window.restoreTopBar === "function") {
+    window.restoreTopBar();
+  }
 
-  document.body.style.pointerEvents =
-    "";
-    
-    document.documentElement.style.overflow =
-  "";
-
-document.documentElement.style.touchAction =
-  "";
-
-  const viewer =
-    document.getElementById(
-      "storyViewer"
-    );
-
-  viewer.style.display = "none";
-  
-  loadStories();
-
-  viewer.style.pointerEvents =
-    "";
-    
-    const replyInput =
-  document.getElementById(
-    "storyReplyInput"
-  );
-
-if (replyInput) {
-  replyInput.value = "";
-}
-
-  document.getElementById(
-    "storyContent"
-  ).innerHTML = "";
-
+  // Unlock a fresh open on the next event-loop turn.
+  setTimeout(() => {
+    window.__storyClosing = false;
+  }, 0);
 };
 
 window.sendStoryReply = async function () {
@@ -23888,39 +23961,32 @@ window.openProfile = async function (
 
 
     // =================================================
-    // LOAD PROFILE — CACHE FIRST
+    // LOAD PROFILE
     // =================================================
 
-    let profile = null;
-    const cachedProfile =
-        navigationOptions.profileData ||
-        window._profileDataCache?.get(String(userId)) ||
-        null;
+    let profile;
 
-    if (cachedProfile && cachedProfile.avatar_url) {
-        // Render from the known-good snapshot immediately. The database
-        // refresh below is deliberately background-only.
-        profile = { ...cachedProfile };
-    } else {
-        try {
+    try {
 
-            const {
-                data,
-                error
-            } = await supabase
-                .from("profiles")
-                .select("*")
-                .eq("id", userId)
-                .maybeSingle();
+        const {
+            data,
+            error
+        } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", userId)
+            .maybeSingle();
 
-            if (error) {
-                throw error;
-            }
 
-            profile = data;
-
+        if (error) {
+            throw error;
         }
-        catch (error) {
+
+
+        profile = data;
+
+    }
+    catch (error) {
 
         console.error(
             "❌ PROFILE LOAD ERROR:",
@@ -23932,24 +23998,6 @@ window.openProfile = async function (
         );
 
         return false;
-        }
-    }
-
-    // Refresh the cached profile silently. This never controls the visible
-    // navigation and therefore cannot create a blank transition.
-    if (cachedProfile && userId) {
-        supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", userId)
-            .maybeSingle()
-            .then(({ data }) => {
-                if (data) {
-                    window._profileDataCache = window._profileDataCache || new Map();
-                    window._profileDataCache.set(String(userId), { ...data });
-                }
-            })
-            .catch(() => {});
     }
 
 
@@ -24640,9 +24688,6 @@ window.profileNavigationUserId =
 
         name:
             profileName,
-
-        profileData:
-            profile,
 
         returnSource:
             navigationSource,
@@ -27337,23 +27382,6 @@ window.openProfileVideo = async function (index) {
     const selectedPost =
         videos[index] || {};
 
-// Preserve the complete profile identity with the video navigation entry.
-// The return screen can render immediately from this snapshot instead of
-// waiting for another profile request (which was causing broken avatars).
-const profileSnapshot = {
-    id: selectedPost.user_id || window.profileNavigationUserId || null,
-    name: selectedPost.name || "User",
-    username: selectedPost.username || "",
-    avatar_url: selectedPost.avatar_url || selectedPost.profiles?.avatar_url || "",
-    cover_url: selectedPost.cover_url || selectedPost.profiles?.cover_url || null,
-    verified: selectedPost.verified === true || selectedPost.profiles?.verified === true
-};
-
-if (profileSnapshot.id) {
-    window._profileDataCache = window._profileDataCache || new Map();
-    window._profileDataCache.set(String(profileSnapshot.id), { ...profileSnapshot });
-}
-
 const mediaData = {
     source: "profile",
 
@@ -27375,9 +27403,6 @@ const mediaData = {
     name:
         selectedPost.name ||
         "User",
-
-    profileData:
-        profileSnapshot,
 
     url:
         selectedPost.file_url ||
@@ -44707,6 +44732,38 @@ window.restoreNavigationState =
 
 
     // =================================================
+    // STORY VIEWER
+    // =================================================
+
+    if (screen === "storyViewer") {
+        const groupIndex = Number(data.groupIndex);
+        const storyIndex = Number(data.storyIndex);
+
+        if (!Number.isInteger(groupIndex) ||
+            !window.storyGroups?.[groupIndex]) {
+            console.warn("⚠️ STORY RESTORE: GROUP NOT READY");
+            return false;
+        }
+
+        if (typeof window.openStoryAt !== "function") {
+            console.error("❌ openStoryAt() NOT FOUND");
+            return false;
+        }
+
+        window.openStoryAt(
+            groupIndex,
+            Number.isInteger(storyIndex) ? storyIndex : 0,
+            data.context || null
+        );
+
+        if (typeof window.hideTopBar === "function") {
+            window.hideTopBar();
+        }
+
+        return true;
+    }
+
+    // =================================================
     // HOME
     // =================================================
 
@@ -44910,11 +44967,6 @@ return true;
 
             sourceData:
                 data.sourceData ||
-                null,
-
-            profileData:
-                data.profileData ||
-                window._profileDataCache?.get(String(userId)) ||
                 null,
 
             tab:
@@ -46583,6 +46635,23 @@ window.addEventListener(
                 ) {
 
                     window.hidePhotoGalleryForNavigation();
+                }
+
+                // Story is an overlay/navigation state. When Back moves to
+                // another screen, remove the old story before restoring it.
+                if (restoreState.screen !== "storyViewer") {
+                    const storyViewer = document.getElementById("storyViewer");
+                    if (storyViewer) {
+                        storyViewer.classList.remove("active");
+                        storyViewer.style.display = "none";
+                        storyViewer.style.visibility = "hidden";
+                        storyViewer.style.opacity = "0";
+                        storyViewer.style.pointerEvents = "none";
+                    }
+                    window.__storyOpen = false;
+                    if (typeof window.restoreTopBar === "function") {
+                        window.restoreTopBar();
+                    }
                 }
 
 
