@@ -25436,9 +25436,34 @@ window.profileNavigationUserId =
                     avatarUrl
                 );
 
+                // Capture the mounted Profile as the authoritative parent.
+                // This prevents stale appNavigation/history data from becoming
+                // the return destination after Home/app history was reset.
+                const profileScroll =
+                    document.getElementById("profileScroll");
+
+                const profileSourceData = {
+                    ...(window.currentProfileNavigationData || {}),
+                    ...(window.appNavigation?.current?.screen === "profileScreen"
+                        ? (window.appNavigation.current.data || {})
+                        : {}),
+                    ...(history.state?.appScreen === "profileScreen"
+                        ? (history.state.data || {})
+                        : {}),
+                    screen: "profileScreen"
+                };
+
                 window.openMedia(
                     avatarUrl,
-                    "image"
+                    "image",
+                    {
+                        profileAvatarMedia: true,
+                        sourceScreen: "profileScreen",
+                        sourceData: profileSourceData,
+                        sourceScrollY: profileScroll
+                            ? Number(profileScroll.scrollTop) || 0
+                            : 0
+                    }
                 );
             }
         );
@@ -27201,12 +27226,51 @@ function createVideoPage(post, index) {
             `;
 
             const closeNestedAvatar = () => {
-                if (history.state?.appScreen === "mediaViewer" &&
-                    history.state?.data?.nestedAvatar === true) {
-                    history.back();
-                    return;
+                if (window._nestedAvatarClosing === true) return;
+                window._nestedAvatarClosing = true;
+
+                const isNestedHistoryEntry =
+                    history.state?.appScreen === "mediaViewer" &&
+                    history.state?.data?.nestedAvatar === true;
+
+                if (isNestedHistoryEntry) {
+                    // Consume ONLY the nested-avatar history entry. Replacing
+                    // it with another mediaViewer entry leaves duplicate
+                    // video entries and makes the parent video need two closes.
+                    overlay.remove();
+                    try {
+                        history.back();
+                        return;
+                    } catch (error) {
+                        console.warn("⚠️ NESTED AVATAR HISTORY BACK FAILED:", error);
+                    }
                 }
+
+                // Safe fallback if the nested history entry is unavailable.
                 overlay.remove();
+                window._nestedAvatarOpen = false;
+                window._nestedAvatarClosing = false;
+                window._nestedAvatarParentState = null;
+                window._nestedAvatarParentHistoryState = null;
+
+                if (window.appNavigation) {
+                    window.appNavigation.current = {
+                        screen: "mediaViewer",
+                        data: { ...parentMediaState },
+                        scrollY: Number(parentMediaState?.sourceScrollY) || 0,
+                        timestamp: Date.now()
+                    };
+                    try {
+                        sessionStorage.setItem(
+                            "appNavigationState",
+                            JSON.stringify(window.appNavigation.current)
+                        );
+                    } catch (error) {}
+                }
+
+                if (typeof window.hideTopBar === "function") {
+                    window.hideTopBar();
+                }
             };
 
             avatarClose.addEventListener("click", closeNestedAvatar);
@@ -27326,7 +27390,14 @@ function createVideoPage(post, index) {
             );
 
             window._nestedAvatarOpen = true;
-            window._nestedAvatarParentState = { ...parentMediaState };
+            window._nestedAvatarParentState = {
+                ...parentMediaState
+            };
+            window._nestedAvatarParentHistoryState = {
+                appScreen: "mediaViewer",
+                data: { ...parentMediaState },
+                scrollY: Number(history.state?.data?.sourceScrollY) || 0
+            };
 
             if (window.appNavigation) {
                 window.appNavigation.current = {
@@ -41286,15 +41357,27 @@ function adjustMediaViewerViewport() {
     const height = Math.max(1, Math.round(vv.height));
     const width = Math.max(1, Math.round(vv.width));
 
+    // IMPORTANT: #mediaViewer starts with inset:0 (top/right/bottom/left).
+    // When we set top/height but leave bottom/right from inset:0, CSS can
+    // resolve the fixed box against the full layout viewport and the browser
+    // bottom bar can still cover the lower part. Explicitly release right and
+    // bottom so the visible visualViewport rectangle is the actual box.
     viewer.style.setProperty("top", top + "px", "important");
     viewer.style.setProperty("left", Math.max(0, Math.round(vv.offsetLeft)) + "px", "important");
+    viewer.style.setProperty("right", "auto", "important");
+    viewer.style.setProperty("bottom", "auto", "important");
     viewer.style.setProperty("width", width + "px", "important");
     viewer.style.setProperty("height", height + "px", "important");
+    viewer.style.setProperty("max-height", height + "px", "important");
 
     const container = document.getElementById("mediaContainer");
     if (container && viewer.contains(container)) {
-        container.style.setProperty("height", "100%", "important");
+        container.style.setProperty("width", width + "px", "important");
+        container.style.setProperty("height", height + "px", "important");
+        container.style.setProperty("max-width", width + "px", "important");
         container.style.setProperty("max-height", height + "px", "important");
+        container.style.setProperty("padding-bottom", "20px", "important");
+        container.style.setProperty("box-sizing", "border-box", "important");
     }
 
     const video = document.getElementById("mediaVideo");
@@ -41306,6 +41389,7 @@ function adjustMediaViewerViewport() {
 }
 
 window.addEventListener("load", adjustMediaViewerViewport, { passive: true });
+window.addEventListener("pageshow", adjustMediaViewerViewport, { passive: true });
 window.addEventListener("resize", adjustMediaViewerViewport, { passive: true });
 window.addEventListener("orientationchange", () => setTimeout(adjustMediaViewerViewport, 100), { passive: true });
 if (window.visualViewport) {
@@ -41459,7 +41543,11 @@ window.openMedia = function (
         // tapping the avatar while watching a profile video), keep the
         // parent viewer state so Back returns to that viewer instead of
         // leaving it.
-        nestedMedia: options?.nestedMedia === true
+        nestedMedia: options?.nestedMedia === true,
+        // The profile avatar is a temporary overlay over an already-mounted
+        // Profile screen.  Mark it so closeMedia() can close it without
+        // traversing browser history and accidentally leaving Profile.
+        profileAvatarMedia: options?.profileAvatarMedia === true
     };
 
     window._mediaReturnState = {
@@ -42089,8 +42177,8 @@ window.openMedia = function (
         video.preload = "metadata";
 
         video.style.cssText = `
-            max-width:calc(100vw - 20px);
-            max-height:calc(100vh - 40px);
+            max-width:calc(100% - 20px);
+            max-height:calc(100% - 40px);
             width:auto;
             height:auto;
             object-fit:contain;
@@ -42131,7 +42219,14 @@ window.openMedia = function (
             video
         );
 
+        // Chrome on Android can animate its bottom browser bar after the
+        // viewer is opened. Re-measure while that chrome settles.
         adjustMediaViewerViewport();
+        requestAnimationFrame(adjustMediaViewerViewport);
+        setTimeout(adjustMediaViewerViewport, 50);
+        setTimeout(adjustMediaViewerViewport, 150);
+        setTimeout(adjustMediaViewerViewport, 300);
+        setTimeout(adjustMediaViewerViewport, 600);
 
         video.play().catch(
             error => {
@@ -44906,8 +45001,72 @@ window.closeMedia = function () {
         document.documentElement.style.touchAction = "";
     }
 
-    // Let the existing navigation system
-    // restore the screen and scroll position.
+    // Profile avatar is an overlay on top of the already-mounted Profile.
+    // Do NOT use history.back() here: the previous browser entry can be a
+    // different app screen, which could unexpectedly exit the Profile/app.
+    // Replace only the current media entry with the exact Profile state and
+    // reveal the existing Profile DOM without rebuilding/reloading it.
+    const currentMediaData = history.state?.appScreen === "mediaViewer"
+        ? history.state?.data
+        : null;
+
+    if (currentMediaData?.profileAvatarMedia === true &&
+        currentMediaData?.sourceScreen === "profileScreen") {
+
+        const profileState = {
+            appScreen: "profileScreen",
+            data: { ...(currentMediaData.sourceData || {}) },
+            scrollY: Number(currentMediaData.sourceScrollY) || 0
+        };
+
+        try {
+            history.replaceState(
+                profileState,
+                "",
+                location.href
+            );
+        } catch (error) {
+            console.warn(
+                "⚠️ PROFILE AVATAR HISTORY REPLACE FAILED:",
+                error
+            );
+        }
+
+        // Keep navigation/session state aligned with the entry we just
+        // restored.  This does not call openProfile() or rebuild the DOM.
+        if (window.appNavigation) {
+            window.appNavigation.current = {
+                screen: "profileScreen",
+                data: { ...(currentMediaData.sourceData || {}) },
+                scrollY: Number(currentMediaData.sourceScrollY) || 0
+            };
+        }
+
+        if (typeof window.syncNavigationSession === "function") {
+            try {
+                window.syncNavigationSession(profileState);
+            } catch (error) {}
+        }
+
+        const existingProfileScroll =
+            document.getElementById("profileScroll");
+        if (existingProfileScroll) {
+            existingProfileScroll.scrollTop =
+                Number(currentMediaData.sourceScrollY) || 0;
+        }
+
+        if (typeof window.hideTopBar === "function") {
+            window.hideTopBar();
+        }
+
+        // The temporary avatar layer is now fully consumed. Do not allow its
+        // return state to affect a later media/profile close operation.
+        window._mediaReturnState = null;
+
+        return;
+    }
+
+    // Let the existing navigation system restore every other media source.
     if (
         history.state?.appScreen ===
         "mediaViewer"
@@ -47699,37 +47858,88 @@ window.addEventListener(
             // removes its history entry, simply remove that overlay.  Do NOT
             // call restoreNavigationState(), because that would rebuild the
             // profile video and cause the visible reload/flash the user sees.
-            if (
-                window._nestedAvatarOpen === true &&
-                event.state?.appScreen === "mediaViewer" &&
-                event.state?.data?.nestedAvatar !== true
-            ) {
+            if (window._nestedAvatarOpen === true) {
                 const nestedAvatar =
                     document.getElementById("nestedAvatarViewer");
 
                 if (nestedAvatar) nestedAvatar.remove();
 
-                window._nestedAvatarOpen = false;
+                const parentData = {
+                    ...(window._nestedAvatarParentState || {})
+                };
 
-                if (window.appNavigation) {
-                    window.appNavigation.current = {
-                        screen: "mediaViewer",
-                        data: event.state.data || {},
-                        scrollY: Number(event.state.scrollY) || 0,
-                        timestamp: Date.now()
+                // If Back landed on the expected parent media entry, simply reveal
+                // the already-mounted video.  Do NOT rebuild it.
+                if (event.state?.appScreen === "mediaViewer" &&
+                    event.state?.data?.nestedAvatar !== true) {
+                    window._nestedAvatarOpen = false;
+                    window._nestedAvatarClosing = false;
+                    window._nestedAvatarParentState = null;
+                    window._nestedAvatarParentHistoryState = null;
+
+                    if (window.appNavigation) {
+                        window.appNavigation.current = {
+                            screen: "mediaViewer",
+                            data: event.state.data || parentData,
+                            scrollY: Number(event.state.scrollY) || 0,
+                            timestamp: Date.now()
+                        };
+                        try {
+                            sessionStorage.setItem(
+                                "appNavigationState",
+                                JSON.stringify(window.appNavigation.current)
+                            );
+                        } catch (error) {}
+                    }
+
+                    if (typeof window.hideTopBar === "function") {
+                        window.hideTopBar();
+                    }
+                    return;
+                }
+
+                // Safety net: if some other navigation handler caused Back to land
+                // on Profile/Home, restore the parent media history state WITHOUT
+                // rebuilding the video.  The existing #mediaViewer stays mounted.
+                if (parentData && Object.keys(parentData).length) {
+                    const parentState = {
+                        appScreen: "mediaViewer",
+                        data: parentData,
+                        scrollY: 0
                     };
+
                     try {
-                        sessionStorage.setItem(
-                            "appNavigationState",
-                            JSON.stringify(window.appNavigation.current)
+                        history.replaceState(
+                            parentState,
+                            "",
+                            location.href
                         );
                     } catch (error) {}
+
+                    window._nestedAvatarOpen = false;
+
+                    if (window.appNavigation) {
+                        window.appNavigation.current = {
+                            screen: "mediaViewer",
+                            data: parentData,
+                            scrollY: 0,
+                            timestamp: Date.now()
+                        };
+                        try {
+                            sessionStorage.setItem(
+                                "appNavigationState",
+                                JSON.stringify(window.appNavigation.current)
+                            );
+                        } catch (error) {}
+                    }
+
+                    if (typeof window.hideTopBar === "function") {
+                        window.hideTopBar();
+                    }
+                    return;
                 }
 
-                if (typeof window.hideTopBar === "function") {
-                    window.hideTopBar();
-                }
-
+                window._nestedAvatarOpen = false;
                 return;
             }
 
@@ -48200,6 +48410,19 @@ window.goHome = async function (explicitClick = false) {
       : "RETURN TO HOME"
   );
 
+  // =====================================================
+  // CANONICAL HOME / APP STATE RESET
+  // =====================================================
+  // Home is the app root. Clear only temporary overlay state here so an
+  // old media/avatar/gallery state can never leak into the next navigation.
+  // This does NOT rebuild Profile, Story, or the profile-video viewer.
+  window._nestedAvatarOpen = false;
+  window._nestedAvatarParentState = null;
+  window._nestedAvatarParentHistoryState = null;
+  window._mediaReturnState = null;
+  window.photoGalleryClosing = false;
+  window.photoGalleryState = null;
+
 window.homeWasExplicitlyClicked =
     explicitClick === true;
 
@@ -48257,6 +48480,55 @@ if (explicitClick === true) {
     console.log(
         "🏠 HOME CLICK → HISTORY RESET"
     );
+
+} else {
+
+    // When returning Home from another screen, popstate has already moved
+    // the browser to the destination entry. Canonicalize that entry too so
+    // stale overlay data cannot survive into the next Back/Close operation.
+    const canonicalHomeState = {
+        appScreen: "app",
+        data: {},
+        scrollY: 0
+    };
+
+    try {
+        history.replaceState(
+            canonicalHomeState,
+            "",
+            "#app"
+        );
+    } catch (error) {
+        console.warn(
+            "⚠️ HOME HISTORY CANONICALIZATION FAILED:",
+            error
+        );
+    }
+
+    if (window.appNavigation) {
+        // HOME is a navigation boundary. When we arrive here without an
+        // explicit Home click (for example after closing a screen), the
+        // previous internal mirror stack must also be consumed. Otherwise
+        // the next Back action can see a stale screen and require two taps.
+        window.appNavigation.stack = [];
+
+        const homeNavigationState = {
+            screen: "app",
+            data: {},
+            scrollY: 0,
+            timestamp: Date.now()
+        };
+
+        window.appNavigation.current =
+            homeNavigationState;
+
+        try {
+            sessionStorage.setItem(
+                "appNavigationState",
+                JSON.stringify(homeNavigationState)
+            );
+        } catch (error) {}
+    }
 
 }
 
