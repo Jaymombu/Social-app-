@@ -815,6 +815,7 @@ transform:scale(.95);
   background:black;
   z-index:999999;
   overflow:hidden;
+  --story-browser-bottom:0px;
 }
 
 #storyViewer.active{
@@ -872,7 +873,9 @@ transform:scale(.95);
   position:fixed !important;
   left:12px !important;
   right:12px !important;
-  bottom:calc(env(safe-area-inset-bottom, 0px) + 16px) !important;
+  /* --story-browser-bottom is updated from visualViewport so the bar
+     stays above Chrome's bottom address bar when it is visible. */
+  bottom:calc(var(--story-browser-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 16px) !important;
   width:auto !important;
   min-height:52px !important;
   display:flex !important;
@@ -884,7 +887,7 @@ transform:scale(.95);
 #storyViewer.active #storyMuteBtn{
   position:fixed !important;
   right:20px !important;
-  bottom:calc(env(safe-area-inset-bottom, 0px) + 82px) !important;
+  bottom:calc(var(--story-browser-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 82px) !important;
   z-index:10000001 !important;
 }
 
@@ -892,7 +895,7 @@ transform:scale(.95);
   position:fixed !important;
   left:15px !important;
   right:15px !important;
-  bottom:calc(env(safe-area-inset-bottom, 0px) + 82px) !important;
+  bottom:calc(var(--story-browser-bottom, 0px) + env(safe-area-inset-bottom, 0px) + 82px) !important;
   z-index:9999999 !important;
   pointer-events:none !important;
 }
@@ -4001,19 +4004,39 @@ window.logout = async function () {
 // =====================================================
 
 function adjustStoryBar() {
+  const viewer = document.getElementById("storyViewer");
   const bar = document.getElementById("storyReplyBar");
 
-  if (!bar || !window.visualViewport) return;
+  if (!viewer || !window.visualViewport) return;
 
-  const offset = window.innerHeight - window.visualViewport.height;
+  const vv = window.visualViewport;
 
-  bar.style.bottom = (offset + 16) + "px";
+  /*
+   * On Android Chrome the bottom address/navigation bar can occupy part of
+   * the visual viewport while the fixed story viewer still uses the layout
+   * viewport. Measure that difference and lift all bottom story controls by
+   * exactly that amount. This also reacts when Chrome expands/collapses the
+   * browser bar and when the keyboard opens.
+   */
+  const browserBottom = Math.max(0,
+    Math.round(window.innerHeight - vv.height - (vv.offsetTop || 0))
+  );
+
+  viewer.style.setProperty("--story-browser-bottom", browserBottom + "px");
+
+  /* Keep the inline fallback in sync, but the active-viewer CSS above is
+     authoritative because it also handles safe-area insets. */
+  if (bar) {
+    bar.style.setProperty("--story-browser-bottom", browserBottom + "px");
+  }
 }
 
-window.addEventListener("load", adjustStoryBar);
+window.addEventListener("load", adjustStoryBar, { passive: true });
 
-window.visualViewport?.addEventListener("resize", adjustStoryBar);
-window.addEventListener("resize", adjustStoryBar);
+window.visualViewport?.addEventListener("resize", adjustStoryBar, { passive: true });
+window.visualViewport?.addEventListener("scroll", adjustStoryBar, { passive: true });
+window.addEventListener("resize", adjustStoryBar, { passive: true });
+window.addEventListener("orientationchange", () => setTimeout(adjustStoryBar, 100), { passive: true });
 
 // ======================
 // THEME
