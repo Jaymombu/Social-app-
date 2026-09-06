@@ -39783,6 +39783,12 @@ window.openChat = async function (
     navigationOptions = {}
 ) {
 
+    // Each open gets its own generation. If the user switches A → B while
+    // an async profile/message request for A is still running, A is cancelled
+    // and is never allowed to paint into B's chat.
+    window.__chatOpenToken = (window.__chatOpenToken || 0) + 1;
+    const chatOpenToken = window.__chatOpenToken;
+
     console.log(
         "💬 OPENING CHAT:",
         userId,
@@ -39892,6 +39898,8 @@ window.openChat = async function (
         .eq("id", userId)
         .maybeSingle();
 
+    if (chatOpenToken !== window.__chatOpenToken) return;
+
     if (permissionError) {
 
         console.error(
@@ -39991,8 +39999,11 @@ window.openChat = async function (
     // SET CURRENT CHAT
     // =====================================================
 
-    currentChatUser =
-        userId;
+    if (chatOpenToken !== window.__chatOpenToken) return;
+
+    currentChatUser = userId;
+    window.__activeChatUserId = userId;
+    window.__chatForceBottom = true;
 
     // =====================================================
     // SAVE CHAT RETURN STATE
@@ -40204,25 +40215,22 @@ window.openChat = async function (
     // MARK MESSAGES AS SEEN
     // =====================================================
 
+    if (chatOpenToken !== window.__chatOpenToken || currentChatUser !== userId) return;
+
+    // Opening a chat is the point at which received messages become READ.
+    // Do this only for the chat that is currently being opened.
     await supabase
         .from("messages")
         .update({
             seen: true,
-            seen_at: new Date(),
+            seen_at: new Date().toISOString(),
             delivered: true
         })
-        .eq(
-            "sender_id",
-            userId
-        )
-        .eq(
-            "receiver_id",
-            session.user.id
-        )
-        .eq(
-            "seen",
-            false
-        );
+        .eq("sender_id", userId)
+        .eq("receiver_id", session.user.id)
+        .eq("seen", false);
+
+    if (chatOpenToken !== window.__chatOpenToken || currentChatUser !== userId) return;
 
     // =====================================================
     // UPDATE BADGE
@@ -40230,11 +40238,13 @@ window.openChat = async function (
 
     await loadUnreadMessages();
 
+    if (chatOpenToken !== window.__chatOpenToken || currentChatUser !== userId) return;
+
     // =====================================================
     // LOAD CHAT
     // =====================================================
 
-    await loadMessages();
+    await loadMessages(userId, chatOpenToken);
 
     // =====================================================
     // REALTIME
@@ -40332,6 +40342,10 @@ async function loadUnreadMessages() {
 // =====================================================
 
 window.openInbox = async function (addHistory = true) {
+
+  // Invalidate any chat opening/load that is still in flight.
+  window.__chatOpenToken = (window.__chatOpenToken || 0) + 1;
+  window.__chatLoadToken = (window.__chatLoadToken || 0) + 1;
 
   // Each inbox load gets a generation token. If a previous async load
   // finishes after the inbox was closed/reopened, it is ignored. This
@@ -41013,11 +41027,16 @@ openChat(
 
 };
 
-async function loadMessages() {
+async function loadMessages(chatUserId = currentChatUser, openToken = window.__chatOpenToken) {
+
+  // Never use a later value of currentChatUser to finish an older request.
+  // This is what prevents User A's results from being rendered into User B.
+  if (!chatUserId) return;
+  if (openToken !== window.__chatOpenToken || currentChatUser !== chatUserId) return;
 
   window.__chatLoadToken = (window.__chatLoadToken || 0) + 1;
   const chatLoadToken = window.__chatLoadToken;
-  const chatUserAtLoad = currentChatUser;
+  const chatUserAtLoad = chatUserId;
 
   // ✅ GET CURRENT USER
   const {
@@ -41052,7 +41071,7 @@ async function loadMessages() {
   )
 `)
     .or(
-  `and(sender_id.eq.${myId},receiver_id.eq.${currentChatUser}),and(sender_id.eq.${currentChatUser},receiver_id.eq.${myId})`
+  `and(sender_id.eq.${myId},receiver_id.eq.${chatUserId}),and(sender_id.eq.${chatUserId},receiver_id.eq.${myId})`
 )
     .order("created_at", {
       ascending: true
@@ -41099,6 +41118,9 @@ async function loadMessages() {
       }
     }, { passive:false });
   }
+
+  const forceBottom = window.__chatForceBottom === true;
+  window.__chatForceBottom = false;
 
   const wasNearBottom =
     chat.scrollHeight === 0 ||
@@ -41676,8 +41698,8 @@ min-height:14px;
   });
 
   requestAnimationFrame(() => {
-    if (chatLoadToken !== window.__chatLoadToken || currentChatUser !== chatUserAtLoad) return;
-    if (wasNearBottom) chat.scrollTop = chat.scrollHeight;
+    if (chatLoadToken !== window.__chatLoadToken || currentChatUser !== chatUserAtLoad || openToken !== window.__chatOpenToken) return;
+    if (forceBottom || wasNearBottom) chat.scrollTop = chat.scrollHeight;
   });
     
 }
@@ -42112,43 +42134,81 @@ function listenTyping(userId) {
 
 }
 
+function updateChatMessageStatus(message) {
+  if (!message?.id) return;
+  const el = document.getElementById(String(message.id));
+  const time = el?.querySelector?.(".messageTime");
+  if (!time || message.sender_id !== session?.user?.id) return;
+  const status = time.querySelector(".messageStatus");
+  if (!status) return;
+  status.className = "messageStatus " + (message.seen ? "seen" : message.delivered ? "delivered" : "sent");
+  status.textContent = message.seen || message.delivered ? "✓✓" : "✓";
+}
+
 function listenForSeenMessages(userId) {
 
   if (window.messageSeenChannel) {
     supabase.removeChannel(window.messageSeenChannel);
   }
 
+  const channelUserId = userId;
+
   window.messageSeenChannel = supabase
-    .channel("seen_" + userId)
+    .channel("seen_" + channelUserId + "_" + Date.now())
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "messages"
+      },
+      async (payload) => {
+        const msg = payload.new;
+        if (!msg || currentChatUser !== channelUserId) return;
+
+        // Sender side: the receiver has opened/read this exact message.
+        if (
+          msg.sender_id === session.user.id &&
+          msg.receiver_id === channelUserId
+        ) {
+          updateChatMessageStatus(msg);
+          loadMessages(channelUserId, window.__chatOpenToken);
+        }
+
+        await loadUnreadMessages();
+        window.scheduleInboxRefresh?.();
+      }
+    )
     .on(
       "postgres_changes",
       {
         event: "INSERT",
         schema: "public",
-        table: "messages",
-        filter: `receiver_id=eq.${session.user.id}`
+        table: "messages"
       },
       async (payload) => {
-
         const msg = payload.new;
-
-        if (msg.sender_id !== userId) return;
-
-        await supabase
-          .from("messages")
-          .update({
-            seen: true,
-            seen_at: new Date(),
-            delivered: true
-          })
-          .eq("id", msg.id);
-
-        await loadUnreadMessages();
-
-        loadMessages();
-
-        window.scheduleInboxRefresh?.();
-
+        if (!msg) return;
+        if (
+          currentChatUser === channelUserId &&
+          ((msg.sender_id === channelUserId && msg.receiver_id === session.user.id) ||
+           (msg.sender_id === session.user.id && msg.receiver_id === channelUserId))
+        ) {
+          if (msg.receiver_id === session.user.id && !msg.seen) {
+            await supabase
+              .from("messages")
+              .update({
+                delivered: true,
+                seen: true,
+                seen_at: new Date().toISOString()
+              })
+              .eq("id", msg.id)
+              .eq("receiver_id", session.user.id);
+          }
+          await loadUnreadMessages();
+          await loadMessages(channelUserId, window.__chatOpenToken);
+          window.scheduleInboxRefresh?.();
+        }
       }
     )
     .subscribe();
@@ -42354,7 +42414,7 @@ if (!window.chatRealtimeSubscription) {
     .on(
       "postgres_changes",
       {
-        event: "INSERT",
+        event: "*",
         schema: "public",
         table: "messages"
       },
@@ -43110,7 +43170,10 @@ window.hideTopBar = function () {
 
 window.closeChat = async function () {
 
+  window.__chatOpenToken = (window.__chatOpenToken || 0) + 1;
   window.__chatLoadToken = (window.__chatLoadToken || 0) + 1;
+  window.__activeChatUserId = null;
+  window.__chatForceBottom = false;
 
   console.log("🔙 CLOSE CHAT");
 
@@ -51674,7 +51737,20 @@ if (!msg) return;
   // If inbox is open, refresh it once (debounced).
   window.scheduleInboxRefresh?.();
 
-  // If current chat is open
+  // Mark incoming messages DELIVERED as soon as they reach this user.
+  // Do not mark them READ unless that exact conversation is currently open.
+  if (
+    msg.receiver_id === currentUser.id &&
+    msg.delivered !== true
+  ) {
+    await supabase
+      .from("messages")
+      .update({ delivered: true })
+      .eq("id", msg.id)
+      .eq("receiver_id", currentUser.id);
+  }
+
+  // If current chat is open, mark only messages from that exact chat as READ.
   if (
     currentChatUser &&
     (
@@ -51685,22 +51761,26 @@ if (!msg) return;
     )
   ) {
 
-    // Mark received messages as delivered
-    if (msg.receiver_id === currentUser.id) {
+    if (
+      msg.receiver_id === currentUser.id &&
+      currentChatUser === msg.sender_id &&
+      msg.seen !== true &&
+      document.getElementById("chatScreen")?.style.display === "flex"
+    ) {
+      await supabase
+        .from("messages")
+        .update({
+          seen: true,
+          seen_at: new Date().toISOString(),
+          delivered: true
+        })
+        .eq("id", msg.id)
+        .eq("receiver_id", currentUser.id)
+        .eq("seen", false);
+    }
 
-  await supabase
-    .from("messages")
-    .update({
-      delivered: true,
-      seen: true,
-      seen_at: new Date()
-    })
-    .eq("id", msg.id);
-
-}
-
-await loadUnreadMessages();
-await loadMessages();
+    await loadUnreadMessages();
+    await loadMessages(currentChatUser, window.__chatOpenToken);
 
   }
 
