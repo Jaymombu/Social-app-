@@ -418,6 +418,70 @@ body {
   box-shadow:0 3px 12px rgba(0,0,0,.25);
 }
 
+/* Add Story uses the same visual footprint as a story card */
+.add-story-card{
+  width:112px !important;
+  height:158px !important;
+  min-width:112px !important;
+  padding:0 !important;
+  margin:0 !important;
+  border-radius:16px !important;
+  border:1px solid rgba(255,255,255,.14) !important;
+  background:#151515 !important;
+  color:#fff !important;
+  box-shadow:0 3px 12px rgba(0,0,0,.25) !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:flex-end !important;
+  gap:8px !important;
+  position:relative !important;
+  overflow:hidden !important;
+  font:700 12px/1.2 Arial,sans-serif !important;
+  cursor:pointer !important;
+  box-sizing:border-box !important;
+}
+.add-story-card::before{
+  content:"+" !important;
+  position:absolute !important;
+  left:50% !important;
+  top:50% !important;
+  transform:translate(-50%,-58%) !important;
+  width:44px !important;
+  height:44px !important;
+  border-radius:50% !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  background:#1877f2 !important;
+  color:#fff !important;
+  font:400 32px/42px Arial,sans-serif !important;
+  box-shadow:0 2px 8px rgba(0,0,0,.35) !important;
+}
+.add-story-card::after{
+  content:"" !important;
+  position:absolute !important;
+  inset:0 !important;
+  background:linear-gradient(to bottom,transparent 55%,rgba(0,0,0,.72) 100%) !important;
+  pointer-events:none !important;
+}
+.add-story-card{
+  text-shadow:0 1px 3px rgba(0,0,0,.7) !important;
+}
+.add-story-card:hover{
+  transform:translateY(-1px) !important;
+}
+body:not(.dark) .add-story-card{
+  background:#f2f2f2 !important;
+  color:#111 !important;
+  border-color:#ddd !important;
+  box-shadow:0 3px 12px rgba(0,0,0,.12) !important;
+  text-shadow:none !important;
+}
+body:not(.dark) .add-story-card::after{
+  background:linear-gradient(to bottom,transparent 55%,rgba(255,255,255,.92) 100%) !important;
+}
+
 .story-user{
   padding:8px !important;
 }
@@ -492,6 +556,7 @@ body {
 
 @media (max-width:420px){
   .story-card{width:104px !important;height:150px !important;}
+  .add-story-card{width:104px !important;height:150px !important;min-width:104px !important;}
   .post-card{margin-left:8px !important;margin-right:8px !important;}
 }
 .post-card button {
@@ -3613,6 +3678,18 @@ body.dark{
 #inboxList img{
   background:var(--screen-soft) !important;
 }
+
+/* ---------- CHAT HEADER STABILITY ---------- */
+#chatHeader{display:flex !important;flex-wrap:nowrap !important;align-items:center !important;gap:10px !important;box-sizing:border-box !important;width:100% !important;min-width:0 !important;overflow:hidden !important;}
+#chatHeader > button:first-child{flex:0 0 40px !important;width:40px !important;min-width:40px !important;}
+#chatHeader > #chatAvatarWrap{flex:0 0 40px !important;width:40px !important;min-width:40px !important;height:40px !important;display:inline-block !important;}
+#chatHeader > #chatAvatarWrap > #chatAvatar{width:40px !important;height:40px !important;display:block !important;}
+#chatHeader > #chatAvatarWrap > #chatAvatarOnline{right:0 !important;bottom:0 !important;width:11px !important;height:11px !important;border-width:2px !important;}
+#chatHeader > #chatAvatarWrap + div{flex:1 1 auto !important;min-width:0 !important;overflow:hidden !important;}
+#chatHeader #chatName{min-width:0 !important;overflow:hidden !important;text-overflow:ellipsis !important;white-space:nowrap !important;}
+#chatHeader #chatStatus,#chatHeader #typingIndicator{overflow:hidden !important;text-overflow:ellipsis !important;white-space:nowrap !important;}
+#chatHeader > span:last-child{flex:0 0 34px !important;width:34px !important;min-width:34px !important;margin-left:auto !important;text-align:center !important;}
+#chatMessages .messageTime{display:flex !important;visibility:visible !important;opacity:1 !important;}
 
 /* ---------- CHAT ---------- */
 #chatScreen{
@@ -38659,7 +38736,7 @@ if (
           <div class="composer-row">
             <input type="file" id="mediaInput" accept="image/*,video/*" />
             <button id="postBtn">Post</button>
-            <button id="storyBtn">Add Story</button>
+            <button id="storyBtn" class="add-story-card" type="button" aria-label="Add Story">Add Story</button>
           </div>
           <input type="file" id="storyInput" accept="image/*,video/*" style="display:none;" />
           <input type="file" id="storyAudioInput" accept="audio/*" style="display:none;" />
@@ -40448,6 +40525,9 @@ window.openInbox = async function (addHistory = true) {
   await loadUnreadMessages();
   if (inboxLoadToken !== window.__inboxLoadToken) return;
 
+  // Sync the global chat badge whenever Inbox is opened.
+  await loadUnreadMessages();
+
   // =========================================
   // GET MESSAGES
   // =========================================
@@ -40870,6 +40950,10 @@ openChat(
 
 async function loadMessages() {
 
+  window.__chatLoadToken = (window.__chatLoadToken || 0) + 1;
+  const chatLoadToken = window.__chatLoadToken;
+  const chatUserAtLoad = currentChatUser;
+
   // ✅ GET CURRENT USER
   const {
     data: { session }
@@ -40908,6 +40992,8 @@ async function loadMessages() {
     .order("created_at", {
       ascending: true
     });
+
+  if (chatLoadToken !== window.__chatLoadToken || currentChatUser !== chatUserAtLoad) return;
 
   console.log("MESSAGES:", data);
   console.log("ERROR:", error);
@@ -40948,6 +41034,10 @@ async function loadMessages() {
       }
     }, { passive:false });
   }
+
+  const wasNearBottom =
+    chat.scrollHeight === 0 ||
+    (chat.scrollHeight - chat.scrollTop - chat.clientHeight < 160);
 
   chat.innerHTML = "";
   
@@ -41482,14 +41572,16 @@ ${
    <div
 class="messageTime"
 style="
-display:none;
-position:absolute;
-left:-65px;
-top:50%;
-transform:translateY(-50%);
+display:flex;
+align-items:center;
+justify-content:flex-end;
+gap:4px;
+position:static;
+margin-top:4px;
 font-size:11px;
 color:#999;
 white-space:nowrap;
+min-height:14px;
 ">
 
   ${
@@ -41518,12 +41610,10 @@ white-space:nowrap;
 `;
   });
 
-  const shouldScroll =
-chat.scrollHeight - chat.scrollTop - chat.clientHeight < 120;
-
-if(shouldScroll){
-  chat.scrollTop = chat.scrollHeight;
-}
+  requestAnimationFrame(() => {
+    if (chatLoadToken !== window.__chatLoadToken || currentChatUser !== chatUserAtLoad) return;
+    if (wasNearBottom) chat.scrollTop = chat.scrollHeight;
+  });
     
 }
 
@@ -42963,6 +43053,8 @@ window.hideTopBar = function () {
 // =====================================================
 
 window.closeChat = async function () {
+
+  window.__chatLoadToken = (window.__chatLoadToken || 0) + 1;
 
   console.log("🔙 CLOSE CHAT");
 
