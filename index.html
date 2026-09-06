@@ -269,6 +269,231 @@ body {
   border-bottom: 2px solid white;
   padding-bottom: 5px;
 }
+
+/* =====================================================
+   HOMEPAGE REDESIGN — layout only; navigation untouched
+===================================================== */
+#app > .home-shell{
+  padding:12px 0 0 !important;
+  min-height:0;
+  box-sizing:border-box;
+}
+
+#app .home-tabs{
+  position:sticky;
+  top:0;
+  z-index:20;
+  display:flex !important;
+  align-items:center;
+  justify-content:center !important;
+  gap:0;
+  height:48px;
+  margin:0 !important;
+  padding:0 18px;
+  box-sizing:border-box;
+  background:rgba(15,15,15,.96);
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+
+#app .home-tabs > div{
+  flex:1;
+  max-width:180px;
+  height:48px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:#8e8e93 !important;
+  font-size:15px;
+  font-weight:700;
+  border:0 !important;
+  padding:0 !important;
+  cursor:pointer;
+  position:relative;
+}
+
+#app .home-tabs > div.active-tab{
+  color:#fff !important;
+}
+
+#app .home-tabs > div.active-tab::after{
+  content:"";
+  position:absolute;
+  left:22%;
+  right:22%;
+  bottom:0;
+  height:2px;
+  border-radius:2px;
+  background:#fff;
+}
+
+#app .home-composer{
+  margin:10px 12px 4px;
+  padding:12px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:16px;
+  background:#171717;
+  box-sizing:border-box;
+}
+
+#app .home-composer textarea{
+  display:block;
+  width:100% !important;
+  height:56px !important;
+  margin:0 0 9px !important;
+  padding:11px 12px;
+  box-sizing:border-box;
+  resize:none;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:12px;
+  outline:none;
+  background:#101010;
+  color:#fff;
+  font:inherit;
+}
+
+#app .home-composer textarea::placeholder{color:#777;}
+
+#app .home-composer .composer-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+#app .home-composer input[type=file]{
+  flex:1 1 150px;
+  min-width:0;
+  margin:0 !important;
+  color:#aaa;
+  font-size:12px;
+}
+
+#app .home-composer button{
+  margin:0 !important;
+  border:0 !important;
+  border-radius:10px !important;
+  padding:9px 13px !important;
+  background:#1877f2 !important;
+  color:#fff !important;
+}
+
+#app .home-login{
+  display:flex;
+  justify-content:center;
+  padding:10px 12px 4px;
+}
+
+#app .home-login button{
+  border:0;
+  border-radius:999px;
+  padding:9px 24px;
+  background:#1877f2;
+  color:#fff;
+  font-weight:700;
+}
+
+#app .home-section-label{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:10px 14px 2px;
+  color:#fff;
+  font-size:15px;
+  font-weight:700;
+}
+
+#storiesBar{
+  gap:10px !important;
+  padding:10px 12px 14px !important;
+  margin:0 !important;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  background:#0f0f0f;
+}
+
+.story-card{
+  width:112px !important;
+  height:158px !important;
+  border-radius:16px !important;
+  border:1px solid rgba(255,255,255,.14) !important;
+  box-shadow:0 3px 12px rgba(0,0,0,.25);
+}
+
+.story-user{
+  padding:8px !important;
+}
+
+.story-avatar{
+  width:32px !important;
+  height:32px !important;
+  border:2px solid #1877f2 !important;
+}
+
+.story-username{
+  font-size:12px !important;
+  max-width:88px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+#posts{
+  min-height:calc(100vh - 230px) !important;
+  padding:8px 0 24px !important;
+  box-sizing:border-box;
+  background:#0f0f0f;
+}
+
+.post-card{
+  margin:10px 10px 16px !important;
+  padding:12px !important;
+  border-radius:16px !important;
+  background:#151515 !important;
+  border:1px solid rgba(255,255,255,.08) !important;
+  box-shadow:0 4px 16px rgba(0,0,0,.22) !important;
+}
+
+.post-card > div:first-child{
+  margin-bottom:8px !important;
+}
+
+.post-card .avatar{
+  width:46px !important;
+  height:46px !important;
+}
+
+.post-card video,
+.post-card img:not(.avatar){
+  width:100% !important;
+  max-width:100% !important;
+  max-height:680px !important;
+  margin-top:9px !important;
+  border-radius:13px !important;
+  object-fit:contain !important;
+  background:#000;
+}
+
+.post-card > div:last-of-type{
+  line-height:1.45;
+}
+
+.post-card .like-btn,
+.post-card button[onclick*="openComments"],
+.post-card button[onclick*="toggleSavePost"],
+.post-card button[onclick*="deletePost"]{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:38px;
+  margin:7px 5px 0 0 !important;
+  padding:8px 12px !important;
+  border-radius:999px !important;
+  font-size:13px;
+}
+
+@media (max-width:420px){
+  .story-card{width:104px !important;height:150px !important;}
+  .post-card{margin-left:8px !important;margin-right:8px !important;}
+}
 .post-card button {
   border:none;
   border-radius:10px;
@@ -2879,6 +3104,183 @@ body:has(#storyViewer.active) #topBar {
   visibility:hidden !important;
   opacity:0 !important;
   pointer-events:none !important;
+}
+</style>
+
+<style id="profile-video-hold-controls-style">
+.profile-video-hold-indicator{
+  position:absolute;
+  top:50%;
+  z-index:120;
+  transform:translateY(-50%);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 14px;
+  border-radius:999px;
+  background:rgba(0,0,0,.72);
+  color:#fff;
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:0 4px 18px rgba(0,0,0,.35);
+  font-weight:700;
+  font-size:15px;
+  pointer-events:none;
+  animation:profileVideoHoldPulse .75s ease-in-out infinite;
+}
+.profile-video-hold-indicator.rewind{left:18%;}
+.profile-video-hold-indicator.forward{right:18%;}
+.profile-video-hold-indicator.rewind .profile-video-hold-arrow,
+.profile-video-hold-indicator.forward .profile-video-hold-arrow{color:#fff;}
+.profile-video-hold-arrow{font-size:24px;line-height:1;animation:profileVideoHoldArrow .65s ease-in-out infinite;}
+.profile-video-hold-indicator.rewind .profile-video-hold-arrow{animation-name:profileVideoHoldArrowBack;}
+.profile-video-hold-label{font-size:14px;line-height:1;}
+@keyframes profileVideoHoldPulse{
+  0%,100%{opacity:.72;transform:translateY(-50%) scale(.96);}
+  50%{opacity:1;transform:translateY(-50%) scale(1.04);}
+}
+@keyframes profileVideoHoldArrow{
+  0%,100%{transform:translateX(0);}
+  50%{transform:translateX(7px);}
+}
+@keyframes profileVideoHoldArrowBack{
+  0%,100%{transform:translateX(0);}
+  50%{transform:translateX(-7px);}
+}
+</style>
+
+<style id="homepage-theme-card-fix">
+/* =====================================================
+   HOMEPAGE THEME-AWARE SURFACES
+   Keeps cards/backgrounds synchronized with light/dark theme.
+===================================================== */
+:root{
+  --home-surface:#f2f2f2;
+  --home-surface-alt:#ffffff;
+  --home-border:#dddddd;
+  --home-muted:#666;
+  --home-shadow:rgba(0,0,0,.10);
+}
+
+body.dark{
+  --home-surface:#1c1c1c;
+  --home-surface-alt:#151515;
+  --home-border:rgba(255,255,255,.10);
+  --home-muted:#aaa;
+  --home-shadow:rgba(0,0,0,.30);
+}
+
+/* Homepage cards */
+#app .home-composer,
+#app .story-card,
+#app .post-card{
+  background:var(--home-surface) !important;
+  color:var(--text) !important;
+  border-color:var(--home-border) !important;
+  box-shadow:0 4px 16px var(--home-shadow) !important;
+}
+
+#app .post-card{
+  background:var(--home-surface) !important;
+}
+
+#app .post-card button{
+  color:var(--text) !important;
+}
+
+#app .home-section-label{
+  color:var(--text) !important;
+}
+
+#app .home-tabs{
+  background:var(--bg) !important;
+  border-bottom-color:var(--home-border) !important;
+}
+
+#app .home-tabs > div{
+  color:var(--home-muted) !important;
+}
+
+#app .home-tabs > div.active-tab{
+  color:var(--text) !important;
+}
+
+#app .home-tabs > div.active-tab::after{
+  background:var(--text) !important;
+}
+
+#storiesBar,
+#posts{
+  background:var(--bg) !important;
+  border-color:var(--home-border) !important;
+}
+
+#app .home-composer textarea{
+  background:var(--bg) !important;
+  color:var(--text) !important;
+  border-color:var(--home-border) !important;
+}
+
+#app .home-composer textarea::placeholder{
+  color:var(--home-muted) !important;
+}
+</style>
+
+
+<style id="homepage-tabs-story-visibility-fix">
+/* Keep the Home tabs below the fixed top bar instead of hiding underneath it. */
+#app > .home-shell{
+  padding-top:60px !important;
+}
+
+#app .home-tabs{
+  position:sticky !important;
+  top:60px !important;
+  z-index:100 !important;
+  min-height:48px !important;
+  height:48px !important;
+  background:var(--bg) !important;
+  color:var(--text) !important;
+  border-bottom:1px solid var(--border) !important;
+}
+
+#app .home-tabs > div{
+  color:var(--text) !important;
+  opacity:.72;
+  visibility:visible !important;
+  display:flex !important;
+}
+
+#app .home-tabs > div.active-tab{
+  color:var(--text) !important;
+  opacity:1;
+}
+
+#app .home-tabs > div.active-tab::after{
+  background:var(--text) !important;
+}
+
+/* Make story cards slightly brighter without washing out the media. */
+#app .story-card{
+  background:var(--home-surface) !important;
+  border-color:var(--home-border) !important;
+}
+
+#app .story-card .story-overlay{
+  background:linear-gradient(
+    to top,
+    rgba(0,0,0,.58),
+    rgba(0,0,0,.04) 62%,
+    rgba(0,0,0,0)
+  ) !important;
+}
+
+body:not(.dark) #app .story-card .story-overlay{
+  background:linear-gradient(
+    to top,
+    rgba(0,0,0,.42),
+    rgba(0,0,0,.02) 62%,
+    rgba(0,0,0,0)
+  ) !important;
 }
 </style>
 </head>
@@ -27027,79 +27429,137 @@ function createVideoPage(post, index) {
     );
 
     // =====================================================
-    // LONG PRESS → 2× SPEED
+    // LONG PRESS → 2× FORWARD / 2× REWIND
     // =====================================================
 
     let pressTimer = null;
-    let fastForward = false;
+    let holdDirection = null;
+    let holdActive = false;
+    let holdStartTime = 0;
+    let holdStartPosition = 0;
+    let holdWasPlaying = false;
+    let holdOriginalPlaybackRate = 1;
+    let holdAnimationFrame = null;
 
-    video.addEventListener(
-        "pointerdown",
-        event => {
-            if (
-                event.clientX <=
-                page.clientWidth * 0.65
-            ) {
-                return;
+    const removeHoldIndicator = () => {
+        page.querySelector(".profile-video-hold-indicator")?.remove();
+    };
+
+    const stopHoldAnimation = () => {
+        if (holdAnimationFrame) {
+            cancelAnimationFrame(holdAnimationFrame);
+            holdAnimationFrame = null;
+        }
+    };
+
+    const createHoldIndicator = direction => {
+        removeHoldIndicator();
+
+        const indicator = document.createElement("div");
+        indicator.className =
+            `profile-video-hold-indicator ${direction === "forward" ? "forward" : "rewind"}`;
+        indicator.innerHTML = `
+            <div class="profile-video-hold-arrow">${direction === "forward" ? "»" : "«"}</div>
+            <div class="profile-video-hold-label">2×</div>
+        `;
+        page.appendChild(indicator);
+        return indicator;
+    };
+
+    const animateHold = () => {
+        if (!holdActive) return;
+
+        // Forward uses the browser's native 2× playback so the video keeps playing.
+        // Rewind must scrub backward manually because HTML video has no reverse rate.
+        if (holdDirection === "forward") {
+            holdAnimationFrame = requestAnimationFrame(animateHold);
+            return;
+        }
+
+        const elapsed = Math.max(0, Date.now() - holdStartTime);
+        const distance = (elapsed / 1000) * 2;
+
+        if (Number.isFinite(video.duration)) {
+            video.currentTime = Math.max(
+                0,
+                holdStartPosition - distance
+            );
+        }
+
+        holdAnimationFrame = requestAnimationFrame(animateHold);
+    };
+
+    const beginHold = event => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+
+        const x = event.clientX;
+        const width = page.clientWidth || window.innerWidth;
+        if (!width) return;
+
+        // Only the outer thirds are hold zones. The centre remains tap/like.
+        if (x <= width / 3) {
+            holdDirection = "rewind";
+        } else if (x >= width * 2 / 3) {
+            holdDirection = "forward";
+        } else {
+            holdDirection = null;
+            return;
+        }
+
+        clearTimeout(pressTimer);
+        pressTimer = setTimeout(() => {
+            holdActive = true;
+            holdStartTime = Date.now();
+            holdStartPosition = Number(video.currentTime) || 0;
+            holdWasPlaying = !video.paused;
+            holdOriginalPlaybackRate = Number(video.playbackRate) || 1;
+
+            // Forward: keep playing at 2× instead of pausing.
+            // Rewind: pause only while scrubbing backward.
+            if (holdDirection === "forward") {
+                video.playbackRate = 2;
+            } else {
+                video.pause();
             }
 
-            clearTimeout(pressTimer);
+            createHoldIndicator(holdDirection);
+            animateHold();
+        }, 250);
+    };
 
-            pressTimer = setTimeout(() => {
-                fastForward = true;
+    const stopHold = () => {
+        clearTimeout(pressTimer);
+        pressTimer = null;
 
-                video.playbackRate = 2;
-
-                if (
-                    !page.querySelector(
-                        ".profile-video-speed"
-                    )
-                ) {
-                    const speed =
-                        document.createElement("div");
-
-                    speed.className =
-                        "profile-video-speed";
-
-                    speed.textContent = "⏩ 2×";
-
-                    page.appendChild(speed);
-                }
-            }, 250);
+        if (!holdActive) {
+            holdDirection = null;
+            return;
         }
-    );
 
-    video.addEventListener(
-        "pointerup",
-        () => {
-            clearTimeout(pressTimer);
+        holdActive = false;
+        holdDirection = null;
+        stopHoldAnimation();
 
-            if (!fastForward) return;
-
-            fastForward = false;
-
-            video.playbackRate = 1;
-
-            page.querySelector(
-                ".profile-video-speed"
-            )?.remove();
+        // Restore the playback state from before the hold.
+        video.playbackRate = holdOriginalPlaybackRate || 1;
+        if (holdWasPlaying) {
+            video.play().catch(() => {});
         }
-    );
 
-    video.addEventListener(
-        "pointercancel",
-        () => {
-            clearTimeout(pressTimer);
+        removeHoldIndicator();
+    };
 
-            fastForward = false;
+    video.addEventListener("pointerdown", beginHold);
+    video.addEventListener("pointerup", stopHold);
+    video.addEventListener("pointercancel", stopHold);
+    video.addEventListener("pointerleave", stopHold);
 
-            video.playbackRate = 1;
-
-            page.querySelector(
-                ".profile-video-speed"
-            )?.remove();
-        }
-    );
+    // Android can lose the pointer event when the finger leaves the video.
+    document.addEventListener("pointerup", stopHold, { passive: true });
+    document.addEventListener("pointercancel", stopHold, { passive: true });
+    document.addEventListener("touchend", stopHold, { passive: true });
+    document.addEventListener("touchcancel", stopHold, { passive: true });
+    window.addEventListener("blur", stopHold);
 
     // =====================================================
     // INFO
@@ -29329,6 +29789,29 @@ window.loadFollowingUsers = async function () {
 window.__reuseSettingsChildScreen = function (screenId, addHistory, data = {}) {
     const screen = document.getElementById(screenId);
     if (!screen) return false;
+
+    const settingsStateData =
+        window.appNavigation?.current?.screen === "profileSettingsScreen"
+            ? (window.appNavigation.current.data || {})
+            : (history.state?.appScreen === "profileSettingsScreen"
+                ? (history.state.data || {})
+                : {});
+
+    const resolvedUserId =
+        data.userId ||
+        screen.dataset.userId ||
+        settingsStateData.userId ||
+        window.currentLanguageSettingsUserId ||
+        window.currentEditProfileUserId ||
+        session?.user?.id ||
+        null;
+
+    data = {
+        ...data,
+        ...(resolvedUserId ? { userId: resolvedUserId } : {})
+    };
+
+    screen.dataset.userId = resolvedUserId ? String(resolvedUserId) : "";
 
     [
         "profileSettingsScreen",
@@ -31600,10 +32083,18 @@ window.openLanguageSettings = async function (addHistory = true) {
 
     const existingLanguage = document.getElementById("languageSettingsScreen");
     if (existingLanguage) {
+        const languageUserId =
+            existingLanguage.dataset.userId ||
+            window.currentLanguageSettingsUserId ||
+            window.appNavigation?.current?.data?.userId ||
+            history.state?.data?.userId ||
+            session?.user?.id ||
+            null;
+
         if (window.__reuseSettingsChildScreen(
             "languageSettingsScreen",
             addHistory,
-            { userId: history.state?.data?.userId || window.appNavigation?.current?.data?.userId || null, source: "profileSettings" }
+            { userId: languageUserId, source: "profileSettings" }
         )) {
             console.log("♻️ REUSING EXISTING LANGUAGE SETTINGS");
             return true;
@@ -36771,70 +37262,38 @@ if (
   // =====================================================
 
   app.innerHTML = `
-    <div style="padding:70px 10px 10px;">
-    
-      <div id="tabs" style="
-        display:flex;
-        justify-content:space-around;
-        margin-bottom:10px;
-        color:#aaa;
-        font-weight:bold;
-      ">
-        <div id="tab-explore" class="active-tab">
-          🌍 Explore
-        </div>
+    <div class="home-shell">
 
-        <div id="tab-following">
-          👥 Following
-        </div>
+      <div id="tabs" class="home-tabs">
+        <div id="tab-explore" class="active-tab">🌍 Explore</div>
+        <div id="tab-following">👥 Following</div>
       </div>
 
       ${
         session
           ? `
-<textarea
-  id="postInput"
-  placeholder="Write something..."
-  style="
-    width:100%;
-    height:80px;
-    margin-bottom:10px;
-  "
-></textarea>
-
-<input
-  type="file"
-  id="mediaInput"
-  accept="image/*,video/*"
-  style="margin-bottom:10px;"
-/>
-
-<button id="postBtn">Post</button>
-
-<button id="storyBtn">Add Story</button>
-
-<input
-  type="file"
-  id="storyInput"
-  accept="image/*,video/*"
-  style="display:none;"
-/>
-
-<input
-  type="file"
-  id="storyAudioInput"
-  accept="audio/*"
-  style="display:none;"
-/>
-`
+        <div class="home-composer">
+          <textarea id="postInput" placeholder="Write something..."></textarea>
+          <div class="composer-row">
+            <input type="file" id="mediaInput" accept="image/*,video/*" />
+            <button id="postBtn">Post</button>
+            <button id="storyBtn">Add Story</button>
+          </div>
+          <input type="file" id="storyInput" accept="image/*,video/*" style="display:none;" />
+          <input type="file" id="storyAudioInput" accept="audio/*" style="display:none;" />
+        </div>
+        `
           : `
-<button id="login">Login</button>
-`
+        <div class="home-login">
+          <button id="login">Login</button>
+        </div>
+        `
       }
 
+      <div class="home-section-label"><span>Stories</span></div>
       <div id="storiesBar"></div>
 
-     <div id="posts"></div>
+      <div id="posts"></div>
 
     </div>
      `; 
@@ -46056,14 +46515,16 @@ window.restoreNavigationState =
     // media/photo overlay visible.
     // =================================================
 
-    if (
-        screen !==
-        "mediaViewer"
-    ) {
+    const restoringFromMediaViewer =
+        history.state?.appScreen === "mediaViewer";
 
-      if (
-        typeof window.hideMediaViewerForNavigation ===
-            "function"
+    if (
+        screen !== "mediaViewer" &&
+        !restoringFromMediaViewer
+    ) {
+        if (
+            typeof window.hideMediaViewerForNavigation ===
+                "function"
         ) {
             window.hideMediaViewerForNavigation();
         }
@@ -47441,41 +47902,65 @@ if (
     }
 
     // =================================================
-    // RESTORE THE CORRECT PROFILE IDENTITY
-    //
-    // IMPORTANT:
-    // Do NOT call openProfile().
-    //
-    // That would visibly open the profile again.
-    // We only restore the internal profile identity.
-    // =================================================
+    // DO NOT RESTORE/SHOW PROFILE BEFORE THE VIDEO
+    // The video is the visible destination. The profile is only the
+    // navigation source. Rebuilding Profile A here caused an unnecessary
+    // profile phase before the video appeared.
 
     const requestedUserId =
         data.userId
             ? String(data.userId)
-            : "";
+            : String(data.sourceData?.userId ||
+                     window.profileNavigationUserId ||
+                     "");
 
-    if (requestedUserId) {
-
-        window.profileNavigationUserId =
-            requestedUserId;
-
-        const profileScreen =
-            document.getElementById(
-                "profileScreen"
-            );
-
-        if (profileScreen) {
-            profileScreen.dataset.userId =
-                requestedUserId;
-        }
+    if (!requestedUserId) {
+        console.warn(
+            "⚠️ PROFILE VIDEO RESTORE: MISSING USER ID"
+        );
+        await restoreSource();
+        return false;
     }
 
-// =================================================
+    // Keep Profile A as the navigation source, but never make it the
+    // visible intermediate screen.
+    window.profileNavigationUserId = requestedUserId;
+
+    const existingProfileForVideo =
+        document.getElementById("profileScreen");
+
+    if (existingProfileForVideo) {
+        existingProfileForVideo.style.display = "none";
+        existingProfileForVideo.style.visibility = "hidden";
+        existingProfileForVideo.style.opacity = "0";
+        existingProfileForVideo.style.pointerEvents = "none";
+    }
+
+// SHOW THE DESTINATION VIEWER BEFORE ANY ASYNC PROFILE QUERY.
+// Keep a real video element visible immediately so restoration never exposes
+// a blank frame while the profile/video list is being fetched.
+const immediateViewer = document.getElementById("mediaViewer");
+if (immediateViewer) {
+    immediateViewer.style.cssText = `
+        position:fixed;inset:0;width:100vw;height:100vh;display:flex;
+        visibility:visible;opacity:1;pointer-events:auto;background:#000;
+        z-index:2147483647;overflow:hidden;
+    `;
+    immediateViewer.innerHTML = "";
+    const immediateVideo = document.createElement("video");
+    immediateVideo.src = String(data.url || "").trim();
+    immediateVideo.autoplay = true;
+    immediateVideo.playsInline = true;
+    immediateVideo.muted = false;
+    immediateVideo.style.cssText = "width:100%;height:100%;object-fit:contain;background:#000;";
+    immediateViewer.appendChild(immediateVideo);
+    immediateVideo.play().catch(() => {});
+}
+
 // LOAD PROFILE VIDEOS SILENTLY FOR RESTORE
 //
 // IMPORTANT:
-// Do NOT call loadProfileVideos() here.
+// Do NOT call openProfile() or loadProfileVideos() here.
 //
 // loadProfileVideos() also renders #profilePosts,
 // which can cause Profile A to become visually
@@ -47734,32 +48219,25 @@ if (requestedUserId) {
     // information point back to the actual profile.
     // =================================================
 
-    const previousNavigation =
-        window.appNavigation?.current || null;
-
-if (window.appNavigation) {
-
-    window.appNavigation.current = {
-        screen:
-            "profileScreen",
-
-        data: {
-            ...(data.sourceData || {}),
-            userId:
-                requestedUserId
-        },
-
-        scrollY:
-            Number.isFinite(
-                Number(data.sourceScrollY)
-            )
+    // openProfile() above already synchronized appNavigation with the
+    // correct Profile A when a different profile was mounted. Do not
+    // blindly overwrite that state here: doing so can erase the profile
+    // tab/source information needed when the viewer is closed.
+    if (window.appNavigation &&
+        window.appNavigation.current?.screen !== "profileScreen") {
+        window.appNavigation.current = {
+            screen: "profileScreen",
+            data: {
+                ...(data.sourceData || {}),
+                userId: requestedUserId,
+                tab: data.sourceData?.tab || "videos"
+            },
+            scrollY: Number.isFinite(Number(data.sourceScrollY))
                 ? Number(data.sourceScrollY)
                 : 0,
-
-        timestamp:
-            Date.now()
-    };
-}
+            timestamp: Date.now()
+        };
+    }
 
     try {
 
@@ -48314,11 +48792,15 @@ window.addEventListener(
                  * immediately remove the overlay before
                  * restoring the underlying screen.
                  */
-                if (
-                    restoreState.screen !==
-                    "mediaViewer"
-                ) {
+                const wasMediaViewer =
+                    history.state?.appScreen === "mediaViewer";
 
+                // Keep the old viewer visible until the destination has been
+                // restored. This prevents a blank transition on Back.
+                if (
+                    restoreState.screen !== "mediaViewer" &&
+                    !wasMediaViewer
+                ) {
                     window.hideMediaViewerForNavigation();
                 }
 
@@ -48377,9 +48859,19 @@ window.addEventListener(
                 }
 
 
+                const wasMediaViewerBeforeRestore =
+                    history.state?.appScreen === "mediaViewer";
+
                 await window.restoreNavigationState(
                     restoreState
                 );
+
+                // Destination is mounted; now it is safe to remove the old
+                // viewer without exposing a blank frame.
+                if (wasMediaViewerBeforeRestore &&
+                    restoreState.screen !== "mediaViewer") {
+                    window.hideMediaViewerForNavigation();
+                }
 
                 // ---------------------------------------------
                 // TOP BAR BELONGS TO THE DESTINATION SCREEN
