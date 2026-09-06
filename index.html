@@ -4285,6 +4285,50 @@ body.dark #chatMessages .chatMessage .chat-reply-media-preview{ color:#fff; }
 #chatMessages .chatMessage video[onclick]{ cursor:pointer !important; }
 </style>
 
+<style id="inbox-avatar-layout-final-fix">
+/* Preserve the fixed75 inbox row geometry while retaining realtime presence. */
+#inboxList .inbox-avatar-wrap{
+  width:55px !important;
+  height:55px !important;
+  min-width:55px !important;
+  min-height:55px !important;
+  flex:0 0 55px !important;
+  display:block !important;
+  position:relative !important;
+  overflow:visible !important;
+  line-height:0 !important;
+}
+#inboxList .inbox-avatar-wrap > img{
+  width:55px !important;
+  height:55px !important;
+  display:block !important;
+  flex:0 0 55px !important;
+}
+#inboxList .inbox-avatar-wrap > .online-indicator{
+  right:0 !important;
+  bottom:0 !important;
+  width:13px !important;
+  height:13px !important;
+  border-width:2px !important;
+}
+.search-avatar-wrap{
+  width:40px !important;
+  height:40px !important;
+  min-width:40px !important;
+  min-height:40px !important;
+  flex:0 0 40px !important;
+  display:block !important;
+  position:relative !important;
+  overflow:visible !important;
+  line-height:0 !important;
+}
+.search-avatar-wrap > .search-avatar-image{
+  width:40px !important;
+  height:40px !important;
+  display:block !important;
+}
+</style>
+
 <style id="chat-inbox-media-theme-final-fix">
 /* Inbox / chat surfaces must follow the selected theme even though the
    original markup contains fixed inline dark colours. */
@@ -40147,6 +40191,12 @@ async function loadUnreadMessages() {
 
 window.openInbox = async function (addHistory = true) {
 
+  // Each inbox load gets a generation token. If a previous async load
+  // finishes after the inbox was closed/reopened, it is ignored. This
+  // prevents duplicate/stale chat rows.
+  window.__inboxLoadToken = (window.__inboxLoadToken || 0) + 1;
+  const inboxLoadToken = window.__inboxLoadToken;
+
   console.log("📥 OPEN INBOX:", {
     addHistory,
     restoring: window.appNavigation?.restoring
@@ -40382,6 +40432,9 @@ window.openInbox = async function (addHistory = true) {
   const userId =
     sessionData.session?.user?.id;
 
+  // A newer open/close operation won while auth was loading.
+  if (inboxLoadToken !== window.__inboxLoadToken) return;
+
   if (!userId) {
 
     inbox.innerHTML =
@@ -40390,6 +40443,10 @@ window.openInbox = async function (addHistory = true) {
     return;
 
   }
+
+  // Keep the global inbox/unread badge accurate whenever Inbox is opened.
+  await loadUnreadMessages();
+  if (inboxLoadToken !== window.__inboxLoadToken) return;
 
   // =========================================
   // GET MESSAGES
@@ -40410,6 +40467,8 @@ window.openInbox = async function (addHistory = true) {
         ascending: false
       }
     );
+
+  if (inboxLoadToken !== window.__inboxLoadToken) return;
 
   if (error) {
 
@@ -40464,7 +40523,14 @@ window.openInbox = async function (addHistory = true) {
   });
 
   const chats =
-    Object.values(uniqueUsers);
+    Object.values(uniqueUsers)
+      .sort((a, b) => {
+        const at = new Date(a?.created_at || 0).getTime();
+        const bt = new Date(b?.created_at || 0).getTime();
+        return bt - at;
+      });
+
+  if (inboxLoadToken !== window.__inboxLoadToken) return;
 
   inbox.innerHTML = "";
 
@@ -40473,6 +40539,8 @@ window.openInbox = async function (addHistory = true) {
   // =========================================
 
   for (const msg of chats) {
+
+    if (inboxLoadToken !== window.__inboxLoadToken) return;
 
     const otherUser =
       msg.sender_id === userId
@@ -40496,6 +40564,8 @@ window.openInbox = async function (addHistory = true) {
         otherUser
       )
       .maybeSingle();
+
+    if (inboxLoadToken !== window.__inboxLoadToken) return;
 
     const div =
       document.createElement("div");
@@ -40692,7 +40762,7 @@ openChat(
 
     div.innerHTML = `
 
-      <span class="avatar-wrap" data-user-id="${escapeHtml(String(otherUser || ''))}" data-online="${profile?.online ? "true" : "false"}">
+      <span class="avatar-wrap inbox-avatar-wrap" data-user-id="${escapeHtml(String(otherUser || ''))}" data-online="${profile?.online ? "true" : "false"}" style="width:55px;height:55px;min-width:55px;min-height:55px;display:block;flex:0 0 55px;position:relative;overflow:visible;line-height:0;">
       <img
         src="${
           profile?.avatar_url ||
@@ -41931,11 +42001,7 @@ function listenForSeenMessages(userId) {
 
         loadMessages();
 
-        if (
-          document.getElementById("inboxScreen")?.style.display === "flex"
-        ) {
-          openInbox();
-        }
+        window.scheduleInboxRefresh?.();
 
       }
     )
@@ -42156,11 +42222,7 @@ if (!window.chatRealtimeSubscription) {
 
           loadUnreadMessages();
 
-          if (
-            document.getElementById("inboxScreen")?.style.display === "flex"
-          ) {
-            openInbox();
-          }
+          window.scheduleInboxRefresh?.();
 
         }
 
@@ -43072,6 +43134,9 @@ window.closeChat = async function () {
 // =====================================================
 
 window.closeInbox = function () {
+
+  // Invalidate any pending async inbox render immediately.
+  window.__inboxLoadToken = (window.__inboxLoadToken || 0) + 1;
 
   console.log("🔙 CLOSE INBOX");
 
@@ -51423,6 +51488,20 @@ function observeVideos() {
 
 }
 
+// Debounced inbox refresh used by realtime events. Multiple message/seen
+// events can arrive together; refresh the list once instead of starting
+// several concurrent openInbox() calls.
+window.scheduleInboxRefresh = function () {
+  if (document.getElementById("inboxScreen")?.style.display !== "flex") return;
+  clearTimeout(window.__inboxRefreshTimer);
+  window.__inboxRefreshTimer = setTimeout(() => {
+    window.__inboxRefreshTimer = null;
+    if (document.getElementById("inboxScreen")?.style.display === "flex") {
+      window.openInbox(false);
+    }
+  }, 80);
+};
+
 if (!window.messagesSubscription) {
 
   window.messagesSubscription =
@@ -51444,12 +51523,8 @@ if (!msg) return;
   // Update unread badge
   loadUnreadMessages();
 
-  // If inbox is open, refresh it
-  if (
-    document.getElementById("inboxScreen")?.style.display === "flex"
-  ) {
-    openInbox();
-  }
+  // If inbox is open, refresh it once (debounced).
+  window.scheduleInboxRefresh?.();
 
   // If current chat is open
   if (
@@ -51478,12 +51553,6 @@ if (!msg) return;
 
 await loadUnreadMessages();
 await loadMessages();
-
-if (
-  document.getElementById("inboxScreen")?.style.display === "flex"
-) {
-  openInbox();
-}
 
   }
 
