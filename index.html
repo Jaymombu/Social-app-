@@ -29463,8 +29463,6 @@ window.openEditProfile = async function (addHistory = true) {
         document.body.appendChild(screen);
     }
 
-    screen.dataset.userId = String(userId);
-
     // =================================================
     // HTML
     // =================================================
@@ -30841,7 +30839,7 @@ window.openProfileSettings = async function (addHistory = true) {
     // Profile uses its own scroll container, so window.scrollY is not
     // sufficient when Settings is opened from a scrolled profile.
     // Preserve the current profile state before creating the Settings entry.
-    const profileScroll = document.getElementById("profileScroll");
+    const profileScroll = document.getElementById("profileScrollContainer");
     const profileScrollY = profileScroll
         ? Number(profileScroll.scrollTop) || 0
         : (Number(window.appNavigation?.current?.scrollY) || Number(history.state?.scrollY) || 0);
@@ -30871,7 +30869,7 @@ window.openProfileSettings = async function (addHistory = true) {
     }
 
     // -------------------------------------------------
-    // CREATE ONCE / REUSE WITHOUT REBUILDING
+    // CREATE SCREEN ONCE
     // -------------------------------------------------
 
     let settingsScreen = document.getElementById("profileSettingsScreen");
@@ -30898,18 +30896,21 @@ window.openProfileSettings = async function (addHistory = true) {
         document.body.appendChild(settingsScreen);
     }
 
-    // IMPORTANT: Profile restoration hides Settings with display + visibility
-    // + opacity. Merely setting display:block later leaves it invisible.
-    // Always restore the complete visibility state before navigation.
-    if (typeof window.hideScreen === "function") {
-        [
-            "app", "commentsScreen", "profileScreen", "searchScreen",
-            "notificationsScreen", "inboxScreen", "chatScreen",
-            "storyViewer", "mediaViewer", "editProfileScreen",
-            "languageSettingsScreen", "privacySettingsScreen",
-            "followRequestsScreen", "savedPostsScreen"
-        ].forEach(id => window.hideScreen(id));
-    }
+    // -------------------------------------------------
+    // NORMALIZE SETTINGS VISIBILITY
+    // -------------------------------------------------
+
+    [
+        "app", "commentsScreen", "profileScreen", "searchScreen",
+        "notificationsScreen", "inboxScreen", "chatScreen",
+        "storyViewer", "mediaViewer", "editProfileScreen",
+        "languageSettingsScreen", "privacySettingsScreen",
+        "followRequestsScreen", "savedPostsScreen"
+    ].forEach(id => {
+        if (id !== "profileSettingsScreen" && typeof window.hideScreen === "function") {
+            window.hideScreen(id);
+        }
+    });
 
     if (typeof window.showScreen === "function") {
         window.showScreen("profileSettingsScreen", "block");
@@ -30918,39 +30919,6 @@ window.openProfileSettings = async function (addHistory = true) {
         settingsScreen.style.visibility = "visible";
         settingsScreen.style.opacity = "1";
         settingsScreen.style.pointerEvents = "auto";
-    }
-
-    document.body.style.overflow = "hidden";
-
-    if (typeof window.hideTopBar === "function") {
-        window.hideTopBar();
-    }
-    if (typeof window.lockBackground === "function") {
-        window.lockBackground();
-    }
-
-    // If Settings was already rendered, reuse it. Do not rebuild the DOM
-    // merely because the user navigated away and opened Settings again.
-    if (settingsScreen.dataset.rendered === "true") {
-        if (typeof window.navigateToScreen === "function") {
-            window.navigateToScreen(
-                "profileSettingsScreen",
-                {
-                    userId,
-                    source: "profile",
-                    returnScreen: "profileScreen",
-                    returnData: { ...(history.state?.data || {}) },
-                    returnScrollY: profileScrollY
-                },
-                addHistory
-            );
-        }
-
-        requestAnimationFrame(() => {
-            if (settingsScreen) settingsScreen.scrollTop = profileScrollY;
-        });
-
-        return true;
     }
 
     // -------------------------------------------------
@@ -30973,12 +30941,23 @@ window.openProfileSettings = async function (addHistory = true) {
     }
 
     // -------------------------------------------------
-    // VISIBILITY IS ALREADY NORMALIZED ABOVE
-    // -------------------------------------------------
-
-    // -------------------------------------------------
     // RENDER
     // -------------------------------------------------
+
+    // If Settings has already been rendered, keep the existing DOM and
+    // only reactivate it. Rebuilding the Settings DOM on every visit can
+    // invalidate child-screen state and event handlers.
+    if (settingsScreen.dataset.rendered === "true") {
+        if (typeof window.showScreen === "function") {
+            window.showScreen("profileSettingsScreen", "block");
+        } else {
+            settingsScreen.style.display = "block";
+            settingsScreen.style.visibility = "visible";
+            settingsScreen.style.opacity = "1";
+            settingsScreen.style.pointerEvents = "auto";
+        }
+        return true;
+    }
 
     settingsScreen.innerHTML = `
         <div style="
@@ -31624,7 +31603,7 @@ window.openLanguageSettings = async function (addHistory = true) {
         if (window.__reuseSettingsChildScreen(
             "languageSettingsScreen",
             addHistory,
-            { userId: session?.user?.id || null, source: "profileSettings" }
+            { userId: history.state?.data?.userId || window.appNavigation?.current?.data?.userId || null, source: "profileSettings" }
         )) {
             console.log("♻️ REUSING EXISTING LANGUAGE SETTINGS");
             return true;
@@ -33066,7 +33045,7 @@ window.openPrivacySettings = async function (addHistory = true) {
         if (window.__reuseSettingsChildScreen(
             "privacySettingsScreen",
             addHistory,
-            { userId: session?.user?.id || null, source: "profileSettings" }
+            { userId: history.state?.data?.userId || window.appNavigation?.current?.data?.userId || null, source: "profileSettings" }
         )) {
             console.log("♻️ REUSING EXISTING PRIVACY SETTINGS");
             return true;
@@ -46848,24 +46827,55 @@ if (
         screen ===
         "editProfileScreen"
     ) {
-        const existingEditProfile = document.getElementById("editProfileScreen");
-
-        if (existingEditProfile) {
-            ["profileSettingsScreen","languageSettingsScreen","privacySettingsScreen","followRequestsScreen","savedPostsScreen"]
-                .forEach(id => hideScreen(id));
-            showScreen("editProfileScreen", "block");
-            if (typeof window.hideTopBar === "function") window.hideTopBar();
-            if (typeof window.lockBackground === "function") window.lockBackground();
-            return true;
-        }
 
         try {
-            if (typeof window.openEditProfile !== "function") throw new Error("openEditProfile() not found");
-            await window.openEditProfile(false);
+
+            if (
+                typeof window.openEditProfile !==
+                "function"
+            ) {
+                throw new Error(
+                    "openEditProfile() not found"
+                );
+            }
+
+            await window.openEditProfile(
+                false
+            );
+
             return true;
+
         } catch (error) {
-            console.error("❌ EDIT PROFILE RESTORE FAILED:", error);
+
+            console.error(
+                "❌ EDIT PROFILE RESTORE FAILED:",
+                error
+            );
+
+            if (
+                typeof window.openProfileSettings ===
+                "function"
+            ) {
+
+                try {
+
+                    await window.openProfileSettings(
+                        false
+                    );
+
+                    return true;
+
+                } catch (settingsError) {
+
+                    console.error(
+                        "❌ SETTINGS FALLBACK FAILED:",
+                        settingsError
+                    );
+                }
+            }
+
             await restoreHome();
+
             return false;
         }
     }
@@ -46879,31 +46889,71 @@ if (
         screen ===
         "languageSettingsScreen"
     ) {
-        const existingLanguage = document.getElementById("languageSettingsScreen");
 
-        if (existingLanguage) {
-            ["profileSettingsScreen","editProfileScreen","privacySettingsScreen","followRequestsScreen","savedPostsScreen"]
-                .forEach(id => hideScreen(id));
-            showScreen("languageSettingsScreen", "block");
-            if (typeof window.hideTopBar === "function") window.hideTopBar();
-            if (typeof window.lockBackground === "function") window.lockBackground();
-            return true;
-        }
+        const userId =
+            data.userId ||
+            session?.user?.id ||
+            null;
 
-        const userId = data.userId || null;
         if (!userId) {
-            console.error("❌ LANGUAGE RESTORE: MISSING USER ID");
+
+            console.error(
+                "❌ LANGUAGE RESTORE: MISSING USER ID"
+            );
+
             await restoreHome();
+
             return false;
         }
 
         try {
-            if (typeof window.openLanguageSettings !== "function") throw new Error("openLanguageSettings() not found");
-            await window.openLanguageSettings(false);
+
+            if (
+                typeof window.openLanguageSettings !==
+                "function"
+            ) {
+                throw new Error(
+                    "openLanguageSettings() not found"
+                );
+            }
+
+            await window.openLanguageSettings(
+                false
+            );
+
             return true;
+
         } catch (error) {
-            console.error("❌ LANGUAGE SETTINGS RESTORE FAILED:", error);
+
+            console.error(
+                "❌ LANGUAGE SETTINGS RESTORE FAILED:",
+                error
+            );
+
+            if (
+                typeof window.openProfileSettings ===
+                "function"
+            ) {
+
+                try {
+
+                    await window.openProfileSettings(
+                        false
+                    );
+
+                    return true;
+
+                } catch (settingsError) {
+
+                    console.error(
+                        "❌ SETTINGS FALLBACK FAILED:",
+                        settingsError
+                    );
+                }
+            }
+
             await restoreHome();
+
             return false;
         }
     }
