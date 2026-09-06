@@ -4285,6 +4285,79 @@ body.dark #chatMessages .chatMessage .chat-reply-media-preview{ color:#fff; }
 #chatMessages .chatMessage video[onclick]{ cursor:pointer !important; }
 </style>
 
+<style id="chat-inbox-media-theme-final-fix">
+/* Inbox / chat surfaces must follow the selected theme even though the
+   original markup contains fixed inline dark colours. */
+body.light #inboxScreen,
+body:not(.dark) #inboxScreen{background:#fff !important;color:#171717 !important;}
+body.dark #inboxScreen{background:#0f0f0f !important;color:#fff !important;}
+body.light #inboxList > div,
+body:not(.dark) #inboxList > div{background:#fff !important;color:#171717 !important;border-bottom-color:#ddd !important;}
+body.dark #inboxList > div{background:#0f0f0f !important;color:#fff !important;border-bottom-color:#292929 !important;}
+body.light #inboxList > div div,
+body:not(.dark) #inboxList > div div{color:#171717 !important;}
+body.dark #inboxList > div div{color:#fff !important;}
+body.light #inboxList > div div div[style*="color:#aaa"],
+body:not(.dark) #inboxList > div div div[style*="color:#aaa"]{color:#777 !important;}
+body.dark #inboxList > div div div[style*="color:#aaa"]{color:#aaa !important;}
+body.light #inboxList img,
+body:not(.dark) #inboxList img{background:#eee !important;}
+body.dark #inboxList img{background:#222 !important;}
+
+body.light #inboxScreen > div:first-child,
+body:not(.dark) #inboxScreen > div:first-child{background:#f7f7f7 !important;border-bottom-color:#ddd !important;}
+body.dark #inboxScreen > div:first-child{background:#151515 !important;border-bottom-color:#292929 !important;}
+body.light #inboxScreen > div:first-child > div{color:#171717 !important;}
+body.dark #inboxScreen > div:first-child > div{color:#fff !important;}
+body.light #inboxScreen button,
+body:not(.dark) #inboxScreen button{color:#171717 !important;}
+body.dark #inboxScreen button{color:#fff !important;}
+
+body.light #chatScreen,
+body:not(.dark) #chatScreen{background:#fff !important;color:#171717 !important;}
+body.dark #chatScreen{background:#0f0f0f !important;color:#fff !important;}
+body.light #chatMessages,
+body:not(.dark) #chatMessages{background:#fff !important;color:#171717 !important;}
+body.dark #chatMessages{background:#0f0f0f !important;color:#fff !important;}
+body.light #chatScreen input,
+body.light #chatScreen textarea,
+body:not(.dark) #chatScreen input,
+body:not(.dark) #chatScreen textarea{background:#f1f1f1 !important;color:#171717 !important;border-color:#ddd !important;}
+body.dark #chatScreen input,
+body.dark #chatScreen textarea{background:#1b1b1b !important;color:#fff !important;border-color:#333 !important;}
+
+/* Received bubbles and reply previews. */
+body.light #chatMessages .chatMessage[style*="background:#222"],
+body.light #chatMessages .chatMessage[style*="background: #222"],
+body:not(.dark) #chatMessages .chatMessage[style*="background:#222"],
+body:not(.dark) #chatMessages .chatMessage[style*="background: #222"]{background:#ededed !important;color:#171717 !important;}
+body.dark #chatMessages .chatMessage[style*="background:#222"],
+body.dark #chatMessages .chatMessage[style*="background: #222"]{background:#222 !important;color:#fff !important;}
+body.light #chatMessages .chat-reply-media-preview,
+body:not(.dark) #chatMessages .chat-reply-media-preview{background:#e9e9e9 !important;color:#171717 !important;border-left-color:#1d9bf0 !important;}
+body.dark #chatMessages .chat-reply-media-preview{background:#242424 !important;color:#fff !important;}
+body.light #chatMessages .chat-reply-media-preview > div[style*="background:rgba(127,127,127,.12)"],
+body:not(.dark) #chatMessages .chat-reply-media-preview > div[style*="background:rgba(127,127,127,.12)"]{background:#ddd !important;color:#171717 !important;}
+body.dark #chatMessages .chat-reply-media-preview > div[style*="background:rgba(127,127,127,.12)"]{background:#303030 !important;color:#fff !important;}
+
+/* Media inside chat should never inherit a pale card colour. */
+#chatMessages .chatMessage img,
+#chatMessages .chatMessage video{background:#000 !important;}
+#chatMessages .chat-reply-media-preview img{background:#000 !important;}
+
+/* Make media/reply previews reliably tappable. */
+#chatMessages .chat-reply-media-preview,
+#chatMessages .chat-reply-media-preview img,
+#chatMessages .chat-reply-media-preview video,
+#chatMessages .chatMessage > img[onclick],
+#chatMessages .chatMessage > video[onclick]{cursor:pointer !important;touch-action:manipulation;}
+
+/* Never show the browser's native fullscreen affordance on app-owned media. */
+#mediaViewer video::-webkit-media-controls-fullscreen-button{display:none !important;}
+#mediaViewer video::-webkit-media-controls-picture-in-picture-button{display:none !important;}
+#mediaViewer, #mediaViewer video{touch-action:none !important;-webkit-touch-callout:none !important;}
+</style>
+
 <style id="media-video-gesture-style">
 .media-gesture-hud{
  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
@@ -4323,6 +4396,53 @@ body.dark #chatMessages .chatMessage .chat-reply-media-preview{ color:#fff; }
   line-height:1.15 !important;
   padding-bottom:2px !important;
 }
+</style>
+
+<style id="verified-badge-online-indicator-style">
+/* Clean verified badge + online indicator, shared across avatar surfaces. */
+.verified-badge{
+  display:inline-flex !important;
+  width:17px !important;
+  height:17px !important;
+  min-width:17px !important;
+  border-radius:50% !important;
+  align-items:center !important;
+  justify-content:center !important;
+  background:#1d9bf0 !important;
+  color:#fff !important;
+  font:800 11px/17px Arial,sans-serif !important;
+  vertical-align:middle !important;
+  margin-left:5px !important;
+  box-sizing:border-box !important;
+  text-indent:0 !important;
+}
+.verified-badge::before{content:"✓" !important;}
+.avatar-wrap,.story-avatar-wrap,.chat-avatar-wrap,.profile-avatar-wrap{
+  position:relative !important;
+  display:inline-block !important;
+  flex:0 0 auto !important;
+  line-height:0 !important;
+}
+.avatar-wrap .online-indicator,.story-avatar-wrap .online-indicator,.chat-avatar-wrap .online-indicator,.profile-avatar-wrap .online-indicator{
+  position:absolute !important;
+  right:1px !important;
+  bottom:1px !important;
+  width:11px !important;
+  height:11px !important;
+  border-radius:50% !important;
+  background:#25d366 !important;
+  border:2px solid var(--avatar-online-border,#fff) !important;
+  box-sizing:border-box !important;
+  z-index:4 !important;
+}
+body.dark .avatar-wrap .online-indicator,body.dark .story-avatar-wrap .online-indicator,body.dark .chat-avatar-wrap .online-indicator,body.dark .profile-avatar-wrap .online-indicator{
+  --avatar-online-border:#111;
+}
+body.light .avatar-wrap .online-indicator,body.light .story-avatar-wrap .online-indicator,body:not(.dark) .avatar-wrap .online-indicator,body:not(.dark) .story-avatar-wrap .online-indicator,body:not(.dark) .chat-avatar-wrap .online-indicator,body.light .chat-avatar-wrap .online-indicator,body.light .profile-avatar-wrap .online-indicator{
+  --avatar-online-border:#fff;
+}
+.story-avatar-wrap{width:40px !important;height:40px !important;}
+.story-avatar-wrap .story-avatar{width:40px !important;height:40px !important;}
 </style>
 </head>
 <body class="dark">
@@ -5810,10 +5930,13 @@ stories.forEach(story => {
           <!-- USER -->
           <div class="story-user">
 
-            <img
-              class="story-avatar"
-              src="${group.avatar}"
-            >
+            <span class="story-avatar-wrap">
+              <img
+                class="story-avatar"
+                src="${group.avatar}"
+              >
+              ${latestStory.online === true ? '<span class="online-indicator" aria-label="Online"></span>' : ''}
+            </span>
 
             <div class="story-username">
               ${group.name}
@@ -8545,26 +8668,29 @@ const isOwner =
       margin-bottom:10px;
     ">
 
-      <img
-  class="avatar"
-  src="${escapeHtml(avatarSrc)}"
-  onclick='openMedia(
-    ${JSON.stringify(avatarSrc)},
-    "image"
-  )'
-  onerror="
-    this.src='${fallbackAvatar}'
-  "
-  style="
-    width:50px;
-    height:50px;
-    border-radius:50%;
-    object-fit:cover;
-    background:#222;
-    flex-shrink:0;
-    cursor:pointer;
-  "
-/>
+      <span class="avatar-wrap" style="width:50px;height:50px;">
+        <img
+    class="avatar"
+    src="${escapeHtml(avatarSrc)}"
+    onclick='openMedia(
+      ${JSON.stringify(avatarSrc)},
+      "image"
+    )'
+    onerror="
+      this.src='${fallbackAvatar}'
+    "
+    style="
+      width:50px;
+      height:50px;
+      border-radius:50%;
+      object-fit:cover;
+      background:#222;
+      flex-shrink:0;
+      cursor:pointer;
+    "
+  />
+        ${post.online === true || profile.online === true ? '<span class="online-indicator" aria-label="Online"></span>' : ''}
+      </span>
 
       <div style="
         flex:1;
@@ -8590,13 +8716,7 @@ const isOwner =
           ${
             profileVerified
               ? `
-                <span style="
-                  color:#1d9bf0;
-                  font-size:14px;
-                  margin-left:4px;
-                ">
-                  ✔️
-                </span>
+                <span class="verified-badge" aria-label="Verified"></span>
               `
               : ""
           }
@@ -40544,6 +40664,38 @@ async function loadMessages() {
       "chatMessages"
     );
 
+  // Reliable media opening for chat photos/videos and replied media.
+  // Delegation avoids fragile inline onclick handlers when storage URLs
+  // contain quotes or query parameters.
+  if (chat && !chat.dataset.mediaDelegateBound) {
+    chat.dataset.mediaDelegateBound = "true";
+    chat.addEventListener("click", event => {
+      const mediaEl = event.target.closest?.("[data-chat-media-open=\"true\"]");
+      const replyEl = event.target.closest?.("[data-chat-reply-open]");
+      const target = mediaEl || replyEl;
+      if (!target) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (window.selectionMode) {
+        const id = target.dataset.messageId || target.closest(".chatMessage")?.id;
+        if (id && typeof window.toggleMessageSelection === "function") {
+          window.toggleMessageSelection(id);
+        }
+        return;
+      }
+
+      const url = target.dataset.chatMediaUrl;
+      const type = target.dataset.chatMediaType === "video" ? "video" : "image";
+      if (url && typeof window.openMedia === "function") {
+        window.openMedia(url, type, { sourceScreen: "chatScreen" });
+      } else if (target.dataset.chatReplyOpen === "message" && target.dataset.chatMessageId) {
+        if (typeof window.jumpToMessage === "function") window.jumpToMessage(target.dataset.chatMessageId);
+      }
+    }, { passive:false });
+  }
+
   chat.innerHTML = "";
   
   window.unreadDividerShown = false;
@@ -40856,13 +41008,10 @@ ${
     ? `
       <div
         class="chat-reply-media-preview"
-        onclick="
-          event.stopPropagation();
-          ${msg.replied.media_url
-            ? `openMedia(${JSON.stringify(msg.replied.media_url)}, ${JSON.stringify(msg.replied.media_type === "video" ? "video" : "image")});`
-            : `jumpToMessage('${msg.replied.id}');`
-          }
-        "
+        data-chat-reply-open="${msg.replied.media_url ? "media" : "message"}"
+        data-chat-media-url="${msg.replied.media_url ? escapeHtml(String(msg.replied.media_url)) : ""}"
+        data-chat-media-type="${msg.replied.media_url ? (msg.replied.media_type === "video" ? "video" : "image") : ""}"
+        data-chat-message-id="${msg.replied.id || ""}"
         style="
           background:rgba(127,127,127,.12);
           border-left:3px solid #4fc3f7;
@@ -40904,17 +41053,10 @@ ${
         <img
   src="${msg.media_url}"
 
-  onclick="
-if(selectionMode){
-  toggleMessageSelection('${msg.id}');
-  return;
-}
-
-openMedia(
-  '${msg.media_url}',
-  'image'
-)
-"
+  data-chat-media-open="true"
+  data-chat-media-url="${escapeHtml(String(msg.media_url))}"
+  data-chat-media-type="image"
+  data-message-id="${msg.id}"
 
   style="
     max-width:100%;
@@ -40941,17 +41083,10 @@ openMedia(
 
   ${selectionMode ? "" : "controls"}
 
-  onclick="
-if(selectionMode){
-  toggleMessageSelection('${msg.id}');
-  return;
-}
-
-openMedia(
-  '${msg.media_url}',
-  'video'
-)
-"
+  data-chat-media-open="true"
+  data-chat-media-url="${escapeHtml(String(msg.media_url))}"
+  data-chat-media-type="video"
+  data-message-id="${msg.id}"
 
   style="
     width:100%;
@@ -43492,6 +43627,8 @@ window.openMedia = function (
         opacity:0;
         pointer-events:auto;
         touch-action:none;
+        -webkit-user-select:none;
+        user-select:none;
         transform:translate3d(0,0,0);
         transition:opacity .2s ease;
     `;
@@ -43938,6 +44075,8 @@ window.openMedia = function (
         // Keep Android/Chrome from entering native fullscreen. The app owns
         // the full-screen viewer so its swipe-down and Back navigation work.
         video.setAttribute("controlslist", "nodownload nofullscreen noremoteplayback");
+        video.setAttribute("disablepictureinpicture", "");
+        video.setAttribute("x-webkit-airplay", "deny");
         video.disablePictureInPicture = true;
 
         video.autoplay = true;
@@ -44003,10 +44142,12 @@ window.openMedia = function (
         );
 
         // =================================================
-        // VERTICAL BRIGHTNESS / VOLUME GESTURES
+        // ROBUST VIDEO GESTURES
         // =================================================
-        // Left third: visual brightness. Right third: video volume.
-        // Centre: normal video interaction and swipe-down-to-close.
+        // The viewer owns pointer capture, so side gestures must be handled
+        // on the viewer itself (not only on <video>).  This also makes the
+        // gestures reliable on Chrome/Android when the finger crosses the
+        // media element boundary.
         let gestureStartX = 0;
         let gestureStartY = 0;
         let gestureStartVolume = Number.isFinite(video.volume) ? video.volume : 1;
@@ -44016,18 +44157,18 @@ window.openMedia = function (
         let gestureHudTimer = null;
 
         const showGestureHud = (kind, value) => {
-            let hud = container.querySelector(".media-gesture-hud");
+            let hud = viewer.querySelector(".media-gesture-hud");
             if (!hud) {
                 hud = document.createElement("div");
                 hud.className = "media-gesture-hud";
-                container.appendChild(hud);
+                viewer.appendChild(hud);
             }
             const icon = kind === "volume" ? "🔊" : "☀️";
             const label = kind === "volume" ? "Volume" : "Brightness";
             hud.innerHTML = `<span class="media-gesture-icon">${icon}</span>${label} ${Math.round(value * 100)}%`;
             hud.classList.add("show");
             clearTimeout(gestureHudTimer);
-            gestureHudTimer = setTimeout(() => hud.classList.remove("show"), 550);
+            gestureHudTimer = setTimeout(() => hud.classList.remove("show"), 650);
         };
 
         const resetGesture = () => {
@@ -44035,46 +44176,102 @@ window.openMedia = function (
             gestureMode = null;
         };
 
-        video.addEventListener("pointerdown", event => {
-            if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+        const beginMediaGesture = event => {
+            if (event.pointerType && event.pointerType !== "touch" && event.pointerType !== "pen") return;
+            if (event.target?.closest?.("button,a")) return;
             gestureStartX = event.clientX;
             gestureStartY = event.clientY;
             gestureStartVolume = Number.isFinite(video.volume) ? video.volume : 1;
             gestureStartBrightness = Number.isFinite(Number(video.dataset.gestureBrightness))
                 ? Number(video.dataset.gestureBrightness) : 1;
-            const w = video.getBoundingClientRect().width || window.innerWidth;
-            gestureMode = event.clientX <= (window.innerWidth * 0.33) ? "brightness"
-                : event.clientX >= (window.innerWidth * 0.67) ? "volume" : null;
+            const vw = viewer.clientWidth || window.innerWidth || 1;
+            gestureMode = event.clientX <= vw * 0.33 ? "brightness"
+                : event.clientX >= vw * 0.67 ? "volume" : "close";
             gestureActive = false;
-        }, { passive:true });
+        };
 
-        video.addEventListener("pointermove", event => {
-            if ((event.pointerType !== "touch" && event.pointerType !== "pen") || !gestureMode) return;
-            const dy = gestureStartY - event.clientY;
+        const moveMediaGesture = event => {
+            if (!gestureMode) return;
             const dx = event.clientX - gestureStartX;
+            const dy = gestureStartY - event.clientY;
+            const absX = Math.abs(dx);
+            const absY = Math.abs(dy);
             if (!gestureActive) {
-                if (Math.abs(dy) < 12 || Math.abs(dy) < Math.abs(dx)) return;
+                if (absY < 10 && absX < 10) return;
+                if (gestureMode !== "close" && absY <= absX) {
+                    gestureMode = null;
+                    return;
+                }
+                if (gestureMode === "close" && absX > absY) {
+                    gestureMode = null;
+                    return;
+                }
                 gestureActive = true;
             }
+            if (!gestureActive) return;
             event.preventDefault();
             event.stopPropagation();
-            const change = Math.max(-1, Math.min(1, dy / Math.max(window.innerHeight * 0.65, 1)));
+
             if (gestureMode === "volume") {
-                const value = Math.max(0, Math.min(1, gestureStartVolume + change));
+                const value = Math.max(0, Math.min(1, gestureStartVolume + dy / Math.max(window.innerHeight * .65, 1)));
                 video.volume = value;
-                video.muted = value === 0;
+                if (value > 0) video.muted = false;
+                else video.muted = true;
                 showGestureHud("volume", value);
-            } else {
-                const value = Math.max(0.35, Math.min(1.35, gestureStartBrightness + change));
+                return;
+            }
+
+            if (gestureMode === "brightness") {
+                const value = Math.max(.35, Math.min(1.35, gestureStartBrightness + dy / Math.max(window.innerHeight * .65, 1)));
                 video.dataset.gestureBrightness = String(value);
                 video.style.filter = `brightness(${value})`;
-                showGestureHud("brightness", Math.max(0, Math.min(1, (value - 0.35) / 1)));
+                showGestureHud("brightness", Math.max(0, Math.min(1, (value - .35) / 1)));
             }
-        }, { passive:false });
+        };
 
-        ["pointerup", "pointercancel", "pointerleave"].forEach(type => {
-            video.addEventListener(type, resetGesture, { passive:true });
-        });
+        const finishMediaGesture = () => resetGesture();
+
+        // Viewer-level listeners are deliberately used because the viewer
+        // captures the pointer during swipe-down-to-close.
+        viewer.addEventListener("pointerdown", beginMediaGesture, { passive:true });
+        viewer.addEventListener("pointermove", moveMediaGesture, { passive:false });
+        viewer.addEventListener("pointerup", finishMediaGesture, { passive:true });
+        viewer.addEventListener("pointercancel", finishMediaGesture, { passive:true });
+        viewer.addEventListener("pointerleave", finishMediaGesture, { passive:true });
+
+        // Touch fallback for Android builds where pointer events can be
+        // consumed by the browser's media controls.
+        let touchGesture = null;
+        viewer.addEventListener("touchstart", event => {
+            if (event.touches.length !== 1 || event.target?.closest?.("button,a")) return;
+            const t = event.touches[0];
+            const vw = viewer.clientWidth || window.innerWidth || 1;
+            const mode = t.clientX <= vw*.33 ? "brightness" : t.clientX >= vw*.67 ? "volume" : "close";
+            touchGesture = {x:t.clientX,y:t.clientY,mode,active:false,startVolume:video.volume,startBrightness:Number(video.dataset.gestureBrightness)||1};
+        }, {passive:true});
+        viewer.addEventListener("touchmove", event => {
+            if (!touchGesture || event.touches.length !== 1) return;
+            const t = event.touches[0];
+            const dx=t.clientX-touchGesture.x, dy=touchGesture.y-t.clientY;
+            const ax=Math.abs(dx), ay=Math.abs(dy);
+            if (!touchGesture.active) {
+                if (ay<10 && ax<10) return;
+                if ((touchGesture.mode!=="close" && ay<=ax) || (touchGesture.mode==="close" && ax>ay)) { touchGesture=null; return; }
+                touchGesture.active=true;
+            }
+            if (!touchGesture.active) return;
+            event.preventDefault();
+            if (touchGesture.mode==="volume") {
+                const value=Math.max(0,Math.min(1,touchGesture.startVolume+dy/Math.max(window.innerHeight*.65,1)));
+                video.volume=value; video.muted=value===0; showGestureHud("volume",value);
+            } else if (touchGesture.mode==="brightness") {
+                const value=Math.max(.35,Math.min(1.35,touchGesture.startBrightness+dy/Math.max(window.innerHeight*.65,1)));
+                video.dataset.gestureBrightness=String(value); video.style.filter=`brightness(${value})`;
+                showGestureHud("brightness",Math.max(0,Math.min(1,(value-.35)/1)));
+            }
+        }, {passive:false});
+        viewer.addEventListener("touchend", () => { touchGesture=null; }, {passive:true});
+        viewer.addEventListener("touchcancel", () => { touchGesture=null; }, {passive:true});
 
         // If Chrome somehow enters native fullscreen, immediately return to
         // the app-owned viewer instead of trapping the user in browser fullscreen.
@@ -51032,6 +51229,19 @@ if (!window.profileSubscription) {
       .subscribe();
 
 }
+
+
+// Keep avatar indicators consistent for dynamically-rendered surfaces.
+window.applyAvatarBadges = function(root=document){
+  root.querySelectorAll('img[data-online="true"], img.avatar[data-online="true"], img.story-avatar[data-online="true"]').forEach(img=>{
+    if (!img.parentElement?.classList.contains('avatar-wrap') && !img.parentElement?.classList.contains('story-avatar-wrap')){
+      const wrap=document.createElement('span');
+      wrap.className=img.classList.contains('story-avatar')?'story-avatar-wrap':'avatar-wrap';
+      img.parentNode.insertBefore(wrap,img); wrap.appendChild(img);
+      const dot=document.createElement('span'); dot.className='online-indicator'; dot.setAttribute('aria-label','Online'); wrap.appendChild(dot);
+    }
+  });
+};
 
 window.addEventListener("beforeunload", async () => {
 
