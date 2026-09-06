@@ -4076,6 +4076,200 @@ body.dark #savedPostsScreen [style*="color:#888"]{
 }
 </style>
 
+
+<style id="theme-visibility-final-fix">
+/* =====================================================
+   FINAL THEME VISIBILITY — INBOX / CHAT / NOTIFICATIONS /
+   COMMENTS, including dynamically-rendered comment cards
+===================================================== */
+
+/* Light mode is the absence of .dark as well as .light in a few
+   restored/dynamically-created states, so use :not(.dark) here. */
+body:not(.dark) #inboxScreen,
+body:not(.dark) #chatScreen,
+body:not(.dark) #notificationsScreen,
+body:not(.dark) #commentsScreen{
+  background:#fff !important;
+  color:#171717 !important;
+}
+
+/* INBOX: fix legacy inline white title/close button. */
+body:not(.dark) #inboxScreen > div:first-child,
+body:not(.dark) #inboxScreen > div:first-child *{
+  color:#171717 !important;
+}
+body:not(.dark) #inboxScreen > div:first-child{
+  background:#fff !important;
+  border-bottom:1px solid #e1e1e1 !important;
+}
+body:not(.dark) #inboxList,
+body:not(.dark) #inboxList > div{
+  background:#fff !important;
+  color:#171717 !important;
+}
+body:not(.dark) #inboxList > div{
+  border-bottom-color:#e1e1e1 !important;
+}
+body:not(.dark) #inboxList > div > div,
+body:not(.dark) #inboxList > div > div > div{
+  color:#171717 !important;
+}
+body:not(.dark) #inboxList > div > div > div > div{
+  color:#666 !important;
+}
+
+/* CHAT: every light-theme surface/text remains readable. */
+body:not(.dark) #chatHeader,
+body:not(.dark) #chatMessages,
+body:not(.dark) #chatScreen > div:last-child,
+body:not(.dark) #selectionBar{
+  background:#fff !important;
+  color:#171717 !important;
+  border-color:#e1e1e1 !important;
+}
+body:not(.dark) #chatHeader *:not(button),
+body:not(.dark) #chatMessages{
+  color:#171717 !important;
+}
+body:not(.dark) #chatHeader #chatStatus,
+body:not(.dark) #chatMessages .messageTime,
+body:not(.dark) #chatMessages .messageStatus{
+  color:#666 !important;
+}
+body:not(.dark) #chatInput{
+  background:#f1f1f1 !important;
+  color:#171717 !important;
+  border-color:#ddd !important;
+}
+body:not(.dark) #chatSearchBar,
+body:not(.dark) #chatSearchBar input,
+body:not(.dark) #chatSearchBar button,
+body:not(.dark) #chatMedia + label,
+body:not(.dark) #chatVoiceBtn,
+body:not(.dark) #chatScreen #replyPreview{
+  background:#f1f1f1 !important;
+  color:#171717 !important;
+  border-color:#ddd !important;
+}
+body:not(.dark) #chatMessages .chatMessage[style*="background:#222"],
+body:not(.dark) #chatMessages .chatMessage[style*="background: #222"]{
+  background:#ededed !important;
+  color:#171717 !important;
+}
+
+/* NOTIFICATIONS */
+body:not(.dark) #notificationsScreen > div:first-child,
+body:not(.dark) #notificationsScreen > div:first-child *{
+  color:#171717 !important;
+}
+body:not(.dark) #notificationFilters,
+body:not(.dark) #notificationsList,
+body:not(.dark) #notificationsList > div{
+  background:#fff !important;
+  color:#171717 !important;
+}
+body:not(.dark) #notificationsList > div{
+  border-bottom-color:#e1e1e1 !important;
+}
+body:not(.dark) #notificationFilters .notifFilter{
+  background:#ededed !important;
+  color:#171717 !important;
+}
+body:not(.dark) #notificationSearch{
+  background:#f1f1f1 !important;
+  color:#171717 !important;
+  border-color:#ddd !important;
+}
+
+/* COMMENTS ROOT + POST LIKE AREA.  The video/image itself may remain
+   black for proper media playback; the surrounding post/comment surface
+   follows the selected theme. */
+body:not(.dark) #commentsScreen #commentPostLikeArea,
+body:not(.dark) #commentsScreen #commentsBody,
+body:not(.dark) #commentsScreen #commentsBody > div,
+body:not(.dark) #commentsScreen #panelComments{
+  background:#fff !important;
+  color:#171717 !important;
+}
+body:not(.dark) #commentsScreen #commentSearch,
+body:not(.dark) #commentsScreen #commentSort{
+  background:#f1f1f1 !important;
+  color:#171717 !important;
+  border-color:#ddd !important;
+}
+body:not(.dark) #commentsScreen #commentFilters{
+  background:#fff !important;
+}
+body:not(.dark) #commentsScreen .commentFilter{
+  background:#ededed !important;
+  color:#171717 !important;
+  border-color:#ddd !important;
+}
+body:not(.dark) #commentsScreen .commentFilter.active{
+  background:#0095f6 !important;
+  color:#fff !important;
+  border-color:#0095f6 !important;
+}
+body:not(.dark) #commentsScreen #commentInputBar,
+body:not(.dark) #commentsScreen #replyPreview,
+body:not(.dark) #commentsScreen #commentMediaPreview,
+body:not(.dark) #commentsScreen #voicePreview{
+  background:#fff !important;
+  color:#171717 !important;
+  border-color:#e1e1e1 !important;
+}
+body:not(.dark) #commentsScreen #panelInput,
+body:not(.dark) #commentsScreen #commentMediaBtn,
+body:not(.dark) #commentsScreen #voiceBtn{
+  background:#f1f1f1 !important;
+  color:#171717 !important;
+  border-color:#ddd !important;
+}
+body:not(.dark) #commentsScreen #replyPreviewText,
+body:not(.dark) #commentsScreen #voicePreview div,
+body:not(.dark) #commentsScreen #voicePreviewTime{
+  color:#171717 !important;
+}
+body:not(.dark) #commentsScreen #commentTypingIndicator{
+  color:#666 !important;
+}
+
+/* DYNAMIC COMMENT CARDS — this is the main pale/black-card problem
+   visible in the light-theme screenshot. */
+body:not(.dark) #panelComments .commentItem,
+body:not(.dark) #panelComments .commentCard,
+body:not(.dark) #panelComments .replyCard{
+  background:#fff !important;
+  color:#171717 !important;
+  border-color:#e1e1e1 !important;
+  box-shadow:0 4px 14px rgba(0,0,0,.10) !important;
+}
+body:not(.dark) #panelComments .commentItem [style*="color:#ffffff"],
+body:not(.dark) #panelComments .commentItem [style*="color:white"],
+body:not(.dark) #panelComments .commentCard [style*="color:#ffffff"],
+body:not(.dark) #panelComments .commentCard [style*="color:white"]{
+  color:#171717 !important;
+}
+body:not(.dark) #panelComments .commentItem [style*="background:#202020"],
+body:not(.dark) #panelComments .commentItem [style*="background:#232323"],
+body:not(.dark) #panelComments .commentCard [style*="background:#202020"],
+body:not(.dark) #panelComments .commentCard [style*="background:#232323"]{
+  background:#ededed !important;
+  color:#171717 !important;
+}
+body:not(.dark) #panelComments .commentItem [style*="color:#8e8e8e"],
+body:not(.dark) #panelComments .commentCard [style*="color:#777"],
+body:not(.dark) #panelComments .commentCard [style*="color:#aaa"]{
+  color:#666 !important;
+}
+
+/* Keep the actual post media area/player black when it needs letterboxing. */
+body:not(.dark) #commentsScreen #commentMedia,
+body:not(.dark) #commentsScreen #commentMedia video{
+  background:#000 !important;
+}
+</style>
+
 </head>
 <body class="dark">
   
