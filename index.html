@@ -4270,6 +4270,60 @@ body:not(.dark) #commentsScreen #commentMedia video{
 }
 </style>
 
+<style id="chat-media-theme-and-reply-fix">
+body:not(.dark) #chatMessages .chatMessage { color:#171717 !important; }
+body:not(.dark) #chatMessages .chatMessage[style*="background:#222"],
+body:not(.dark) #chatMessages .chatMessage[style*="background: #222"]{ background:#ededed !important; color:#171717 !important; }
+body:not(.dark) #chatMessages .chatMessage[style*="background:transparent"]{ background:transparent !important; }
+body:not(.dark) #chatMessages .chatMessage img,
+body:not(.dark) #chatMessages .chatMessage video{ background:#f3f3f3 !important; }
+body.dark #chatMessages .chatMessage img,
+body.dark #chatMessages .chatMessage video{ background:#111 !important; }
+#chatMessages .chatMessage .chat-reply-media-preview{ color:var(--text,#171717); }
+body.dark #chatMessages .chatMessage .chat-reply-media-preview{ color:#fff; }
+#chatMessages .chatMessage img[onclick],
+#chatMessages .chatMessage video[onclick]{ cursor:pointer !important; }
+</style>
+
+<style id="media-video-gesture-style">
+.media-gesture-hud{
+ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+ z-index:250; min-width:92px; padding:12px 18px; border-radius:18px;
+ background:rgba(0,0,0,.72); color:#fff; text-align:center;
+ font:700 15px/1.25 system-ui,sans-serif; pointer-events:none;
+ opacity:0; transition:opacity .12s ease,transform .12s ease;
+}
+.media-gesture-hud.show{opacity:1; transform:translate(-50%,-50%) scale(1.04);}
+.media-gesture-hud .media-gesture-icon{font-size:28px; display:block; margin-bottom:3px;}
+</style>
+
+<style id="story-avatar-username-position-fix">
+/* Keep the story identity anchored low at the card edge without clipping long names. */
+.story-card .story-user{
+  left:8px !important;
+  right:6px !important;
+  bottom:6px !important;
+  gap:6px !important;
+  padding:0 !important;
+  min-width:0 !important;
+  align-items:flex-end !important;
+}
+.story-card .story-avatar{
+  flex:0 0 40px !important;
+  width:40px !important;
+  height:40px !important;
+}
+.story-card .story-username{
+  flex:1 1 auto !important;
+  min-width:0 !important;
+  max-width:none !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+  white-space:nowrap !important;
+  line-height:1.15 !important;
+  padding-bottom:2px !important;
+}
+</style>
 </head>
 <body class="dark">
   
@@ -5730,7 +5784,7 @@ stories.forEach(story => {
   onclick="openStory(${index})"
 
   style="
-    opacity:${seen ? "0.5" : "1"};
+    opacity:${seen ? "0.82" : "1"};
     border:${
       seen
         ? "1px solid #555"
@@ -40467,6 +40521,7 @@ async function loadMessages() {
   replied:reply_to(
     id,
     content,
+    media_url,
     media_type
   ),
   reactions:message_reactions(
@@ -40800,24 +40855,44 @@ ${
   msg.replied
     ? `
       <div
-        onclick="jumpToMessage('${msg.replied.id}')"
+        class="chat-reply-media-preview"
+        onclick="
+          event.stopPropagation();
+          ${msg.replied.media_url
+            ? `openMedia(${JSON.stringify(msg.replied.media_url)}, ${JSON.stringify(msg.replied.media_type === "video" ? "video" : "image")});`
+            : `jumpToMessage('${msg.replied.id}');`
+          }
+        "
         style="
-          background:rgba(255,255,255,.08);
+          background:rgba(127,127,127,.12);
           border-left:3px solid #4fc3f7;
           padding:8px;
           margin-bottom:8px;
           border-radius:8px;
           font-size:13px;
-          opacity:.9;
+          color:var(--text, #171717);
+          opacity:.95;
           cursor:pointer;
+          overflow:hidden;
         ">
-        ↩ ${
-          msg.replied.content
-            ? escapeHtml(msg.replied.content)
-            : msg.replied.media_type === "image"
-              ? "📷 Photo"
-              : "🎥 Video"
+        <div style="font-size:12px;opacity:.72;margin-bottom:5px;">↩ Reply</div>
+        ${msg.replied.media_url && msg.replied.media_type === "image"
+          ? `<img src="${msg.replied.media_url}" alt="Replied photo" style="display:block;width:min(180px,100%);max-height:130px;object-fit:cover;border-radius:9px;margin-bottom:5px;">`
+          : msg.replied.media_url && msg.replied.media_type === "video"
+            ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(127,127,127,.12);border-radius:9px;margin-bottom:5px;">🎥 <span>Video</span></div>`
+            : ""
         }
+        <div style="word-break:break-word;">
+          ${
+            msg.replied.content
+              ? escapeHtml(msg.replied.content)
+              : msg.replied.media_type === "image"
+                ? "📷 Photo"
+                : msg.replied.media_type === "video"
+                  ? "🎥 Video"
+                  : "Message"
+          }
+        </div>
       </div>
     `
     : ""
@@ -43860,6 +43935,10 @@ window.openMedia = function (
         video.src = url;
 
         video.controls = true;
+        // Keep Android/Chrome from entering native fullscreen. The app owns
+        // the full-screen viewer so its swipe-down and Back navigation work.
+        video.setAttribute("controlslist", "nodownload nofullscreen noremoteplayback");
+        video.disablePictureInPicture = true;
 
         video.autoplay = true;
 
@@ -43922,6 +44001,90 @@ window.openMedia = function (
         container.appendChild(
             video
         );
+
+        // =================================================
+        // VERTICAL BRIGHTNESS / VOLUME GESTURES
+        // =================================================
+        // Left third: visual brightness. Right third: video volume.
+        // Centre: normal video interaction and swipe-down-to-close.
+        let gestureStartX = 0;
+        let gestureStartY = 0;
+        let gestureStartVolume = Number.isFinite(video.volume) ? video.volume : 1;
+        let gestureStartBrightness = 1;
+        let gestureMode = null;
+        let gestureActive = false;
+        let gestureHudTimer = null;
+
+        const showGestureHud = (kind, value) => {
+            let hud = container.querySelector(".media-gesture-hud");
+            if (!hud) {
+                hud = document.createElement("div");
+                hud.className = "media-gesture-hud";
+                container.appendChild(hud);
+            }
+            const icon = kind === "volume" ? "🔊" : "☀️";
+            const label = kind === "volume" ? "Volume" : "Brightness";
+            hud.innerHTML = `<span class="media-gesture-icon">${icon}</span>${label} ${Math.round(value * 100)}%`;
+            hud.classList.add("show");
+            clearTimeout(gestureHudTimer);
+            gestureHudTimer = setTimeout(() => hud.classList.remove("show"), 550);
+        };
+
+        const resetGesture = () => {
+            gestureActive = false;
+            gestureMode = null;
+        };
+
+        video.addEventListener("pointerdown", event => {
+            if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+            gestureStartX = event.clientX;
+            gestureStartY = event.clientY;
+            gestureStartVolume = Number.isFinite(video.volume) ? video.volume : 1;
+            gestureStartBrightness = Number.isFinite(Number(video.dataset.gestureBrightness))
+                ? Number(video.dataset.gestureBrightness) : 1;
+            const w = video.getBoundingClientRect().width || window.innerWidth;
+            gestureMode = event.clientX <= (window.innerWidth * 0.33) ? "brightness"
+                : event.clientX >= (window.innerWidth * 0.67) ? "volume" : null;
+            gestureActive = false;
+        }, { passive:true });
+
+        video.addEventListener("pointermove", event => {
+            if ((event.pointerType !== "touch" && event.pointerType !== "pen") || !gestureMode) return;
+            const dy = gestureStartY - event.clientY;
+            const dx = event.clientX - gestureStartX;
+            if (!gestureActive) {
+                if (Math.abs(dy) < 12 || Math.abs(dy) < Math.abs(dx)) return;
+                gestureActive = true;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            const change = Math.max(-1, Math.min(1, dy / Math.max(window.innerHeight * 0.65, 1)));
+            if (gestureMode === "volume") {
+                const value = Math.max(0, Math.min(1, gestureStartVolume + change));
+                video.volume = value;
+                video.muted = value === 0;
+                showGestureHud("volume", value);
+            } else {
+                const value = Math.max(0.35, Math.min(1.35, gestureStartBrightness + change));
+                video.dataset.gestureBrightness = String(value);
+                video.style.filter = `brightness(${value})`;
+                showGestureHud("brightness", Math.max(0, Math.min(1, (value - 0.35) / 1)));
+            }
+        }, { passive:false });
+
+        ["pointerup", "pointercancel", "pointerleave"].forEach(type => {
+            video.addEventListener(type, resetGesture, { passive:true });
+        });
+
+        // If Chrome somehow enters native fullscreen, immediately return to
+        // the app-owned viewer instead of trapping the user in browser fullscreen.
+        document.addEventListener("fullscreenchange", () => {
+            if (!document.fullscreenElement) return;
+            try { document.exitFullscreen?.(); } catch (error) {}
+        });
+
+        // Chrome's native video fullscreen button is disabled above. Android
+        // Back is handled by the app history/popstate path and closes media.
 
         // Chrome on Android can animate its bottom browser bar after the
         // viewer is opened. Re-measure while that chrome settles.
@@ -43986,6 +44149,7 @@ window.openMedia = function (
     let pointerDirectionLocked = false;
 
     let pointerVerticalSwipe = false;
+    let pointerMediaAdjustZone = null;
 
     const SWIPE_CLOSE_DISTANCE = 120;
 
@@ -44014,6 +44178,7 @@ window.openMedia = function (
 
         pointerVerticalSwipe =
             false;
+        pointerMediaAdjustZone = null;
 
         resetViewerPosition();
     }
@@ -44083,6 +44248,13 @@ window.openMedia = function (
         pointerVerticalSwipe =
             false;
 
+        pointerMediaAdjustZone = null;
+        if (type === "video") {
+            const vw = viewer.clientWidth || window.innerWidth;
+            if (event.clientX <= vw * 0.33) pointerMediaAdjustZone = "brightness";
+            else if (event.clientX >= vw * 0.67) pointerMediaAdjustZone = "volume";
+        }
+
         viewer.style.transition =
             "none";
 
@@ -44128,6 +44300,14 @@ window.openMedia = function (
 
         const absY =
             Math.abs(deltaY);
+
+        // Side-zone vertical gestures belong to brightness/volume, not
+        // swipe-to-close. Let the video gesture handler consume them.
+        if (type === "video" && pointerMediaAdjustZone && absY > 8 && absY >= absX) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
 
         /*
          * Wait until the gesture has moved
@@ -44284,6 +44464,8 @@ window.openMedia = function (
 
         pointerVerticalSwipe =
             false;
+
+        pointerMediaAdjustZone = null;
 
         try {
 
