@@ -3283,6 +3283,556 @@ body:not(.dark) #app .story-card .story-overlay{
   ) !important;
 }
 </style>
+
+<style id="homepage-full-width-card-fix">
+/* =====================================================
+   HOMEPAGE FULL-WIDTH FEED CARDS
+   Removes the inner dark media bands and lets each post
+   use the full available screen width.
+===================================================== */
+#app .post-card{
+  width:100% !important;
+  box-sizing:border-box !important;
+  margin-left:0 !important;
+  margin-right:0 !important;
+  border-left:0 !important;
+  border-right:0 !important;
+  border-radius:0 !important;
+}
+
+#app .post-card video,
+#app .post-card img:not(.avatar){
+  display:block !important;
+  width:calc(100% + 24px) !important;
+  max-width:none !important;
+  height:auto !important;
+  /* Keep very tall media from making a single post enormous.
+     The media scales down to leave room for the post header/actions. */
+  max-height:calc(100vh - 250px) !important;
+  margin-left:-12px !important;
+  margin-right:-12px !important;
+  background:transparent !important;
+  object-fit:contain !important;
+  border-radius:0 !important;
+}
+
+/* Prevent the old mobile margin rule from bringing the card back inward. */
+@media (max-width:420px){
+  #app .post-card{
+    margin-left:0 !important;
+    margin-right:0 !important;
+  }
+}
+</style>
+
+
+<style id="profile-theme-colors">
+/* =====================================================
+   PROFILE THEME
+   Keeps the profile page synchronized with the app theme.
+===================================================== */
+#profileScrollContainer.profile-theme-surface{
+  background:var(--profile-bg) !important;
+  color:var(--profile-text) !important;
+}
+
+body.dark{
+  --profile-bg:#000;
+  --profile-surface:#151515;
+  --profile-surface-2:#1d1d1d;
+  --profile-border:#2d2d2d;
+  --profile-text:#fff;
+  --profile-muted:#aaa;
+  --profile-subtle:#888;
+}
+
+body.light{
+  --profile-bg:#fff;
+  --profile-surface:#f5f5f5;
+  --profile-surface-2:#fff;
+  --profile-border:#dedede;
+  --profile-text:#171717;
+  --profile-muted:#666;
+  --profile-subtle:#777;
+}
+
+/* Profile content */
+body.light #profileScrollContainer.profile-theme-surface .profile-theme-content,
+body.dark #profileScrollContainer.profile-theme-surface .profile-theme-content{
+  color:var(--profile-text) !important;
+}
+
+body.light #profileScrollContainer.profile-theme-surface .profile-theme-muted{
+  color:var(--profile-muted) !important;
+}
+
+body.dark #profileScrollContainer.profile-theme-surface .profile-theme-muted{
+  color:var(--profile-muted) !important;
+}
+
+body.light #profileScrollContainer.profile-theme-surface .profile-theme-subtle{
+  color:var(--profile-subtle) !important;
+}
+
+body.dark #profileScrollContainer.profile-theme-surface .profile-theme-subtle{
+  color:var(--profile-subtle) !important;
+}
+
+/* Theme the profile tabs instead of leaving hard-coded dark borders/text. */
+body.light #profileScrollContainer.profile-theme-surface #profileTabs{
+  border-bottom-color:var(--profile-border) !important;
+}
+body.dark #profileScrollContainer.profile-theme-surface #profileTabs{
+  border-bottom-color:var(--profile-border) !important;
+}
+
+body.light #profileScrollContainer.profile-theme-surface .profile-tab{
+  color:#777 !important;
+}
+body.dark #profileScrollContainer.profile-theme-surface .profile-tab{
+  color:#888 !important;
+}
+body.light #profileScrollContainer.profile-theme-surface #profilePostsTab{
+  color:#171717 !important;
+}
+body.dark #profileScrollContainer.profile-theme-surface #profilePostsTab{
+  color:#fff !important;
+}
+
+/* Theme profile action buttons while retaining the blue primary action. */
+body.light #profileScrollContainer.profile-theme-surface #profileSettingsButton{
+  background:#eee !important;
+  color:#222 !important;
+  border-color:#d5d5d5 !important;
+}
+body.dark #profileScrollContainer.profile-theme-surface #profileSettingsButton{
+  background:#222 !important;
+  color:#fff !important;
+  border-color:#333 !important;
+}
+
+body.light #profileScrollContainer.profile-theme-surface #profileMessageButton,
+body.light #profileScrollContainer.profile-theme-surface #followBtn{
+  color:#fff !important;
+}
+body.dark #profileScrollContainer.profile-theme-surface #profileMessageButton,
+body.dark #profileScrollContainer.profile-theme-surface #followBtn{
+  color:#fff !important;
+}
+
+/* Follow/Following states use theme-appropriate neutrals. */
+body.light #profileScrollContainer.profile-theme-surface #followBtn[data-state="following"],
+body.light #profileScrollContainer.profile-theme-surface #followBtn[data-state="pending"]{
+  background:#e7e7e7 !important;
+  color:#222 !important;
+}
+body.dark #profileScrollContainer.profile-theme-surface #followBtn[data-state="following"],
+body.dark #profileScrollContainer.profile-theme-surface #followBtn[data-state="pending"]{
+  background:#444 !important;
+  color:#fff !important;
+}
+body.light #profileScrollContainer.profile-theme-surface #followBtn{
+  background:#1d9bf0 !important;
+}
+body.dark #profileScrollContainer.profile-theme-surface #followBtn{
+  background:#1d9bf0 !important;
+}
+body.light #profileScrollContainer.profile-theme-surface #followBtn.following,
+body.light #profileScrollContainer.profile-theme-surface #followBtn[data-state="following"]{
+  background:#e7e7e7 !important;
+  color:#222 !important;
+}
+body.dark #profileScrollContainer.profile-theme-surface #followBtn.following,
+body.dark #profileScrollContainer.profile-theme-surface #followBtn[data-state="following"]{
+  background:#444 !important;
+  color:#fff !important;
+}
+
+/* Profile post cards inherit the same surface instead of hard-coded dark cards. */
+body.light #profileScrollContainer.profile-theme-surface .profile-post-card{
+  background:var(--profile-surface) !important;
+  color:var(--profile-text) !important;
+  border-color:var(--profile-border) !important;
+}
+body.dark #profileScrollContainer.profile-theme-surface .profile-post-card{
+  background:var(--profile-surface) !important;
+  color:var(--profile-text) !important;
+  border-color:var(--profile-border) !important;
+}
+</style>
+
+
+<style id="profile-cards-homepage-match-fix">
+/* =====================================================
+   PROFILE POST CARDS — MATCH HOMEPAGE
+   Full-width cards, theme-aware surfaces, and no dark
+   inner media bands. Keeps profile navigation untouched.
+===================================================== */
+#profileScrollContainer.profile-theme-surface #profilePosts .post-card{
+  width:100% !important;
+  box-sizing:border-box !important;
+  margin:12px 0 !important;
+  padding:14px !important;
+  border-radius:0 !important;
+  border-left:0 !important;
+  border-right:0 !important;
+  background:var(--profile-surface) !important;
+  color:var(--profile-text) !important;
+  border-top-color:var(--profile-border) !important;
+  border-bottom-color:var(--profile-border) !important;
+  box-shadow:none !important;
+  overflow:hidden !important;
+}
+
+#profileScrollContainer.profile-theme-surface #profilePosts .post-card > div:first-child{
+  color:var(--profile-text) !important;
+}
+
+#profileScrollContainer.profile-theme-surface #profilePosts .post-card img:not(.avatar),
+#profileScrollContainer.profile-theme-surface #profilePosts .post-card video{
+  display:block !important;
+  width:calc(100% + 28px) !important;
+  max-width:none !important;
+  height:auto !important;
+  max-height:calc(100vh - 250px) !important;
+  margin-left:-14px !important;
+  margin-right:-14px !important;
+  margin-top:10px !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  object-fit:contain !important;
+}
+
+/* Keep the profile post's text and controls theme-aware. */
+#profileScrollContainer.profile-theme-surface #profilePosts .post-card .post-text,
+#profileScrollContainer.profile-theme-surface #profilePosts .post-card .profile-theme-muted{
+  color:var(--profile-muted) !important;
+}
+
+#profileScrollContainer.profile-theme-surface #profilePosts .post-card button:not(.like-btn){
+  color:var(--profile-text) !important;
+}
+
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="openComments"]{
+  background:#333 !important;
+  color:#fff !important;
+}
+body.dark #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="openComments"]{
+  background:#333 !important;
+  color:#fff !important;
+}
+
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="toggleSavePost"]{
+  background:#444 !important;
+  color:#fff !important;
+}
+body.dark #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="toggleSavePost"]{
+  background:#444 !important;
+  color:#fff !important;
+}
+
+/* The profile feed itself should not add a second dark strip around cards. */
+#profileScrollContainer.profile-theme-surface #profilePosts{
+  width:100% !important;
+  margin-left:0 !important;
+  margin-right:0 !important;
+  box-sizing:border-box !important;
+}
+
+@media (max-width:420px){
+  #profileScrollContainer.profile-theme-surface #profilePosts .post-card{
+    margin-left:0 !important;
+    margin-right:0 !important;
+    border-radius:0 !important;
+  }
+}
+</style>
+
+
+<style id="messaging-comments-notifications-theme-fix">
+/* =====================================================
+   CHAT / INBOX / COMMENTS / NOTIFICATIONS THEME
+   These screens contain older inline dark styles, so the
+   theme layer intentionally uses !important to keep them
+   synchronized with body.light / body.dark.
+===================================================== */
+:root{
+  --screen-bg:#ffffff;
+  --screen-surface:#f2f2f2;
+  --screen-surface-2:#ffffff;
+  --screen-input:#eeeeee;
+  --screen-border:#dddddd;
+  --screen-text:#171717;
+  --screen-muted:#666666;
+  --screen-soft:#e7e7e7;
+  --screen-received:#e7e7e7;
+  --screen-overlay:rgba(0,0,0,.06);
+}
+
+body.dark{
+  --screen-bg:#0f0f0f;
+  --screen-surface:#181818;
+  --screen-surface-2:#1c1c1c;
+  --screen-input:#242424;
+  --screen-border:#303030;
+  --screen-text:#ffffff;
+  --screen-muted:#aaaaaa;
+  --screen-soft:#2a2a2a;
+  --screen-received:#222222;
+  --screen-overlay:rgba(255,255,255,.06);
+}
+
+/* ---------- INBOX ---------- */
+#inboxScreen{
+  background:var(--screen-bg) !important;
+  color:var(--screen-text) !important;
+}
+#inboxScreen > div:first-child{
+  background:var(--screen-surface) !important;
+  border-bottom-color:var(--screen-border) !important;
+  color:var(--screen-text) !important;
+}
+#inboxScreen button{
+  color:var(--screen-text) !important;
+}
+#inboxList{
+  background:var(--screen-bg) !important;
+  color:var(--screen-text) !important;
+}
+#inboxList > div{
+  border-bottom-color:var(--screen-border) !important;
+  color:var(--screen-text) !important;
+}
+#inboxList > div > div,
+#inboxList > div > div > div{
+  color:var(--screen-text) !important;
+}
+#inboxList > div > div > div > div{
+  color:var(--screen-muted) !important;
+}
+#inboxList img{
+  background:var(--screen-soft) !important;
+}
+
+/* ---------- CHAT ---------- */
+#chatScreen{
+  background:var(--screen-bg) !important;
+  color:var(--screen-text) !important;
+}
+#chatHeader{
+  background:var(--screen-surface) !important;
+  border-bottom-color:var(--screen-border) !important;
+  color:var(--screen-text) !important;
+}
+#chatHeader #chatName{ color:var(--screen-text) !important; }
+#chatHeader #chatStatus{ color:var(--screen-muted) !important; }
+#chatHeader button{ color:var(--screen-text) !important; }
+#chatMessages{
+  background:var(--screen-bg) !important;
+  color:var(--screen-text) !important;
+}
+#chatMessages .messageTime,
+#chatMessages .messageStatus{ color:var(--screen-muted) !important; }
+
+/* Received message bubbles follow the theme; sent messages remain blue. */
+#chatMessages .chatMessage[style*="background:#222"]{
+  background:var(--screen-received) !important;
+  color:var(--screen-text) !important;
+}
+#chatMessages .chatMessage[style*="background: #222"]{
+  background:var(--screen-received) !important;
+  color:var(--screen-text) !important;
+}
+#chatMessages .chatMessage[style*="background:rgba(255,255,255,.08)"]{
+  background:var(--screen-overlay) !important;
+}
+
+#chatSearchBar{
+  background:var(--screen-surface) !important;
+  border-bottom:1px solid var(--screen-border);
+}
+#chatSearchBar input,
+#chatSearchBar button{
+  background:var(--screen-input) !important;
+  color:var(--screen-text) !important;
+  border-color:var(--screen-border) !important;
+}
+#chatSearchBar input::placeholder,
+#chatInput::placeholder{
+  color:var(--screen-muted) !important;
+}
+#chatScreen > div:last-child{
+  background:var(--screen-surface) !important;
+  border-top-color:var(--screen-border) !important;
+}
+#chatScreen #replyPreview{
+  background:var(--screen-soft) !important;
+  color:var(--screen-text) !important;
+}
+#chatInput{
+  background:var(--screen-input) !important;
+  color:var(--screen-text) !important;
+}
+#chatMedia + label,
+#chatVoiceBtn{
+  background:var(--screen-input) !important;
+  color:var(--screen-text) !important;
+}
+
+/* Selection bar */
+#selectionBar{
+  background:var(--screen-surface) !important;
+  color:var(--screen-text) !important;
+  border-bottom-color:var(--screen-border) !important;
+}
+#selectionBar button{ color:var(--screen-text) !important; }
+
+/* ---------- NOTIFICATIONS ---------- */
+#notificationsScreen{
+  background:var(--screen-bg) !important;
+  color:var(--screen-text) !important;
+}
+#notificationsScreen > div:first-child{
+  background:var(--screen-surface) !important;
+  border-bottom-color:var(--screen-border) !important;
+  color:var(--screen-text) !important;
+}
+#notificationsScreen > div:first-child button{
+  color:#1877f2 !important;
+}
+#notificationFilters{
+  background:var(--screen-bg) !important;
+}
+#notificationFilters .notifFilter{
+  background:var(--screen-soft) !important;
+  color:var(--screen-text) !important;
+}
+#notificationFilters .notifFilter.active{
+  background:#1f6fff !important;
+  color:#fff !important;
+}
+#notificationSearch{
+  background:var(--screen-input) !important;
+  color:var(--screen-text) !important;
+  border:1px solid var(--screen-border) !important;
+}
+#notificationSearch::placeholder{ color:var(--screen-muted) !important; }
+#notificationsList{
+  background:var(--screen-bg) !important;
+  color:var(--screen-text) !important;
+}
+#notificationsList > div{
+  border-bottom-color:var(--screen-border) !important;
+  color:var(--screen-text) !important;
+  background:var(--screen-surface) !important;
+}
+#notificationsList > div[style*="rgba(24,119,242,0.07)"]{
+  background:rgba(24,119,242,.10) !important;
+}
+#notificationsList > div img{
+  background:var(--screen-soft) !important;
+}
+#notificationsList > div div{ color:var(--screen-text) !important; }
+#notificationsList > div div div[style*="color:#888"]{
+  color:var(--screen-muted) !important;
+}
+
+/* ---------- COMMENTS ---------- */
+#commentsScreen{
+  background:var(--screen-bg) !important;
+  color:var(--screen-text) !important;
+}
+/* Media can remain black; the comment surface below it follows the theme. */
+#commentsScreen #commentsBody,
+#commentsScreen #commentPostLikeArea{
+  background:var(--screen-surface) !important;
+  color:var(--screen-text) !important;
+}
+#commentsScreen #commentsBody > div{
+  color:var(--screen-text);
+}
+#commentsScreen #commentSearch,
+#commentsScreen #commentSort{
+  background:var(--screen-input) !important;
+  color:var(--screen-text) !important;
+  border-color:var(--screen-border) !important;
+}
+#commentsScreen #commentSearch::placeholder{ color:var(--screen-muted) !important; }
+#commentsScreen #commentFilters{
+  background:var(--screen-surface) !important;
+}
+#commentsScreen .commentFilter{
+  background:var(--screen-soft) !important;
+  color:var(--screen-text) !important;
+  border:1px solid var(--screen-border) !important;
+}
+#commentsScreen .commentFilter.active{
+  background:#0095f6 !important;
+  color:#fff !important;
+  border-color:#0095f6 !important;
+}
+#commentsScreen #panelComments{
+  background:var(--screen-surface) !important;
+  color:var(--screen-text) !important;
+}
+#commentsScreen #commentTypingIndicator{
+  color:var(--screen-muted) !important;
+}
+#commentsScreen #replyPreview,
+#commentsScreen #commentMediaPreview,
+#commentsScreen #voicePreview{
+  background:var(--screen-surface) !important;
+  color:var(--screen-text) !important;
+  border-top-color:var(--screen-border) !important;
+}
+#commentsScreen #replyPreviewText,
+#commentsScreen #voicePreview div,
+#commentsScreen #voicePreviewTime{
+  color:var(--screen-text) !important;
+}
+#commentsScreen #commentInputBar{
+  background:var(--screen-surface) !important;
+  border-top-color:var(--screen-border) !important;
+}
+#commentsScreen #panelInput,
+#commentsScreen #commentMediaBtn,
+#commentsScreen #voiceBtn{
+  background:var(--screen-input) !important;
+  color:var(--screen-text) !important;
+  border-color:var(--screen-border) !important;
+}
+#commentsScreen #panelInput::placeholder{ color:var(--screen-muted) !important; }
+#commentsScreen #commentMenu{
+  background:var(--screen-surface) !important;
+  color:var(--screen-text) !important;
+  border-top-color:var(--screen-border) !important;
+}
+#commentsScreen .menu-item{
+  color:var(--screen-text) !important;
+  border-bottom-color:var(--screen-border) !important;
+}
+
+/* Generic comment cards/bubbles generated at runtime. */
+#panelComments [style*="background:#111"],
+#panelComments [style*="background:#141414"],
+#panelComments [style*="background:#181818"],
+#panelComments [style*="background:#1a1a1a"],
+#panelComments [style*="background:#1f1f1f"],
+#panelComments [style*="background:#222"]{
+  background:var(--screen-soft) !important;
+  color:var(--screen-text) !important;
+}
+#panelComments [style*="color:white"],
+#panelComments [style*="color:#fff"]{
+  color:var(--screen-text) !important;
+}
+#panelComments [style*="color:#888"],
+#panelComments [style*="color:#999"],
+#panelComments [style*="color:#aaa"]{
+  color:var(--screen-muted) !important;
+}
+</style>
+
 </head>
 <body class="dark">
   
@@ -25121,6 +25671,7 @@ window.openProfile = async function (
 
 <div
     id="profileScrollContainer"
+    class="profile-theme-surface"
     style="
         color:white;
         min-height:100%;
@@ -25128,7 +25679,7 @@ window.openProfile = async function (
         overflow-y:auto;
         -webkit-overflow-scrolling:touch;
         box-sizing:border-box;
-        background:#000;
+        background:var(--profile-bg);
     "
 >
 
@@ -25216,7 +25767,7 @@ window.openProfile = async function (
     </div>
 
 
-    <div style="
+    <div class="profile-theme-content" style="
         padding:15px;
     ">
 
@@ -25279,7 +25830,7 @@ window.openProfile = async function (
                 </h2>
 
 
-                <div style="
+                <div class="profile-theme-muted" style="
                     margin-top:5px;
                     color:#aaa;
                     display:flex;
@@ -25305,7 +25856,7 @@ window.openProfile = async function (
                 ${
                     profile.created_at
                         ? `
-                <div style="
+                <div class="profile-theme-subtle" style="
                     margin-top:8px;
                     color:#888;
                     font-size:13px;
@@ -25346,7 +25897,7 @@ window.openProfile = async function (
                 ${
                     profile.bio
                         ? `
-                <div style="
+                <div class="profile-theme-content" style="
                     margin-top:10px;
                     color:#ddd;
                     font-size:15px;
@@ -25390,7 +25941,7 @@ window.openProfile = async function (
                 ${
                     profile.location
                         ? `
-                <div style="
+                <div class="profile-theme-muted" style="
                     margin-top:8px;
                     color:#aaa;
                     font-size:14px;
@@ -26375,6 +26926,7 @@ window.profileNavigationUserId =
 
 <button
     id="followBtn"
+    data-state="${state}"
     type="button"
     style="
         margin-top:10px;
