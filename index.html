@@ -3833,6 +3833,249 @@ body.dark{
 }
 </style>
 
+
+<style id="final-theme-card-and-settings-fix">
+/* =====================================================
+   FINAL THEME POLISH — FEED CARDS + SETTINGS + CHILD SCREENS
+===================================================== */
+
+/* Feed cards: clean surfaces in both themes, without the
+   washed-out pale grey look in light mode. */
+body.light #app .post-card,
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-card{
+  background:#fff !important;
+  color:#171717 !important;
+  border-color:#e1e1e1 !important;
+}
+body.dark #app .post-card,
+body.dark #profileScrollContainer.profile-theme-surface #profilePosts .post-card{
+  background:#151515 !important;
+  color:#fff !important;
+  border-color:#2d2d2d !important;
+}
+
+body.light #app .post-card button:not([style*="background:#1d9bf0"]):not([style*="background:rgb(29,155,240)"]),
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-card button:not([style*="background:#1d9bf0"]){
+  background:#ededed !important;
+  color:#171717 !important;
+  border-color:#d9d9d9 !important;
+}
+body.dark #app .post-card button:not([style*="background:#1d9bf0"]):not([style*="background:rgb(29,155,240)"]),
+body.dark #profileScrollContainer.profile-theme-surface #profilePosts .post-card button:not([style*="background:#1d9bf0"]){
+  background:#292929 !important;
+  color:#fff !important;
+  border-color:#3a3a3a !important;
+}
+
+/* Keep destructive Delete buttons visibly red. */
+#app .post-card button[style*="background:#ff4d4d"],
+#app .post-card button[style*="background: #ff4d4d"],
+#profileScrollContainer .post-card button[style*="background:#ff4d4d"],
+#profileScrollContainer .post-card button[style*="background: #ff4d4d"]{
+  background:#ff4d4d !important;
+  color:#fff !important;
+  border-color:#ff4d4d !important;
+}
+
+/* -----------------------------------------------------
+   SETTINGS ROOT + ALL SETTINGS CHILD SCREENS
+   Overrides legacy inline black/white styling whenever
+   the user changes the global theme.
+----------------------------------------------------- */
+body.light #profileSettingsScreen,
+body.light #editProfileScreen,
+body.light #languageSettingsScreen,
+body.light #privacySettingsScreen,
+body.light #followRequestsScreen,
+body.light #savedPostsScreen{
+  background:#fff !important;
+  color:#171717 !important;
+}
+
+body.dark #profileSettingsScreen,
+body.dark #editProfileScreen,
+body.dark #languageSettingsScreen,
+body.dark #privacySettingsScreen,
+body.dark #followRequestsScreen,
+body.dark #savedPostsScreen{
+  background:#000 !important;
+  color:#fff !important;
+}
+
+/* Every legacy full-screen content wrapper. */
+body.light #profileSettingsScreen div[style*="background:#000"],
+body.light #profileSettingsScreen div[style*="background:#111"],
+body.light #profileSettingsScreen div[style*="background:#151515"],
+body.light #profileSettingsScreen div[style*="background:#181818"],
+body.light #editProfileScreen div[style*="background:#000"],
+body.light #editProfileScreen div[style*="background:#111"],
+body.light #editProfileScreen div[style*="background:#151515"],
+body.light #languageSettingsScreen div[style*="background:#000"],
+body.light #languageSettingsScreen div[style*="background:#111"],
+body.light #privacySettingsScreen div[style*="background:#000"],
+body.light #privacySettingsScreen div[style*="background:#111"],
+body.light #followRequestsScreen div[style*="background:#111"],
+body.light #savedPostsScreen div[style*="background:#111"]{
+  background:#fff !important;
+  color:#171717 !important;
+}
+
+body.dark #profileSettingsScreen div[style*="background:#000"],
+body.dark #profileSettingsScreen div[style*="background:#111"],
+body.dark #profileSettingsScreen div[style*="background:#151515"],
+body.dark #profileSettingsScreen div[style*="background:#181818"],
+body.dark #editProfileScreen div[style*="background:#000"],
+body.dark #editProfileScreen div[style*="background:#111"],
+body.dark #editProfileScreen div[style*="background:#151515"],
+body.dark #languageSettingsScreen div[style*="background:#000"],
+body.dark #languageSettingsScreen div[style*="background:#111"],
+body.dark #privacySettingsScreen div[style*="background:#000"],
+body.dark #privacySettingsScreen div[style*="background:#111"],
+body.dark #followRequestsScreen div[style*="background:#111"],
+body.dark #savedPostsScreen div[style*="background:#111"]{
+  background:#151515 !important;
+  color:#fff !important;
+}
+
+/* Settings rows/cards. */
+body.light #profileSettingsScreen button[style*="background:#111"],
+body.light #profileSettingsScreen button[style*="background: #111"],
+body.light #editProfileScreen button[style*="background:#111"],
+body.light #languageSettingsScreen button[style*="background:#111"],
+body.light #privacySettingsScreen button[style*="background:#111"],
+body.light #followRequestsScreen button[style*="background:#111"],
+body.light #savedPostsScreen button[style*="background:#111"]{
+  background:#fff !important;
+  color:#171717 !important;
+  border-color:#e0e0e0 !important;
+}
+
+body.dark #profileSettingsScreen button[style*="background:#111"],
+body.dark #profileSettingsScreen button[style*="background: #111"],
+body.dark #editProfileScreen button[style*="background:#111"],
+body.dark #languageSettingsScreen button[style*="background:#111"],
+body.dark #privacySettingsScreen button[style*="background:#111"],
+body.dark #followRequestsScreen button[style*="background:#111"],
+body.dark #savedPostsScreen button[style*="background:#111"]{
+  background:#151515 !important;
+  color:#fff !important;
+  border-color:#2d2d2d !important;
+}
+
+/* Inputs/selects/textareas inside settings. */
+body.light #profileSettingsScreen input,
+body.light #profileSettingsScreen select,
+body.light #profileSettingsScreen textarea,
+body.light #editProfileScreen input,
+body.light #editProfileScreen select,
+body.light #editProfileScreen textarea,
+body.light #languageSettingsScreen input,
+body.light #languageSettingsScreen select,
+body.light #languageSettingsScreen textarea,
+body.light #privacySettingsScreen input,
+body.light #privacySettingsScreen select,
+body.light #privacySettingsScreen textarea,
+body.light #followRequestsScreen input,
+body.light #savedPostsScreen input{
+  background:#f3f3f3 !important;
+  color:#171717 !important;
+  border-color:#d8d8d8 !important;
+}
+body.dark #profileSettingsScreen input,
+body.dark #profileSettingsScreen select,
+body.dark #profileSettingsScreen textarea,
+body.dark #editProfileScreen input,
+body.dark #editProfileScreen select,
+body.dark #editProfileScreen textarea,
+body.dark #languageSettingsScreen input,
+body.dark #languageSettingsScreen select,
+body.dark #languageSettingsScreen textarea,
+body.dark #privacySettingsScreen input,
+body.dark #privacySettingsScreen select,
+body.dark #privacySettingsScreen textarea,
+body.dark #followRequestsScreen input,
+body.dark #savedPostsScreen input{
+  background:#242424 !important;
+  color:#fff !important;
+  border-color:#383838 !important;
+}
+
+/* Legacy inline white text/border colors inside settings. */
+body.light #profileSettingsScreen [style*="color:#fff"],
+body.light #editProfileScreen [style*="color:#fff"],
+body.light #languageSettingsScreen [style*="color:#fff"],
+body.light #privacySettingsScreen [style*="color:#fff"],
+body.light #followRequestsScreen [style*="color:#fff"],
+body.light #savedPostsScreen [style*="color:#fff"]{
+  color:#171717 !important;
+}
+
+body.dark #profileSettingsScreen [style*="color:#fff"],
+body.dark #editProfileScreen [style*="color:#fff"],
+body.dark #languageSettingsScreen [style*="color:#fff"],
+body.dark #privacySettingsScreen [style*="color:#fff"],
+body.dark #followRequestsScreen [style*="color:#fff"],
+body.dark #savedPostsScreen [style*="color:#fff"]{
+  color:#fff !important;
+}
+
+/* Section dividers and card borders. */
+body.light #profileSettingsScreen [style*="border-bottom:1px solid #222"],
+body.light #profileSettingsScreen [style*="border:1px solid #1d1d1d"],
+body.light #privacySettingsScreen [style*="border-bottom:1px solid #222"],
+body.light #privacySettingsScreen [style*="border:1px solid #1d1d1d"],
+body.light #languageSettingsScreen [style*="border-bottom:1px solid #222"],
+body.light #followRequestsScreen [style*="border-bottom:1px solid #292929"]{
+  border-color:#dedede !important;
+}
+body.dark #profileSettingsScreen [style*="border-bottom:1px solid #222"],
+body.dark #profileSettingsScreen [style*="border:1px solid #1d1d1d"],
+body.dark #privacySettingsScreen [style*="border-bottom:1px solid #222"],
+body.dark #privacySettingsScreen [style*="border:1px solid #1d1d1d"],
+body.dark #languageSettingsScreen [style*="border-bottom:1px solid #222"],
+body.dark #followRequestsScreen [style*="border-bottom:1px solid #292929"]{
+  border-color:#2d2d2d !important;
+}
+
+/* Settings back buttons stay visible in both themes. */
+body.light #profileSettingsBackBtn,
+body.light #editProfileBackBtn,
+body.light #languageSettingsBackBtn,
+body.light #privacySettingsBackBtn,
+body.light #closeFollowRequests,
+body.light #savedPostsBackBtn{
+  background:#ededed !important;
+  color:#171717 !important;
+}
+body.dark #profileSettingsBackBtn,
+body.dark #editProfileBackBtn,
+body.dark #languageSettingsBackBtn,
+body.dark #privacySettingsBackBtn,
+body.dark #closeFollowRequests,
+body.dark #savedPostsBackBtn{
+  background:#222 !important;
+  color:#fff !important;
+}
+
+/* Muted/section labels remain readable without becoming pure black. */
+body.light #profileSettingsScreen [style*="color:#888"],
+body.light #editProfileScreen [style*="color:#888"],
+body.light #languageSettingsScreen [style*="color:#888"],
+body.light #privacySettingsScreen [style*="color:#888"],
+body.light #followRequestsScreen [style*="color:#888"],
+body.light #savedPostsScreen [style*="color:#888"]{
+  color:#666 !important;
+}
+body.dark #profileSettingsScreen [style*="color:#888"],
+body.dark #editProfileScreen [style*="color:#888"],
+body.dark #languageSettingsScreen [style*="color:#888"],
+body.dark #privacySettingsScreen [style*="color:#888"],
+body.dark #followRequestsScreen [style*="color:#888"],
+body.dark #savedPostsScreen [style*="color:#888"]{
+  color:#999 !important;
+}
+</style>
+
 </head>
 <body class="dark">
   
