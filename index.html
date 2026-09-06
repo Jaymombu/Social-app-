@@ -4355,7 +4355,7 @@ body.dark #chatMessages .chat-reply-media-preview > div[style*="background:rgba(
 /* Never show the browser's native fullscreen affordance on app-owned media. */
 #mediaViewer video::-webkit-media-controls-fullscreen-button{display:none !important;}
 #mediaViewer video::-webkit-media-controls-picture-in-picture-button{display:none !important;}
-#mediaViewer, #mediaViewer video{touch-action:none !important;-webkit-touch-callout:none !important;}
+#mediaViewer, #mediaViewer video{touch-action:none !important;-webkit-touch-callout:none !important;-webkit-user-select:none !important;user-select:none !important;}
 </style>
 
 <style id="media-video-gesture-style">
@@ -4368,6 +4368,50 @@ body.dark #chatMessages .chat-reply-media-preview > div[style*="background:rgba(
 }
 .media-gesture-hud.show{opacity:1; transform:translate(-50%,-50%) scale(1.04);}
 .media-gesture-hud .media-gesture-icon{font-size:28px; display:block; margin-bottom:3px;}
+
+/* Avatar presence: keep the dot physically anchored to the lower-right edge. */
+.avatar-wrap,.story-avatar-wrap,.chat-avatar-wrap,.profile-avatar-wrap{
+  position:relative !important;
+  overflow:visible !important;
+  line-height:0 !important;
+  vertical-align:middle !important;
+}
+.profile-avatar-wrap{
+  width:120px !important;
+  height:120px !important;
+}
+.profile-avatar-wrap .online-indicator{
+  right:5px !important;
+  bottom:5px !important;
+  width:16px !important;
+  height:16px !important;
+  border-width:3px !important;
+}
+.comment-avatar-wrap{
+  position:relative !important;
+  width:48px !important;
+  height:48px !important;
+  min-width:48px !important;
+  min-height:48px !important;
+  display:inline-block !important;
+  flex:0 0 48px !important;
+  overflow:visible !important;
+}
+.comment-avatar-wrap > img{
+  width:48px !important;
+  height:48px !important;
+  display:block !important;
+  box-sizing:border-box !important;
+}
+.comment-avatar-wrap .online-indicator{
+  right:-3px !important;
+  bottom:-3px !important;
+  width:12px !important;
+  height:12px !important;
+  border-width:2px !important;
+  z-index:10 !important;
+}
+
 </style>
 
 <style id="story-avatar-username-position-fix">
@@ -4556,6 +4600,7 @@ cursor:pointer;
   ←
 </button>
 
+   <span class="chat-avatar-wrap" id="chatAvatarWrap">
    <img
   id="chatAvatar"
   src="https://via.placeholder.com/40"
@@ -4576,6 +4621,7 @@ cursor:pointer;
     cursor:pointer;
   "
 />
+   <span id="chatAvatarOnline" class="online-indicator" aria-label="Online" style="display:none;"></span>
 
    <div>
   <div
@@ -8127,6 +8173,8 @@ async function loadStoryViewers(storyId) {
             object-fit:cover;
           "
         >
+        ${r.profiles?.online ? '<span class="online-indicator" aria-label="Online"></span>' : ''}
+        </span>
 
         <div>
           ${p.name || "User"}
@@ -8668,7 +8716,7 @@ const isOwner =
       margin-bottom:10px;
     ">
 
-      <span class="avatar-wrap" style="width:50px;height:50px;">
+      <span class="avatar-wrap" data-user-id="${escapeHtml(String(post.user_id || ''))}" data-online="${window.presenceIsOnline ? (window.presenceIsOnline(profile) ? 'true' : 'false') : (post.online === true || profile.online === true ? 'true' : 'false')}" style="width:50px;height:50px;">
         <img
     class="avatar"
     src="${escapeHtml(avatarSrc)}"
@@ -8689,7 +8737,7 @@ const isOwner =
       cursor:pointer;
     "
   />
-        ${post.online === true || profile.online === true ? '<span class="online-indicator" aria-label="Online"></span>' : ''}
+        ${window.presenceIsOnline ? (window.presenceIsOnline(profile) ? '<span class="online-indicator" aria-label="Online"></span>' : '') : (post.online === true || profile.online === true ? '<span class="online-indicator" aria-label="Online"></span>' : '')}
       </span>
 
       <div style="
@@ -9034,7 +9082,9 @@ if (userIds.length > 0) {
       username,
       avatar_url,
       cover_url,
-      verified
+      verified,
+      online,
+      last_seen
     `)
     .in("id", userIds);
 
@@ -10730,7 +10780,9 @@ async function loadComments(postId) {
                 id,
                 name,
                 avatar_url,
-                verified
+                verified,
+                online,
+                last_seen
             ),
             comment_likes (
                 id,
@@ -12329,6 +12381,7 @@ touch-action:pan-y;
 "
 >
 
+    <span class="avatar-wrap comment-avatar-wrap" data-user-id="${escapeHtml(String(c.user_id || ''))}" data-online="${window.presenceIsOnline ? (window.presenceIsOnline(profile) ? 'true' : 'false') : (profile.online === true ? 'true' : 'false')}">
     <img
     src="${profile.avatar_url || 'https://via.placeholder.com/40'}"
     style="
@@ -12341,6 +12394,8 @@ touch-action:pan-y;
     flex-shrink:0;
     "
     >
+    ${window.presenceIsOnline ? (window.presenceIsOnline(profile) ? '<span class="online-indicator" aria-label="Online"></span>' : '') : (profile.online === true ? '<span class="online-indicator" aria-label="Online"></span>' : '')}
+    </span>
 
     <div style="flex:1;">
 
@@ -12369,7 +12424,7 @@ touch-action:pan-y;
 
             ${
                 profile.verified
-                    ? '<span style="color:#0095f6;">✔</span>'
+                    ? '<span class="verified-badge" aria-label="Verified"></span>'
                     : ""
             }
 
@@ -26388,6 +26443,7 @@ window.openProfile = async function (
             gap:10px;
         ">
 
+            <span class="profile-avatar-wrap" data-user-id="${escapeHtml(String(userId || profile.id || ""))}" data-online="${window.presenceIsOnline ? (window.presenceIsOnline(profile) ? "true" : "false") : (profile.online ? "true" : "false")}">
             <img
                 id="profileAvatarImage"
                 src="${escapeHtml(avatarUrl)}"
@@ -26403,6 +26459,8 @@ window.openProfile = async function (
                     flex-shrink:0;
                 "
             >
+            ${profile.online ? '<span class="online-indicator" aria-label="Online"></span>' : ''}
+            </span>
 
             <div style="
                 min-width:0;
@@ -26420,20 +26478,7 @@ window.openProfile = async function (
                     ${
                         profile.verified
                             ? `
-                    <span style="
-                        display:inline-flex;
-                        align-items:center;
-                        justify-content:center;
-                        width:20px;
-                        height:20px;
-                        border-radius:50%;
-                        background:#1d9bf0;
-                        color:white;
-                        font-size:12px;
-                        font-weight:bold;
-                    ">
-                        ✓
-                    </span>
+                    <span class="verified-badge" aria-label="Verified"></span>
                     `
                             : ""
                     }
@@ -28494,6 +28539,12 @@ function createVideoPage(post, index) {
     video.addEventListener(
         "click",
         event => {
+            if (suppressNextVideoClick) {
+                suppressNextVideoClick = false;
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+            }
             const now = Date.now();
 
             if (now - lastTap < 300) {
@@ -28603,6 +28654,8 @@ function createVideoPage(post, index) {
     let holdWasPlaying = false;
     let holdOriginalPlaybackRate = 1;
     let holdAnimationFrame = null;
+    let suppressNextVideoClick = false;
+    let touchHoldStarted = false;
 
     const removeHoldIndicator = () => {
         page.querySelector(".profile-video-hold-indicator")?.remove();
@@ -28723,6 +28776,44 @@ function createVideoPage(post, index) {
     document.addEventListener("touchend", stopHold, { passive: true });
     document.addEventListener("touchcancel", stopHold, { passive: true });
     window.addEventListener("blur", stopHold);
+
+    // Android fallback: some WebViews/Chrome builds do not deliver reliable
+    // pointerdown/up events to a custom video surface. Use the native touch
+    // stream as the authoritative long-press path too.
+    video.addEventListener("touchstart", event => {
+        if (event.touches.length !== 1) return;
+        const t = event.touches[0];
+        const width = page.clientWidth || window.innerWidth || 1;
+        if (t.clientX <= width / 3) holdDirection = "rewind";
+        else if (t.clientX >= width * 2 / 3) holdDirection = "forward";
+        else { holdDirection = null; return; }
+
+        touchHoldStarted = false;
+        clearTimeout(pressTimer);
+        pressTimer = setTimeout(() => {
+            touchHoldStarted = true;
+            holdActive = true;
+            holdStartTime = Date.now();
+            holdStartPosition = Number(video.currentTime) || 0;
+            holdWasPlaying = !video.paused;
+            holdOriginalPlaybackRate = Number(video.playbackRate) || 1;
+            if (holdDirection === "forward") video.playbackRate = 2;
+            else video.pause();
+            createHoldIndicator(holdDirection);
+            animateHold();
+        }, 250);
+    }, { passive:true });
+
+    video.addEventListener("touchend", event => {
+        if (touchHoldStarted) suppressNextVideoClick = true;
+        stopHold();
+        touchHoldStarted = false;
+    }, { passive:true });
+    video.addEventListener("touchcancel", event => {
+        if (touchHoldStarted) suppressNextVideoClick = true;
+        stopHold();
+        touchHoldStarted = false;
+    }, { passive:true });
 
     // =====================================================
     // INFO
@@ -37383,15 +37474,18 @@ window.saveRecentSearch = function (
     localStorage.getItem("recentSearches") || "[]"
   );
 
-  recent = recent.filter(user => user.id !== id);
+  id = String(id || "");
+  if (!id) return;
+
+  recent = recent.filter(user => String(user.id) !== id);
 
   recent.unshift({
   id,
-  name,
-  avatar,
-  online,
-  last_seen,
-  verified,
+  name: name || "User",
+  avatar: avatar || "",
+  online: online === true,
+  last_seen: last_seen || "",
+  verified: verified === true,
   searched_at: new Date().toISOString()
 });
 
@@ -37507,6 +37601,10 @@ container.innerHTML +=
         class="search-profile-row"
         data-user-id="${escapeHtml(String(user.id))}"
         data-user-name="${escapeHtml(user.name || "User")}"
+        data-user-avatar="${escapeHtml(user.avatar || user.avatar_url || "")}"
+        data-user-online="${window.presenceIsOnline ? (window.presenceIsOnline(user) ? "true" : "false") : (user.online ? "true" : "false")}"
+        data-user-last-seen="${escapeHtml(user.last_seen || "")}"
+        data-user-verified="${user.verified ? "true" : "false"}"
         style="
           display:flex;
           align-items:center;
@@ -37517,8 +37615,8 @@ container.innerHTML +=
         "
       >
 
-        <img
-          src="${user.avatar || 'https://via.placeholder.com/40'}"
+        <span class="avatar-wrap search-avatar-wrap" data-user-id="${escapeHtml(String(user.id || ""))}" data-online="${window.presenceIsOnline ? (window.presenceIsOnline(user) ? "true" : "false") : (user.online ? "true" : "false")}"><img class="search-avatar-image"
+          src="${user.avatar || user.avatar_url || 'https://via.placeholder.com/40'}"
           style="
             width:40px;
             height:40px;
@@ -37526,10 +37624,12 @@ container.innerHTML +=
             object-fit:cover;
           "
         >
+        ${window.presenceIsOnline ? (window.presenceIsOnline(user) ? '<span class="online-indicator" aria-label="Online"></span>' : '') : (user.online ? '<span class="online-indicator" aria-label="Online"></span>' : '')}
+        </span>
 
        <div style="flex:1">
 
-  <div style="
+  <div class="search-user-name" style="
 display:flex;
 align-items:center;
 gap:4px;
@@ -37539,21 +37639,14 @@ font-weight:bold;
 
 ${user.name}
 
-${user.verified ? `
-<span style="
-color:#1d9bf0;
-font-size:14px;
-">
-✔️
-</span>
-` : ""}
+${user.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ""}
 
 </div>
 
-  <div style="color:#888;font-size:12px;">
+  <div class="search-status-text" style="color:#888;font-size:12px;">
     ${
       user.online
-        ? "🟢 Online"
+        ? "Online"
         : user.last_seen
           ? "Last seen " + formatLastSeen(user.last_seen)
           : "Offline"
@@ -37700,6 +37793,10 @@ const results = [
     class="search-profile-row"
     data-user-id="${escapeHtml(String(user.id))}"
     data-user-name="${escapeHtml(user.name || "User")}"
+    data-user-avatar="${escapeHtml(user.avatar_url || user.avatar || "")}"
+    data-user-online="${window.presenceIsOnline ? (window.presenceIsOnline(user) ? "true" : "false") : (user.online ? "true" : "false")}"
+    data-user-last-seen="${escapeHtml(user.last_seen || "")}"
+    data-user-verified="${user.verified ? "true" : "false"}"
     style="
       display:flex;
       align-items:center;
@@ -37710,7 +37807,8 @@ const results = [
     "
   >
   
-  <img
+  <span class="avatar-wrap" data-user-id="${escapeHtml(String(user.id || ""))}" data-online="${window.presenceIsOnline ? (window.presenceIsOnline(user) ? "true" : "false") : (user.online ? "true" : "false")}">
+  <img class="search-avatar-image"
     src="${escapeHtml(
       user.avatar_url ||
       user.avatar ||
@@ -37724,10 +37822,12 @@ const results = [
       flex-shrink:0;
     "
   >
+  ${window.presenceIsOnline ? (window.presenceIsOnline(user) ? '<span class="online-indicator" aria-label="Online"></span>' : '') : (user.online ? '<span class="online-indicator" aria-label="Online"></span>' : '')}
+  </span>
 
   <div style="flex:1;min-width:0;">
 
-    <div style="
+    <div class="search-user-name" style="
       display:flex;
       align-items:center;
       gap:4px;
@@ -37747,12 +37847,7 @@ const results = [
       ${
         user.verified
           ? `
-            <span style="
-              color:#1d9bf0;
-              font-size:14px;
-            ">
-              ✔️
-            </span>
+            <span class="verified-badge" aria-label="Verified"></span>
           `
           : ""
       }
@@ -37761,6 +37856,7 @@ const results = [
 
     <div
       id="search-status-${user.id}"
+      class="search-status-text"
       style="
         color:#888;
         font-size:12px;
@@ -37768,7 +37864,7 @@ const results = [
     >
       ${
         user.online
-          ? "🟢 Online"
+          ? "Online"
           : user.last_seen
             ? "Last seen " + formatLastSeen(user.last_seen)
             : "Offline"
@@ -37911,9 +38007,9 @@ window.setupSearchProfileClicks = function () {
                     userId,
                     userName,
                     userAvatar,
-                    false,
-                    "",
-                    false
+                    messageButton.closest(".search-profile-row")?.dataset.userOnline === "true",
+                    messageButton.closest(".search-profile-row")?.dataset.userLastSeen || "",
+                    messageButton.closest(".search-profile-row")?.dataset.userVerified === "true"
                 );
             }
 
@@ -37967,6 +38063,20 @@ window.setupSearchProfileClicks = function () {
         const userName =
             row.dataset.userName || "User";
 
+        // Save every profile opened from Search into recent history.
+        // Use the row's current data immediately, then realtime profile
+        // updates will keep the saved record synchronized.
+        if (typeof window.saveRecentSearch === "function") {
+            window.saveRecentSearch(
+                userId,
+                userName,
+                row.dataset.userAvatar || "",
+                row.dataset.userOnline === "true",
+                row.dataset.userLastSeen || "",
+                row.dataset.userVerified === "true"
+            );
+        }
+
         console.log(
             "🔍 SEARCH PROFILE CLICK:",
             {
@@ -38012,6 +38122,67 @@ window.setupSearchProfileClicks = function () {
 
 let searchStatusChannel = null;
 
+// Keep Search results AND Recent Searches synchronized with every profile
+// UPDATE (name/username/avatar/verified/presence/etc.), not only presence.
+window.applySearchProfileUpdate = function(user) {
+  if (!user?.id) return;
+  const id = String(user.id);
+  const online = window.presenceIsOnline
+    ? window.presenceIsOnline(user)
+    : user.online === true;
+
+  document.querySelectorAll('.search-profile-row[data-user-id="' + CSS.escape(id) + '"]').forEach(row => {
+    row.dataset.userName = user.name || "User";
+    row.dataset.userAvatar = user.avatar_url || user.avatar || "";
+    row.dataset.userOnline = online ? "true" : "false";
+    row.dataset.userLastSeen = user.last_seen || "";
+    row.dataset.userVerified = user.verified ? "true" : "false";
+
+    const img = row.querySelector('.search-avatar-image, .search-avatar-wrap img, .avatar-wrap img');
+    if (img) img.src = user.avatar_url || user.avatar || 'https://via.placeholder.com/40';
+
+    const nameEl = row.querySelector('.search-user-name');
+    if (nameEl) {
+      nameEl.textContent = user.name || "User";
+      if (user.verified) {
+        if (!nameEl.querySelector('.verified-badge')) {
+          const badge = document.createElement('span');
+          badge.className = 'verified-badge';
+          badge.setAttribute('aria-label','Verified');
+          nameEl.appendChild(badge);
+        }
+      } else {
+        nameEl.querySelectorAll('.verified-badge').forEach(b => b.remove());
+      }
+    }
+
+    const status = row.querySelector('.search-status-text');
+    if (status) status.textContent = online ? 'Online' : (user.last_seen ? 'Last seen ' + formatLastSeen(user.last_seen) : 'Offline');
+
+    const wrap = row.querySelector('.search-avatar-wrap, .avatar-wrap');
+    if (wrap && window.applyPresenceToAvatar) window.applyPresenceToAvatar(wrap, online);
+  });
+
+  // Update the persisted Recent Searches cache immediately as well.
+  let recent = [];
+  try { recent = JSON.parse(localStorage.getItem('recentSearches') || '[]'); } catch(e) { recent = []; }
+  let changed = false;
+  recent = recent.map(item => {
+    if (String(item.id) !== id) return item;
+    changed = true;
+    return {
+      ...item,
+      id,
+      name: user.name || item.name || 'User',
+      avatar: user.avatar_url || user.avatar || '',
+      online,
+      last_seen: user.last_seen || '',
+      verified: user.verified === true
+    };
+  });
+  if (changed) localStorage.setItem('recentSearches', JSON.stringify(recent));
+};
+
 function listenSearchStatus(){
 
   if(searchStatusChannel){
@@ -38032,6 +38203,10 @@ function listenSearchStatus(){
 
         const user = payload.new;
 
+        if (window.applySearchProfileUpdate) {
+          window.applySearchProfileUpdate(user);
+        }
+
 // Update visible search result
 const status = document.getElementById(
   "search-status-" + user.id
@@ -38039,8 +38214,8 @@ const status = document.getElementById(
 
 if (status) {
   status.innerText =
-    user.online
-      ? "🟢 Online"
+    (window.presenceIsOnline ? window.presenceIsOnline(user) : user.online)
+      ? "Online"
       : user.last_seen
         ? "Last seen " + formatLastSeen(user.last_seen)
         : "Offline";
@@ -38061,7 +38236,7 @@ recent = recent.map(item => {
 
     return {
   ...item,
-  online: user.online,
+  online: window.presenceIsOnline ? window.presenceIsOnline(user) : user.online,
   last_seen: user.last_seen,
   verified: user.verified
    };
@@ -39764,6 +39939,11 @@ window.openChat = async function (
 
     if (chatAvatar) {
 
+        chatAvatar.dataset.userId = String(userId || "");
+        chatAvatar.dataset.online = targetProfile.online ? "true" : "false";
+        const chatAvatarOnline = document.getElementById("chatAvatarOnline");
+        if (chatAvatarOnline) chatAvatarOnline.style.display = (window.presenceIsOnline ? window.presenceIsOnline(targetProfile) : targetProfile.online) ? "block" : "none";
+
         chatAvatar.src =
             targetProfile.avatar_url ||
             (
@@ -39788,8 +39968,8 @@ window.openChat = async function (
     if (status) {
 
         status.innerText =
-            targetProfile.online
-                ? "🟢 Online"
+            (window.presenceIsOnline ? window.presenceIsOnline(targetProfile) : targetProfile.online)
+                ? "Online"
                 : targetProfile.last_seen
                     ? `Last seen ${formatLastSeen(
                         targetProfile.last_seen
@@ -40512,6 +40692,7 @@ openChat(
 
     div.innerHTML = `
 
+      <span class="avatar-wrap" data-user-id="${escapeHtml(String(otherUser || ''))}" data-online="${profile?.online ? "true" : "false"}">
       <img
         src="${
           profile?.avatar_url ||
@@ -40536,6 +40717,8 @@ openChat(
           cursor:pointer;
         "
       >
+      ${profile?.online ? '<span class="online-indicator" aria-label="Online"></span>' : ''}
+      </span>
 
       <div style="flex:1;">
 
@@ -42280,7 +42463,10 @@ window.loadReactionDetails = async function(messageId, emoji) {
       profiles:user_id(
         id,
         name,
-        avatar_url
+        avatar_url,
+        online,
+        last_seen,
+        verified
       )
     `)
     .eq("message_id", messageId)
@@ -42383,6 +42569,7 @@ window.renderReactionUsers = function(users) {
     cursor:pointer;
   ">
 
+<span class="avatar-wrap" data-user-id="${escapeHtml(String(u.profiles?.id || ''))}" data-online="${u.profiles?.online ? "true" : "false"}">
 <img
 src="${
   u.profiles?.avatar_url ||
@@ -42395,6 +42582,8 @@ height:45px;
 border-radius:50%;
 object-fit:cover;
 ">
+${u.profiles?.online ? '<span class="online-indicator" aria-label="Online"></span>' : ''}
+</span>
 
 <div style="flex:1;">
 
@@ -44273,6 +44462,99 @@ window.openMedia = function (
         viewer.addEventListener("touchend", () => { touchGesture=null; }, {passive:true});
         viewer.addEventListener("touchcancel", () => { touchGesture=null; }, {passive:true});
 
+        // =============================================================
+        // ANDROID TOUCH GESTURE FALLBACK
+        // One capture-phase recognizer owns vertical gestures. This avoids
+        // the conflict between the video element, viewer swipe handler and
+        // Chrome's touch routing that made the earlier handlers unreliable.
+        // =============================================================
+        if (!viewer.dataset.unifiedGestureReady) {
+            viewer.dataset.unifiedGestureReady = "1";
+            let ug = null;
+            const beginUG = e => {
+                if (e.touches?.length !== 1) return;
+                if (e.target?.closest?.("button,a")) return;
+                const t=e.touches[0], w=viewer.clientWidth||innerWidth||1;
+                ug={x:t.clientX,y:t.clientY,mode:(t.clientX<w*.33?"brightness":t.clientX>w*.67?"volume":"close"),active:false,vol:video.volume,bright:Number(video.dataset.gestureBrightness)||1};
+            };
+            const moveUG = e => {
+                if (!ug || e.touches?.length!==1) return;
+                const t=e.touches[0], dx=t.clientX-ug.x, down=t.clientY-ug.y;
+                const ax=Math.abs(dx), ay=Math.abs(down);
+                if (!ug.active) {
+                    if (ax<8 && ay<8) return;
+                    if (ax>ay) { ug=null; return; }
+                    ug.active=true;
+                }
+                e.preventDefault();
+                e.stopPropagation();
+                if (ug.mode==="close") {
+                    const d=Math.max(0,down), p=Math.min(d/Math.max(innerHeight,1),1);
+                    viewer.style.transition="none";
+                    viewer.style.transform=`translate3d(0,${Math.min(d,innerHeight)}px,0)`;
+                    viewer.style.opacity=String(Math.max(.15,1-p));
+                } else if (ug.mode==="volume") {
+                    const v=Math.max(0,Math.min(1,ug.vol-down/Math.max(innerHeight*.65,1)));
+                    video.volume=v; video.muted=v===0; showGestureHud("volume",v);
+                } else {
+                    const b=Math.max(.35,Math.min(1.35,ug.bright-down/Math.max(innerHeight*.65,1)));
+                    video.dataset.gestureBrightness=String(b); video.style.filter=`brightness(${b})`;
+                    showGestureHud("brightness",Math.max(0,Math.min(1,(b-.35)/1)));
+                }
+            };
+            const endUG = (e) => {
+                if (!ug) return;
+                const endY = e?.changedTouches?.[0]?.clientY;
+                const down = Number.isFinite(endY) ? endY - ug.y : 0;
+                const m=viewer.style.transform.match(/translate3d\(0,([0-9.]+)px/);
+                const d=m?Number(m[1]):0;
+                const close = ug.active && ug.mode === "close" && Math.max(d,down) >= 100;
+                ug=null;
+                if (close) {
+                    viewer.style.transition="transform .18s ease,opacity .18s ease";
+                    viewer.style.transform=`translate3d(0,${innerHeight}px,0)`;
+                    viewer.style.opacity="0";
+                    setTimeout(()=>window.closeMedia(),180);
+                } else {
+                    viewer.style.transition="transform .18s ease,opacity .18s ease";
+                    viewer.style.transform="translate3d(0,0,0)";
+                    viewer.style.opacity="1";
+                }
+            };
+            viewer.addEventListener("touchstart",beginUG,{capture:true,passive:true});
+            viewer.addEventListener("touchmove",moveUG,{capture:true,passive:false});
+            viewer.addEventListener("touchend",endUG,{capture:true,passive:true});
+            viewer.addEventListener("touchcancel",()=>{ug=null;viewer.style.transform="translate3d(0,0,0)";viewer.style.opacity="1";},{capture:true,passive:true});
+        }
+
+        // FINAL CAPTURE-PHASE TOUCH ROUTER: Android media controls can consume
+        // element-level touch events. Capture here before the video gets them.
+        if (!window.__mediaCaptureGestureReady) {
+            window.__mediaCaptureGestureReady = true;
+            let cg = null;
+            const visible = () => { const v=document.getElementById('mediaViewer'); return v && getComputedStyle(v).display !== 'none'; };
+            document.addEventListener('touchstart', e => {
+              if (!visible() || e.touches.length!==1) return;
+              if (e.target?.closest?.('#mediaViewer button,a')) return;
+              const t=e.touches[0], v=document.getElementById('mediaViewer'), w=v.clientWidth||innerWidth||1;
+              cg={x:t.clientX,y:t.clientY,mode:t.clientX<w*.33?'brightness':t.clientX>w*.67?'volume':'close',active:false,vol:document.getElementById('mediaVideo')?.volume??1,bright:Number(document.getElementById('mediaVideo')?.dataset.gestureBrightness)||1};
+            }, {capture:true,passive:true});
+            document.addEventListener('touchmove', e => {
+              if (!cg || e.touches.length!==1) return;
+              const t=e.touches[0], dx=t.clientX-cg.x, dy=t.clientY-cg.y, ax=Math.abs(dx), ay=Math.abs(dy);
+              if (!cg.active) { if (ax<8 && ay<8) return; if (ax>ay) {cg=null;return;} cg.active=true; }
+              e.preventDefault();
+              const video=document.getElementById('mediaVideo'); if(!video) return;
+              if(cg.mode==='close'){ const d=Math.max(0,dy), p=Math.min(d/Math.max(innerHeight,1),1); const v=document.getElementById('mediaViewer'); v.style.transition='none'; v.style.transform=`translate3d(0,${Math.min(d,innerHeight)}px,0)`; v.style.opacity=String(Math.max(.15,1-p)); }
+              else if(cg.mode==='volume'){ const val=Math.max(0,Math.min(1,cg.vol-dy/Math.max(innerHeight*.65,1))); video.volume=val; video.muted=val===0; showGestureHud('volume',val); }
+              else { const val=Math.max(.35,Math.min(1.35,cg.bright-dy/Math.max(innerHeight*.65,1))); video.dataset.gestureBrightness=String(val); video.style.filter=`brightness(${val})`; showGestureHud('brightness',Math.max(0,Math.min(1,(val-.35)/1))); }
+            }, {capture:true,passive:false});
+            document.addEventListener('touchend', e => {
+              if(!cg) return; const t=e.changedTouches?.[0], d=t? t.clientY-cg.y:0; const v=document.getElementById('mediaViewer'); const close=cg.active&&cg.mode==='close'&&Math.max(d, parseFloat(v?.style.transform?.match(/translate3d\(0,([0-9.]+)px/)?.[1]||0))>=100; cg=null; if(close){v.style.transition='transform .18s ease,opacity .18s ease';v.style.transform=`translate3d(0,${innerHeight}px,0)`;v.style.opacity='0';setTimeout(()=>window.closeMedia(),180);} else if(v){v.style.transition='transform .18s ease,opacity .18s ease';v.style.transform='translate3d(0,0,0)';v.style.opacity='1';}
+            }, {capture:true,passive:true});
+            document.addEventListener('touchcancel',()=>{cg=null;const v=document.getElementById('mediaViewer');if(v){v.style.transform='translate3d(0,0,0)';v.style.opacity='1';}}, {capture:true,passive:true});
+        }
+
         // If Chrome somehow enters native fullscreen, immediately return to
         // the app-owned viewer instead of trapping the user in browser fullscreen.
         document.addEventListener("fullscreenchange", () => {
@@ -44810,7 +45092,10 @@ window.loadNotificationProfiles = async function(notifications) {
       id,
       name,
       username,
-      avatar_url
+      avatar_url,
+      online,
+      last_seen,
+      verified
     `)
     .in("id", senderIds);
 
@@ -46119,6 +46404,7 @@ const bg =
           "
         >
 
+          <span class="avatar-wrap" data-user-id="${escapeHtml(String(n.sender_id || ''))}" data-online="${currentProfile.online ? "true" : "false"}">
           <img
             src="${safeAvatar}"
             onerror="
@@ -46133,6 +46419,8 @@ const bg =
               flex-shrink:0;
             "
           />
+          ${currentProfile.online ? '<span class="online-indicator" aria-label="Online"></span>' : ''}
+          </span>
 
           <div style="
             flex:1;
@@ -46145,7 +46433,7 @@ const bg =
             ">
 
               <b>
-                ${icon} ${username}
+                ${icon} ${username}${currentProfile.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ''}
               </b>
 
               ${text}
@@ -46554,6 +46842,7 @@ function appendReplies(data) {
         margin-bottom:10px;
       ">
 
+        <span class="avatar-wrap" data-online="${r.profiles?.online ? "true" : "false"}">
         <img
           src="${
             escapeHtml(
@@ -51242,6 +51531,119 @@ window.applyAvatarBadges = function(root=document){
     }
   });
 };
+
+// =====================================================
+// REALTIME PRESENCE / AVATAR ACCURACY
+// =====================================================
+// The database flag is treated as online only while the heartbeat is fresh.
+// This prevents a stale `online=true` value from leaving a green dot behind.
+window.PRESENCE_TTL_MS = 60000;
+window.presenceIsOnline = function(profile){
+  if (!profile || profile.online !== true) return false;
+  const last = profile.last_seen ? new Date(profile.last_seen).getTime() : 0;
+  // A realtime online=true update should show immediately even when last_seen
+  // has not arrived in the same payload. The heartbeat/polling will correct it.
+  if (!last) return true;
+  return (Date.now() - last) <= window.PRESENCE_TTL_MS;
+};
+
+window.applyPresenceToAvatar = function(wrap, online){
+  if (!wrap) return;
+  wrap.dataset.online = online ? 'true' : 'false';
+  let dot = wrap.querySelector(':scope > .online-indicator');
+  if (online && !dot) {
+    dot = document.createElement('span');
+    dot.className = 'online-indicator';
+    dot.setAttribute('aria-label','Online');
+    wrap.appendChild(dot);
+  }
+  if (dot) dot.style.display = online ? 'block' : 'none';
+};
+
+window.applyPresenceUpdate = function(profile){
+  if (!profile?.id) return;
+  const id = String(profile.id);
+  const online = window.presenceIsOnline(profile);
+  document.querySelectorAll('[data-user-id="'+CSS.escape(id)+'"]').forEach(el => {
+    if (el.classList.contains('avatar-wrap') || el.classList.contains('comment-avatar-wrap') || el.classList.contains('profile-avatar-wrap') || el.classList.contains('story-avatar-wrap') || el.classList.contains('chat-avatar-wrap')) {
+      window.applyPresenceToAvatar(el, online);
+    }
+  });
+  const status = document.getElementById('search-status-'+CSS.escape(id));
+  if (status) {
+    status.textContent = online ? 'Online' : (profile.last_seen ? 'Last seen ' + formatLastSeen(profile.last_seen) : 'Offline');
+  }
+  const chatStatus = document.getElementById('chatStatus');
+  const chatAvatar = document.getElementById('chatAvatar');
+  if (chatAvatar?.dataset?.userId === id) {
+    window.applyPresenceToAvatar(chatAvatar.parentElement, online);
+    if (chatStatus) chatStatus.textContent = online ? 'Online' : (profile.last_seen ? 'Last seen ' + formatLastSeen(profile.last_seen) : 'Offline');
+  }
+};
+
+window.refreshVisiblePresence = async function(){
+  const ids = [...document.querySelectorAll('[data-user-id]')]
+    .map(el => el.dataset.userId).filter(Boolean);
+  const unique = [...new Set(ids)];
+  if (!unique.length || !window.supabase) return;
+  const {data, error} = await supabase.from('profiles').select('id,name,avatar_url,online,last_seen,verified').in('id', unique);
+  if (error || !data) return;
+  data.forEach(profile => {
+    window.applyPresenceUpdate(profile);
+    window.applySearchProfileUpdate?.(profile);
+  });
+
+  let recent = JSON.parse(localStorage.getItem('recentSearches') || '[]');
+  let changed = false;
+  recent = recent.map(item => {
+    const p = data.find(x => String(x.id) === String(item.id));
+    if (!p) return item;
+    changed = true;
+    return {...item, name:p.name || item.name, avatar:p.avatar_url || item.avatar || '', online:window.presenceIsOnline(p), last_seen:p.last_seen, verified:p.verified};
+  });
+  if (changed) localStorage.setItem('recentSearches', JSON.stringify(recent));
+};
+
+window.startPresenceHeartbeat = async function(){
+  if (window.__presenceHeartbeatStarted) return;
+  window.__presenceHeartbeatStarted = true;
+  const setOnline = async (online) => {
+    const {data:{session}} = await supabase.auth.getSession();
+    if (!session?.user?.id) return;
+    await supabase.from('profiles').update({online, last_seen:new Date().toISOString()}).eq('id',session.user.id);
+  };
+  await setOnline(true);
+  window.__presenceHeartbeat = setInterval(() => {
+    if (document.visibilityState === 'visible' && navigator.onLine !== false) setOnline(true);
+  }, 10000);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      setOnline(true);
+      window.refreshVisiblePresence();
+    } else setOnline(false);
+  });
+  window.addEventListener('online', () => setOnline(true));
+  window.addEventListener('offline', () => setOnline(false));
+  window.addEventListener('pagehide', () => {
+    try { setOnline(false); } catch(e) {}
+  });
+  setInterval(() => window.refreshVisiblePresence(), 5000);
+  window.refreshVisiblePresence();
+};
+
+// Subscribe once: all visible avatar surfaces update immediately when a profile changes.
+if (!window.globalPresenceChannel) {
+  window.globalPresenceChannel = supabase.channel('global-profile-presence')
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'profiles'},payload=>{
+      window.applyPresenceUpdate(payload.new);
+      window.applySearchProfileUpdate?.(payload.new);
+    })
+    .subscribe();
+}
+
+window.addEventListener("load", () => {
+  setTimeout(() => { if (window.supabase) window.startPresenceHeartbeat?.(); }, 300);
+}, {once:true});
 
 window.addEventListener("beforeunload", async () => {
 
