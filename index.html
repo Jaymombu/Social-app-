@@ -1354,8 +1354,9 @@ opacity:1;
 }
 
 .sending-message{
-  opacity:.6;
-  animation:sendingPulse 1s infinite;
+  opacity:1;
+  animation:sendingPulse 1.1s ease-in-out infinite !important;
+  will-change:opacity;
 }
 
 @keyframes sendingPulse{
@@ -1420,9 +1421,7 @@ opacity:1;
 }
 
 .message-enter{
-
-  animation:messageEnter .25s ease;
-
+  animation:none !important;
 }
 
 @keyframes messageEnter{
@@ -42196,6 +42195,12 @@ function updateChatMessageStatus(message) {
   const nextState = message.seen ? "seen" : message.delivered ? "delivered" : "sent";
   const nextText = message.seen || message.delivered ? "✓✓" : "✓";
   const previousState = status.className;
+  const messageBubble = el.closest?.(".chatMessage");
+  if (messageBubble) {
+    // Pulse is a real pending-delivery indicator. It must stop the moment
+    // the database says the recipient has received the message.
+    messageBubble.classList.toggle("sending-message", !message.delivered && !message.seen);
+  }
   status.className = "messageStatus " + nextState;
   status.textContent = nextText;
   if (!previousState.endsWith(" " + nextState)) {
@@ -42248,7 +42253,6 @@ function startChatStatusPolling(userId) {
       return;
     }
     await refreshOpenChatStatuses(userId);
-    await refreshOpenChatMessages(userId);
     await loadUnreadMessages();
   }, 1500);
 
@@ -42295,7 +42299,8 @@ function listenForSeenMessages(userId) {
       }
 
       if (channelToken !== window.__chatOpenToken || currentChatUser !== userId) return;
-      await loadMessages(userId, channelToken);
+      // The global messages subscription performs the single chat render.
+      // Avoid a second load here, which used to race it and cause blinking.
       await loadUnreadMessages();
       window.scheduleInboxRefresh?.();
     })
@@ -51851,8 +51856,8 @@ if (!window.messagesSubscription) {
       // Paint a newly received/sent message into the currently open chat
       // without requiring a browser refresh.
       if (currentChatUser &&
-          ((String(msg.sender_id) === String(currentUser.id) && String(msg.receiver_id) === String(currentChatUser)) ||
-           (String(msg.sender_id) === String(currentChatUser) && String(msg.receiver_id) === String(currentUser.id))) &&
+          String(msg.sender_id) !== String(currentUser.id) &&
+          ((String(msg.sender_id) === String(currentChatUser) && String(msg.receiver_id) === String(currentUser.id))) &&
           isChatScreenVisible()) {
         const token = window.__chatOpenToken;
         await loadMessages(currentChatUser, token);
