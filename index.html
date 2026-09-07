@@ -120,6 +120,52 @@ body {
     z-index:1000;
 }
 
+
+/* =====================================================
+   CLEAN MONOCHROME COMMENT ICONS
+   ===================================================== */
+.comment-ui-icon{
+  width:18px;
+  height:18px;
+  display:inline-block;
+  vertical-align:-4px;
+  flex:0 0 auto;
+  stroke:currentColor;
+  fill:none;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.comment-action-icon{
+  width:17px;
+  height:17px;
+  display:inline-block;
+  vertical-align:-4px;
+  stroke:currentColor;
+  fill:none;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.voice-play-icon{
+  width:17px;
+  height:17px;
+  display:block;
+  stroke:currentColor;
+  fill:none;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.comment-icon-button{display:flex !important;align-items:center;justify-content:center;}
+.comment-menu-row{
+  display:flex !important;
+  align-items:center;
+  justify-content:flex-start;
+  gap:10px;
+  text-align:left !important;
+}
+
 .menu-item{
 padding:18px;
 text-align:center;
@@ -4782,6 +4828,11 @@ body.light .avatar-wrap .online-indicator,body.light .story-avatar-wrap .online-
 }
 </style>
 
+
+<style id="fixed114-tab-icons">
+#tab-explore,#tab-following{display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;}
+#tab-explore .story-tab-icon,#tab-following .story-tab-icon{width:19px!important;height:19px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.7!important;stroke-linecap:round!important;stroke-linejoin:round!important;}
+</style>
 </head>
 <body class="dark">
   
@@ -5156,7 +5207,7 @@ user-select:none;
 -webkit-touch-callout:none;
 pointer-events:auto;
 ">
-🎤
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg>
 </button>
 
     <button
@@ -5232,6 +5283,29 @@ pointer-events:auto;
 
 </div>
 
+
+<style id="story-tab-monochrome-icons">
+.storyTab{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:7px !important;
+}
+.story-tab-icon{
+  width:19px !important;
+  height:19px !important;
+  fill:none !important;
+  stroke:currentColor !important;
+  stroke-width:1.7 !important;
+  stroke-linecap:round !important;
+  stroke-linejoin:round !important;
+  flex:0 0 auto !important;
+}
+.storyTab span{
+  line-height:1 !important;
+}
+</style>
+
 <div id="app">
   
 
@@ -5241,11 +5315,19 @@ pointer-events:auto;
     <div id="storiesHeader">
 
       <div class="storyTab active">
-        🌍 Explore
+        <svg class="story-tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5"></circle>
+          <path d="M3.5 12h17M12 3.5c2.3 2.4 3.5 5.2 3.5 8.5S14.3 18.1 12 20.5C9.7 18.1 8.5 15.3 8.5 12S9.7 5.9 12 3.5Z"></path>
+        </svg>
+        <span>Explore</span>
       </div>
 
       <div class="storyTab">
-        👥 Following
+        <svg class="story-tab-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="9" cy="8" r="3.2"></circle>
+          <path d="M3.5 19c.4-3.2 2.3-5 5.5-5s5.1 1.8 5.5 5M16.2 11.2c2.3.2 3.8 1.6 4.3 4M16.5 5.2a3 3 0 0 1 0 5.8"></path>
+        </svg>
+        <span>Following</span>
       </div>
 
     </div>
@@ -7693,7 +7775,7 @@ video.addEventListener("click", e => {
     audio.pause();
   }
 
-  playBtn.innerHTML = "▶";
+  playBtn.innerHTML = `<svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>`;
 
 }
 
@@ -10230,6 +10312,12 @@ window.openComments = async function (
     targetCommentId = null,
     addHistory = true
 ) {
+
+// Capture Home BEFORE Comments changes the navigation state.
+if (history.state?.appScreen === "app" &&
+    typeof window.saveHomeScroll === "function") {
+    window.saveHomeScroll();
+}
   
 // =====================================================
 // NAVIGATION RESTORE OVERRIDE
@@ -12832,7 +12920,7 @@ touch-action:pan-y;
                     cursor:pointer;
                     "
                     >
-                        ▶
+                        <svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>
                     </button>
 
 
@@ -12982,7 +13070,7 @@ touch-action:pan-y;
                 cursor:pointer;
                 font-weight:600;
                 ">
-                    🌐 See translation
+                    <svg class="comment-action-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3Z"/></svg> See translation
                 </div>
 
 
@@ -13038,7 +13126,7 @@ touch-action:pan-y;
             transition:.2s;
             ">
 
-                ❤️
+                <svg class="comment-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.7c0 5.4-8.8 10.1-8.8 10.1S3.2 14.1 3.2 8.7A4.7 4.7 0 0 1 12 6.1a4.7 4.7 0 0 1 8.8 2.6Z"/></svg>
 
                 <span id="commentLikeCount-${c.id}">
                     ${c.comment_likes?.length || 0}
@@ -13072,7 +13160,7 @@ touch-action:pan-y;
             transition:all .2s ease;
             ">
 
-                💬
+                <svg class="comment-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10H9l-5 4v-14Z"/><path d="M8 9.5h8M8 13h5"/></svg>
 
                 <span>
                     Reply
@@ -13422,7 +13510,7 @@ window.renderReply = function (comment) {
                         cursor:pointer;
                     "
                 >
-                    ▶
+                    <svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>
                 </button>
 
 
@@ -16480,6 +16568,12 @@ let selectedCommentUserId = null;
 
 window.openCommentMenu = async function(commentId, userId) {
 
+    const { data: { session: menuSession } } = await supabase.auth.getSession();
+    if (!menuSession?.user?.id) {
+        showToast("Please log in to use comment actions.");
+        return;
+    }
+
     // =====================================================
     // STORE THE EXACT COMMENT SELECTED
     // =====================================================
@@ -16532,6 +16626,16 @@ window.openCommentMenu = async function(commentId, userId) {
 
     const postOwnerId =
         String(window.currentPostOwnerId || "");
+
+    let selectedCommentHidden = false;
+    try {
+        const { data: selectedRow } = await supabase
+            .from("comments")
+            .select("hidden")
+            .eq("id", exactId)
+            .maybeSingle();
+        selectedCommentHidden = selectedRow?.hidden === true;
+    } catch (e) {}
 
 
     const isMine =
@@ -16596,7 +16700,7 @@ window.openCommentMenu = async function(commentId, userId) {
     if (deleteBtn) {
 
         deleteBtn.style.display =
-            isMine
+            (isMine || isPostOwner)
                 ? "block"
                 : "none";
 
@@ -16654,10 +16758,13 @@ window.openCommentMenu = async function(commentId, userId) {
     }
 
     if (hideBtn) {
-        hideBtn.style.display =
-            isPostOwner
-                ? "block"
-                : "none";
+        hideBtn.style.display = isPostOwner ? "block" : "none";
+        hideBtn.innerHTML = selectedCommentHidden
+            ? '<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s3.2-6 9-6 9 6 9 6-3.2 6-9 6-9-6-9-6Z"/><path d="m4 4 16 16"/></svg> Unhide Comment'
+            : '<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s3.2-6 9-6 9 6 9 6-3.2 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="2.5"/></svg> Hide Comment';
+        hideBtn.onclick = selectedCommentHidden
+            ? () => { unhideComment(selectedCommentId); }
+            : () => { hideComment(selectedCommentId); };
     }
 
     if (reportBtn) {
@@ -16678,6 +16785,8 @@ window.openCommentMenu = async function(commentId, userId) {
 
 async function copySelectedComment() {
 
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) { showToast("Please log in to use comment actions."); return; }
     closeCommentMenu();
 
     const { data: comment, error } = await supabase
@@ -16717,6 +16826,8 @@ function closeCommentMenu() {
 window.closeCommentMenu = closeCommentMenu;
 
 async function editComment(commentId) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) { showToast("Please log in to edit comments."); return; }
   
   closeCommentMenu();
 
@@ -16727,6 +16838,11 @@ async function editComment(commentId) {
         .single();
 
     if (!comment) return;
+    const { data: ownerRow } = await supabase.from("comments").select("user_id").eq("id", commentId).maybeSingle();
+    if (String(ownerRow?.user_id || "") !== String(session.user.id)) {
+        showToast("Only the comment owner can edit it.");
+        return;
+    }
 
     const text = prompt("Edit comment", comment.content);
 
@@ -16753,6 +16869,9 @@ async function editComment(commentId) {
 }
 
 async function deleteComment(commentId) {
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user?.id) { showToast("Please log in to delete comments."); return; }
 
     closeCommentMenu();
 
@@ -16805,6 +16924,13 @@ async function deleteComment(commentId) {
             exactId
         );
 
+        return;
+    }
+
+    const isCommentOwner = String(comment.user_id || "") === String(session.user.id);
+    const isCurrentPostOwner = String(window.currentPostOwnerId || "") === String(session.user.id);
+    if (!isCommentOwner && !isCurrentPostOwner) {
+        showToast("Only the comment owner or post owner can delete this comment.");
         return;
     }
 
@@ -18633,7 +18759,7 @@ window.showVoicePreview = async function () {
 
 
     if (playBtn) {
-        playBtn.innerHTML = "▶";
+        playBtn.innerHTML = `<svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>`;
     }
 
 
@@ -18797,7 +18923,7 @@ window.showVoicePreview = async function () {
                         await audio.play();
 
                         playBtn.innerHTML =
-                            "⏸";
+                            `<svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>`;
 
                     }
 
@@ -18817,7 +18943,7 @@ window.showVoicePreview = async function () {
                     audio.pause();
 
                     playBtn.innerHTML =
-                        "▶";
+                        `<svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>`;
 
                 }
 
@@ -18881,7 +19007,7 @@ window.showVoicePreview = async function () {
         function () {
 
             if (playBtn) {
-                playBtn.innerHTML = "▶";
+                playBtn.innerHTML = `<svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>`;
             }
 
 
@@ -19248,7 +19374,7 @@ window.clearVoicePreview = function () {
     if (playBtn) {
 
         playBtn.innerHTML =
-            "▶";
+            `<svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>`;
 
         playBtn.disabled =
             false;
@@ -19266,7 +19392,7 @@ window.clearVoicePreview = function () {
             false;
 
         postBtn.innerHTML =
-            "➤";
+            `<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-7-4.5 14-4-6.5L4 12Z"/><path d="M11.5 12.5 20 5"/></svg>`;
 
     }
 
@@ -19562,7 +19688,7 @@ window.toggleVoice = function (id) {
                 if (otherBtn) {
 
                     otherBtn.innerHTML =
-                        "▶";
+                        `<svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>`;
 
                 }
 
@@ -19702,7 +19828,7 @@ window.toggleVoice = function (id) {
                 function () {
 
                     btn.innerHTML =
-                        "⏸";
+                        `<svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>`;
 
 
                     if (player) {
@@ -19742,7 +19868,7 @@ window.toggleVoice = function (id) {
 
 
         btn.innerHTML =
-            "▶";
+            `<svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>`;
 
 
         if (player) {
@@ -19918,7 +20044,7 @@ window.renderVoiceCommentPlayer = function (comment) {
                     justify-content:center;
                     cursor:pointer;
                 "
-            >▶</button>
+            ><svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg></button>
 
 
             <div
@@ -22633,7 +22759,12 @@ if (!window.commentReactionBadgeClickAttached) {
 
 }
 
-function openReactionPicker(commentId){
+async function openReactionPicker(commentId){
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user?.id) {
+      showToast("Please log in to use comment reactions.");
+      return;
+  }
 
     console.log("Reaction picker opened");
 
@@ -26078,6 +26209,13 @@ window.openProfile = async function (
     name,
     navigationOptions = {}
 ) {
+    // Capture Home BEFORE changing navigation state or awaiting Supabase.
+    // This makes Profile → Back/Close return to the exact feed position.
+    if (history.state?.appScreen === "app" &&
+        typeof window.saveHomeScroll === "function") {
+        window.saveHomeScroll();
+    }
+
     console.log("👤 OPEN PROFILE:", userId);
 
     // =================================================
@@ -38881,8 +39019,14 @@ if (
     <div class="home-shell">
 
       <div id="tabs" class="home-tabs">
-        <div id="tab-explore" class="active-tab">🌍 Explore</div>
-        <div id="tab-following">👥 Following</div>
+        <div id="tab-explore" class="active-tab">
+          <svg class="story-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"></circle><path d="M3.5 12h17M12 3.5c2.3 2.4 3.5 5.2 3.5 8.5S14.3 18.1 12 20.5C9.7 18.1 8.5 15.3 8.5 12S9.7 5.9 12 3.5Z"></path></svg>
+          <span>Explore</span>
+        </div>
+        <div id="tab-following">
+          <svg class="story-tab-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3.5 19c.4-3.2 2.3-5 5.5-5s5.1 1.8 5.5 5M16.2 11.2c2.3.2 3.8 1.6 4.3 4M16.5 5.2a3 3 0 0 1 0 5.8"></path></svg>
+          <span>Following</span>
+        </div>
       </div>
 
       ${
@@ -39172,7 +39316,7 @@ cursor:pointer;
 z-index:99999999;
 pointer-events:auto;
 ">
-←
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"/></svg>
 </div>
 
 <div id="commentMediaContent" style="
@@ -39268,7 +39412,7 @@ color:#999;
 cursor:pointer;
 user-select:none;
 ">
-✕
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
 </span>
 
 </div>
@@ -39387,7 +39531,7 @@ font-size:22px;
 cursor:pointer;
 padding:4px 10px;
 ">
-✕
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
 </div>
 
 </div>
@@ -39467,6 +39611,7 @@ box-sizing:border-box;
         <button
             id="voicePreviewPlay"
             type="button"
+            class="comment-icon-button"
             style="
                 width:42px;
                 height:42px;
@@ -39478,7 +39623,7 @@ box-sizing:border-box;
                 flex-shrink:0;
             "
         >
-            ▶
+            <svg class="voice-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10-6.5-10-6.5Z"/></svg>
         </button>
 
 
@@ -39513,6 +39658,7 @@ box-sizing:border-box;
         <button
             id="voicePreviewDelete"
             type="button"
+            class="comment-icon-button"
             style="
                 width:38px;
                 height:38px;
@@ -39524,13 +39670,14 @@ box-sizing:border-box;
                 flex-shrink:0;
             "
         >
-            🗑️
+            <svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M8 10v8M12 10v8M16 10v8M6 7l1 14h10l1-14"/></svg>
         </button>
 
 
         <button
             id="voicePreviewPost"
             type="button"
+            class="comment-icon-button"
             style="
                 width:38px;
                 height:38px;
@@ -39542,7 +39689,7 @@ box-sizing:border-box;
                 flex-shrink:0;
             "
         >
-            ➤
+            <svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 12 16-7-4.5 14-4-6.5L4 12Z"/><path d="M11.5 12.5 20 5"/></svg>
         </button>
 
     </div>
@@ -39594,6 +39741,7 @@ style="display:none;">
 <button
 id="commentMediaBtn"
 type="button"
+class="comment-icon-button"
 style="
 width:46px;
 height:46px;
@@ -39604,7 +39752,7 @@ color:white;
 font-size:20px;
 cursor:pointer;
 ">
-📷
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l1.5-2h5L16 7h4v12H4V7Z"/><circle cx="12" cy="13" r="3.5"/></svg>
 </button>
 
 <span
@@ -39625,6 +39773,7 @@ cursor:pointer;
 <button
 id="voiceBtn"
 type="button"
+class="comment-icon-button"
 style="
 width:46px;
 height:46px;
@@ -39677,68 +39826,68 @@ z-index:1000000;
 
 <div
 id="commentReactionBtn"
-class="menu-item"
+class="menu-item comment-menu-row"
 onclick="event.stopPropagation(); openReactionPicker(selectedCommentId);"
 >
-😀 React
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14c1.1 1.2 2.4 1.8 4 1.8s2.9-.6 4-1.8M9 9h.01M15 9h.01"/></svg> React
 </div>
 
 <div
 id="commentCopyBtn"
-class="menu-item"
+class="menu-item comment-menu-row"
 onclick="copySelectedComment()"
 >
-📋 Copy
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v10A1.5 1.5 0 0 0 5.5 17H8"/></svg> Copy
 </div>
 
 <div
 id="commentReportBtn"
-class="menu-item"
+class="menu-item comment-menu-row"
 style="color:#ff9800;"
 onclick="reportComment(selectedCommentId)"
 >
-🚩 Report
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V4m0 1h11l-2.5 4L17 13H6"/></svg> Report
 </div>
 
 <div
 id="commentHideBtn"
-class="menu-item"
+class="menu-item comment-menu-row"
 onclick="hideComment(selectedCommentId);closeCommentMenu();"
 >
-🙈 Hide Comment
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s3.2-6 9-6 9 6 9 6-3.2 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="2.5"/><path d="m4 4 16 16"/></svg> Hide Comment
 </div>
 
 <div
 id="commentPinBtn"
-class="menu-item"
+class="menu-item comment-menu-row"
 onclick="pinComment(selectedCommentId);closeCommentMenu();"
 >
-📌 Pin / Unpin Comment
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8l-1 5 3 3H6l3-3-1-5ZM12 12v8"/></svg> Pin / Unpin Comment
 </div>
 
 <div
 id="commentEditBtn"
-class="menu-item"
+class="menu-item comment-menu-row"
 onclick="editComment(selectedCommentId);closeCommentMenu();"
 >
-✏️ Edit
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 16-.8 4 4-.8L19 8.4a2 2 0 0 0-2.8-2.8L5 16Z"/><path d="m14.5 7.5 2 2"/></svg> Edit
 </div>
 
 <div
 id="commentDeleteBtn"
-class="menu-item"
+class="menu-item comment-menu-row"
 style="color:#ff3b30;"
 onclick="deleteComment(selectedCommentId);closeCommentMenu();"
 >
-🗑 Delete
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M8 10v8M12 10v8M16 10v8M6 7l1 14h10l1-14"/></svg> Delete
 </div>
 
 <div
 id="commentCancelBtn"
-class="menu-item"
+class="menu-item comment-menu-row"
 onclick="closeCommentMenu()"
 >
-Cancel
+<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg> Cancel
 </div>
 
 </div>
@@ -43860,6 +44009,13 @@ window.openMedia = function (
     type = "image",
     options = {}
 ) {
+
+    // Capture Home BEFORE opening Post/Avatar media. The viewer then stores
+    // this exact Home position as its return state.
+    if (history.state?.appScreen === "app" &&
+        typeof window.saveHomeScroll === "function") {
+        window.saveHomeScroll();
+    }
 
     if (
         typeof url !== "string" ||
@@ -51332,10 +51488,17 @@ if (explicitClick === true) {
     // When returning Home from another screen, popstate has already moved
     // the browser to the destination entry. Canonicalize that entry too so
     // stale overlay data cannot survive into the next Back/Close operation.
+    // Preserve the Home feed position when returning from another screen.
+    // Only an explicit Home-button click is allowed to reset it to the top.
+    const preservedHomeScrollY = Math.max(
+        0,
+        Number(window.homeScrollY) || 0
+    );
+
     const canonicalHomeState = {
         appScreen: "app",
         data: {},
-        scrollY: 0
+        scrollY: preservedHomeScrollY
     };
 
     try {
@@ -51361,7 +51524,7 @@ if (explicitClick === true) {
         const homeNavigationState = {
             screen: "app",
             data: {},
-            scrollY: 0,
+            scrollY: preservedHomeScrollY,
             timestamp: Date.now()
         };
 
@@ -51465,6 +51628,10 @@ if (explicitClick === true) {
   // Jump to newest post immediately
   requestAnimationFrame(() => {
 
+    if (typeof window.bindHomePostsScrollTracker === "function") {
+      window.bindHomePostsScrollTracker();
+    }
+
     if (postsEl) {
       postsEl.scrollTo({
         top: 0,
@@ -51489,12 +51656,19 @@ if (explicitClick === true) {
   // NO RELOAD
   // ===============================================
 
+  // Returning from another screen must restore the exact Home position.
+  // Do not reset or reload the feed here.
   console.log(
     "↩️ RETURNING HOME → RESTORE:",
     window.homeScrollY
   );
 
-  restoreHomeScroll();
+  requestAnimationFrame(() => {
+    if (typeof window.bindHomePostsScrollTracker === "function") {
+      window.bindHomePostsScrollTracker();
+    }
+    restoreHomeScroll();
+  });
 
 };
 
@@ -51536,12 +51710,74 @@ window.saveHomeScroll = function () {
       0;
   }
 
+  // Keep the CURRENT Home history entry continuously accurate. This is
+  // important because Back/Close restores the browser entry's scrollY,
+  // not just the last value held in memory.
+  try {
+    if (history.state?.appScreen === "app") {
+      history.replaceState(
+        {
+          ...(history.state || {}),
+          appScreen: "app",
+          data: { ...(history.state?.data || {}) },
+          scrollY: Number(window.homeScrollY) || 0
+        },
+        "",
+        location.href
+      );
+    }
+  } catch (error) {}
+
   console.log(
     "💾 HOME POSITION SAVED:",
     window.homeScrollElement,
     window.homeScrollY
   );
 };
+
+// =====================================================
+// LIVE HOME SCROLL TRACKING
+// =====================================================
+// The Home feed can use either #posts or the document as its scroll
+// container. Track both so opening Comments/Profile/Post/Avatar at ANY
+// point records the exact current position before navigation.
+window.trackHomeScrollLive = function () {
+  try {
+    if (history.state?.appScreen !== "app") return;
+    if (window.appNavigation?.current?.screen &&
+        window.appNavigation.current.screen !== "app") return;
+    window.saveHomeScroll();
+  } catch (error) {}
+};
+
+window.addEventListener("scroll", window.trackHomeScrollLive, {
+  passive: true
+});
+
+document.addEventListener("scroll", window.trackHomeScrollLive, {
+  passive: true,
+  capture: true
+});
+
+// #posts may be the actual scrolling element and may be created/replaced
+// after startup, so observe it whenever the feed exists.
+window.homePostsScrollHandler = null;
+window.bindHomePostsScrollTracker = function () {
+  const posts = document.getElementById("posts");
+  if (!posts) return;
+  if (window.homePostsScrollHandler &&
+      window.homePostsScrollElement === posts) return;
+  window.homePostsScrollHandler = () => {
+    window.trackHomeScrollLive();
+  };
+  window.homePostsScrollElement = posts;
+  posts.addEventListener("scroll", window.homePostsScrollHandler, {
+    passive: true
+  });
+};
+
+window.bindHomePostsScrollTracker();
+
 
 
 // =====================================================
@@ -52037,5 +52273,119 @@ document.addEventListener("selectstart", function(e) {
 </script>
 
 
+
+<script>
+/* =========================================================
+   GLOBAL MONOCHROME UI ICON PASS
+   Converts emoji used as BUTTON/LABEL UI icons into clean
+   outline SVGs. Reaction controls are intentionally excluded.
+   ========================================================= */
+(function(){
+  const ICONS = {
+    '🏠': '<path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V21h13V9.5"/><path d="M9.5 21v-6h5v6"/>',
+    '🔍': '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+    '🔔': '<path d="M6 17h12l-1.3-2.2V10a4.7 4.7 0 0 0-9.4 0v4.8L6 17Z"/><path d="M10 20h4"/>',
+    '💬': '<path d="M4 5.5h16v10H9l-5 4v-4H4z"/><path d="M8 9h8M8 12h5"/>',
+    '←': '<path d="M19 12H5"/><path d="m11 6-6 6 6 6"/>',
+    '→': '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
+    '✕': '<path d="m6 6 12 12M18 6 6 18"/>',
+    '📎': '<path d="m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7"/>',
+    '🎤': '<path d="M12 15a3 3 0 0 0 3-3V7a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3Z"/><path d="M5 12a7 7 0 0 0 14 0M12 19v3M9 22h6"/>',
+    '➤': '<path d="m4 4 17 8-17 8 4-8z"/><path d="M8 12h13"/>',
+    '▲': '<path d="m5 15 7-8 7 8"/>',
+    '▼': '<path d="m5 9 7 8 7-8"/>',
+    '☑️': '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="m7 12 3 3 7-7"/>',
+    '📋': '<rect x="6" y="5" width="12" height="15" rx="2"/><path d="M9 5.5V4h6v1.5M9 10h6M9 14h6"/>',
+    '📨': '<path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/>',
+    '🗑': '<path d="M5 7h14M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/>',
+    '🗑️': '<path d="M5 7h14M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6"/>',
+    '📌': '<path d="m9 4 6 6M12 7l5 5-3 3 2 4-2 2-4-4 3-3-5-5zM4 20l5-5"/>',
+    '✏️': '<path d="m4 20 4.2-1 10.6-10.6a2.1 2.1 0 0 0-3-3L5.2 16z"/><path d="m14.5 7.5 3 3"/>',
+    '🌐': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/>',
+    '🔒': '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v3"/>',
+    '👥': '<circle cx="9" cy="9" r="3"/><circle cx="16" cy="10" r="2.5"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M14 16a4.5 4.5 0 0 1 5 3"/>',
+    '🔖': '<path d="M6 4h12v17l-6-3.5L6 21z"/>',
+    '🌙': '<path d="M19 15.5A7.5 7.5 0 0 1 8.5 5 8 8 0 1 0 19 15.5Z"/>',
+    '🚪': '<path d="M5 3h9v18H5zM14 12h6M17 9l3 3-3 3"/>',
+    '📍': '<path d="M12 21s6-6.2 6-11A6 6 0 0 0 6 10c0 4.8 6 11 6 11Z"/><circle cx="12" cy="10" r="2"/>',
+    '📅': '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 9h16"/>',
+    '🔇': '<path d="M5 10h3l4-4v12l-4-4H5z"/><path d="m17 9 4 6M21 9l-4 6"/>',
+    '🔊': '<path d="M5 10h3l4-4v12l-4-4H5z"/><path d="M16 9a5 5 0 0 1 0 6M18 6a9 9 0 0 1 0 12"/>',
+    '▶': '<path d="m8 5 11 7-11 7z"/>',
+    '⏸': '<path d="M8 5v14M16 5v14"/>',
+    '✓': '<path d="m5 12 4 4L19 6"/>',
+    '✓✓': '<path d="m3 12 4 4 8-10M10 12l3 4 8-10"/>',
+    '👁': '<path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/>'
+  };
+
+  function iconSvg(ch){
+    return '<span class="global-mono-ui-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'+ICONS[ch]+'</svg></span>';
+  }
+
+  function excluded(el){
+    return !!el.closest('.messageReactions, #storyReplyBar, .story-reaction, .post-actions, [data-reaction-button="true"]');
+  }
+
+  function convert(root){
+    if(!root || root.nodeType!==1) return;
+    const nodes = root.matches?.('button,label') ? [root] : root.querySelectorAll?.('button,label');
+    if(!nodes) return;
+    nodes.forEach(el=>{
+      if(excluded(el) || el.dataset.monoIconsDone==='1') return;
+      // Convert only UI emoji tokens in direct text nodes. This preserves
+      // badges, labels, reaction buttons, message text, and click handlers.
+      const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
+      const texts=[];
+      let n;
+      while((n=walker.nextNode())) texts.push(n);
+      let changed=false;
+      texts.forEach(t=>{
+        let frag=null;
+        for(const ch of Object.keys(ICONS)){
+          if(!t.nodeValue.includes(ch)) continue;
+          // Avoid converting emoji that are part of ordinary descriptive text.
+          const re=new RegExp(ch.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'g');
+          const parts=t.nodeValue.split(re);
+          if(parts.length<2) continue;
+          if(!frag) frag=document.createDocumentFragment();
+          parts.forEach((part,i)=>{
+            if(part) frag.appendChild(document.createTextNode(part));
+            if(i<parts.length-1){
+              const holder=document.createElement('span');
+              holder.innerHTML=iconSvg(ch);
+              frag.appendChild(holder.firstElementChild);
+            }
+          });
+          t.parentNode.replaceChild(frag,t);
+          changed=true;
+          break;
+        }
+      });
+      if(changed) el.dataset.monoIconsDone='1';
+    });
+  }
+
+  const style=document.createElement('style');
+  style.textContent=`
+    .global-mono-ui-icon{display:inline-flex;align-items:center;justify-content:center;width:1.15em;height:1.15em;vertical-align:-.16em;line-height:1;color:currentColor;flex:0 0 auto}
+    .global-mono-ui-icon svg{width:100%;height:100%;display:block}
+    button .global-mono-ui-icon,label .global-mono-ui-icon{margin-right:.42em}
+    #topBar .global-mono-ui-icon{width:22px;height:22px;margin:0}
+    #topBar button{display:flex;align-items:center;justify-content:center;position:relative}
+    #chatHeader .global-mono-ui-icon{width:22px;height:22px;margin:0}
+    #chatSearchBar .global-mono-ui-icon{width:18px;height:18px;margin:0}
+  `;
+  document.head.appendChild(style);
+
+  function run(){ convert(document.body); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',run,{once:true}); else run();
+  const observer=new MutationObserver(muts=>{
+    for(const m of muts) for(const node of m.addedNodes){
+      if(node.nodeType===1) convert(node);
+    }
+  });
+  observer.observe(document.body,{childList:true,subtree:true});
+})();
+</script>
 </body>
 </html>
