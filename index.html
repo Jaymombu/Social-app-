@@ -1371,23 +1371,41 @@ opacity:1;
 }
 
 .messageStatus{
-  display:inline-block;
+  display:inline-flex !important;
+  align-items:center;
+  justify-content:center;
   margin-left:4px;
-  transition:all .25s ease;
+  min-width:17px;
+  height:17px;
+  padding:0 2px;
+  box-sizing:border-box;
+  border-radius:999px;
+  font:800 11px/17px Arial,sans-serif;
+  letter-spacing:-2px;
+  white-space:nowrap;
+  transform-origin:center;
+  transition:color .22s ease, background-color .22s ease, transform .22s ease, opacity .22s ease;
 }
 
 .messageStatus.sent{
-  color:#bbb;
+  color:#a8adb3;
+  background:rgba(128,128,128,.10);
 }
 
 .messageStatus.delivered{
-  color:#ddd;
-  animation:statusPop .25s ease;
+  color:#c7ccd2;
+  background:rgba(128,128,128,.13);
+  animation:statusPop .28s ease;
 }
 
 .messageStatus.seen{
-  color:#4fc3f7;
-  animation:statusPop .25s ease;
+  color:#35a7ff;
+  background:rgba(53,167,255,.12);
+  animation:statusPop .28s ease;
+}
+
+.messageStatus.status-changing{
+  transform:scale(1.16);
 }
 
 @keyframes statusPop{
@@ -4263,9 +4281,20 @@ body:not(.dark) #chatMessages{
   color:#171717 !important;
 }
 body:not(.dark) #chatHeader #chatStatus,
-body:not(.dark) #chatMessages .messageTime,
-body:not(.dark) #chatMessages .messageStatus{
+body:not(.dark) #chatMessages .messageTime{
   color:#666 !important;
+}
+body:not(.dark) #chatMessages .messageStatus.sent{
+  color:#7b8087 !important;
+  background:rgba(90,90,90,.10) !important;
+}
+body:not(.dark) #chatMessages .messageStatus.delivered{
+  color:#555b63 !important;
+  background:rgba(90,90,90,.12) !important;
+}
+body:not(.dark) #chatMessages .messageStatus.seen{
+  color:#1689df !important;
+  background:rgba(22,137,223,.11) !important;
 }
 body:not(.dark) #chatInput{
   background:#f1f1f1 !important;
@@ -40005,6 +40034,14 @@ window.openChat = async function (
     window.__activeChatUserId = userId;
     window.__chatForceBottom = true;
 
+    // Immediately detach the previous conversation from the message pane.
+    // A→B must never leave A's DOM visible while B is loading.
+    const activeChatPane = document.getElementById("chatMessages");
+    if (activeChatPane) {
+      activeChatPane.dataset.chatUserId = String(userId);
+      activeChatPane.innerHTML = "";
+    }
+
     // =====================================================
     // SAVE CHAT RETURN STATE
     // =====================================================
@@ -40255,6 +40292,7 @@ window.openChat = async function (
     listenTyping(userId);
 
     listenForSeenMessages(userId);
+    startChatStatusPolling(userId);
 
     console.log(
         "💬 CHAT OPENED SUCCESSFULLY:",
@@ -41086,6 +41124,11 @@ async function loadMessages(chatUserId = currentChatUser, openToken = window.__c
     document.getElementById(
       "chatMessages"
     );
+
+  // Every rendered chat owns the user id it belongs to. This prevents a
+  // late request/event from User A from ever painting into User B's chat.
+  if (!chat) return;
+  if (chat.dataset.chatUserId !== String(chatUserAtLoad)) return;
 
   // Reliable media opening for chat photos/videos and replied media.
   // Delegation avoids fragile inline onclick handlers when storage URLs
@@ -42134,85 +42177,145 @@ function listenTyping(userId) {
 
 }
 
-function updateChatMessageStatus(message) {
-  if (!message?.id) return;
-  const el = document.getElementById(String(message.id));
-  const time = el?.querySelector?.(".messageTime");
-  if (!time || message.sender_id !== session?.user?.id) return;
-  const status = time.querySelector(".messageStatus");
-  if (!status) return;
-  status.className = "messageStatus " + (message.seen ? "seen" : message.delivered ? "delivered" : "sent");
-  status.textContent = message.seen || message.delivered ? "✓✓" : "✓";
+function isChatScreenVisible(){
+  const el = document.getElementById("chatScreen");
+  if (!el) return false;
+  if (el.hidden) return false;
+  const d = getComputedStyle(el).display;
+  return d !== "none" && el.style.visibility !== "hidden";
 }
 
-function listenForSeenMessages(userId) {
+function updateChatMessageStatus(message) {
+  if (!message?.id || !session?.user) return;
+  if (message.sender_id !== session.user.id) return;
+  if (message.receiver_id !== currentChatUser) return;
+  const el = document.getElementById(String(message.id));
+  const time = el?.querySelector?.(".messageTime");
+  const status = time?.querySelector?.(".messageStatus");
+  if (!status) return;
+  const nextState = message.seen ? "seen" : message.delivered ? "delivered" : "sent";
+  const nextText = message.seen || message.delivered ? "✓✓" : "✓";
+  const previousState = status.className;
+  status.className = "messageStatus " + nextState;
+  status.textContent = nextText;
+  if (!previousState.endsWith(" " + nextState)) {
+    status.classList.remove("status-changing");
+    void status.offsetWidth;
+    status.classList.add("status-changing");
+    setTimeout(() => status.classList.remove("status-changing"), 240);
+  }
+}
 
+async function refreshOpenChatStatuses(userId) {
+  if (!session?.user || !userId || currentChatUser !== userId) return;
+  if (!isChatScreenVisible()) return;
+
+  const token = window.__chatOpenToken;
+  const { data, error } = await supabase
+    .from("messages")
+    .select("id,sender_id,receiver_id,delivered,seen")
+    .or(`and(sender_id.eq.${session.user.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${session.user.id})`)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.log("Chat status refresh error:", error);
+    return;
+  }
+  if (token !== window.__chatOpenToken || currentChatUser !== userId || !isChatScreenVisible()) return;
+
+  (data || []).forEach(msg => {
+    if (msg.sender_id === session.user.id) updateChatMessageStatus(msg);
+  });
+}
+
+async function refreshOpenChatMessages(userId) {
+  if (!session?.user || !userId || currentChatUser !== userId) return;
+  if (!isChatScreenVisible()) return;
+  const token = window.__chatOpenToken;
+  await loadMessages(userId, token);
+}
+
+function startChatStatusPolling(userId) {
+  clearInterval(window.__chatStatusPollTimer);
+  window.__chatStatusPollUser = userId;
+
+  // Realtime is the fast path. Polling is the reliable fallback when a
+  // browser/device/Supabase realtime connection misses an event.
+  window.__chatStatusPollTimer = setInterval(async () => {
+    if (currentChatUser !== userId || !isChatScreenVisible()) {
+      clearInterval(window.__chatStatusPollTimer);
+      window.__chatStatusPollTimer = null;
+      return;
+    }
+    await refreshOpenChatStatuses(userId);
+    await refreshOpenChatMessages(userId);
+    await loadUnreadMessages();
+  }, 1500);
+
+  refreshOpenChatStatuses(userId);
+}
+
+
+function listenForSeenMessages(userId) {
   if (window.messageSeenChannel) {
     supabase.removeChannel(window.messageSeenChannel);
+    window.messageSeenChannel = null;
   }
 
-  const channelUserId = userId;
+  const channelUserId = String(userId);
+  const channelToken = window.__chatOpenToken;
 
   window.messageSeenChannel = supabase
-    .channel("seen_" + channelUserId + "_" + Date.now())
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "messages"
-      },
-      async (payload) => {
-        const msg = payload.new;
-        if (!msg || currentChatUser !== channelUserId) return;
+    .channel("chat_messages_" + channelUserId + "_" + channelToken)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, async payload => {
+      const msg = payload.new;
+      if (!msg || !session?.user) return;
 
-        // Sender side: the receiver has opened/read this exact message.
-        if (
-          msg.sender_id === session.user.id &&
-          msg.receiver_id === channelUserId
-        ) {
-          updateChatMessageStatus(msg);
-          loadMessages(channelUserId, window.__chatOpenToken);
-        }
+      const belongsToChat =
+        (String(msg.sender_id) === String(session.user.id) && String(msg.receiver_id) === channelUserId) ||
+        (String(msg.sender_id) === channelUserId && String(msg.receiver_id) === String(session.user.id));
+      if (!belongsToChat) return;
+      if (channelToken !== window.__chatOpenToken || currentChatUser !== userId) return;
 
-        await loadUnreadMessages();
-        window.scheduleInboxRefresh?.();
+      // The recipient has received the row. Mark it delivered immediately.
+      if (String(msg.receiver_id) === String(session.user.id) && msg.delivered !== true) {
+        await supabase.from("messages").update({ delivered: true })
+          .eq("id", msg.id).eq("receiver_id", session.user.id).eq("delivered", false);
       }
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "messages"
-      },
-      async (payload) => {
-        const msg = payload.new;
-        if (!msg) return;
-        if (
-          currentChatUser === channelUserId &&
-          ((msg.sender_id === channelUserId && msg.receiver_id === session.user.id) ||
-           (msg.sender_id === session.user.id && msg.receiver_id === channelUserId))
-        ) {
-          if (msg.receiver_id === session.user.id && !msg.seen) {
-            await supabase
-              .from("messages")
-              .update({
-                delivered: true,
-                seen: true,
-                seen_at: new Date().toISOString()
-              })
-              .eq("id", msg.id)
-              .eq("receiver_id", session.user.id);
-          }
-          await loadUnreadMessages();
-          await loadMessages(channelUserId, window.__chatOpenToken);
-          window.scheduleInboxRefresh?.();
-        }
-      }
-    )
-    .subscribe();
 
+      // Only an actually visible conversation becomes read.
+      if (String(msg.receiver_id) === String(session.user.id) &&
+          String(msg.sender_id) === channelUserId &&
+          isChatScreenVisible()) {
+        await supabase.from("messages").update({
+          delivered: true,
+          seen: true,
+          seen_at: new Date().toISOString()
+        }).eq("id", msg.id).eq("receiver_id", session.user.id).eq("seen", false);
+      }
+
+      if (channelToken !== window.__chatOpenToken || currentChatUser !== userId) return;
+      await loadMessages(userId, channelToken);
+      await loadUnreadMessages();
+      window.scheduleInboxRefresh?.();
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, async payload => {
+      const msg = payload.new;
+      if (!msg || !session?.user) return;
+
+      const belongsToChat =
+        (String(msg.sender_id) === String(session.user.id) && String(msg.receiver_id) === channelUserId) ||
+        (String(msg.sender_id) === channelUserId && String(msg.receiver_id) === String(session.user.id));
+      if (!belongsToChat) return;
+      if (channelToken !== window.__chatOpenToken || currentChatUser !== userId) return;
+
+      updateChatMessageStatus(msg);
+      await loadUnreadMessages();
+      window.scheduleInboxRefresh?.();
+    })
+    .subscribe((status) => {
+      console.log("💬 chat realtime status", channelUserId, status);
+    });
 }
 
 window.messageOptions = async function(messageId) {
@@ -43174,6 +43277,14 @@ window.closeChat = async function () {
   window.__chatLoadToken = (window.__chatLoadToken || 0) + 1;
   window.__activeChatUserId = null;
   window.__chatForceBottom = false;
+  clearInterval(window.__chatStatusPollTimer);
+  window.__chatStatusPollTimer = null;
+  window.__chatStatusPollUser = null;
+  const closingChatPane = document.getElementById("chatMessages");
+  if (closingChatPane) {
+    closingChatPane.dataset.chatUserId = "";
+    closingChatPane.innerHTML = "";
+  }
 
   console.log("🔙 CLOSE CHAT");
 
@@ -43254,6 +43365,13 @@ window.closeChat = async function () {
   //
   // LET CENTRAL NAVIGATION RESTORE THE PREVIOUS SCREEN.
   // =====================================================
+
+  // Detach the closed conversation before navigation restores another screen.
+  currentChatUser = null;
+  chatOpenedFrom = null;
+  window.__activeChatUserId = null;
+  loadUnreadMessages();
+  window.scheduleInboxRefresh?.();
 
   if (
     state?.appScreen === "chatScreen" ||
@@ -51714,81 +51832,51 @@ window.scheduleInboxRefresh = function () {
 };
 
 if (!window.messagesSubscription) {
+  window.messagesSubscription = supabase
+    .channel("messages_global")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, async payload => {
+      const msg = payload.new;
+      if (!msg || !currentUser?.id) return;
 
-  window.messagesSubscription =
-    supabase
-      .channel("messages")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "messages"
-        },
-      async payload => {
+      // Always acknowledge delivery for the receiver. This is independent of
+      // whether the receiver currently has the chat screen open.
+      if (String(msg.receiver_id) === String(currentUser.id) && msg.delivered !== true) {
+        await supabase.from("messages").update({ delivered: true })
+          .eq("id", msg.id).eq("receiver_id", currentUser.id).eq("delivered", false);
+      }
 
-  const msg = payload.new;
+      await loadUnreadMessages();
+      window.scheduleInboxRefresh?.();
 
-if (!msg) return;
+      // Paint a newly received/sent message into the currently open chat
+      // without requiring a browser refresh.
+      if (currentChatUser &&
+          ((String(msg.sender_id) === String(currentUser.id) && String(msg.receiver_id) === String(currentChatUser)) ||
+           (String(msg.sender_id) === String(currentChatUser) && String(msg.receiver_id) === String(currentUser.id))) &&
+          isChatScreenVisible()) {
+        const token = window.__chatOpenToken;
+        await loadMessages(currentChatUser, token);
+      }
+    })
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, async payload => {
+      const msg = payload.new;
+      if (!msg || !currentUser?.id) return;
 
-  // Update unread badge
-  loadUnreadMessages();
+      await loadUnreadMessages();
+      window.scheduleInboxRefresh?.();
 
-  // If inbox is open, refresh it once (debounced).
-  window.scheduleInboxRefresh?.();
-
-  // Mark incoming messages DELIVERED as soon as they reach this user.
-  // Do not mark them READ unless that exact conversation is currently open.
-  if (
-    msg.receiver_id === currentUser.id &&
-    msg.delivered !== true
-  ) {
-    await supabase
-      .from("messages")
-      .update({ delivered: true })
-      .eq("id", msg.id)
-      .eq("receiver_id", currentUser.id);
-  }
-
-  // If current chat is open, mark only messages from that exact chat as READ.
-  if (
-    currentChatUser &&
-    (
-      (msg.sender_id === currentUser.id &&
-       msg.receiver_id === currentChatUser) ||
-      (msg.sender_id === currentChatUser &&
-       msg.receiver_id === currentUser.id)
-    )
-  ) {
-
-    if (
-      msg.receiver_id === currentUser.id &&
-      currentChatUser === msg.sender_id &&
-      msg.seen !== true &&
-      document.getElementById("chatScreen")?.style.display === "flex"
-    ) {
-      await supabase
-        .from("messages")
-        .update({
-          seen: true,
-          seen_at: new Date().toISOString(),
-          delivered: true
-        })
-        .eq("id", msg.id)
-        .eq("receiver_id", currentUser.id)
-        .eq("seen", false);
-    }
-
-    await loadUnreadMessages();
-    await loadMessages(currentChatUser, window.__chatOpenToken);
-
-  }
-
+      if (currentChatUser &&
+          ((String(msg.sender_id) === String(currentUser.id) && String(msg.receiver_id) === String(currentChatUser)) ||
+           (String(msg.sender_id) === String(currentChatUser) && String(msg.receiver_id) === String(currentUser.id))) &&
+          isChatScreenVisible()) {
+        updateChatMessageStatus(msg);
+      }
+    })
+    .subscribe((status) => {
+      console.log("🌐 global messages realtime status", status);
+    });
 }
-      )
-      .subscribe();
 
-}
 
 if (!window.profileSubscription) {
 
