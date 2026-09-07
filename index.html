@@ -24973,35 +24973,17 @@ async function translateMessage(messageId) {
 
     const { data: message } = await supabase
         .from("messages")
-        .select(`
-            content,
-            language_code,
-            translated_text
-        `)
+        .select("content")
         .eq("id", messageId)
         .single();
 
     if (!message) return;
 
-    // Already translated
-    if (message.translated_text) {
-
-        if (contentBox.dataset.translated === "true") {
-
-            contentBox.innerHTML =
-                escapeHtml(message.content);
-
-            contentBox.dataset.translated = "false";
-
-        } else {
-
-            contentBox.innerHTML =
-                escapeHtml(message.translated_text);
-
-            contentBox.dataset.translated = "true";
-
-        }
-
+    // Translation is kept local to the current message bubble because the
+    // messages table does not contain translation columns.
+    if (contentBox.dataset.translated === "true") {
+        contentBox.innerHTML = escapeHtml(message.content);
+        contentBox.dataset.translated = "false";
         return;
     }
 
@@ -25009,7 +24991,7 @@ async function translateMessage(messageId) {
 
     const translated = await translateText(
         message.content,
-        message.language_code,
+        "unknown",
         language
     );
 
@@ -25020,14 +25002,6 @@ async function translateMessage(messageId) {
 
     contentBox.innerHTML = escapeHtml(translated);
     contentBox.dataset.translated = "true";
-
-    await supabase
-        .from("messages")
-        .update({
-            translated_text: translated,
-            translation_status: "completed"
-        })
-        .eq("id", messageId);
 
     const btn =
         document.getElementById("translateMessageBtn-" + messageId);
@@ -40255,16 +40229,9 @@ window.openChat = async function (
 
     // Opening a chat is the point at which received messages become READ.
     // Do this only for the chat that is currently being opened.
-    await supabase
-        .from("messages")
-        .update({
-            seen: true,
-            seen_at: new Date().toISOString(),
-            delivered: true
-        })
-        .eq("sender_id", userId)
-        .eq("receiver_id", session.user.id)
-        .eq("seen", false);
+    await supabase.rpc("mark_conversation_seen", {
+        p_other_user: userId
+    });
 
     if (chatOpenToken !== window.__chatOpenToken || currentChatUser !== userId) return;
 
@@ -40337,41 +40304,88 @@ function listenToChatStatus(userId) {
 }
 
 async function loadUnreadMessages() {
-
-  if (!currentUser) return;
+  const uid = session?.user?.id || currentUser?.id;
+  if (!uid) return;
 
   const { data, error } = await supabase
     .from("messages")
     .select("id")
-    .eq("receiver_id", currentUser.id)
-    .eq("seen", false);
+    .eq("receiver_id", uid)
+    .eq("seen", false)
+    .eq("deleted_for_receiver", false);
 
   if (error) {
-    console.log(error);
+    console.log("Unread count error:", error);
     return;
   }
 
-  const unreadMessages = data ? data.length : 0;
-
+  const unreadMessages = data?.length || 0;
   const badge = document.getElementById("chatBadge");
-
   if (!badge) return;
 
+  badge.textContent = unreadMessages > 99 ? "99+" : String(unreadMessages);
+  badge.style.display = unreadMessages > 0 ? "flex" : "none";
   if (unreadMessages > 0) {
-
-    badge.style.display = "flex";
     badge.style.alignItems = "center";
     badge.style.justifyContent = "center";
-    badge.textContent =
-      unreadMessages > 99 ? "99+" : unreadMessages;
+  }
+}
 
-  } else {
+// Reconcile message delivery/read state from the database. Realtime is only
+// a fast path; this prevents stale ✓ states and stale unread badges when a
+// mobile browser drops a realtime event.
+async function reconcileMessageState() {
+  const uid = session?.user?.id;
+  if (!uid) return;
 
-    badge.style.display = "none";
+  try {
+    const { data: incoming, error } = await supabase
+      .from("messages")
+      .select("id,sender_id,receiver_id,delivered,seen")
+      .eq("receiver_id", uid)
+      .eq("delivered", false)
+      .order("created_at", { ascending: false })
+      .limit(100);
 
+    if (!error && incoming?.length) {
+      for (const msg of incoming) {
+        // First acknowledgement is delivery. Do not mark it read here unless
+        // this exact conversation is currently visible.
+        const isOpen = currentChatUser &&
+          String(currentChatUser) === String(msg.sender_id) &&
+          isChatScreenVisible();
+
+        if (isOpen) {
+          await supabase.rpc("mark_message_seen", { p_message_id: msg.id });
+        } else {
+          await supabase.rpc("mark_message_delivered", { p_message_id: msg.id });
+        }
+      }
+    }
+
+    // If a conversation is open, reconcile all unread messages from that
+    // sender as read. This does not depend on a realtime INSERT event.
+    if (currentChatUser && isChatScreenVisible()) {
+      await supabase.rpc("mark_conversation_seen", {
+        p_other_user: currentChatUser
+      });
+    }
+  } catch (e) {
+    console.log("Message state reconciliation error:", e);
   }
 
+  await loadUnreadMessages();
+  if (currentChatUser && isChatScreenVisible()) {
+    await refreshOpenChatStatuses(currentChatUser);
+  }
 }
+
+if (!window.__messageStateReconcileTimer) {
+  window.__messageStateReconcileTimer = setInterval(() => {
+    reconcileMessageState();
+  }, 2000);
+}
+
 
 // =====================================================
 // OPEN INBOX
@@ -40641,9 +40655,6 @@ window.openInbox = async function (addHistory = true) {
   await loadUnreadMessages();
   if (inboxLoadToken !== window.__inboxLoadToken) return;
 
-  // Sync the global chat badge whenever Inbox is opened.
-  await loadUnreadMessages();
-
   // =========================================
   // GET MESSAGES
   // =========================================
@@ -40785,13 +40796,17 @@ window.openInbox = async function (addHistory = true) {
           if (!confirmDelete)
             return;
 
-          await supabase
+          const { data: chatRows } = await supabase
             .from("messages")
-            .delete()
-            .or(`
-              and(sender_id.eq.${userId},receiver_id.eq.${otherUser}),
-              and(sender_id.eq.${otherUser},receiver_id.eq.${userId})
-            `);
+            .select("id")
+            .or(`and(sender_id.eq.${userId},receiver_id.eq.${otherUser}),and(sender_id.eq.${otherUser},receiver_id.eq.${userId})`);
+
+          for (const row of (chatRows || [])) {
+            await supabase.rpc("delete_message", {
+              p_message_id: row.id,
+              p_delete_for_everyone: false
+            });
+          }
 
           // REFRESH WITHOUT NEW HISTORY
           openInbox(
@@ -41190,7 +41205,14 @@ async function loadMessages(chatUserId = currentChatUser, openToken = window.__c
   return;
 }
 
-  if (!data || data.length === 0) {
+  // Respect per-user deletion state. A deleted-for-me message remains in the
+  // database for the other participant but is invisible to this participant.
+  const visibleMessages = (data || []).filter(msg => {
+    if (msg.sender_id === myId) return msg.deleted_for_sender !== true;
+    return msg.deleted_for_receiver !== true;
+  });
+
+  if (!visibleMessages || visibleMessages.length === 0) {
     chat.innerHTML = `
       <div style="
         color:#888;
@@ -41207,7 +41229,7 @@ async function loadMessages(chatUserId = currentChatUser, openToken = window.__c
 
   window.unreadDividerShown = false;
 
-data.forEach(msg => {
+visibleMessages.forEach(msg => {
     
     const mine =
   msg.sender_id === myId;
@@ -41861,14 +41883,10 @@ window.editMessage = async function(messageId) {
     return;
   }
 
-  const { error } = await supabase
-  .from("messages")
-  .update({
-    content: newText.trim(),
-    edited: true,
-    edited_at: new Date()
-  })
-  .eq("id", messageId);
+  const { error } = await supabase.rpc("edit_message", {
+    p_message_id: messageId,
+    p_content: newText.trim()
+  });
 
   if (error) {
     alert(error.message);
@@ -41900,14 +41918,10 @@ window.deleteForEveryone = async function(messageId) {
 
   if (!ok) return;
 
-  const { error } = await supabase
-    .from("messages")
-    .update({
-      deleted: true,
-      deleted_at: new Date(),
-      content: ""
-    })
-    .eq("id", messageId);
+  const { error } = await supabase.rpc("delete_message", {
+    p_message_id: messageId,
+    p_delete_for_everyone: true
+  });
 
   if (error) {
     alert(error.message);
@@ -42283,19 +42297,7 @@ function listenForSeenMessages(userId) {
 
       // The recipient has received the row. Mark it delivered immediately.
       if (String(msg.receiver_id) === String(session.user.id) && msg.delivered !== true) {
-        await supabase.from("messages").update({ delivered: true })
-          .eq("id", msg.id).eq("receiver_id", session.user.id).eq("delivered", false);
-      }
-
-      // Only an actually visible conversation becomes read.
-      if (String(msg.receiver_id) === String(session.user.id) &&
-          String(msg.sender_id) === channelUserId &&
-          isChatScreenVisible()) {
-        await supabase.from("messages").update({
-          delivered: true,
-          seen: true,
-          seen_at: new Date().toISOString()
-        }).eq("id", msg.id).eq("receiver_id", session.user.id).eq("seen", false);
+        await supabase.rpc("mark_message_seen", { p_message_id: msg.id });
       }
 
       if (channelToken !== window.__chatOpenToken || currentChatUser !== userId) return;
@@ -43003,12 +43005,9 @@ u=>u.reaction===reaction
 
 window.pinMessage = async function(messageId) {
 
-  const { error } = await supabase
-    .from("messages")
-    .update({
-      pinned: true
-    })
-    .eq("id", messageId);
+  const { error } = await supabase.rpc("pin_message", {
+    p_message_id: messageId
+  });
 
   if (!error) {
     loadMessages();
@@ -43104,11 +43103,10 @@ window.deleteMessage = async function(messageId) {
     messageId
   );
 
-  const { error } =
-    await supabase
-      .from("messages")
-      .delete()
-      .eq("id", messageId);
+  const { error } = await supabase.rpc("delete_message", {
+    p_message_id: messageId,
+    p_delete_for_everyone: false
+  });
 
   console.log(
     "Delete error:",
@@ -43745,16 +43743,18 @@ window.deleteSelectedMessages = async function(){
 
   if(!confirm("Delete selected messages?")) return;
 
-  const { error } = await supabase
-    .from("messages")
-    .delete()
-    .in("id", selectedMessages);
+  let deleteError = null;
+  for (const id of selectedMessages) {
+    const { error } = await supabase.rpc("delete_message", {
+      p_message_id: id,
+      p_delete_for_everyone: false
+    });
+    if (error) { deleteError = error; break; }
+  }
 
-  if(error){
-
-    alert(error.message);
+  if(deleteError){
+    alert(deleteError.message);
     return;
-
   }
 
   cancelSelection();
@@ -51846,8 +51846,12 @@ if (!window.messagesSubscription) {
       // Always acknowledge delivery for the receiver. This is independent of
       // whether the receiver currently has the chat screen open.
       if (String(msg.receiver_id) === String(currentUser.id) && msg.delivered !== true) {
-        await supabase.from("messages").update({ delivered: true })
-          .eq("id", msg.id).eq("receiver_id", currentUser.id).eq("delivered", false);
+        const openForSender = currentChatUser &&
+          String(currentChatUser) === String(msg.sender_id) &&
+          isChatScreenVisible();
+        await supabase.rpc(openForSender ? "mark_message_seen" : "mark_message_delivered", {
+          p_message_id: msg.id
+        });
       }
 
       await loadUnreadMessages();
