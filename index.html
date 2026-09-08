@@ -41610,7 +41610,7 @@ chat.innerHTML +=`
   data-message="${escapeHtml(msg.content || "").toLowerCase()}"
   
   onclick="
-if(selectionMode && this.dataset.suppressClick !== "true"){
+if(selectionMode && this.dataset.touchSelectionHandled !== "true"){
   toggleMessageSelection('${msg.id}');
 }
 "
@@ -41625,13 +41625,18 @@ swipeStartX = event.changedTouches[0].clientX;
 swipeStartY = event.changedTouches[0].clientY;
 this.dataset.longPressed = "false";
 this.dataset.touchMoved = "false";
+this.dataset.touchSelectionHandled = "false";
+clearTimeout(window.pressTimer);
 
-window.pressTimer = setTimeout(() => {
-  this.dataset.longPressed = "true";
-  if (!selectionMode) {
+// Only the FIRST message requires a long hold. Once selection mode is active,
+// every other message is selected with a normal tap.
+if(!selectionMode){
+  window.pressTimer = setTimeout(() => {
+    this.dataset.longPressed = "true";
+    this.dataset.touchSelectionHandled = "true";
     toggleMessageSelection('${msg.id}');
-  }
-},700);
+  },700);
+}
 "
 
 ontouchmove="
@@ -41665,12 +41670,25 @@ this.style.transform='';
 const t = this.querySelector('.messageTime');
 if(t) t.style.display='none';
 
-if (selectionMode) {
-  if (this.dataset.longPressed !== "true" && this.dataset.touchMoved !== "true") {
-    toggleMessageSelection('${msg.id}');
-    this.dataset.suppressClick = "true";
-    setTimeout(() => { this.dataset.suppressClick = "false"; }, 350);
+// In selection mode a normal tap selects/deselects this message.
+// No second hold is required. Suppress the synthetic click so it cannot toggle twice.
+if(selectionMode){
+  if(this.dataset.longPressed === "true"){
+    event.preventDefault();
+    this.dataset.touchSelectionHandled = "true";
+    return;
   }
+  if(this.dataset.touchMoved !== "true"){
+    toggleMessageSelection('${msg.id}');
+    this.dataset.touchSelectionHandled = "true";
+    event.preventDefault();
+  }
+  return;
+}
+
+// A long hold is used only to enter selection mode, never to open the old menu.
+if(this.dataset.longPressed === "true") {
+  event.preventDefault();
   return;
 }
 
@@ -41688,7 +41706,8 @@ if(moveX>70){
 
   replyToMessage('${msg.id}');
 
-}"
+}
+"
 
   style="
     background:${
@@ -52407,15 +52426,3 @@ document.addEventListener("selectstart", function(e) {
 </script>
 </body>
 </html>
-/* Clean voice/comment controls */
-#commentsScreen .commentVoice button,
-#commentsScreen #voiceBtn,
-#commentsScreen #commentMediaBtn,
-#commentsScreen #panelPostBtn{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-#commentsScreen .commentVoice button{
-  box-shadow:0 2px 10px rgba(0,0,0,.18);
-}
