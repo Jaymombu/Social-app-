@@ -4739,6 +4739,54 @@ body.light .avatar-wrap .online-indicator,body.light .story-avatar-wrap .online-
 </style>
 
 <style id="chat-message-ui108">
+<style id="message-swipe-reply-fix">
+#chatMessages .chatMessage.message-swiping-reply{
+  transition:none !important;
+  will-change:transform;
+}
+#chatMessages .chatMessage.message-swipe-reply-ready{
+  box-shadow:0 0 0 2px rgba(29,155,240,.22),0 4px 16px rgba(29,155,240,.12) !important;
+}
+#chatMessages .chatMessage.message-swiping-reply::before{
+  content:"↩";
+  position:absolute;
+  left:-42px;
+  top:50%;
+  transform:translateY(-50%);
+  width:30px;
+  height:30px;
+  border-radius:50%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:#1d9bf0;
+  color:#fff;
+  font-size:19px;
+  font-weight:600;
+  box-shadow:0 3px 10px rgba(29,155,240,.25);
+  opacity:.95;
+  pointer-events:none;
+}
+#chatMessages .chatMessage.message-swipe-reply-ready::before{
+  left:-46px;
+  opacity:1;
+}
+#chatMessages .chatMessage.message-reply-target{
+  animation:messageReplyTarget .9s ease both;
+}
+#chatScreen #replyPreview.chat-reply-active{
+  animation:replyPreviewIn .18s ease both;
+}
+@keyframes messageReplyTarget{
+  0%{box-shadow:0 0 0 3px rgba(29,155,240,.35)}
+  100%{box-shadow:none}
+}
+@keyframes replyPreviewIn{
+  from{transform:translateY(8px);opacity:.55}
+  to{transform:translateY(0);opacity:1}
+}
+</style>
+
 /* v108: message controls are monochrome outline icons; no top selection toolbar */
 #selectionBar{display:none !important;height:0 !important;min-height:0 !important;overflow:hidden !important;padding:0 !important;border:0 !important;}
 #chatScreen:has(#selectionActionsSheet108) #chatHeader{display:flex !important;}
@@ -4849,6 +4897,76 @@ body, #posts, #chatMessages, .comments-list, .search-results, .notifications-lis
   touch-action: auto;
 }
 * { -webkit-overflow-scrolling: touch; }
+</style>
+
+<style id="fixed123-chat-controls">
+/* Chat composer: keep every control on one centered baseline. */
+#chatScreen > div:last-child{
+  box-sizing:border-box !important;
+  padding:8px 10px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+}
+#chatScreen > div:last-child > div:not(#replyPreview){
+  min-height:46px !important;
+  align-items:center !important;
+  gap:8px !important;
+}
+#chatScreen #chatMedia + input + #chatVoiceBtn{}
+#chatScreen label[for="chatMedia"],
+#chatScreen #chatVoiceBtn,
+#chatScreen #chatVoiceBtn + button{
+  width:46px !important;
+  height:46px !important;
+  min-width:46px !important;
+  min-height:46px !important;
+  flex:0 0 46px !important;
+  margin:0 !important;
+  padding:0 !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  box-sizing:border-box !important;
+}
+#chatScreen #chatInput{
+  height:46px !important;
+  min-height:46px !important;
+  box-sizing:border-box !important;
+}
+#chatScreen label[for="chatMedia"] .global-mono-ui-icon,
+#chatScreen #chatVoiceBtn .comment-ui-icon,
+#chatScreen #chatVoiceBtn + button .chat-send-icon{
+  width:22px !important;
+  height:22px !important;
+  margin:0 !important;
+}
+#chatScreen #chatVoiceBtn .comment-ui-icon,
+#chatScreen #chatVoiceBtn + button .chat-send-icon,
+#chatScreen label[for="chatMedia"] .global-mono-ui-icon svg{
+  display:block !important;
+}
+/* Header search is a real outline SVG, not an emoji glyph. */
+#chatHeader > .chat-header-search{
+  width:40px !important;
+  min-width:40px !important;
+  flex:0 0 40px !important;
+  height:40px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  margin-left:auto !important;
+  color:inherit !important;
+  font-size:0 !important;
+  line-height:0 !important;
+}
+#chatHeader > .chat-header-search .chat-search-icon{
+  width:24px !important;
+  height:24px !important;
+  display:block !important;
+  fill:none !important;
+  stroke:currentColor !important;
+  stroke-width:1.8 !important;
+  stroke-linecap:round !important;
+  stroke-linejoin:round !important;
+}
 </style>
 </head>
 <body class="dark">
@@ -5028,7 +5146,10 @@ cursor:pointer;
   onclick="toggleChatSearch()"
   aria-label="Search chat"
   role="button">
-  🔍
+  <svg class="chat-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+    <circle cx="10.5" cy="10.5" r="6.5"></circle>
+    <path d="M16 16l5 5"></path>
+  </svg>
 </span>
 
 </div>
@@ -5170,8 +5291,8 @@ padding:8px;
 
     <label for="chatMedia"
     style="
-      width:42px;
-      height:42px;
+      width:46px;
+      height:46px;
       border-radius:50%;
       background:#1f1f1f;
       display:flex;
@@ -5196,7 +5317,7 @@ padding:8px;
       placeholder="Type a message..."
       style="
         flex:1;
-        height:44px;
+        height:46px;
         background:#1f1f1f;
         border:none;
         border-radius:25px;
@@ -5230,8 +5351,8 @@ pointer-events:auto;
     <button
       onclick="sendMessage()"
       style="
-        width:50px;
-        height:50px;
+        width:46px;
+        height:46px;
         border:none;
         border-radius:50%;
         background:#0084ff;
@@ -41608,6 +41729,7 @@ chat.innerHTML +=`
   class="chatMessage ${mine && !msg.delivered ? 'sending-message' : ''} message-enter"
 
   data-message="${escapeHtml(msg.content || "").toLowerCase()}"
+  data-message-content="${escapeHtml(msg.content || "")}"
   
   onclick="
 if(selectionMode){
@@ -41621,59 +41743,101 @@ oncontextmenu="
 "
 
 ontouchstart="
-swipeStartX = event.changedTouches[0].clientX;
-swipeStartY = event.changedTouches[0].clientY;
+// Long-press only enters the message action menu when selection mode is off.
+// Once selection mode is active, a normal tap selects/deselects immediately.
+const touch = event.changedTouches && event.changedTouches[0];
+if(!touch) return;
+
+window.__messageSwipeState = {
+  id:'${msg.id}',
+  startX:touch.clientX,
+  startY:touch.clientY,
+  lastX:touch.clientX,
+  lastY:touch.clientY,
+  horizontal:false,
+  triggered:false
+};
+
+if(selectionMode){
+  clearTimeout(window.pressTimer);
+  window.pressTimer = null;
+  return;
+}
 
 window.pressTimer = setTimeout(() => {
-
+  const st = window.__messageSwipeState;
+  if(st && st.id==='${msg.id}' && !st.horizontal && !st.triggered){
     messageOptions('${msg.id}');
-
+  }
 },700);
 "
 
 ontouchmove="
-clearTimeout(window.pressTimer);
+const touch = event.changedTouches && event.changedTouches[0];
+const st = window.__messageSwipeState;
+if(!touch || !st || st.id!=='${msg.id}') return;
 
-if(selectionMode) return;
+st.lastX = touch.clientX;
+st.lastY = touch.clientY;
+const dx = touch.clientX - st.startX;
+const dy = touch.clientY - st.startY;
 
-moveX = event.changedTouches[0].clientX - swipeStartX;
+// Decide whether this gesture is a horizontal message swipe or normal vertical scrolling.
+if(!st.horizontal && (Math.abs(dx)>8 || Math.abs(dy)>8)){
+  if(Math.abs(dy) > Math.abs(dx) || dx <= 0){
+    clearTimeout(window.pressTimer);
+    return;
+  }
+  st.horizontal = true;
+  clearTimeout(window.pressTimer);
+}
 
-if(moveX>0 && moveX<80){
+if(selectionMode || !st.horizontal || st.triggered) return;
 
-  this.style.transform='translateX('+moveX+'px)';
+const distance = Math.min(76, Math.max(0, dx));
+this.style.transform='translateX('+distance+'px)';
+this.classList.add('message-swiping-reply');
 
-  const t=this.querySelector('.messageTime');
+const t=this.querySelector('.messageTime');
+if(t) t.style.display='block';
 
-  if(t) t.style.display='block';
-
+if(distance >= 58){
+  st.triggered = true;
+  this.classList.add('message-swipe-reply-ready');
 }
 "
 
 ontouchend="
 clearTimeout(window.pressTimer);
 
-moveX = event.changedTouches[0].clientX - swipeStartX;
-
-this.style.transform='';
-
+const touch = event.changedTouches && event.changedTouches[0];
+const st = window.__messageSwipeState;
 const t = this.querySelector('.messageTime');
-if(t) t.style.display='none';
 
-if(moveX>70 && !selectionMode){
+if(st && st.id==='${msg.id}' && touch){
+  const dx = touch.clientX - st.startX;
+  const dy = touch.clientY - st.startY;
 
-  this.style.transform='translateX(40px)';
+  // A rightward horizontal swipe on THIS message replies to THIS exact message.
+  if(!selectionMode && st.horizontal && dx >= 58 && Math.abs(dx) > Math.abs(dy) * 1.15){
+    this.classList.add('message-swipe-reply-ready');
+    this.style.transform='translateX(58px)';
 
-  setTimeout(()=>{
+    if(typeof replyToMessage === 'function') replyToMessage('${msg.id}');
 
+    setTimeout(()=>{
+      this.style.transform='';
+      this.classList.remove('message-swiping-reply','message-swipe-reply-ready');
+      if(t) t.style.display='none';
+    },180);
+  }else{
     this.style.transform='';
-
+    this.classList.remove('message-swiping-reply','message-swipe-reply-ready');
     if(t) t.style.display='none';
-
-  },150);
-
-  replyToMessage('${msg.id}');
-
+  }
 }
+
+window.__messageSwipeState = null;
 "
 
   style="
@@ -42033,7 +42197,9 @@ min-height:14px;
 // =====================================================
 // INSTANT CHAT MESSAGE PAINT
 // =====================================================
-
+// Paint a newly inserted/realtime message immediately. The normal
+// loadMessages() call can still reconcile the complete server state later,
+// but the user never has to wait for that network round-trip to see the row.
 window.appendInstantChatMessage = function(msg) {
   if (!msg?.id || !session?.user || !currentChatUser) return false;
   if (!isChatScreenVisible()) return false;
@@ -42062,9 +42228,30 @@ window.appendInstantChatMessage = function(msg) {
   } else if (msg.media_type === "video" && msg.media_url) {
     media = `<video src="${escapeHtml(String(msg.media_url))}" controls data-chat-media-open="true" data-chat-media-url="${escapeHtml(String(msg.media_url))}" data-chat-media-type="video" data-message-id="${escapeHtml(String(msg.id))}" style="width:100%;max-width:260px;max-height:320px;object-fit:cover;border-radius:16px;margin-bottom:6px;background:black;cursor:pointer;"></video>`;
   }
-  const content = msg.content ? `<div style="word-break:break-word;">${escapeHtml(String(msg.content))}</div>` : "";
+  // Realtime INSERT payloads do not include the joined reply_to row. Build a
+  // complete visible message immediately, including a non-empty fallback,
+  // then hydrate the replied-to preview in the background when needed.
+  const replied = msg.replied || msg.reply_to_message || null;
+  const replyPreview = replied ? `
+    <div class="chat-reply-media-preview instant-reply-preview"
+         data-chat-reply-open="${replied.media_url ? "media" : "message"}"
+         data-chat-media-url="${replied.media_url ? escapeHtml(String(replied.media_url)) : ""}"
+         data-chat-media-type="${replied.media_url ? (replied.media_type === "video" ? "video" : "image") : ""}"
+         data-chat-message-id="${escapeHtml(String(replied.id || msg.reply_to || ""))}"
+         style="background:rgba(127,127,127,.12);border-left:3px solid #4fc3f7;padding:8px;margin-bottom:8px;border-radius:8px;font-size:13px;color:inherit;opacity:.95;cursor:pointer;overflow:hidden;">
+      <div style="font-size:12px;opacity:.72;margin-bottom:5px;">↩ Reply</div>
+      ${replied.media_url && replied.media_type === "image"
+        ? `<img src="${escapeHtml(String(replied.media_url))}" alt="Replied photo" style="display:block;width:min(180px,100%);max-height:130px;object-fit:cover;border-radius:9px;margin-bottom:5px;">`
+        : replied.media_url && replied.media_type === "video"
+          ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(127,127,127,.12);border-radius:9px;margin-bottom:5px;">Video</div>`
+          : ""}
+      <div style="word-break:break-word;">${replied.content ? escapeHtml(String(replied.content)) : (replied.media_type === "image" ? "Photo" : replied.media_type === "video" ? "Video" : "Message")}</div>
+    </div>` : (msg.reply_to ? `<div class="instant-reply-placeholder" style="background:rgba(127,127,127,.12);border-left:3px solid #4fc3f7;padding:8px;margin-bottom:8px;border-radius:8px;font-size:12px;opacity:.8;">↩ Replying to a message…</div>` : "");
+  const content = msg.content
+    ? `<div style="word-break:break-word;">${escapeHtml(String(msg.content))}</div>`
+    : (msg.media_url ? "" : `<div style="word-break:break-word;">Message</div>`);
   const status = mine ? `<span class="messageStatus sent">✓</span>` : "";
-  bubble.innerHTML = `<div>${media}${content}</div><div class="messageTime" style="display:flex;align-items:center;justify-content:flex-end;gap:4px;position:absolute;right:4px;bottom:-30px;margin:0;font-size:11px;color:var(--screen-muted,#999);white-space:nowrap;min-height:14px;">${time} ${status}</div>`;
+  bubble.innerHTML = `<div>${replyPreview}${media}${content}</div><div class="messageTime" style="display:flex;align-items:center;justify-content:flex-end;gap:4px;position:absolute;right:4px;bottom:-30px;margin:0;font-size:11px;color:var(--screen-muted,#999);white-space:nowrap;min-height:14px;">${time} ${status}</div>`;
   wrap.appendChild(bubble);
   chat.appendChild(wrap);
   chat.scrollTop = chat.scrollHeight;
@@ -42099,20 +42286,31 @@ let replyingTo = null;
 
 window.replyToMessage = function(messageId) {
 
+  const msg = document.getElementById(messageId);
+  if(!msg) return;
+
   replyingTo = messageId;
 
-  const msg = document.getElementById(messageId);
+  const replyText = document.getElementById("replyText");
+  if(replyText){
+    const raw = msg.dataset.messageContent || msg.innerText || "";
+    replyText.innerText = raw.replace(/\s+/g," ").trim().slice(0,120) || "Media message";
+  }
 
-  document.getElementById("replyText").innerText =
-    msg.innerText.slice(0, 80);
+  const preview = document.getElementById("replyPreview");
+  if(preview){
+    preview.style.display = "block";
+    preview.classList.add("chat-reply-active");
+  }
 
-  document.getElementById("replyPreview").style.display =
-    "block";
+  msg.classList.add("message-reply-target");
+  setTimeout(()=>msg.classList.remove("message-reply-target"),900);
 
-  document.getElementById("chatInput").focus();
+  const input = document.getElementById("chatInput");
+  if(input) input.focus();
 
   document.getElementById("messageMenu")?.remove();
-
+  document.getElementById("messageMenu108")?.remove();
 };
 
 window.cancelReply = function() {
@@ -42122,6 +42320,7 @@ window.cancelReply = function() {
   const replyPreview = document.getElementById("replyPreview");
 if (replyPreview) {
   replyPreview.style.display = "none";
+  replyPreview.classList.remove("chat-reply-active");
 }
 
 };
@@ -42348,7 +42547,12 @@ await supabase
     return;
 }
 
+// The current messages table does not expose language_code / translated_text
+// in its schema, so translation metadata must not be written to messages.
+// The message itself has already been saved successfully above.
 
+  // Paint locally immediately. The server/realtime reconciliation below may
+  // replace it later, but the message is visible with no extra refresh wait.
   window.appendInstantChatMessage?.(insertedMessage);
 
   // Notify the receiver (skip self-notifications for self-chat)
@@ -42443,6 +42647,8 @@ if (replyPreview) {
 }
   fileInput.value = "";
 
+  // Reconcile in the background; do not make the sender wait for a second
+  // messages query after the message is already on screen.
   loadMessages();
 }
 
@@ -42603,7 +42809,8 @@ function listenForSeenMessages(userId) {
       }
 
       if (channelToken !== window.__chatOpenToken || currentChatUser !== userId) return;
-
+      // The global messages subscription performs the single chat render.
+      // Avoid a second load here, which used to race it and cause blinking.
       await loadUnreadMessages();
       window.scheduleInboxRefresh?.();
     })
@@ -43274,6 +43481,50 @@ window.forwardMessage = async function(messageId) {
 
 };
 
+window.deleteSelectedMessages = async function() {
+  if (!session?.user) {
+    alert("Please login first");
+    return;
+  }
+
+  const ids = Array.from(new Set((selectedMessages || []).filter(Boolean)));
+  if (!ids.length) return;
+
+  const ok = confirm(`Delete ${ids.length} selected message${ids.length === 1 ? "" : "s"}?`);
+  if (!ok) return;
+
+  const original = [...ids];
+  const failed = [];
+
+  // Delete each selected message for the current user through the same
+  // controlled RPC used by single-message deletion. This respects RLS and
+  // the per-user deleted_for_sender/deleted_for_receiver rules.
+  for (const messageId of original) {
+    const { error } = await supabase.rpc("delete_message", {
+      p_message_id: messageId,
+      p_delete_for_everyone: false
+    });
+    if (error) failed.push({ id: messageId, error });
+  }
+
+  // Clear selection immediately so the UI never remains stuck in selection mode.
+  window.cancelSelection?.();
+
+  // Repaint the open chat once after all RPCs finish instead of reloading after
+  // every message. Then silently refresh Inbox so an empty conversation card
+  // disappears when its last visible message was deleted.
+  try {
+    await loadMessages();
+  } catch (e) {
+    console.warn("Could not refresh messages after bulk delete:", e);
+  }
+  window.scheduleInboxRefresh?.();
+
+  if (failed.length) {
+    alert(`${failed.length} message${failed.length === 1 ? "" : "s"} could not be deleted.`);
+  }
+};
+
 window.deleteMessage = async function(messageId) {
   
   if (!session?.user) {
@@ -43471,6 +43722,9 @@ window.closeChat = async function () {
   clearInterval(window.__chatStatusPollTimer);
   window.__chatStatusPollTimer = null;
   window.__chatStatusPollUser = null;
+  // Do not clear the chat DOM before navigation. Clearing it here creates a
+  // visible empty frame and makes the next screen look like it is waiting for
+  // a reload. The next chat open will detach/replace it safely.
 
   console.log("🔙 CLOSE CHAT");
 
@@ -43546,11 +43800,11 @@ window.closeChat = async function () {
   const current =
     window.appNavigation?.current || null;
 
-// =====================================================
+  // =====================================================
   // CHAT IS A REAL HISTORY SCREEN
   //
   // LET CENTRAL NAVIGATION RESTORE THE PREVIOUS SCREEN.
-// =====================================================
+  // =====================================================
 
   // Detach the closed conversation before navigation restores another screen.
   currentChatUser = null;
@@ -43573,9 +43827,9 @@ window.closeChat = async function () {
     return;
   }
 
-// =====================================================
+  // =====================================================
   // FALLBACK ONLY
-// =====================================================
+  // =====================================================
 
   console.warn(
     "⚠️ CHAT HISTORY NOT FOUND → FALLBACK"
@@ -51865,6 +52119,7 @@ window.openComments = openComments;
 window.openChat = openChat;
 window.sendMessage = sendMessage;
 window.deleteMessage = deleteMessage;
+window.deleteSelectedMessages = deleteSelectedMessages;
 window.renderNotifications = renderNotifications;
 window.loadNotificationProfiles = loadNotificationProfiles;
 
@@ -52035,6 +52290,33 @@ if (!window.messagesSubscription) {
           String(currentChatUser) === String(msg.sender_id) &&
           isChatScreenVisible()) {
         window.appendInstantChatMessage?.(msg);
+
+        // A realtime row contains reply_to but not the joined `replied` object.
+        // Hydrate that relation after the message is already visible so the
+        // incoming reply can never appear as an empty/blank card.
+        if (msg.reply_to) {
+          (async () => {
+            const { data: replyRow } = await supabase
+              .from("messages")
+              .select("id,content,media_url,media_type")
+              .eq("id", msg.reply_to)
+              .maybeSingle();
+            if (!replyRow || !currentChatUser || !isChatScreenVisible()) return;
+            const bubble = document.getElementById(String(msg.id));
+            if (!bubble) return;
+            const placeholder = bubble.querySelector(".instant-reply-placeholder");
+            if (!placeholder) return;
+            const preview = document.createElement("div");
+            preview.className = "chat-reply-media-preview instant-reply-preview";
+            preview.dataset.chatReplyOpen = replyRow.media_url ? "media" : "message";
+            preview.dataset.chatMediaUrl = replyRow.media_url || "";
+            preview.dataset.chatMediaType = replyRow.media_url ? (replyRow.media_type === "video" ? "video" : "image") : "";
+            preview.dataset.chatMessageId = String(replyRow.id);
+            preview.style.cssText = "background:rgba(127,127,127,.12);border-left:3px solid #4fc3f7;padding:8px;margin-bottom:8px;border-radius:8px;font-size:13px;color:inherit;opacity:.95;cursor:pointer;overflow:hidden;";
+            preview.innerHTML = `<div style="font-size:12px;opacity:.72;margin-bottom:5px;">↩ Reply</div>${replyRow.media_url && replyRow.media_type === "image" ? `<img src="${escapeHtml(String(replyRow.media_url))}" alt="Replied photo" style="display:block;width:min(180px,100%);max-height:130px;object-fit:cover;border-radius:9px;margin-bottom:5px;">` : replyRow.media_url && replyRow.media_type === "video" ? `<div style="padding:8px 10px;background:rgba(127,127,127,.12);border-radius:9px;margin-bottom:5px;">Video</div>` : ""}<div style="word-break:break-word;">${replyRow.content ? escapeHtml(String(replyRow.content)) : (replyRow.media_type === "image" ? "Photo" : replyRow.media_type === "video" ? "Video" : "Message")}</div>`;
+            placeholder.replaceWith(preview);
+          })();
+        }
       }
 
       // Always acknowledge delivery for the receiver. This is independent of
@@ -52380,3 +52662,15 @@ document.addEventListener("selectstart", function(e) {
 </script>
 </body>
 </html>
+/* Clean voice/comment controls */
+#commentsScreen .commentVoice button,
+#commentsScreen #voiceBtn,
+#commentsScreen #commentMediaBtn,
+#commentsScreen #panelPostBtn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+#commentsScreen .commentVoice button{
+  box-shadow:0 2px 10px rgba(0,0,0,.18);
+}
