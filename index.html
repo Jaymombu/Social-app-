@@ -41610,6 +41610,10 @@ chat.innerHTML +=`
   data-message="${escapeHtml(msg.content || "").toLowerCase()}"
   
   onclick="
+if(window.__longPressSelectionTriggered){
+  window.__longPressSelectionTriggered = false;
+  return;
+}
 if(selectionMode){
   toggleMessageSelection('${msg.id}');
 }
@@ -41617,16 +41621,25 @@ if(selectionMode){
 
 oncontextmenu="
   event.preventDefault();
-  toggleMessageSelection('${msg.id}')
+  toggleMessageSelection('${msg.id}');
 "
 
 ontouchstart="
 swipeStartX = event.changedTouches[0].clientX;
 swipeStartY = event.changedTouches[0].clientY;
+window.__longPressSelectionTriggered = false;
 
 window.pressTimer = setTimeout(() => {
 
-    messageOptions('${msg.id}');
+    /*
+      Long-press on the first message enters multi-selection and selects
+      only that message. Once selectionMode is active, normal taps on
+      other messages toggle them; there is no need to long-press each one.
+    */
+    if(!selectionMode){
+      window.__longPressSelectionTriggered = true;
+      toggleMessageSelection('${msg.id}');
+    }
 
 },700);
 "
@@ -43841,6 +43854,7 @@ function renderSelectionActions108(){
 }
 
 window.toggleMessageSelection = function(id){
+  /* A tap toggles selection; long-press is only needed for the first message. */
   selectionMode = true;
   const el = document.getElementById(id);
   if(!el) return;
