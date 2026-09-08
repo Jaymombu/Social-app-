@@ -4834,87 +4834,63 @@ body.light .avatar-wrap .online-indicator,body.light .story-avatar-wrap .online-
 #tab-explore .story-tab-icon,#tab-following .story-tab-icon{width:19px!important;height:19px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.7!important;stroke-linecap:round!important;stroke-linejoin:round!important;}
 </style>
 <style>
-
+/* Global smooth scrolling */
+/* Native touch scrolling stays in the browser compositor.  Do not force
+   CSS smooth scrolling on every container: repeated programmatic scrollTo()
+   calls can fight Android's finger/momentum scrolling and feel laggy. */
 html { scroll-behavior: auto; }
 body, #posts, #chatMessages, .comments-list, .search-results, .notifications-list, .settings-content, .profile-posts, .story-list {
   scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
 }
 #posts, #chatMessages, .comments-list, .search-results, .notifications-list, .settings-content, .profile-posts, .story-list {
-
+  /* Let the browser own vertical touch scrolling. App gesture handlers
+     should only take over after they have positively detected a gesture. */
   touch-action: auto;
 }
 * { -webkit-overflow-scrolling: touch; }
 </style>
 
-<style id="fixed123-chat-controls">
-/* Chat composer: keep every control on one centered baseline. */
-#chatScreen > div:last-child{
-  box-sizing:border-box !important;
-  padding:8px 10px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
-}
-#chatScreen > div:last-child > div:not(#replyPreview){
-  min-height:46px !important;
-  align-items:center !important;
-  gap:8px !important;
-}
-#chatScreen #chatMedia + input + #chatVoiceBtn{}
-#chatScreen label[for="chatMedia"],
-#chatScreen #chatVoiceBtn,
-#chatScreen #chatVoiceBtn + button{
-  width:46px !important;
-  height:46px !important;
-  min-width:46px !important;
-  min-height:46px !important;
-  flex:0 0 46px !important;
-  margin:0 !important;
-  padding:0 !important;
-  display:flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  box-sizing:border-box !important;
-}
-#chatScreen #chatInput{
-  height:46px !important;
-  min-height:46px !important;
-  box-sizing:border-box !important;
-}
-#chatScreen label[for="chatMedia"] .global-mono-ui-icon,
-#chatScreen #chatVoiceBtn .comment-ui-icon,
-#chatScreen #chatVoiceBtn + button .chat-send-icon{
-  width:22px !important;
-  height:22px !important;
-  margin:0 !important;
-}
-#chatScreen #chatVoiceBtn .comment-ui-icon,
-#chatScreen #chatVoiceBtn + button .chat-send-icon,
-#chatScreen label[for="chatMedia"] .global-mono-ui-icon svg{
-  display:block !important;
-}
-/* Header search is a real outline SVG, not an emoji glyph. */
+<style id="fixed123-chat-controls-selection">
 #chatHeader > .chat-header-search{
-  width:40px !important;
-  min-width:40px !important;
-  flex:0 0 40px !important;
-  height:40px !important;
-  display:flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  margin-left:auto !important;
-  color:inherit !important;
-  font-size:0 !important;
-  line-height:0 !important;
+  appearance:none!important;
+  -webkit-appearance:none!important;
+  border:0!important;
+  background:transparent!important;
+  color:inherit!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  flex:0 0 40px!important;
+  width:40px!important;
+  min-width:40px!important;
+  height:40px!important;
+  margin:0 0 0 auto!important;
+  padding:0!important;
+  box-sizing:border-box!important;
+  cursor:pointer!important;
 }
-#chatHeader > .chat-header-search .chat-search-icon{
-  width:24px !important;
-  height:24px !important;
-  display:block !important;
-  fill:none !important;
-  stroke:currentColor !important;
-  stroke-width:1.8 !important;
-  stroke-linecap:round !important;
-  stroke-linejoin:round !important;
+#chatHeader > .chat-header-search svg{
+  width:24px!important;height:24px!important;display:block!important;
+  fill:none!important;stroke:currentColor!important;stroke-width:1.9!important;
+  stroke-linecap:round!important;stroke-linejoin:round!important;
 }
+.chat-send-btn-fixed120{
+  flex:0 0 50px!important;width:50px!important;height:50px!important;
+  min-width:50px!important;min-height:50px!important;
+  border:none!important;border-radius:50%!important;
+  background:#0084ff!important;color:#fff!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  padding:0!important;margin:0!important;box-sizing:border-box!important;
+  cursor:pointer!important;
+}
+.chat-send-btn-fixed120 svg{width:25px!important;height:25px!important;display:block!important;fill:none!important;stroke:currentColor!important;stroke-width:1.8!important;stroke-linecap:round!important;stroke-linejoin:round!important;}
+#chatInput{min-width:0!important;box-sizing:border-box!important;}
+#chatMedia + #chatInput{}
+#chatScreen label[for="chatMedia"]{flex:0 0 46px!important;width:46px!important;height:46px!important;min-width:46px!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;margin:0!important;padding:0!important;}
+#chatScreen #chatVoiceBtn{flex:0 0 46px!important;width:46px!important;height:46px!important;min-width:46px!important;min-height:46px!important;display:flex!important;align-items:center!important;justify-content:center!important;margin:0!important;padding:0!important;box-sizing:border-box!important;}
+#chatScreen #chatVoiceBtn svg{width:22px!important;height:22px!important;display:block!important;}
+#chatMessages .chatMessage.chat-selected{outline:2px solid #0084ff!important;outline-offset:2px!important;}
 </style>
 </head>
 <body class="dark">
@@ -5089,16 +5065,13 @@ cursor:pointer;
 </div>
 </div>
 
-<span
+<button
+  type="button"
   class="chat-header-search"
   onclick="toggleChatSearch()"
-  aria-label="Search chat"
-  role="button">
-  <svg class="chat-search-icon" viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="10.5" cy="10.5" r="6.5"></circle>
-    <path d="M16 16l5 5"></path>
-  </svg>
-</span>
+  aria-label="Search chat">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 5 5"></path></svg>
+</button>
 
 </div>
 
@@ -5239,8 +5212,8 @@ padding:8px;
 
     <label for="chatMedia"
     style="
-      width:46px;
-      height:46px;
+      width:42px;
+      height:42px;
       border-radius:50%;
       background:#1f1f1f;
       display:flex;
@@ -5265,7 +5238,7 @@ padding:8px;
       placeholder="Type a message..."
       style="
         flex:1;
-        height:46px;
+        height:44px;
         background:#1f1f1f;
         border:none;
         border-radius:25px;
@@ -5297,18 +5270,11 @@ pointer-events:auto;
 </button>
 
     <button
+      type="button"
+      class="chat-send-btn-fixed120"
       onclick="sendMessage()"
-      style="
-        width:46px;
-        height:46px;
-        border:none;
-        border-radius:50%;
-        background:#0084ff;
-        color:white;
-        font-size:20px;
-        cursor:pointer;
-      ">
-      ➤
+      aria-label="Send message">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 4 18 8-18 8 4-8z"></path><path d="M7 12h14"></path></svg>
     </button>
 
   </div>
@@ -41690,28 +41656,23 @@ oncontextmenu="
 "
 
 ontouchstart="
-// Once selection mode is active, a normal touch selects/deselects immediately.
-// Do not require another long-press for every additional message.
-if(selectionMode){
-  clearTimeout(window.pressTimer);
-  window.pressTimer = null;
-  swipeStartX = event.changedTouches[0].clientX;
-  swipeStartY = event.changedTouches[0].clientY;
-  return;
-}
-
 swipeStartX = event.changedTouches[0].clientX;
 swipeStartY = event.changedTouches[0].clientY;
 
+if(selectionMode){
+  window.pressTimer = null;
+  return;
+}
+
 window.pressTimer = setTimeout(() => {
-
-    messageOptions('${msg.id}');
-
+  window.pressTimer = null;
+  toggleMessageSelection('${msg.id}');
 },700);
 "
 
 ontouchmove="
 clearTimeout(window.pressTimer);
+window.pressTimer = null;
 
 if(selectionMode) return;
 
@@ -43363,50 +43324,6 @@ window.forwardMessage = async function(messageId) {
 
 };
 
-window.deleteSelectedMessages = async function() {
-  if (!session?.user) {
-    alert("Please login first");
-    return;
-  }
-
-  const ids = Array.from(new Set((selectedMessages || []).filter(Boolean)));
-  if (!ids.length) return;
-
-  const ok = confirm(`Delete ${ids.length} selected message${ids.length === 1 ? "" : "s"}?`);
-  if (!ok) return;
-
-  const original = [...ids];
-  const failed = [];
-
-  // Delete each selected message for the current user through the same
-  // controlled RPC used by single-message deletion. This respects RLS and
-  // the per-user deleted_for_sender/deleted_for_receiver rules.
-  for (const messageId of original) {
-    const { error } = await supabase.rpc("delete_message", {
-      p_message_id: messageId,
-      p_delete_for_everyone: false
-    });
-    if (error) failed.push({ id: messageId, error });
-  }
-
-  // Clear selection immediately so the UI never remains stuck in selection mode.
-  window.cancelSelection?.();
-
-  // Repaint the open chat once after all RPCs finish instead of reloading after
-  // every message. Then silently refresh Inbox so an empty conversation card
-  // disappears when its last visible message was deleted.
-  try {
-    await loadMessages();
-  } catch (e) {
-    console.warn("Could not refresh messages after bulk delete:", e);
-  }
-  window.scheduleInboxRefresh?.();
-
-  if (failed.length) {
-    alert(`${failed.length} message${failed.length === 1 ? "" : "s"} could not be deleted.`);
-  }
-};
-
 window.deleteMessage = async function(messageId) {
   
   if (!session?.user) {
@@ -43935,6 +43852,86 @@ window.previousSearchResult = function () {
 
 };
 
+window.deleteSelectedMessages = async function(){
+  if(!session?.user){
+    alert("Please log in first.");
+    return;
+  }
+
+  const ids = Array.from(new Set((selectedMessages || []).filter(Boolean)));
+  if(!ids.length) return;
+
+  const ok = confirm(`Delete ${ids.length} selected message${ids.length===1?'':'s'}?`);
+  if(!ok) return;
+
+  const deletedIds = [];
+  const failed = [];
+
+  // Delete each selected message through the existing protected RPC.
+  // Do not call loadMessages() until the whole batch has completed.
+  for(const id of ids){
+    try{
+      const { data, error } = await supabase.rpc("delete_message", {
+        p_message_id: id,
+        p_delete_for_everyone: false
+      });
+      if(error || data === false){
+        failed.push({id,error: error?.message || "Delete failed"});
+      }else{
+        deletedIds.push(id);
+      }
+    }catch(err){
+      failed.push({id,error: err?.message || "Delete failed"});
+    }
+  }
+
+  // Remove successful messages immediately so there is no stale UI.
+  deletedIds.forEach(id=>document.getElementById(id)?.remove());
+
+  // Clear selection once, then reconcile the chat once.
+  selectedMessages = [];
+  selectionMode = false;
+  document.getElementById("selectionActionsSheet108")?.remove();
+  document.querySelectorAll(".chatMessage").forEach(msg=>{
+    msg.classList.remove("chat-selected");
+    const check=msg.querySelector(".messageCheck");
+    if(check) check.style.display="none";
+  });
+
+  if(typeof loadMessages === "function") await loadMessages();
+  window.scheduleInboxRefresh?.();
+
+  if(failed.length){
+    alert(`${deletedIds.length} deleted. ${failed.length} could not be deleted.`);
+  }
+};
+
+window.toggleMessageSelection = function(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+
+  selectionMode = true;
+
+  if(selectedMessages.includes(id)){
+    selectedMessages = selectedMessages.filter(x => x !== id);
+    el.classList.remove("chat-selected");
+    const check = el.querySelector(".messageCheck");
+    if(check) check.style.display = "none";
+  }else{
+    selectedMessages.push(id);
+    el.classList.add("chat-selected");
+    const check = el.querySelector(".messageCheck");
+    if(check) check.style.display = "flex";
+  }
+
+  document.getElementById("selectionBar")?.style && (document.getElementById("selectionBar").style.display="none");
+  const header=document.getElementById("chatHeader");
+  if(header) header.style.display="flex";
+
+  if(selectedMessages.length>0) renderSelectionActions108();
+  else cancelSelection();
+};
+
 function renderSelectionActions108(){
   let sheet=document.getElementById("selectionActionsSheet108");
   if(sheet) sheet.remove();
@@ -43962,31 +43959,6 @@ function renderSelectionActions108(){
   `;
   document.body.appendChild(sheet);
 }
-
-window.toggleMessageSelection = function(id){
-  selectionMode = true;
-  const el = document.getElementById(id);
-  if(!el) return;
-
-  if(selectedMessages.includes(id)){
-    selectedMessages = selectedMessages.filter(x => x !== id);
-    el.classList.remove("chat-selected");
-    const check = el.querySelector(".messageCheck");
-    if(check) check.style.display = "none";
-  }else{
-    selectedMessages.push(id);
-    el.classList.add("chat-selected");
-    const check = el.querySelector(".messageCheck");
-    if(check) check.style.display = "flex";
-  }
-
-  document.getElementById("selectionBar")?.style && (document.getElementById("selectionBar").style.display="none");
-  const header=document.getElementById("chatHeader");
-  if(header) header.style.display="flex";
-
-  if(selectedMessages.length>0) renderSelectionActions108();
-  else cancelSelection();
-};
 
 window.cancelSelection = function(){
   selectionMode = false;
@@ -52001,7 +51973,6 @@ window.openComments = openComments;
 window.openChat = openChat;
 window.sendMessage = sendMessage;
 window.deleteMessage = deleteMessage;
-window.deleteSelectedMessages = deleteSelectedMessages;
 window.renderNotifications = renderNotifications;
 window.loadNotificationProfiles = loadNotificationProfiles;
 
