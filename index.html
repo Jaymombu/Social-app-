@@ -4850,48 +4850,6 @@ body, #posts, #chatMessages, .comments-list, .search-results, .notifications-lis
 }
 * { -webkit-overflow-scrolling: touch; }
 </style>
-
-<style id="fixed123-chat-controls-selection">
-#chatHeader > .chat-header-search{
-  appearance:none!important;
-  -webkit-appearance:none!important;
-  border:0!important;
-  background:transparent!important;
-  color:inherit!important;
-  display:flex!important;
-  align-items:center!important;
-  justify-content:center!important;
-  flex:0 0 40px!important;
-  width:40px!important;
-  min-width:40px!important;
-  height:40px!important;
-  margin:0 0 0 auto!important;
-  padding:0!important;
-  box-sizing:border-box!important;
-  cursor:pointer!important;
-}
-#chatHeader > .chat-header-search svg{
-  width:24px!important;height:24px!important;display:block!important;
-  fill:none!important;stroke:currentColor!important;stroke-width:1.9!important;
-  stroke-linecap:round!important;stroke-linejoin:round!important;
-}
-.chat-send-btn-fixed120{
-  flex:0 0 50px!important;width:50px!important;height:50px!important;
-  min-width:50px!important;min-height:50px!important;
-  border:none!important;border-radius:50%!important;
-  background:#0084ff!important;color:#fff!important;
-  display:flex!important;align-items:center!important;justify-content:center!important;
-  padding:0!important;margin:0!important;box-sizing:border-box!important;
-  cursor:pointer!important;
-}
-.chat-send-btn-fixed120 svg{width:25px!important;height:25px!important;display:block!important;fill:none!important;stroke:currentColor!important;stroke-width:1.8!important;stroke-linecap:round!important;stroke-linejoin:round!important;}
-#chatInput{min-width:0!important;box-sizing:border-box!important;}
-#chatMedia + #chatInput{}
-#chatScreen label[for="chatMedia"]{flex:0 0 46px!important;width:46px!important;height:46px!important;min-width:46px!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;margin:0!important;padding:0!important;}
-#chatScreen #chatVoiceBtn{flex:0 0 46px!important;width:46px!important;height:46px!important;min-width:46px!important;min-height:46px!important;display:flex!important;align-items:center!important;justify-content:center!important;margin:0!important;padding:0!important;box-sizing:border-box!important;}
-#chatScreen #chatVoiceBtn svg{width:22px!important;height:22px!important;display:block!important;}
-#chatMessages .chatMessage.chat-selected{outline:2px solid #0084ff!important;outline-offset:2px!important;}
-</style>
 </head>
 <body class="dark">
   
@@ -5065,13 +5023,13 @@ cursor:pointer;
 </div>
 </div>
 
-<button
-  type="button"
+<span
   class="chat-header-search"
   onclick="toggleChatSearch()"
-  aria-label="Search chat">
-  <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 5 5"></path></svg>
-</button>
+  aria-label="Search chat"
+  role="button">
+  🔍
+</span>
 
 </div>
 
@@ -5270,11 +5228,18 @@ pointer-events:auto;
 </button>
 
     <button
-      type="button"
-      class="chat-send-btn-fixed120"
       onclick="sendMessage()"
-      aria-label="Send message">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 4 18 8-18 8 4-8z"></path><path d="M7 12h14"></path></svg>
+      style="
+        width:50px;
+        height:50px;
+        border:none;
+        border-radius:50%;
+        background:#0084ff;
+        color:white;
+        font-size:20px;
+        cursor:pointer;
+      ">
+      ➤
     </button>
 
   </div>
@@ -41645,7 +41610,7 @@ chat.innerHTML +=`
   data-message="${escapeHtml(msg.content || "").toLowerCase()}"
   
   onclick="
-if(selectionMode){
+if(selectionMode && this.dataset.suppressClick !== "true"){
   toggleMessageSelection('${msg.id}');
 }
 "
@@ -41658,21 +41623,22 @@ oncontextmenu="
 ontouchstart="
 swipeStartX = event.changedTouches[0].clientX;
 swipeStartY = event.changedTouches[0].clientY;
-
-if(selectionMode){
-  window.pressTimer = null;
-  return;
-}
+this.dataset.longPressed = "false";
+this.dataset.touchMoved = "false";
 
 window.pressTimer = setTimeout(() => {
-  window.pressTimer = null;
-  toggleMessageSelection('${msg.id}');
+  this.dataset.longPressed = "true";
+  if (!selectionMode) {
+    toggleMessageSelection('${msg.id}');
+  }
 },700);
 "
 
 ontouchmove="
-clearTimeout(window.pressTimer);
-window.pressTimer = null;
+if (Math.abs(event.changedTouches[0].clientX - swipeStartX) > 12 || Math.abs(event.changedTouches[0].clientY - swipeStartY) > 12) {
+  this.dataset.touchMoved = "true";
+  clearTimeout(window.pressTimer);
+}
 
 if(selectionMode) return;
 
@@ -41699,7 +41665,16 @@ this.style.transform='';
 const t = this.querySelector('.messageTime');
 if(t) t.style.display='none';
 
-if(moveX>70 && !selectionMode){
+if (selectionMode) {
+  if (this.dataset.longPressed !== "true" && this.dataset.touchMoved !== "true") {
+    toggleMessageSelection('${msg.id}');
+    this.dataset.suppressClick = "true";
+    setTimeout(() => { this.dataset.suppressClick = "false"; }, 350);
+  }
+  return;
+}
+
+if(moveX>70){
 
   this.style.transform='translateX(40px)';
 
@@ -41713,8 +41688,7 @@ if(moveX>70 && !selectionMode){
 
   replyToMessage('${msg.id}');
 
-}
-"
+}"
 
   style="
     background:${
@@ -43852,86 +43826,6 @@ window.previousSearchResult = function () {
 
 };
 
-window.deleteSelectedMessages = async function(){
-  if(!session?.user){
-    alert("Please log in first.");
-    return;
-  }
-
-  const ids = Array.from(new Set((selectedMessages || []).filter(Boolean)));
-  if(!ids.length) return;
-
-  const ok = confirm(`Delete ${ids.length} selected message${ids.length===1?'':'s'}?`);
-  if(!ok) return;
-
-  const deletedIds = [];
-  const failed = [];
-
-  // Delete each selected message through the existing protected RPC.
-  // Do not call loadMessages() until the whole batch has completed.
-  for(const id of ids){
-    try{
-      const { data, error } = await supabase.rpc("delete_message", {
-        p_message_id: id,
-        p_delete_for_everyone: false
-      });
-      if(error || data === false){
-        failed.push({id,error: error?.message || "Delete failed"});
-      }else{
-        deletedIds.push(id);
-      }
-    }catch(err){
-      failed.push({id,error: err?.message || "Delete failed"});
-    }
-  }
-
-  // Remove successful messages immediately so there is no stale UI.
-  deletedIds.forEach(id=>document.getElementById(id)?.remove());
-
-  // Clear selection once, then reconcile the chat once.
-  selectedMessages = [];
-  selectionMode = false;
-  document.getElementById("selectionActionsSheet108")?.remove();
-  document.querySelectorAll(".chatMessage").forEach(msg=>{
-    msg.classList.remove("chat-selected");
-    const check=msg.querySelector(".messageCheck");
-    if(check) check.style.display="none";
-  });
-
-  if(typeof loadMessages === "function") await loadMessages();
-  window.scheduleInboxRefresh?.();
-
-  if(failed.length){
-    alert(`${deletedIds.length} deleted. ${failed.length} could not be deleted.`);
-  }
-};
-
-window.toggleMessageSelection = function(id){
-  const el = document.getElementById(id);
-  if(!el) return;
-
-  selectionMode = true;
-
-  if(selectedMessages.includes(id)){
-    selectedMessages = selectedMessages.filter(x => x !== id);
-    el.classList.remove("chat-selected");
-    const check = el.querySelector(".messageCheck");
-    if(check) check.style.display = "none";
-  }else{
-    selectedMessages.push(id);
-    el.classList.add("chat-selected");
-    const check = el.querySelector(".messageCheck");
-    if(check) check.style.display = "flex";
-  }
-
-  document.getElementById("selectionBar")?.style && (document.getElementById("selectionBar").style.display="none");
-  const header=document.getElementById("chatHeader");
-  if(header) header.style.display="flex";
-
-  if(selectedMessages.length>0) renderSelectionActions108();
-  else cancelSelection();
-};
-
 function renderSelectionActions108(){
   let sheet=document.getElementById("selectionActionsSheet108");
   if(sheet) sheet.remove();
@@ -43959,6 +43853,31 @@ function renderSelectionActions108(){
   `;
   document.body.appendChild(sheet);
 }
+
+window.toggleMessageSelection = function(id){
+  selectionMode = true;
+  const el = document.getElementById(id);
+  if(!el) return;
+
+  if(selectedMessages.includes(id)){
+    selectedMessages = selectedMessages.filter(x => x !== id);
+    el.classList.remove("chat-selected");
+    const check = el.querySelector(".messageCheck");
+    if(check) check.style.display = "none";
+  }else{
+    selectedMessages.push(id);
+    el.classList.add("chat-selected");
+    const check = el.querySelector(".messageCheck");
+    if(check) check.style.display = "flex";
+  }
+
+  document.getElementById("selectionBar")?.style && (document.getElementById("selectionBar").style.display="none");
+  const header=document.getElementById("chatHeader");
+  if(header) header.style.display="flex";
+
+  if(selectedMessages.length>0) renderSelectionActions108();
+  else cancelSelection();
+};
 
 window.cancelSelection = function(){
   selectionMode = false;
