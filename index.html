@@ -4833,6 +4833,23 @@ body.light .avatar-wrap .online-indicator,body.light .story-avatar-wrap .online-
 #tab-explore,#tab-following{display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;}
 #tab-explore .story-tab-icon,#tab-following .story-tab-icon{width:19px!important;height:19px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.7!important;stroke-linecap:round!important;stroke-linejoin:round!important;}
 </style>
+<style>
+/* Global smooth scrolling */
+/* Native touch scrolling stays in the browser compositor.  Do not force
+   CSS smooth scrolling on every container: repeated programmatic scrollTo()
+   calls can fight Android's finger/momentum scrolling and feel laggy. */
+html { scroll-behavior: auto; }
+body, #posts, #chatMessages, .comments-list, .search-results, .notifications-list, .settings-content, .profile-posts, .story-list {
+  scroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#posts, #chatMessages, .comments-list, .search-results, .notifications-list, .settings-content, .profile-posts, .story-list {
+  /* Let the browser own vertical touch scrolling. App gesture handlers
+     should only take over after they have positively detected a gesture. */
+  touch-action: auto;
+}
+* { -webkit-overflow-scrolling: touch; }
+</style>
 </head>
 <body class="dark">
   
@@ -8887,19 +8904,10 @@ window.setupNewPostListener = function () {
 // ========================
 
 function setupScrollSnap() {
-
-  if (!postsEl) return;
-
-  postsEl.addEventListener("scroll", () => {
-
-    clearTimeout(scrollTimeout);
-
-    scrollTimeout = setTimeout(() => {
-      snapToNearestPost();
-    }, 120);
-
-  });
-
+  // Disabled for touch scrolling. The previous delayed auto-snap called
+  // scrollTo({behavior:"smooth"}) shortly after every finger scroll, which
+  // fought Android's native momentum and caused visible lag/jitter.
+  return;
 }
 
 function snapToNearestPost() {
