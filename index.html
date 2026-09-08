@@ -4787,93 +4787,6 @@ body.light .avatar-wrap .online-indicator,body.light .story-avatar-wrap .online-
 }
 </style>
 
-/* v108: message controls are monochrome outline icons; no top selection toolbar */
-#selectionBar{display:none !important;height:0 !important;min-height:0 !important;overflow:hidden !important;padding:0 !important;border:0 !important;}
-#chatScreen:has(#selectionActionsSheet108) #chatHeader{display:flex !important;}
-
-#messageMenu108, #selectionActionsSheet108{
-  position:fixed !important;
-  left:0 !important;
-  right:0 !important;
-  bottom:0 !important;
-  z-index:999999 !important;
-  background:var(--screen-surface,#18191a) !important;
-  color:var(--screen-text,#fff) !important;
-  border-top-left-radius:26px !important;
-  border-top-right-radius:26px !important;
-  padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px)) !important;
-  box-shadow:0 -8px 30px rgba(0,0,0,.48) !important;
-  max-height:min(72vh,620px) !important;
-  overflow-y:auto !important;
-  -webkit-overflow-scrolling:touch !important;
-}
-#messageMenu108 .action-row108, #selectionActionsSheet108 .action-row108{
-  display:flex !important;
-  align-items:center !important;
-  gap:10px !important;
-  min-height:48px !important;
-  padding:12px 14px !important;
-  margin:8px 0 !important;
-  background:var(--screen-input,#242526) !important;
-  color:var(--screen-text,#fff) !important;
-  border-radius:14px !important;
-  font-size:16px !important;
-  cursor:pointer !important;
-  box-sizing:border-box !important;
-}
-#messageMenu108 .action-row108.danger108, #selectionActionsSheet108 .action-row108.danger108{color:#ff6262 !important;}
-.action-icon108{
-  width:22px !important;height:22px !important;min-width:22px !important;
-  display:inline-flex !important;align-items:center !important;justify-content:center !important;
-  color:currentColor !important;
-}
-.action-icon108 svg{width:21px;height:21px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
-.action-icon108 svg .fill108{fill:currentColor;stroke:none;}
-.reaction-row108{
-  display:flex !important;justify-content:space-evenly !important;align-items:center !important;
-  padding:8px 0 14px !important;margin-bottom:8px !important;
-  border-bottom:1px solid var(--screen-border,#333) !important;
-}
-.reaction-row108 span{font-size:30px !important;line-height:1 !important;cursor:pointer !important;}
-.selection-title108{display:flex;align-items:center;justify-content:space-between;padding:3px 4px 10px;font-size:18px;}
-.selection-title108 button{border:0;background:none;color:inherit;font-size:22px;cursor:pointer;padding:6px;}
-
-/* Keep the timestamp visually outside the bubble, with enough vertical room for reactions. */
-#chatMessages > div[style*="margin-bottom:22px"]{margin-bottom:50px !important;position:relative !important;}
-#chatMessages .chatMessage .messageTime{
-  position:absolute !important;
-  left:auto !important;
-  right:4px !important;
-  bottom:-30px !important;
-  margin:0 !important;
-  width:max-content !important;
-  min-height:16px !important;
-  z-index:2 !important;
-  pointer-events:none !important;
-  background:transparent !important;
-  color:var(--screen-muted,#999) !important;
-}
-#chatMessages .chatMessage .messageTime .messageStatus{pointer-events:none !important;}
-#chatMessages .chatMessage .messageReactions{
-  position:absolute !important;
-  left:8px !important;
-  bottom:-13px !important;
-  margin:0 !important;
-  padding:0 !important;
-  z-index:6 !important;
-  max-width:calc(100% - 16px) !important;
-  pointer-events:auto !important;
-}
-#chatMessages .chatMessage .messageReactions > div{
-  box-sizing:border-box !important;
-  white-space:nowrap !important;
-  box-shadow:0 1px 4px rgba(0,0,0,.35) !important;
-}
-#chatMessages .messageCheck{
-  top:auto !important;left:auto !important;
-  right:-9px !important;bottom:-12px !important;
-  z-index:8 !important;
-}
 </style>
 
 
@@ -42228,30 +42141,9 @@ window.appendInstantChatMessage = function(msg) {
   } else if (msg.media_type === "video" && msg.media_url) {
     media = `<video src="${escapeHtml(String(msg.media_url))}" controls data-chat-media-open="true" data-chat-media-url="${escapeHtml(String(msg.media_url))}" data-chat-media-type="video" data-message-id="${escapeHtml(String(msg.id))}" style="width:100%;max-width:260px;max-height:320px;object-fit:cover;border-radius:16px;margin-bottom:6px;background:black;cursor:pointer;"></video>`;
   }
-  // Realtime INSERT payloads do not include the joined reply_to row. Build a
-  // complete visible message immediately, including a non-empty fallback,
-  // then hydrate the replied-to preview in the background when needed.
-  const replied = msg.replied || msg.reply_to_message || null;
-  const replyPreview = replied ? `
-    <div class="chat-reply-media-preview instant-reply-preview"
-         data-chat-reply-open="${replied.media_url ? "media" : "message"}"
-         data-chat-media-url="${replied.media_url ? escapeHtml(String(replied.media_url)) : ""}"
-         data-chat-media-type="${replied.media_url ? (replied.media_type === "video" ? "video" : "image") : ""}"
-         data-chat-message-id="${escapeHtml(String(replied.id || msg.reply_to || ""))}"
-         style="background:rgba(127,127,127,.12);border-left:3px solid #4fc3f7;padding:8px;margin-bottom:8px;border-radius:8px;font-size:13px;color:inherit;opacity:.95;cursor:pointer;overflow:hidden;">
-      <div style="font-size:12px;opacity:.72;margin-bottom:5px;">↩ Reply</div>
-      ${replied.media_url && replied.media_type === "image"
-        ? `<img src="${escapeHtml(String(replied.media_url))}" alt="Replied photo" style="display:block;width:min(180px,100%);max-height:130px;object-fit:cover;border-radius:9px;margin-bottom:5px;">`
-        : replied.media_url && replied.media_type === "video"
-          ? `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(127,127,127,.12);border-radius:9px;margin-bottom:5px;">Video</div>`
-          : ""}
-      <div style="word-break:break-word;">${replied.content ? escapeHtml(String(replied.content)) : (replied.media_type === "image" ? "Photo" : replied.media_type === "video" ? "Video" : "Message")}</div>
-    </div>` : (msg.reply_to ? `<div class="instant-reply-placeholder" style="background:rgba(127,127,127,.12);border-left:3px solid #4fc3f7;padding:8px;margin-bottom:8px;border-radius:8px;font-size:12px;opacity:.8;">↩ Replying to a message…</div>` : "");
-  const content = msg.content
-    ? `<div style="word-break:break-word;">${escapeHtml(String(msg.content))}</div>`
-    : (msg.media_url ? "" : `<div style="word-break:break-word;">Message</div>`);
+  const content = msg.content ? `<div style="word-break:break-word;">${escapeHtml(String(msg.content))}</div>` : "";
   const status = mine ? `<span class="messageStatus sent">✓</span>` : "";
-  bubble.innerHTML = `<div>${replyPreview}${media}${content}</div><div class="messageTime" style="display:flex;align-items:center;justify-content:flex-end;gap:4px;position:absolute;right:4px;bottom:-30px;margin:0;font-size:11px;color:var(--screen-muted,#999);white-space:nowrap;min-height:14px;">${time} ${status}</div>`;
+  bubble.innerHTML = `<div>${media}${content}</div><div class="messageTime" style="display:flex;align-items:center;justify-content:flex-end;gap:4px;position:absolute;right:4px;bottom:-30px;margin:0;font-size:11px;color:var(--screen-muted,#999);white-space:nowrap;min-height:14px;">${time} ${status}</div>`;
   wrap.appendChild(bubble);
   chat.appendChild(wrap);
   chat.scrollTop = chat.scrollHeight;
@@ -52290,33 +52182,6 @@ if (!window.messagesSubscription) {
           String(currentChatUser) === String(msg.sender_id) &&
           isChatScreenVisible()) {
         window.appendInstantChatMessage?.(msg);
-
-        // A realtime row contains reply_to but not the joined `replied` object.
-        // Hydrate that relation after the message is already visible so the
-        // incoming reply can never appear as an empty/blank card.
-        if (msg.reply_to) {
-          (async () => {
-            const { data: replyRow } = await supabase
-              .from("messages")
-              .select("id,content,media_url,media_type")
-              .eq("id", msg.reply_to)
-              .maybeSingle();
-            if (!replyRow || !currentChatUser || !isChatScreenVisible()) return;
-            const bubble = document.getElementById(String(msg.id));
-            if (!bubble) return;
-            const placeholder = bubble.querySelector(".instant-reply-placeholder");
-            if (!placeholder) return;
-            const preview = document.createElement("div");
-            preview.className = "chat-reply-media-preview instant-reply-preview";
-            preview.dataset.chatReplyOpen = replyRow.media_url ? "media" : "message";
-            preview.dataset.chatMediaUrl = replyRow.media_url || "";
-            preview.dataset.chatMediaType = replyRow.media_url ? (replyRow.media_type === "video" ? "video" : "image") : "";
-            preview.dataset.chatMessageId = String(replyRow.id);
-            preview.style.cssText = "background:rgba(127,127,127,.12);border-left:3px solid #4fc3f7;padding:8px;margin-bottom:8px;border-radius:8px;font-size:13px;color:inherit;opacity:.95;cursor:pointer;overflow:hidden;";
-            preview.innerHTML = `<div style="font-size:12px;opacity:.72;margin-bottom:5px;">↩ Reply</div>${replyRow.media_url && replyRow.media_type === "image" ? `<img src="${escapeHtml(String(replyRow.media_url))}" alt="Replied photo" style="display:block;width:min(180px,100%);max-height:130px;object-fit:cover;border-radius:9px;margin-bottom:5px;">` : replyRow.media_url && replyRow.media_type === "video" ? `<div style="padding:8px 10px;background:rgba(127,127,127,.12);border-radius:9px;margin-bottom:5px;">Video</div>` : ""}<div style="word-break:break-word;">${replyRow.content ? escapeHtml(String(replyRow.content)) : (replyRow.media_type === "image" ? "Photo" : replyRow.media_type === "video" ? "Video" : "Message")}</div>`;
-            placeholder.replaceWith(preview);
-          })();
-        }
       }
 
       // Always acknowledge delivery for the receiver. This is independent of
@@ -52662,15 +52527,3 @@ document.addEventListener("selectstart", function(e) {
 </script>
 </body>
 </html>
-/* Clean voice/comment controls */
-#commentsScreen .commentVoice button,
-#commentsScreen #voiceBtn,
-#commentsScreen #commentMediaBtn,
-#commentsScreen #panelPostBtn{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-#commentsScreen .commentVoice button{
-  box-shadow:0 2px 10px rgba(0,0,0,.18);
-}
