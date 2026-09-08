@@ -4739,54 +4739,93 @@ body.light .avatar-wrap .online-indicator,body.light .story-avatar-wrap .online-
 </style>
 
 <style id="chat-message-ui108">
-<style id="message-swipe-reply-fix">
-#chatMessages .chatMessage.message-swiping-reply{
-  transition:none !important;
-  will-change:transform;
-}
-#chatMessages .chatMessage.message-swipe-reply-ready{
-  box-shadow:0 0 0 2px rgba(29,155,240,.22),0 4px 16px rgba(29,155,240,.12) !important;
-}
-#chatMessages .chatMessage.message-swiping-reply::before{
-  content:"↩";
-  position:absolute;
-  left:-42px;
-  top:50%;
-  transform:translateY(-50%);
-  width:30px;
-  height:30px;
-  border-radius:50%;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:#1d9bf0;
-  color:#fff;
-  font-size:19px;
-  font-weight:600;
-  box-shadow:0 3px 10px rgba(29,155,240,.25);
-  opacity:.95;
-  pointer-events:none;
-}
-#chatMessages .chatMessage.message-swipe-reply-ready::before{
-  left:-46px;
-  opacity:1;
-}
-#chatMessages .chatMessage.message-reply-target{
-  animation:messageReplyTarget .9s ease both;
-}
-#chatScreen #replyPreview.chat-reply-active{
-  animation:replyPreviewIn .18s ease both;
-}
-@keyframes messageReplyTarget{
-  0%{box-shadow:0 0 0 3px rgba(29,155,240,.35)}
-  100%{box-shadow:none}
-}
-@keyframes replyPreviewIn{
-  from{transform:translateY(8px);opacity:.55}
-  to{transform:translateY(0);opacity:1}
-}
-</style>
+/* v108: message controls are monochrome outline icons; no top selection toolbar */
+#selectionBar{display:none !important;height:0 !important;min-height:0 !important;overflow:hidden !important;padding:0 !important;border:0 !important;}
+#chatScreen:has(#selectionActionsSheet108) #chatHeader{display:flex !important;}
 
+#messageMenu108, #selectionActionsSheet108{
+  position:fixed !important;
+  left:0 !important;
+  right:0 !important;
+  bottom:0 !important;
+  z-index:999999 !important;
+  background:var(--screen-surface,#18191a) !important;
+  color:var(--screen-text,#fff) !important;
+  border-top-left-radius:26px !important;
+  border-top-right-radius:26px !important;
+  padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px)) !important;
+  box-shadow:0 -8px 30px rgba(0,0,0,.48) !important;
+  max-height:min(72vh,620px) !important;
+  overflow-y:auto !important;
+  -webkit-overflow-scrolling:touch !important;
+}
+#messageMenu108 .action-row108, #selectionActionsSheet108 .action-row108{
+  display:flex !important;
+  align-items:center !important;
+  gap:10px !important;
+  min-height:48px !important;
+  padding:12px 14px !important;
+  margin:8px 0 !important;
+  background:var(--screen-input,#242526) !important;
+  color:var(--screen-text,#fff) !important;
+  border-radius:14px !important;
+  font-size:16px !important;
+  cursor:pointer !important;
+  box-sizing:border-box !important;
+}
+#messageMenu108 .action-row108.danger108, #selectionActionsSheet108 .action-row108.danger108{color:#ff6262 !important;}
+.action-icon108{
+  width:22px !important;height:22px !important;min-width:22px !important;
+  display:inline-flex !important;align-items:center !important;justify-content:center !important;
+  color:currentColor !important;
+}
+.action-icon108 svg{width:21px;height:21px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.action-icon108 svg .fill108{fill:currentColor;stroke:none;}
+.reaction-row108{
+  display:flex !important;justify-content:space-evenly !important;align-items:center !important;
+  padding:8px 0 14px !important;margin-bottom:8px !important;
+  border-bottom:1px solid var(--screen-border,#333) !important;
+}
+.reaction-row108 span{font-size:30px !important;line-height:1 !important;cursor:pointer !important;}
+.selection-title108{display:flex;align-items:center;justify-content:space-between;padding:3px 4px 10px;font-size:18px;}
+.selection-title108 button{border:0;background:none;color:inherit;font-size:22px;cursor:pointer;padding:6px;}
+
+/* Keep the timestamp visually outside the bubble, with enough vertical room for reactions. */
+#chatMessages > div[style*="margin-bottom:22px"]{margin-bottom:50px !important;position:relative !important;}
+#chatMessages .chatMessage .messageTime{
+  position:absolute !important;
+  left:auto !important;
+  right:4px !important;
+  bottom:-30px !important;
+  margin:0 !important;
+  width:max-content !important;
+  min-height:16px !important;
+  z-index:2 !important;
+  pointer-events:none !important;
+  background:transparent !important;
+  color:var(--screen-muted,#999) !important;
+}
+#chatMessages .chatMessage .messageTime .messageStatus{pointer-events:none !important;}
+#chatMessages .chatMessage .messageReactions{
+  position:absolute !important;
+  left:8px !important;
+  bottom:-13px !important;
+  margin:0 !important;
+  padding:0 !important;
+  z-index:6 !important;
+  max-width:calc(100% - 16px) !important;
+  pointer-events:auto !important;
+}
+#chatMessages .chatMessage .messageReactions > div{
+  box-sizing:border-box !important;
+  white-space:nowrap !important;
+  box-shadow:0 1px 4px rgba(0,0,0,.35) !important;
+}
+#chatMessages .messageCheck{
+  top:auto !important;left:auto !important;
+  right:-9px !important;bottom:-12px !important;
+  z-index:8 !important;
+}
 </style>
 
 
@@ -4795,18 +4834,14 @@ body.light .avatar-wrap .online-indicator,body.light .story-avatar-wrap .online-
 #tab-explore .story-tab-icon,#tab-following .story-tab-icon{width:19px!important;height:19px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.7!important;stroke-linecap:round!important;stroke-linejoin:round!important;}
 </style>
 <style>
-/* Global smooth scrolling */
-/* Native touch scrolling stays in the browser compositor.  Do not force
-   CSS smooth scrolling on every container: repeated programmatic scrollTo()
-   calls can fight Android's finger/momentum scrolling and feel laggy. */
+
 html { scroll-behavior: auto; }
 body, #posts, #chatMessages, .comments-list, .search-results, .notifications-list, .settings-content, .profile-posts, .story-list {
   scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
 }
 #posts, #chatMessages, .comments-list, .search-results, .notifications-list, .settings-content, .profile-posts, .story-list {
-  /* Let the browser own vertical touch scrolling. App gesture handlers
-     should only take over after they have positively detected a gesture. */
+
   touch-action: auto;
 }
 * { -webkit-overflow-scrolling: touch; }
@@ -41642,7 +41677,6 @@ chat.innerHTML +=`
   class="chatMessage ${mine && !msg.delivered ? 'sending-message' : ''} message-enter"
 
   data-message="${escapeHtml(msg.content || "").toLowerCase()}"
-  data-message-content="${escapeHtml(msg.content || "")}"
   
   onclick="
 if(selectionMode){
@@ -41656,101 +41690,69 @@ oncontextmenu="
 "
 
 ontouchstart="
-// Long-press only enters the message action menu when selection mode is off.
-// Once selection mode is active, a normal tap selects/deselects immediately.
-const touch = event.changedTouches && event.changedTouches[0];
-if(!touch) return;
-
-window.__messageSwipeState = {
-  id:'${msg.id}',
-  startX:touch.clientX,
-  startY:touch.clientY,
-  lastX:touch.clientX,
-  lastY:touch.clientY,
-  horizontal:false,
-  triggered:false
-};
-
+// Once selection mode is active, a normal touch selects/deselects immediately.
+// Do not require another long-press for every additional message.
 if(selectionMode){
   clearTimeout(window.pressTimer);
   window.pressTimer = null;
+  swipeStartX = event.changedTouches[0].clientX;
+  swipeStartY = event.changedTouches[0].clientY;
   return;
 }
 
+swipeStartX = event.changedTouches[0].clientX;
+swipeStartY = event.changedTouches[0].clientY;
+
 window.pressTimer = setTimeout(() => {
-  const st = window.__messageSwipeState;
-  if(st && st.id==='${msg.id}' && !st.horizontal && !st.triggered){
+
     messageOptions('${msg.id}');
-  }
+
 },700);
 "
 
 ontouchmove="
-const touch = event.changedTouches && event.changedTouches[0];
-const st = window.__messageSwipeState;
-if(!touch || !st || st.id!=='${msg.id}') return;
+clearTimeout(window.pressTimer);
 
-st.lastX = touch.clientX;
-st.lastY = touch.clientY;
-const dx = touch.clientX - st.startX;
-const dy = touch.clientY - st.startY;
+if(selectionMode) return;
 
-// Decide whether this gesture is a horizontal message swipe or normal vertical scrolling.
-if(!st.horizontal && (Math.abs(dx)>8 || Math.abs(dy)>8)){
-  if(Math.abs(dy) > Math.abs(dx) || dx <= 0){
-    clearTimeout(window.pressTimer);
-    return;
-  }
-  st.horizontal = true;
-  clearTimeout(window.pressTimer);
-}
+moveX = event.changedTouches[0].clientX - swipeStartX;
 
-if(selectionMode || !st.horizontal || st.triggered) return;
+if(moveX>0 && moveX<80){
 
-const distance = Math.min(76, Math.max(0, dx));
-this.style.transform='translateX('+distance+'px)';
-this.classList.add('message-swiping-reply');
+  this.style.transform='translateX('+moveX+'px)';
 
-const t=this.querySelector('.messageTime');
-if(t) t.style.display='block';
+  const t=this.querySelector('.messageTime');
 
-if(distance >= 58){
-  st.triggered = true;
-  this.classList.add('message-swipe-reply-ready');
+  if(t) t.style.display='block';
+
 }
 "
 
 ontouchend="
 clearTimeout(window.pressTimer);
 
-const touch = event.changedTouches && event.changedTouches[0];
-const st = window.__messageSwipeState;
+moveX = event.changedTouches[0].clientX - swipeStartX;
+
+this.style.transform='';
+
 const t = this.querySelector('.messageTime');
+if(t) t.style.display='none';
 
-if(st && st.id==='${msg.id}' && touch){
-  const dx = touch.clientX - st.startX;
-  const dy = touch.clientY - st.startY;
+if(moveX>70 && !selectionMode){
 
-  // A rightward horizontal swipe on THIS message replies to THIS exact message.
-  if(!selectionMode && st.horizontal && dx >= 58 && Math.abs(dx) > Math.abs(dy) * 1.15){
-    this.classList.add('message-swipe-reply-ready');
-    this.style.transform='translateX(58px)';
+  this.style.transform='translateX(40px)';
 
-    if(typeof replyToMessage === 'function') replyToMessage('${msg.id}');
+  setTimeout(()=>{
 
-    setTimeout(()=>{
-      this.style.transform='';
-      this.classList.remove('message-swiping-reply','message-swipe-reply-ready');
-      if(t) t.style.display='none';
-    },180);
-  }else{
     this.style.transform='';
-    this.classList.remove('message-swiping-reply','message-swipe-reply-ready');
-    if(t) t.style.display='none';
-  }
-}
 
-window.__messageSwipeState = null;
+    if(t) t.style.display='none';
+
+  },150);
+
+  replyToMessage('${msg.id}');
+
+}
 "
 
   style="
@@ -42178,31 +42180,20 @@ let replyingTo = null;
 
 window.replyToMessage = function(messageId) {
 
-  const msg = document.getElementById(messageId);
-  if(!msg) return;
-
   replyingTo = messageId;
 
-  const replyText = document.getElementById("replyText");
-  if(replyText){
-    const raw = msg.dataset.messageContent || msg.innerText || "";
-    replyText.innerText = raw.replace(/\s+/g," ").trim().slice(0,120) || "Media message";
-  }
+  const msg = document.getElementById(messageId);
 
-  const preview = document.getElementById("replyPreview");
-  if(preview){
-    preview.style.display = "block";
-    preview.classList.add("chat-reply-active");
-  }
+  document.getElementById("replyText").innerText =
+    msg.innerText.slice(0, 80);
 
-  msg.classList.add("message-reply-target");
-  setTimeout(()=>msg.classList.remove("message-reply-target"),900);
+  document.getElementById("replyPreview").style.display =
+    "block";
 
-  const input = document.getElementById("chatInput");
-  if(input) input.focus();
+  document.getElementById("chatInput").focus();
 
   document.getElementById("messageMenu")?.remove();
-  document.getElementById("messageMenu108")?.remove();
+
 };
 
 window.cancelReply = function() {
@@ -42212,7 +42203,6 @@ window.cancelReply = function() {
   const replyPreview = document.getElementById("replyPreview");
 if (replyPreview) {
   replyPreview.style.display = "none";
-  replyPreview.classList.remove("chat-reply-active");
 }
 
 };
@@ -52527,3 +52517,15 @@ document.addEventListener("selectstart", function(e) {
 </script>
 </body>
 </html>
+/* Clean voice/comment controls */
+#commentsScreen .commentVoice button,
+#commentsScreen #voiceBtn,
+#commentsScreen #commentMediaBtn,
+#commentsScreen #panelPostBtn{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+#commentsScreen .commentVoice button{
+  box-shadow:0 2px 10px rgba(0,0,0,.18);
+}
