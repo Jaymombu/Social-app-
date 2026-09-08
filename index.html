@@ -10324,7 +10324,7 @@ window.openComments = async function (
 // Capture Home BEFORE Comments changes the navigation state.
 if (history.state?.appScreen === "app" &&
     typeof window.saveHomeScroll === "function") {
-    window.saveHomeScroll();
+    window.saveHomeScroll(true);
 }
   
 // =====================================================
@@ -26221,7 +26221,7 @@ window.openProfile = async function (
     // This makes Profile → Back/Close return to the exact feed position.
     if (history.state?.appScreen === "app" &&
         typeof window.saveHomeScroll === "function") {
-        window.saveHomeScroll();
+        window.saveHomeScroll(true);
     }
 
     console.log("👤 OPEN PROFILE:", userId);
@@ -37698,7 +37698,7 @@ window.openSearch = function (addHistory = true) {
 
     // Save current Home position
     if (typeof window.saveHomeScroll === "function") {
-        window.saveHomeScroll();
+        window.saveHomeScroll(true);
     }
 
     // =================================================
@@ -42033,9 +42033,7 @@ min-height:14px;
 // =====================================================
 // INSTANT CHAT MESSAGE PAINT
 // =====================================================
-// Paint a newly inserted/realtime message immediately. The normal
-// loadMessages() call can still reconcile the complete server state later,
-// but the user never has to wait for that network round-trip to see the row.
+
 window.appendInstantChatMessage = function(msg) {
   if (!msg?.id || !session?.user || !currentChatUser) return false;
   if (!isChatScreenVisible()) return false;
@@ -42350,12 +42348,7 @@ await supabase
     return;
 }
 
-// The current messages table does not expose language_code / translated_text
-// in its schema, so translation metadata must not be written to messages.
-// The message itself has already been saved successfully above.
 
-  // Paint locally immediately. The server/realtime reconciliation below may
-  // replace it later, but the message is visible with no extra refresh wait.
   window.appendInstantChatMessage?.(insertedMessage);
 
   // Notify the receiver (skip self-notifications for self-chat)
@@ -42450,8 +42443,6 @@ if (replyPreview) {
 }
   fileInput.value = "";
 
-  // Reconcile in the background; do not make the sender wait for a second
-  // messages query after the message is already on screen.
   loadMessages();
 }
 
@@ -42612,8 +42603,7 @@ function listenForSeenMessages(userId) {
       }
 
       if (channelToken !== window.__chatOpenToken || currentChatUser !== userId) return;
-      // The global messages subscription performs the single chat render.
-      // Avoid a second load here, which used to race it and cause blinking.
+
       await loadUnreadMessages();
       window.scheduleInboxRefresh?.();
     })
@@ -43481,9 +43471,6 @@ window.closeChat = async function () {
   clearInterval(window.__chatStatusPollTimer);
   window.__chatStatusPollTimer = null;
   window.__chatStatusPollUser = null;
-  // Do not clear the chat DOM before navigation. Clearing it here creates a
-  // visible empty frame and makes the next screen look like it is waiting for
-  // a reload. The next chat open will detach/replace it safely.
 
   console.log("🔙 CLOSE CHAT");
 
@@ -43559,11 +43546,11 @@ window.closeChat = async function () {
   const current =
     window.appNavigation?.current || null;
 
-  // =====================================================
+// =====================================================
   // CHAT IS A REAL HISTORY SCREEN
   //
   // LET CENTRAL NAVIGATION RESTORE THE PREVIOUS SCREEN.
-  // =====================================================
+// =====================================================
 
   // Detach the closed conversation before navigation restores another screen.
   currentChatUser = null;
@@ -43586,9 +43573,9 @@ window.closeChat = async function () {
     return;
   }
 
-  // =====================================================
+// =====================================================
   // FALLBACK ONLY
-  // =====================================================
+// =====================================================
 
   console.warn(
     "⚠️ CHAT HISTORY NOT FOUND → FALLBACK"
@@ -51693,24 +51680,18 @@ window.homeWasExplicitlyClicked = false;
 // SAVE HOME SCROLL POSITION
 // =====================================================
 
-window.saveHomeScroll = function () {
+window.saveHomeScroll = function (commitHistory = false) {
 
   const posts = document.getElementById("posts");
 
-  // If #posts is the actual scrolling container
-  if (
-    posts &&
-    posts.scrollHeight > posts.clientHeight
-  ) {
-
+  // Keep this handler extremely cheap: scrolling must remain on the
+  // browser compositor thread.  Do not call history.replaceState() on
+  // every scroll event.
+  if (posts && posts.scrollHeight > posts.clientHeight) {
     window.homeScrollElement = "posts";
     window.homeScrollY = posts.scrollTop;
-
   } else {
-
-    // Otherwise the page itself is scrolling
     window.homeScrollElement = "window";
-
     window.homeScrollY =
       window.scrollY ||
       document.documentElement.scrollTop ||
@@ -51718,29 +51699,25 @@ window.saveHomeScroll = function () {
       0;
   }
 
-  // Keep the CURRENT Home history entry continuously accurate. This is
-  // important because Back/Close restores the browser entry's scrollY,
-  // not just the last value held in memory.
-  try {
-    if (history.state?.appScreen === "app") {
-      history.replaceState(
-        {
-          ...(history.state || {}),
-          appScreen: "app",
-          data: { ...(history.state?.data || {}) },
-          scrollY: Number(window.homeScrollY) || 0
-        },
-        "",
-        location.href
-      );
-    }
-  } catch (error) {}
-
-  console.log(
-    "💾 HOME POSITION SAVED:",
-    window.homeScrollElement,
-    window.homeScrollY
-  );
+  // Only commit the navigation entry when we actually need to.  This is
+  // used immediately before leaving Home, so the exact position is still
+  // available to Back/Close without making normal scrolling janky.
+  if (commitHistory) {
+    try {
+      if (history.state?.appScreen === "app") {
+        history.replaceState(
+          {
+            ...(history.state || {}),
+            appScreen: "app",
+            data: { ...(history.state?.data || {}) },
+            scrollY: Number(window.homeScrollY) || 0
+          },
+          "",
+          location.href
+        );
+      }
+    } catch (error) {}
+  }
 };
 
 // =====================================================
@@ -51749,13 +51726,19 @@ window.saveHomeScroll = function () {
 // The Home feed can use either #posts or the document as its scroll
 // container. Track both so opening Comments/Profile/Post/Avatar at ANY
 // point records the exact current position before navigation.
+window.__homeScrollTrackQueued = false;
 window.trackHomeScrollLive = function () {
-  try {
-    if (history.state?.appScreen !== "app") return;
-    if (window.appNavigation?.current?.screen &&
-        window.appNavigation.current.screen !== "app") return;
-    window.saveHomeScroll();
-  } catch (error) {}
+  if (window.__homeScrollTrackQueued) return;
+  window.__homeScrollTrackQueued = true;
+  requestAnimationFrame(() => {
+    window.__homeScrollTrackQueued = false;
+    try {
+      if (history.state?.appScreen !== "app") return;
+      if (window.appNavigation?.current?.screen &&
+          window.appNavigation.current.screen !== "app") return;
+      window.saveHomeScroll(false);
+    } catch (error) {}
+  });
 };
 
 window.addEventListener("scroll", window.trackHomeScrollLive, {
