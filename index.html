@@ -3276,66 +3276,6 @@ body {
   white-space:nowrap !important;
 }
 #chatHeader .chat-header-search span{display:block !important;}
-
-/* ---------- CHAT HEADER BUTTON ALIGNMENT ---------- */
-#chatHeader > button:first-child{
-  display:flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  flex:0 0 40px !important;
-  width:40px !important;
-  height:40px !important;
-  min-width:40px !important;
-  margin:0 !important;
-  padding:0 !important;
-  line-height:1 !important;
-  text-align:center !important;
-  box-sizing:border-box !important;
-}
-
-#chatHeader > .chat-header-search{
-  display:flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  flex:0 0 40px !important;
-  width:40px !important;
-  min-width:40px !important;
-  height:40px !important;
-  margin:0 !important;
-  padding:0 !important;
-  line-height:1 !important;
-  text-align:center !important;
-  box-sizing:border-box !important;
-}
-
-#chatHeader > .chat-header-search svg{
-  width:23px !important;
-  height:23px !important;
-  display:block !important;
-  fill:none !important;
-  stroke:currentColor !important;
-  stroke-width:2 !important;
-  stroke-linecap:round !important;
-  stroke-linejoin:round !important;
-  flex:none !important;
-}
-
-#chatHeader > #chatAvatarWrap{
-  display:flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-}
-
-#chatHeader > .chat-header-info{
-  align-self:stretch !important;
-  justify-content:center !important;
-}
-
-#chatHeader button,
-#chatHeader .chat-header-search{
-  -webkit-tap-highlight-color:transparent;
-  user-select:none;
-}
 </style>
 
 <style id="story-navigation-final-fix">
@@ -3926,83 +3866,6 @@ body.dark{
 #chatInput{
   background:var(--screen-input) !important;
   color:var(--screen-text) !important;
-}
-
-/* ---------- CHAT COMPOSER ALIGNMENT ---------- */
-#chatComposerRow{
-  display:flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  gap:8px !important;
-  width:100% !important;
-  box-sizing:border-box !important;
-}
-
-#chatComposerRow > label,
-#chatComposerRow > button{
-  flex:0 0 auto !important;
-  display:flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  align-self:center !important;
-  margin:0 !important;
-  padding:0 !important;
-  box-sizing:border-box !important;
-}
-
-#chatComposerRow > label{
-  width:42px !important;
-  height:42px !important;
-}
-
-#chatComposerRow > #chatInput{
-  flex:1 1 auto !important;
-  min-width:0 !important;
-  width:auto !important;
-  height:44px !important;
-  margin:0 !important;
-  box-sizing:border-box !important;
-}
-
-#chatComposerRow > #chatVoiceBtn{
-  width:46px !important;
-  height:46px !important;
-}
-
-#chatComposerRow > button[onclick="sendMessage()"]{
-  width:50px !important;
-  height:50px !important;
-}
-
-#chatComposerRow .comment-ui-icon{
-  width:22px !important;
-  height:22px !important;
-  display:block !important;
-}
-
-/* Center the icons INSIDE their existing circular backgrounds.
-   Button/label positions and background sizes are intentionally unchanged. */
-#chatComposerRow .composer-icon{
-  width:22px !important;
-  height:22px !important;
-  display:block !important;
-  flex:0 0 22px !important;
-  margin:0 !important;
-  padding:0 !important;
-  fill:none !important;
-  stroke:currentColor !important;
-  stroke-width:1.9 !important;
-  stroke-linecap:round !important;
-  stroke-linejoin:round !important;
-}
-
-#chatComposerRow .composer-send-icon{
-  width:25px !important;
-  height:25px !important;
-  flex-basis:25px !important;
-  fill:none !important;
-  stroke:currentColor !important;
-  stroke-width:1.8 !important;
 }
 #chatMedia + label,
 #chatVoiceBtn{
@@ -5164,12 +5027,8 @@ cursor:pointer;
   class="chat-header-search"
   onclick="toggleChatSearch()"
   aria-label="Search chat"
-  role="button"
-  tabindex="0">
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <circle cx="10.5" cy="10.5" r="6.5"></circle>
-    <path d="m16 16 5 5"></path>
-  </svg>
+  role="button">
+  🔍
 </span>
 
 </div>
@@ -5303,13 +5162,10 @@ padding:8px;
     </button>
   </div>
 
-  <div id="chatComposerRow" style="
+  <div style="
     display:flex;
     align-items:center;
-    justify-content:center;
     gap:8px;
-    width:100%;
-    box-sizing:border-box;
   ">
 
     <label for="chatMedia"
@@ -5324,12 +5180,8 @@ padding:8px;
       font-size:22px;
       cursor:pointer;
       color:white;
-      line-height:1;
-      box-sizing:border-box;
     ">
-      <svg class="composer-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="m20.5 11.5-8.2 8.2a5 5 0 0 1-7.1-7.1l9.1-9.1a3.5 3.5 0 0 1 5 5l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.2-8.2"/>
-      </svg>
+      📎
     </label>
 
     <input
@@ -41765,20 +41617,17 @@ if(selectionMode){
 
 oncontextmenu="
   event.preventDefault();
-  toggleMessageSelection('${msg.id}');
+  messageOptions('${msg.id}');
 "
 
 ontouchstart="
 swipeStartX = event.changedTouches[0].clientX;
 swipeStartY = event.changedTouches[0].clientY;
 
-/*
-  Long-press keeps the original message interaction:
-  HOLD -> open the existing reaction/options panel.
-  Selection starts only when the user taps Select in that panel.
-*/
 window.pressTimer = setTimeout(() => {
-  messageOptions('${msg.id}');
+
+    messageOptions('${msg.id}');
+
 },700);
 "
 
@@ -42814,7 +42663,10 @@ window.messageOptions = async function(messageId) {
   <span class="action-icon108"><svg viewBox="0 0 24 24"><path d="M9 15 4 10l5-5"/><path d="M4 10h10a6 6 0 0 1 6 6v3"/></svg></span><span>Reply</span>
 </div>
 
-<div class="action-row108" onclick="document.getElementById('messageMenu108')?.remove();toggleMessageSelection('${messageId}');">
+<div class="action-row108" onclick="
+  document.getElementById('messageMenu108')?.remove();
+  requestAnimationFrame(() => toggleMessageSelection('${messageId}'));
+">
   <span class="action-icon108"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg></span><span>Select</span>
 </div>
 
@@ -52544,15 +52396,3 @@ document.addEventListener("selectstart", function(e) {
 </script>
 </body>
 </html>
-/* Clean voice/comment controls */
-#commentsScreen .commentVoice button,
-#commentsScreen #voiceBtn,
-#commentsScreen #commentMediaBtn,
-#commentsScreen #panelPostBtn{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-#commentsScreen .commentVoice button{
-  box-shadow:0 2px 10px rgba(0,0,0,.18);
-}
