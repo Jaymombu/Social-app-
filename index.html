@@ -41674,6 +41674,72 @@ chat.innerHTML +=`
 
   data-message="${escapeHtml(msg.content || "").toLowerCase()}"
 
+  onclick="
+    if(window.__suppressMessageClick){
+      window.__suppressMessageClick=false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    if(selectionMode){
+      event.preventDefault();
+      event.stopPropagation();
+      toggleMessageSelection('${msg.id}');
+    }
+  "
+
+  oncontextmenu="
+    event.preventDefault();
+    if(!selectionMode) messageOptions('${msg.id}');
+  "
+
+  ontouchstart="
+    if(selectionMode) return;
+    swipeStartX = event.changedTouches[0].clientX;
+    swipeStartY = event.changedTouches[0].clientY;
+    window.__messageMoved=false;
+    window.__messageLongPressed=false;
+    clearTimeout(window.pressTimer);
+    window.pressTimer = setTimeout(() => {
+      window.__messageLongPressed=true;
+      window.__suppressMessageClick=true;
+      messageOptions('${msg.id}');
+    },700);
+  "
+
+  ontouchmove="
+    if(!selectionMode){
+      const tx=event.changedTouches[0].clientX;
+      const ty=event.changedTouches[0].clientY;
+      if(Math.abs(tx-swipeStartX)>12 || Math.abs(ty-swipeStartY)>12){
+        window.__messageMoved=true;
+        clearTimeout(window.pressTimer);
+      }
+    }
+  "
+
+  ontouchend="
+    clearTimeout(window.pressTimer);
+    if(window.__messageLongPressed){
+      window.__suppressMessageClick=true;
+      event.preventDefault();
+      event.stopPropagation();
+      window.__messageLongPressed=false;
+      return;
+    }
+    if(window.__messageMoved) return;
+    if(selectionMode){
+      event.preventDefault();
+      event.stopPropagation();
+      toggleMessageSelection('${msg.id}');
+    }
+  "
+
+  ontouchcancel="
+    clearTimeout(window.pressTimer);
+    window.__messageMoved=false;
+    window.__messageLongPressed=false;
+  "
 
   style="
     background:${
@@ -52334,71 +52400,7 @@ document.addEventListener("selectstart", function(e) {
 
 <style id="chatAttachmentCleanV12">#chatScreen label[for="chatMedia"]{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;padding:0!important;margin:0!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;border-radius:50%!important;line-height:0!important;font-size:0!important;color:var(--screen-text,#fff)!important;}#chatScreen label[for="chatMedia"]::before{content:"";width:22px;height:22px;display:block;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;}</style>
 
-<script id="chatMessageTouchAuthoritative">
-(function(){
-  const HOLD=650, MOVE=12;
-  let state=null;
-  function getMessage(target){
-    return target && target.closest ? target.closest('#chatMessages .chatMessage') : null;
-  }
-  function isInteractive(target){
-    return !!(target && target.closest && target.closest('button,a,input,textarea,select,label,video,[contenteditable="true"],.messageReactions,[data-reaction-button="true"]'));
-  }
-  const host=document.getElementById('chatMessages');
-  if(!host) return;
 
-  host.addEventListener('touchstart', function(e){
-    if(!e.touches || e.touches.length!==1) return;
-    const target=e.target;
-    const msg=getMessage(target);
-    if(!msg || isInteractive(target)) return;
-    const t=e.touches[0];
-    if(state && state.timer) clearTimeout(state.timer);
-    state={msg:msg,x:t.clientX,y:t.clientY,moved:false,long:false,timer:null};
-    if(selectionMode) return;
-    state.timer=setTimeout(function(){
-      if(!state || state.moved || selectionMode) return;
-      state.long=true;
-      window.messageOptions && window.messageOptions(state.msg.id);
-    },HOLD);
-  }, {passive:false});
-
-  host.addEventListener('touchmove', function(e){
-    if(!state || !e.touches || e.touches.length!==1) return;
-    const t=e.touches[0];
-    if(Math.abs(t.clientX-state.x)>MOVE || Math.abs(t.clientY-state.y)>MOVE){
-      state.moved=true;
-      clearTimeout(state.timer);
-      state.timer=null;
-    }
-  }, {passive:true});
-
-  host.addEventListener('touchend', function(e){
-    if(!state) return;
-    const q=state;
-    clearTimeout(q.timer);
-    state=null;
-    if(q.moved || q.long) return;
-    if(selectionMode){
-      e.preventDefault();
-      e.stopPropagation();
-      window.toggleMessageSelection && window.toggleMessageSelection(q.msg.id);
-    }
-  }, {passive:false});
-
-  host.addEventListener('touchcancel', function(){
-    if(state) clearTimeout(state.timer);
-    state=null;
-  }, {passive:true});
-
-  host.addEventListener('contextmenu', function(e){
-    if(getMessage(e.target)){
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  }, true);
-})();
-</script>
 </body>
 </html>
-ended...
+..... end....
