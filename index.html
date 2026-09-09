@@ -3254,37 +3254,6 @@ body {
   width:auto !important;
   overflow:hidden !important;
 }
-#selectionAllBox108{
-  display:none !important;
-  flex:0 0 34px !important;
-  width:34px !important;
-  min-width:34px !important;
-  height:34px !important;
-  margin:0 !important;
-  padding:5px !important;
-  border:0 !important;
-  border-radius:9px !important;
-  background:var(--screen-input,#242526) !important;
-  color:var(--screen-text,#fff) !important;
-  align-items:center !important;
-  justify-content:center !important;
-  cursor:pointer !important;
-  box-sizing:border-box !important;
-}
-#selectionAllBox108 svg{
-  width:22px !important;
-  height:22px !important;
-  display:block !important;
-  fill:none !important;
-  stroke:currentColor !important;
-  stroke-width:1.8 !important;
-  stroke-linecap:round !important;
-  stroke-linejoin:round !important;
-}
-#selectionAllBox108.active108{
-  background:#1877f2 !important;
-  color:#fff !important;
-}
 #chatHeader > .chat-header-search{
   display:flex !important;
   align-items:center !important;
@@ -3836,8 +3805,10 @@ body.dark{
 #chatHeader > #chatAvatarWrap + div{flex:1 1 auto !important;min-width:0 !important;overflow:hidden !important;}
 #chatHeader #chatName{min-width:0 !important;overflow:hidden !important;text-overflow:ellipsis !important;white-space:nowrap !important;}
 #chatHeader #chatStatus,#chatHeader #typingIndicator{overflow:hidden !important;text-overflow:ellipsis !important;white-space:nowrap !important;}
-#chatHeader > .chat-header-search{flex:0 0 38px !important;width:38px !important;min-width:38px !important;margin-left:auto !important;text-align:center !important;}
-#chatHeader > #selectionAllBox108{margin-left:0 !important;}
+#chatHeader > .chat-header-search{flex:0 0 38px !important;width:38px !important;min-width:38px !important;height:40px !important;margin-left:auto !important;display:flex !important;align-items:center !important;justify-content:center !important;}
+#chatHeader > #selectionAllBox108{display:none !important;flex:0 0 34px !important;width:34px !important;min-width:34px !important;height:34px !important;margin:0 !important;padding:5px !important;border:0 !important;border-radius:9px !important;background:var(--screen-input,#242526) !important;color:var(--screen-text,#fff) !important;align-items:center !important;justify-content:center !important;box-sizing:border-box !important;cursor:pointer !important;}
+#selectionAllBox108 svg{width:22px !important;height:22px !important;display:block !important;fill:none !important;stroke:currentColor !important;stroke-width:1.8 !important;stroke-linecap:round !important;stroke-linejoin:round !important;}
+#selectionAllBox108.active108{background:#1877f2 !important;color:#fff !important;}
 #chatMessages .messageTime{display:flex !important;visibility:visible !important;opacity:1 !important;}
 
 /* ---------- CHAT ---------- */
@@ -5116,17 +5087,8 @@ cursor:pointer;
   </svg>
 </span>
 
-<button
-  id="selectionAllBox108"
-  type="button"
-  aria-label="Select all messages"
-  title="Select all messages"
-  onclick="selectAllMessages()"
->
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <rect x="3" y="3" width="18" height="18" rx="4"></rect>
-    <path d="m7 12 3 3 7-7"></path>
-  </svg>
+<button id="selectionAllBox108" type="button" aria-label="Select all messages" title="Select all messages" onclick="selectAllMessages()">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="m7 12 3 3 7-7"></path></svg>
 </button>
 
 </div>
@@ -41706,8 +41668,17 @@ chat.innerHTML +=`
   class="chatMessage ${mine && !msg.delivered ? 'sending-message' : ''} message-enter"
 
   data-message="${escapeHtml(msg.content || "").toLowerCase()}"
+  
 
-  data-message-interactive="true"
+
+
+
+
+
+
+
+
+
   style="
     background:${
       msg.media_url
@@ -42695,7 +42666,7 @@ window.messageOptions = async function(messageId) {
   <span class="action-icon108"><svg viewBox="0 0 24 24"><path d="M9 15 4 10l5-5"/><path d="M4 10h10a6 6 0 0 1 6 6v3"/></svg></span><span>Reply</span>
 </div>
 
-<div class="action-row108" onclick="event.stopPropagation();document.getElementById('messageMenu108')?.remove();window.toggleMessageSelection('${messageId}');">
+<div class="action-row108" onclick="document.getElementById('messageMenu108')?.remove();toggleMessageSelection('${messageId}');">
   <span class="action-icon108"><svg viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/><rect x="3" y="3" width="18" height="18" rx="3"/></svg></span><span>Select</span>
 </div>
 
@@ -42730,31 +42701,16 @@ window.messageOptions = async function(messageId) {
 
   document.body.appendChild(menu);
 
-  // The long-press that creates this menu ends with the SAME touch/pointer
-  // sequence. Never use touchend to close the menu: on Android that event is
-  // the end of the long-press and would remove the menu immediately.
-  menu.addEventListener("click", (e) => {
-    e.stopPropagation();
-  });
-
   const closeMessageMenu108 = (e) => {
     const m = document.getElementById("messageMenu108");
     const picker = document.getElementById("emojiPicker");
-    if (!m) return;
+    if (!m) { document.removeEventListener("pointerdown", closeMessageMenu108, true); return; }
     if (m.contains(e.target) || picker?.contains(e.target)) return;
     m.remove();
     picker?.remove();
     document.removeEventListener("pointerdown", closeMessageMenu108, true);
-    document.removeEventListener("click", closeMessageMenu108, true);
   };
-
-  window.__messageMenuOpenedAt108 = Date.now();
-  // pointerdown happens BEFORE click and, unlike touchend, is only generated
-  // when the user starts a NEW interaction.
-  setTimeout(() => {
-    document.addEventListener("pointerdown", closeMessageMenu108, true);
-    document.addEventListener("click", closeMessageMenu108, true);
-  }, 0);
+  setTimeout(() => document.addEventListener("pointerdown", closeMessageMenu108, true), 300);
 };
 
 if (!window.chatRealtimeSubscription) {
@@ -43854,75 +43810,33 @@ window.previousSearchResult = function () {
 
 };
 
-function renderSelectionActions108(){
-  document.getElementById('selectionActionsSheet108')?.remove();
-}
+function renderSelectionActions108(){ document.getElementById("selectionActionsSheet108")?.remove(); }
 
 function updateSelectionAllBox108(){
-  if(typeof window.__updateRecreatedSelectionBox==='function') window.__updateRecreatedSelectionBox();
+  const box=document.getElementById("selectionAllBox108"); if(!box) return;
+  const msgs=[...document.querySelectorAll("#chatMessages .chatMessage")];
+  box.style.setProperty("display", selectionMode && selectedMessages.length ? "flex" : "none", "important");
+  const all=msgs.length>0 && msgs.every(m=>selectedMessages.includes(m.id));
+  box.classList.toggle("active108",all); box.setAttribute("aria-pressed",all?"true":"false");
 }
-
 window.toggleMessageSelection=function(id){
-  const el=document.getElementById(id);
-  if(!el) return;
-
-  if(!selectionMode) selectionMode=true;
-
-  const index=selectedMessages.indexOf(id);
-  const check=el.querySelector('.messageCheck');
-
-  if(index>=0){
-    selectedMessages.splice(index,1);
-    el.classList.remove('chat-selected');
-    if(check) check.style.display='none';
-  }else{
-    selectedMessages.push(id);
-    el.classList.add('chat-selected');
-    if(check) check.style.display='flex';
-  }
-
-  document.getElementById('selectionBar')?.style && (document.getElementById('selectionBar').style.display='none');
-  document.getElementById('selectionActionsSheet108')?.remove();
-  const header=document.getElementById('chatHeader');
-  if(header) header.style.display='flex';
-
-  if(selectedMessages.length===0){
-    window.cancelSelection();
-  }else{
-    updateSelectionAllBox108();
-  }
+  const el=document.getElementById(id); if(!el) return;
+  selectionMode=true; const i=selectedMessages.indexOf(id); const check=el.querySelector(".messageCheck");
+  if(i>=0){selectedMessages.splice(i,1);el.classList.remove("chat-selected");if(check)check.style.display="none";}
+  else{selectedMessages.push(id);el.classList.add("chat-selected");if(check)check.style.display="flex";}
+  document.getElementById("selectionBar")?.style && (document.getElementById("selectionBar").style.display="none");
+  document.getElementById("selectionActionsSheet108")?.remove();
+  const header=document.getElementById("chatHeader"); if(header)header.style.display="flex";
+  if(selectedMessages.length===0) window.cancelSelection(); else updateSelectionAllBox108();
 };
-
 window.cancelSelection=function(){
-  selectionMode=false;
-  selectedMessages=[];
-  document.getElementById('selectionBar')?.style && (document.getElementById('selectionBar').style.display='none');
-  document.getElementById('selectionActionsSheet108')?.remove();
-  const header=document.getElementById('chatHeader');
-  if(header) header.style.display='flex';
-  document.querySelectorAll('.chatMessage').forEach(msg=>{
-    msg.classList.remove('chat-selected');
-    msg.style.outline='';
-  });
-  document.querySelectorAll('.messageCheck').forEach(c=>c.style.display='none');
-  updateSelectionAllBox108();
+  selectionMode=false; selectedMessages=[]; document.getElementById("selectionActionsSheet108")?.remove();
+  document.querySelectorAll(".chatMessage").forEach(m=>{m.classList.remove("chat-selected");m.style.outline="";});
+  document.querySelectorAll(".messageCheck").forEach(c=>c.style.display="none"); updateSelectionAllBox108();
 };
-
 window.selectAllMessages=function(){
-  selectionMode=true;
-  selectedMessages=[];
-  document.querySelectorAll('#chatMessages .chatMessage').forEach(msg=>{
-    if(!msg.id) return;
-    selectedMessages.push(msg.id);
-    msg.classList.add('chat-selected');
-    const check=msg.querySelector('.messageCheck');
-    if(check) check.style.display='flex';
-  });
-  document.getElementById('selectionBar')?.style && (document.getElementById('selectionBar').style.display='none');
-  document.getElementById('selectionActionsSheet108')?.remove();
-  const header=document.getElementById('chatHeader');
-  if(header) header.style.display='flex';
-  updateSelectionAllBox108();
+  selectionMode=true; selectedMessages=[]; document.querySelectorAll("#chatMessages .chatMessage").forEach(m=>{if(!m.id)return;selectedMessages.push(m.id);m.classList.add("chat-selected");const c=m.querySelector(".messageCheck");if(c)c.style.display="flex";});
+  document.getElementById("selectionActionsSheet108")?.remove(); const h=document.getElementById("chatHeader");if(h)h.style.display="flex"; updateSelectionAllBox108();
 };
 
 window.formatLastSeen = function(date){
@@ -52292,7 +52206,7 @@ window.addEventListener("beforeunload", async () => {
 });
 
 document.addEventListener("contextmenu", function(e) {
-  if(!e.target.closest?.("#chatMessages .chatMessage")) e.preventDefault();
+  e.preventDefault();
 });
 
 document.addEventListener("selectstart", function(e) {
@@ -52421,202 +52335,24 @@ document.addEventListener("selectstart", function(e) {
   observer.observe(document.body,{childList:true,subtree:true});
 })();
 </script>
-
-
-
-<script id="chatSelectionRecreatedV11">
-/* CHAT MESSAGE INTERACTION — CLEAN TOUCH IMPLEMENTATION
-   Long-press opens message options. After Select, ordinary taps select/deselect. */
+<script id="chatSelectionCleanV12">
 (function(){
-  let timer=null;
-  let targetMessage=null;
-  let startX=0, startY=0;
-  let moved=false;
-  let openedByLongPress=false;
-  let ignoreNextClickUntil=0;
-
-  function messageFrom(target){
-    return target?.closest?.('#chatMessages .chatMessage') || null;
-  }
-  function interactive(target){
-    return !!target?.closest?.('button,a,input,textarea,select,label,.messageReactions,[data-reaction-button="true"]');
-  }
-  function clear(){
-    if(timer){clearTimeout(timer);timer=null;}
-  }
-  function reset(){
-    clear(); targetMessage=null; moved=false; startX=0; startY=0;
-  }
-
-  // Prevent the browser's native context menu on chat messages.
-  document.addEventListener('contextmenu',function(e){
-    if(messageFrom(e.target)){ e.preventDefault(); e.stopPropagation(); }
-  },true);
-
-  // TOUCHSTART is deliberately used here. This is the event Android Chrome
-  // reliably delivers for the long-press gesture in this app.
-  document.addEventListener('touchstart',function(e){
-    const msg=messageFrom(e.target);
-    if(!msg || interactive(e.target)) return;
-    const t=e.touches?.[0];
-    if(!t) return;
-
-    clear();
-    targetMessage=msg;
-    startX=t.clientX; startY=t.clientY; moved=false; openedByLongPress=false;
-
-    if(selectionMode){
-      // IMPORTANT: selection mode has NO long-press timer. A normal tap is
-      // handled on touchend below.
-      return;
-    }
-
-    timer=setTimeout(function(){
-      timer=null;
-      if(!targetMessage || moved || selectionMode) return;
-      openedByLongPress=true;
-      ignoreNextClickUntil=Date.now()+1000;
-      if(typeof window.messageOptions==='function'){
-        window.messageOptions(targetMessage.id);
-      }
-    },650);
-  },true);
-
-  document.addEventListener('touchmove',function(e){
-    if(!targetMessage) return;
-    const t=e.touches?.[0];
-    if(!t) return;
-    if(Math.abs(t.clientX-startX)>12 || Math.abs(t.clientY-startY)>12){
-      moved=true; clear();
-    }
-  },true);
-
-  document.addEventListener('touchend',function(e){
-    const msg=targetMessage;
-    if(!msg) return;
-    const t=e.changedTouches?.[0];
-    const dx=(t?.clientX||startX)-startX;
-    const dy=(t?.clientY||startY)-startY;
-    const wasMoved=moved;
-    const wasLong=openedByLongPress;
-
-    clear();
-    targetMessage=null;
-    moved=false;
-    openedByLongPress=false;
-
-    if(wasLong){
-      // Do NOT close the menu. This touchend belongs to the long-press that
-      // opened it.
-      ignoreNextClickUntil=Date.now()+1000;
-      return;
-    }
-
-    if(selectionMode && !wasMoved && Math.abs(dx)<18 && Math.abs(dy)<18){
-      ignoreNextClickUntil=Date.now()+700;
-      if(typeof window.toggleMessageSelection==='function'){
-        window.toggleMessageSelection(msg.id);
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
-    if(!selectionMode && !wasMoved && dx>70 && Math.abs(dx)>Math.abs(dy)){
-      if(typeof window.replyToMessage==='function') window.replyToMessage(msg.id);
-      e.preventDefault();
-      e.stopPropagation();
-    }
-  },true);
-
-  document.addEventListener('touchcancel',reset,true);
-
-  // Pointer fallback for browsers where touch events are unavailable.
-  document.addEventListener('pointerdown',function(e){
-    if(e.pointerType==='touch') return;
-    const msg=messageFrom(e.target);
-    if(!msg || interactive(e.target) || (e.pointerType==='mouse' && e.button!==0)) return;
-    clear(); targetMessage=msg; startX=e.clientX; startY=e.clientY; moved=false; openedByLongPress=false;
-    if(selectionMode) return;
-    timer=setTimeout(function(){
-      timer=null;
-      if(!targetMessage || moved || selectionMode) return;
-      openedByLongPress=true; ignoreNextClickUntil=Date.now()+1000;
-      window.messageOptions?.(targetMessage.id);
-    },650);
-  },true);
-
-  document.addEventListener('pointerup',function(e){
-    if(e.pointerType==='touch') return;
-    const msg=targetMessage; if(!msg) return;
-    const dx=e.clientX-startX,dy=e.clientY-startY; const wasLong=openedByLongPress; const wasMoved=moved;
-    clear(); targetMessage=null; moved=false; openedByLongPress=false;
-    if(wasLong){ignoreNextClickUntil=Date.now()+1000;return;}
-    if(selectionMode && !wasMoved && Math.abs(dx)<18 && Math.abs(dy)<18){
-      ignoreNextClickUntil=Date.now()+700; window.toggleMessageSelection?.(msg.id); e.preventDefault(); e.stopPropagation();
-    }
-  },true);
-
-  document.addEventListener('pointercancel',reset,true);
-
-  // Mouse/keyboard fallback only. Never let the synthetic click after a touch
-  // long-press toggle a message a second time.
-  document.addEventListener('click',function(e){
-    const msg=messageFrom(e.target); if(!msg) return;
-    if(Date.now()<ignoreNextClickUntil){e.preventDefault();e.stopPropagation();return;}
-    if(selectionMode && !interactive(e.target)){
-      window.toggleMessageSelection?.(msg.id);
-      e.preventDefault();e.stopPropagation();
-    }
-  },true);
-
-  window.__updateRecreatedSelectionBox=function(){
-    const box=document.getElementById('selectionAllBox108');
-    if(!box) return;
-    const visible=[...document.querySelectorAll('#chatMessages .chatMessage')];
-    const show=!!selectionMode && selectedMessages.length>0;
-    box.style.setProperty('display',show?'flex':'none','important');
-    const all=visible.length>0 && visible.every(m=>selectedMessages.includes(m.id));
-    box.classList.toggle('active108',all);
-    box.setAttribute('aria-pressed',all?'true':'false');
-  };
+ let s=null; const HOLD=650,MOVE=12;
+ const msg=t=>t?.closest?.("#chatMessages .chatMessage")||null;
+ const interactive=t=>!!t?.closest?.("button,a,input,textarea,select,label,.messageReactions,video,[data-reaction-button='true']");
+ document.addEventListener("pointerdown",e=>{
+   if(e.pointerType!=="touch")return; const m=msg(e.target); if(!m||interactive(e.target))return;
+   if(s?.timer)clearTimeout(s.timer); s={m,x:e.clientX,y:e.clientY,moved:false,long:false,timer:null};
+   if(selectionMode)return;
+   s.timer=setTimeout(()=>{if(!s||s.moved||selectionMode)return;s.long=true;window.messageOptions?.(s.m.id);},HOLD);
+ },true);
+ document.addEventListener("pointermove",e=>{if(!s)return;if(Math.abs(e.clientX-s.x)>MOVE||Math.abs(e.clientY-s.y)>MOVE){s.moved=true;if(s.timer)clearTimeout(s.timer);s.timer=null;}},true);
+ document.addEventListener("pointerup",e=>{if(!s)return;const q=s;if(q.timer)clearTimeout(q.timer);s=null;if(q.long||q.moved)return;if(selectionMode){e.preventDefault();e.stopPropagation();window.toggleMessageSelection?.(q.m.id);}},true);
+ document.addEventListener("pointercancel",()=>{if(s?.timer)clearTimeout(s.timer);s=null;},true);
+ document.addEventListener("contextmenu",e=>{if(msg(e.target)){e.preventDefault();e.stopPropagation();}},true);
 })();
 </script>
-
-<style id="chatAttachmentRecreatedV10">
-#chatMedia + label[for="chatMedia"]{
-  width:42px !important;
-  min-width:42px !important;
-  height:42px !important;
-  min-height:42px !important;
-  padding:0 !important;
-  margin:0 !important;
-  box-sizing:border-box !important;
-  display:flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  border-radius:50% !important;
-  line-height:0 !important;
-  font-size:0 !important;
-  color:#fff !important;
-  overflow:hidden !important;
-}
-#chatMedia + label[for="chatMedia"] .global-mono-ui-icon{
-  width:22px !important;height:22px !important;margin:0 !important;
-  display:flex !important;align-items:center !important;justify-content:center !important;
-}
-#chatMedia + label[for="chatMedia"] .global-mono-ui-icon svg{
-  width:22px !important;height:22px !important;display:block !important;
-  stroke:currentColor !important;fill:none !important;
-}
-#chatMedia + label[for="chatMedia"]::before{
-  content:'';
-  font-size:22px;
-  line-height:1;
-  display:block;
-}
-#chatMedia + label[for="chatMedia"] .global-mono-ui-icon{display:none !important;}
-</style>
-
+<style id="chatAttachmentCleanV12">#chatMedia + label[for="chatMedia"]{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;padding:0!important;margin:0!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;border-radius:50%!important;line-height:0!important;font-size:0!important;color:var(--screen-text,#fff)!important;}#chatMedia + label[for="chatMedia"]::before{content:"";width:22px;height:22px;display:block;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;}</style>
 </body>
 </html>
+end...
