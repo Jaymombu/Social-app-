@@ -3805,10 +3805,7 @@ body.dark{
 #chatHeader > #chatAvatarWrap + div{flex:1 1 auto !important;min-width:0 !important;overflow:hidden !important;}
 #chatHeader #chatName{min-width:0 !important;overflow:hidden !important;text-overflow:ellipsis !important;white-space:nowrap !important;}
 #chatHeader #chatStatus,#chatHeader #typingIndicator{overflow:hidden !important;text-overflow:ellipsis !important;white-space:nowrap !important;}
-#chatHeader > .chat-header-search{flex:0 0 38px !important;width:38px !important;min-width:38px !important;height:40px !important;margin-left:auto !important;display:flex !important;align-items:center !important;justify-content:center !important;}
-#chatHeader > #selectionAllBox108{display:none !important;flex:0 0 34px !important;width:34px !important;min-width:34px !important;height:34px !important;margin:0 !important;padding:5px !important;border:0 !important;border-radius:9px !important;background:var(--screen-input,#242526) !important;color:var(--screen-text,#fff) !important;align-items:center !important;justify-content:center !important;box-sizing:border-box !important;cursor:pointer !important;}
-#selectionAllBox108 svg{width:22px !important;height:22px !important;display:block !important;fill:none !important;stroke:currentColor !important;stroke-width:1.8 !important;stroke-linecap:round !important;stroke-linejoin:round !important;}
-#selectionAllBox108.active108{background:#1877f2 !important;color:#fff !important;}
+#chatHeader > span:last-child{flex:0 0 34px !important;width:34px !important;min-width:34px !important;margin-left:auto !important;text-align:center !important;}
 #chatMessages .messageTime{display:flex !important;visibility:visible !important;opacity:1 !important;}
 
 /* ---------- CHAT ---------- */
@@ -4904,20 +4901,13 @@ body, #posts, #chatMessages, .comments-list, .search-results, .notifications-lis
 </style>
 
 
-<style id="chatAttachmentFixV13">
+<style id="selectionAndAttachmentMinimalV21">
+#selectionAllBox108.active108{background:#1877f2 !important;color:#fff !important;}
 #chatScreen label[for="chatMedia"]{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;padding:0!important;margin:0!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;border-radius:50%!important;background:#1f1f1f!important;color:#fff!important;font-size:0!important;line-height:0!important;flex:0 0 42px!important;}
 #chatScreen label[for="chatMedia"]::before{content:""!important;width:22px!important;height:22px!important;display:block!important;background:currentColor!important;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat!important;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat!important;}
 </style>
-
-<style id="chatSelectionTouchV18">
-/* V18: one authoritative touch controller for chat messages. */
-#chatScreen{touch-action:auto !important;}
-#chatMessages{touch-action:pan-y !important;}
-#messageMenu108{z-index:2147483646 !important;display:block !important;visibility:visible !important;opacity:1 !important;pointer-events:auto !important;}
-</style>
 </head>
 <body class="dark">
-
   
   <div id="chatScreen" style="
   position:fixed;
@@ -4944,6 +4934,7 @@ border-bottom:1px solid #333;
 <div>
   
 <button 
+onclick="selectAllMessages()"
 style="
 background:none;
 border:none;
@@ -4955,6 +4946,7 @@ cursor:pointer;
 </button>
 
 <button
+onclick="copySelectedMessages()"
 style="
 background:none;
 border:none;
@@ -4966,6 +4958,7 @@ cursor:pointer;
 </button>
 
 <button
+onclick="forwardSelectedMessages()"
 style="
 background:none;
 border:none;
@@ -4977,6 +4970,7 @@ cursor:pointer;
 </button>
 
 <button 
+onclick="deleteSelectedMessages()"
 style="
 background:none;
 border:none;
@@ -4988,6 +4982,7 @@ cursor:pointer;
 </button>
 
 <button
+onclick="cancelSelection()"
 style="
 background:none;
 border:none;
@@ -5027,6 +5022,13 @@ cursor:pointer;
    <img
   id="chatAvatar"
   src="https://via.placeholder.com/40"
+
+  onclick="
+    openMedia(
+      this.src,
+      'image'
+    )
+  "
 
   style="
     width:40px;
@@ -5079,6 +5081,7 @@ cursor:pointer;
 
 <span
   class="chat-header-search"
+  onclick="toggleChatSearch()"
   aria-label="Search chat"
   role="button">
   <svg class="chat-search-clean-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -5087,8 +5090,8 @@ cursor:pointer;
   </svg>
 </span>
 
-<button id="selectionAllBox108" type="button" aria-label="Select all messages" title="Select all messages" onclick="selectAllMessages()">
-  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="m7 12 3 3 7-7"></path></svg>
+<button id="selectionAllBox108" type="button" aria-label="Select all messages" title="Select all messages" onclick="selectAllMessages()" style="display:none;flex:0 0 34px;width:34px;min-width:34px;height:34px;margin:0;padding:5px;border:0;border-radius:9px;background:var(--screen-input,#242526);color:var(--screen-text,#fff);align-items:center;justify-content:center;box-sizing:border-box;cursor:pointer;">
+  <svg viewBox="0 0 24 24" aria-hidden="true" style="width:22px;height:22px;display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;"><rect x="3" y="3" width="18" height="18" rx="4"></rect><path d="m7 12 3 3 7-7"></path></svg>
 </button>
 
 </div>
@@ -5126,6 +5129,7 @@ cursor:pointer;
 >
 
 <button
+  onclick="previousSearchResult()"
   style="
     width:34px;
     height:34px;
@@ -5141,6 +5145,7 @@ cursor:pointer;
 </button>
 
 <button
+  onclick="nextSearchResult()"
   style="
     width:34px;
     height:34px;
@@ -5156,6 +5161,7 @@ cursor:pointer;
 </button>
 
 <button
+  onclick="toggleChatSearch()"
   style="
     width:34px;
     height:34px;
@@ -5207,6 +5213,7 @@ padding:8px;
     <div id="replyText"></div>
 
     <button
+      onclick="cancelReply()"
       style="
         float:right;
         background:none;
@@ -5284,6 +5291,7 @@ pointer-events:auto;
 </button>
 
     <button
+      onclick="sendMessage()"
       style="
         width:50px;
         height:50px;
@@ -5331,6 +5339,7 @@ pointer-events:auto;
   </div>
 
 <button
+  onclick="closeInbox()"
   style="
     background:none;
     border:none;
@@ -5429,6 +5438,7 @@ pointer-events:auto;
 >
 
   <button
+    onclick="closeMedia()"
 
     style="
       position:absolute;
@@ -5510,6 +5520,7 @@ pointer-events:auto;
   
 <div
   id="storyTopBar"
+  onclick="toggleStoryViewers()"
   style="
     position:fixed;
     top:50px;
@@ -5585,6 +5596,7 @@ pointer-events:auto;
     <b>👁 Viewers</b>
 
     <button
+      onclick="closeStoryViewers()"
       style="
         background:none;
         border:none;
@@ -5660,6 +5672,7 @@ pointer-events:auto;
 
   <!-- SEND -->
   <button
+    onclick="sendStoryReply()"
     style="
       height:40px;
       padding:0 14px;
@@ -5681,6 +5694,7 @@ pointer-events:auto;
 
   <!-- REACTIONS INLINE -->
   <button
+    onclick="reactStory('❤️')"
 
     style="
       width:50px;
@@ -5696,6 +5710,7 @@ pointer-events:auto;
   </button>
 
   <button
+    onclick="reactStory('🔥')"
 
     style="
       width:50px;
@@ -5711,6 +5726,7 @@ pointer-events:auto;
   </button>
 
   <button
+    onclick="reactStory('😂')"
 
     style="
       width:50px;
@@ -5726,6 +5742,7 @@ pointer-events:auto;
   </button>
 
   <button
+    onclick="reactStory('😍')"
 
     style="
       width:50px;
@@ -5745,6 +5762,7 @@ pointer-events:auto;
 <!-- MUTE (kept floating but above bar) -->
 <button
   id="storyMuteBtn"
+  onclick="toggleStorySound()"
   style="
     position:fixed;
     right:20px;
@@ -5773,6 +5791,7 @@ pointer-events:auto;
 <!-- CLOSE -->
 <button
   type="button"
+  onclick="event.preventDefault(); event.stopPropagation(); closeStoryViewer();"
   style="
     position:absolute;
     top:50px;
@@ -5838,6 +5857,7 @@ pointer-events:auto;
   </div>
 
   <button
+    onclick="clearNotifications()"
     style="
       background:none;
       border:none;
@@ -5850,6 +5870,7 @@ pointer-events:auto;
   </button>
   
   <button
+  onclick="markAllNotificationsRead()"
   style="
     background:none;
     border:none;
@@ -5869,27 +5890,33 @@ overflow-x:auto;
 padding:10px 14px;
 ">
 
-<button class="notifFilter active">
+<button class="notifFilter active"
+onclick="setNotificationFilter(this,'all')">
 All
 </button>
 
-<button class="notifFilter">
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'like')">
 Likes
 </button>
 
-<button class="notifFilter">
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'comment')">
 Comments
 </button>
 
-<button class="notifFilter">
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'follow')">
 Follows
 </button>
 
-<button class="notifFilter">
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'message')">
 Messages
 </button>
 
-<button class="notifFilter">
+<button class="notifFilter"
+onclick="setNotificationFilter(this,'stories')">
 Stories
 </button>
 
@@ -5972,6 +5999,11 @@ outline:none;
 ">
 
 <button
+onclick="
+document.getElementById('userSearchInput').value='';
+document.getElementById('searchResults').innerHTML='';
+document.getElementById('userSearchInput').focus();
+"
 style="
 background:none;
 border:none;
@@ -6373,6 +6405,7 @@ stories.forEach(story => {
 
         <div
   class="story-card"
+  onclick="openStory(${index})"
 
   style="
     opacity:${seen ? "0.82" : "1"};
@@ -7488,6 +7521,7 @@ if (
     story.user_id === currentUser?.id
       ? `
         <button
+          onclick="event.preventDefault(); event.stopPropagation(); deleteStory('${story.id}')"
           style="
             margin-left:auto;
             background:none;
@@ -9060,6 +9094,13 @@ const isOwner =
       <img
         src="${escapeHtml(post.file_url)}"
 
+        onclick="
+          openMedia(
+            '${post.file_url}',
+            'image'
+          )
+        "
+
         style="
           max-width:100%;
           width:auto;
@@ -9229,6 +9270,7 @@ const isOwner =
           ? `
             <div
               id="translatePostBtn-${post.id}"
+              onclick="translatePost('${post.id}')"
               style="
                 margin-top:8px;
                 color:#0095f6;
@@ -9258,6 +9300,7 @@ const isOwner =
 
     <button
       class="like-btn"
+      onclick="likePost('${post.id}')"
 
       style="
         margin-top:5px;
@@ -9285,6 +9328,7 @@ const isOwner =
 
 
     <button
+      onclick="openComments('${post.id}')"
 
       style="
         margin-top:5px;
@@ -9300,6 +9344,7 @@ const isOwner =
 
 
     <button
+      onclick="toggleSavePost('${post.id}')"
 
       style="
         margin-top:5px;
@@ -9323,6 +9368,7 @@ const isOwner =
       isOwner
         ? `
           <button
+            onclick="deletePost('${post.id}')"
 
             style="
               margin-top:8px;
@@ -10730,7 +10776,8 @@ const isLiked =
 postLikeArea.innerHTML = `  
 
     <button  
-        class="comments-post-like-btn"    
+        class="comments-post-like-btn"  
+        onclick="likePost('${post.id}')"  
         style="  
             width:100%;  
             height:46px;  
@@ -11812,6 +11859,7 @@ for (
                 `
                 <div
                     id="loadMoreCommentsBtn"
+                    onclick="loadMoreComments()"
                     style="
                         text-align:center;
                         padding:15px;
@@ -12760,6 +12808,27 @@ class="commentItem"
 data-comment-id="${c.id}"
 data-user-id="${c.user_id}"
 data-user-name="${escapeHtml(commentName)}"
+onclick="
+    event.stopPropagation();
+
+    commentDoubleTap(
+        '${c.id}'
+    );
+
+    return false;
+"
+
+oncontextmenu="
+    event.preventDefault();
+    event.stopPropagation();
+
+    openCommentMenu(
+        '${c.id}',
+        '${c.user_id}'
+    );
+
+    return false;
+"
 
 style="
 display:flex;
@@ -12902,6 +12971,11 @@ touch-action:pan-y;
                     id="voiceBtn-${c.id}"
                     type="button"
 
+                    onclick="
+                    event.stopPropagation();
+                    toggleVoice('${c.id}');
+                    "
+
                     style="
                     width:40px;
                     height:40px;
@@ -12926,6 +13000,10 @@ touch-action:pan-y;
                     <div
                     id="voiceWaveform-${c.id}"
                     class="voiceWaveform"
+
+                    onclick="
+                    event.stopPropagation();
+                    "
 
                     data-duration="${voiceDuration}"
 
@@ -12985,6 +13063,14 @@ touch-action:pan-y;
                             <img
                             src="${c.media_url}"
 
+                            onclick="
+                            event.stopPropagation();
+                            openMediaViewer(
+                                '${c.media_url}',
+                                'image'
+                            )
+                            "
+
                             style="
                             width:220px;
                             max-height:300px;
@@ -13012,6 +13098,10 @@ touch-action:pan-y;
                             src="${c.media_url}"
                             controls
 
+                            onclick="
+                            event.stopPropagation();
+                            "
+
                             style="
                             width:220px;
                             max-height:300px;
@@ -13038,6 +13128,11 @@ touch-action:pan-y;
                 ? `
                 <div
                 id="translateBtn-${c.id}"
+
+                onclick="
+                event.stopPropagation();
+                translateComment(${c.id})
+                "
 
                 style="
                 margin-top:6px;
@@ -13083,6 +13178,11 @@ touch-action:pan-y;
             <span
             id="commentLike-${c.id}"
 
+            onclick="
+            event.stopPropagation();
+            likeComment('${c.id}')
+            "
+
             style="
             display:flex;
             align-items:center;
@@ -13107,6 +13207,15 @@ touch-action:pan-y;
 
 
             <span
+            onclick="
+            event.stopPropagation();
+
+            replyToComment(
+                '${c.id}',
+                ${JSON.stringify(commentName)},
+                '${c.user_id}'
+            );
+            "
 
             style="
             display:flex;
@@ -13341,6 +13450,17 @@ window.renderReply = function (comment) {
                         border-radius:12px;
                         cursor:pointer;
                     "
+
+                    onclick="
+                        event.stopPropagation();
+
+                        window.open(
+                            '${escapeHtml(
+                                comment.media_url
+                            )}',
+                            '_blank'
+                        )
+                    "
                 >
 
             </div>
@@ -13377,6 +13497,10 @@ window.renderReply = function (comment) {
                     controls
                     playsinline
                     preload="metadata"
+
+                    onclick="
+                        event.stopPropagation();
+                    "
 
                     style="
                         width:100%;
@@ -13431,6 +13555,17 @@ window.renderReply = function (comment) {
 
                     type="button"
 
+                    onclick="
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        toggleVoice(
+                            '${comment.id}'
+                        );
+
+                        return false;
+                    "
+
                     style="
                         width:40px;
                         height:40px;
@@ -13458,6 +13593,11 @@ window.renderReply = function (comment) {
                     class="voiceWaveform"
 
                     data-duration="${voiceDuration}"
+
+                    onclick="
+                        event.preventDefault();
+                        event.stopPropagation();
+                    "
 
                     style="
                         flex:1;
@@ -13544,6 +13684,13 @@ window.renderReply = function (comment) {
             <button
                 id="translateBtn-${comment.id}"
 
+                onclick="
+                    event.stopPropagation();
+                    translateComment(
+                        '${comment.id}'
+                    )
+                "
+
                 style="
                     border:0;
                     background:none;
@@ -13586,6 +13733,13 @@ window.renderReply = function (comment) {
 
             <button
                 id="translateBtn-${comment.id}"
+
+                onclick="
+                    event.stopPropagation();
+                    translateComment(
+                        '${comment.id}'
+                    )
+                "
 
                 style="
                     border:0;
@@ -13691,7 +13845,16 @@ window.renderReply = function (comment) {
                         object-fit:cover;
                         flex-shrink:0;
                         cursor:pointer;
-                    "\\'"
+                    "
+
+                    onclick="
+                        event.stopPropagation();
+
+                        openProfile(
+                            '${userId}',
+                            '${safeName.replace(
+                                /'/g,
+                                "\\'"
                             )}'
                         )
                     "
@@ -13769,6 +13932,19 @@ onmouseleave="
     commentPressEnd(event);
 "
 
+oncontextmenu="
+    event.preventDefault();
+    event.stopPropagation();
+
+    commentPressStart(
+        event,
+        '${comment.id}',
+        '${userId}'
+    );
+
+    return false;
+"
+
 ondblclick="
     event.stopPropagation();
 
@@ -13818,7 +13994,16 @@ ondblclick="
                     style="
                         font-size:14px;
                         cursor:pointer;
-                    "\\'"
+                    "
+
+                    onclick="
+                        event.stopPropagation();
+
+                        openProfile(
+                            '${userId}',
+                            '${safeName.replace(
+                                /'/g,
+                                "\\'"
                             )}'
                         )
                     "
@@ -13933,6 +14118,14 @@ ondblclick="
                 <button
                     id="commentLike-${comment.id}"
 
+                    onclick="
+                        event.stopPropagation();
+
+                        likeComment(
+                            '${comment.id}'
+                        )
+                    "
+
                     style="
                         border:0;
                         background:${
@@ -13961,6 +14154,19 @@ ondblclick="
 
                 <button
                     type="button"
+
+                    onclick="
+                        event.preventDefault();
+                        event.stopPropagation();
+
+                        replyToComment(
+                            '${comment.id}',
+                            ${safeReplyName},
+                            '${userId}'
+                        );
+
+                        return false;
+                    "
 
                     style="
                         border:0;
@@ -14028,6 +14234,14 @@ ondblclick="
 
                 <button
                     id="threadBtn-${comment.id}"
+
+                    onclick="
+                        event.stopPropagation();
+
+                        toggleReplies(
+                            '${comment.id}'
+                        );
+                    "
 
                     style="
                         display:none;
@@ -16074,6 +16288,7 @@ function commentDebug(message, data = null) {
         }
         <br><br>
         <button
+            onclick="document.getElementById('commentDebugBox')?.remove()"
             style="
                 background:#ff3040;
                 color:white;
@@ -19882,6 +20097,10 @@ window.renderVoiceCommentPlayer = function (comment) {
             <button
                 id="voiceBtn-${id}"
                 type="button"
+                onclick="
+                    event.stopPropagation();
+                    window.toggleVoice('${id}');
+                "
                 style="
                     width:40px;
                     height:40px;
@@ -19907,6 +20126,9 @@ window.renderVoiceCommentPlayer = function (comment) {
                     flex:1;
                     min-width:0;
                     cursor:pointer;
+                "
+                onclick="
+                    event.stopPropagation();
                 "
             ></div>
 
@@ -37834,6 +38056,7 @@ border-bottom:1px solid #222;
 Recent Searches
 
 <button
+onclick="clearRecentSearches()"
 style="
 background:none;
 border:none;
@@ -37951,6 +38174,10 @@ ${formatSearchTime(user.searched_at)}
 </button>
 
 <button
+onclick="
+event.stopPropagation();
+togglePinnedSearch('${user.id}');
+"
 style="
 background:none;
 border:none;
@@ -37962,6 +38189,10 @@ ${isPinned(user.id) ? "📌" : "📍"}
 </button>
 
 <button
+onclick="
+event.stopPropagation();
+removeRecentSearch('${user.id}');
+"
 style="
 background:none;
 border:none;
@@ -38148,6 +38379,12 @@ const results = [
 
   <button
     type="button"
+    onclick="
+      event.stopPropagation();
+      togglePinnedSearch(
+        ${JSON.stringify(user.id)}
+      );
+    "
     style="
       background:none;
       border:none;
@@ -38654,6 +38891,7 @@ if (!topBar) {
 
     <button
       id="homeBtn"
+      onclick="goHome(true)"
     >
       🏠
      <span id="homePostBadge">0</span>
@@ -38661,12 +38899,14 @@ if (!topBar) {
 
     <button
       id="searchBtn"
+      onclick="openSearch()"
     >
       🔍
     </button>
 
     <button
       id="chatBtn"
+      onclick="openInbox()"
     >
       💬
 
@@ -38676,6 +38916,7 @@ if (!topBar) {
 
     <button
       id="notificationBtn"
+      onclick="openNotifications()"
     >
       🔔
 
@@ -39127,6 +39368,8 @@ flex-shrink:0;
 
       <div
 id="closeComments"
+onclick="
+closeComments()"
 style="
 position:fixed;
 top:15px;
@@ -39224,6 +39467,11 @@ box-sizing:border-box;
 
 <span
 id="clearCommentSearch"
+onclick="
+document.getElementById('commentSearch').value='';
+document.getElementById('commentSearch').dispatchEvent(new Event('input'));
+this.style.display='none';
+"
 style="
 display:none;
 position:absolute;
@@ -39348,6 +39596,7 @@ margin-top:4px;
 </div>
 
 <div
+onclick="cancelReply()"
 style="
 font-size:22px;
 cursor:pointer;
@@ -39649,6 +39898,7 @@ z-index:1000000;
 <div
 id="commentReactionBtn"
 class="menu-item comment-menu-row"
+onclick="event.stopPropagation(); openReactionPicker(selectedCommentId);"
 >
 <svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14c1.1 1.2 2.4 1.8 4 1.8s2.9-.6 4-1.8M9 9h.01M15 9h.01"/></svg> React
 </div>
@@ -39656,6 +39906,7 @@ class="menu-item comment-menu-row"
 <div
 id="commentCopyBtn"
 class="menu-item comment-menu-row"
+onclick="copySelectedComment()"
 >
 <svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="12" rx="1.5"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v10A1.5 1.5 0 0 0 5.5 17H8"/></svg> Copy
 </div>
@@ -39664,6 +39915,7 @@ class="menu-item comment-menu-row"
 id="commentReportBtn"
 class="menu-item comment-menu-row"
 style="color:#ff9800;"
+onclick="reportComment(selectedCommentId)"
 >
 <svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V4m0 1h11l-2.5 4L17 13H6"/></svg> Report
 </div>
@@ -39671,6 +39923,7 @@ style="color:#ff9800;"
 <div
 id="commentHideBtn"
 class="menu-item comment-menu-row"
+onclick="hideComment(selectedCommentId);closeCommentMenu();"
 >
 <svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s3.2-6 9-6 9 6 9 6-3.2 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="2.5"/><path d="m4 4 16 16"/></svg> Hide Comment
 </div>
@@ -39678,6 +39931,7 @@ class="menu-item comment-menu-row"
 <div
 id="commentPinBtn"
 class="menu-item comment-menu-row"
+onclick="pinComment(selectedCommentId);closeCommentMenu();"
 >
 <svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8l-1 5 3 3H6l3-3-1-5ZM12 12v8"/></svg> Pin / Unpin Comment
 </div>
@@ -39685,6 +39939,7 @@ class="menu-item comment-menu-row"
 <div
 id="commentEditBtn"
 class="menu-item comment-menu-row"
+onclick="editComment(selectedCommentId);closeCommentMenu();"
 >
 <svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 16-.8 4 4-.8L19 8.4a2 2 0 0 0-2.8-2.8L5 16Z"/><path d="m14.5 7.5 2 2"/></svg> Edit
 </div>
@@ -39693,6 +39948,7 @@ class="menu-item comment-menu-row"
 id="commentDeleteBtn"
 class="menu-item comment-menu-row"
 style="color:#ff3b30;"
+onclick="deleteComment(selectedCommentId);closeCommentMenu();"
 >
 <svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M9 7V4h6v3M8 10v8M12 10v8M16 10v8M6 7l1 14h10l1-14"/></svg> Delete
 </div>
@@ -39700,6 +39956,7 @@ style="color:#ff3b30;"
 <div
 id="commentCancelBtn"
 class="menu-item comment-menu-row"
+onclick="closeCommentMenu()"
 >
 <svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg> Cancel
 </div>
@@ -39822,6 +40079,7 @@ let searchResults = [];
 let currentSearchIndex = -1;
 
 let selectedMessages = [];
+window.selectionMode = false;
 let selectionMode = false;
 
 let currentChatUser = null;
@@ -41055,6 +41313,11 @@ openChat(
           )
         }"
 
+        onclick="
+          event.stopPropagation();
+          openMedia(this.src, 'image');
+        "
+
         style="
           width:55px;
           height:55px;
@@ -41409,6 +41672,108 @@ chat.innerHTML +=`
   class="chatMessage ${mine && !msg.delivered ? 'sending-message' : ''} message-enter"
 
   data-message="${escapeHtml(msg.content || "").toLowerCase()}"
+  
+  onclick="
+if(window.__suppressMessageClick){
+  window.__suppressMessageClick=false;
+  event.preventDefault();
+  return;
+}
+if(window.selectionMode){
+  event.preventDefault();
+  toggleMessageSelection('${msg.id}');
+}
+"
+
+oncontextmenu="
+  event.preventDefault();
+  if(!window.selectionMode) messageOptions('${msg.id}');
+"
+
+ontouchstart="
+swipeStartX = event.changedTouches[0].clientX;
+swipeStartY = event.changedTouches[0].clientY;
+window.__messageLongPressed=false;
+window.__messageMoved=false;
+clearTimeout(window.pressTimer);
+
+if(window.selectionMode) return;
+
+window.pressTimer = setTimeout(() => {
+  window.__messageLongPressed=true;
+  window.__suppressMessageClick=true;
+  messageOptions('${msg.id}');
+},700);
+"
+
+ontouchmove="
+if(!window.selectionMode){
+  const tx=event.changedTouches[0].clientX;
+  const ty=event.changedTouches[0].clientY;
+  if(Math.abs(tx-swipeStartX)>12 || Math.abs(ty-swipeStartY)>12){
+    window.__messageMoved=true;
+    clearTimeout(window.pressTimer);
+  }
+}
+
+if(window.selectionMode) return;
+
+moveX = event.changedTouches[0].clientX - swipeStartX;
+
+if(moveX>0 && moveX<80){
+
+  this.style.transform='translateX('+moveX+'px)';
+
+  const t=this.querySelector('.messageTime');
+
+  if(t) t.style.display='block';
+
+}
+"
+
+ontouchend="
+clearTimeout(window.pressTimer);
+
+if(window.__messageLongPressed){
+  window.__messageLongPressed=false;
+  window.__suppressMessageClick=true;
+  return;
+}
+
+if(window.__messageMoved){
+  window.__messageMoved=false;
+  return;
+}
+
+moveX = event.changedTouches[0].clientX - swipeStartX;
+
+this.style.transform='';
+
+const t = this.querySelector('.messageTime');
+if(t) t.style.display='none';
+
+if(window.selectionMode){
+  event.preventDefault();
+  toggleMessageSelection('${msg.id}');
+  return;
+}
+
+if(moveX>70){
+
+  this.style.transform='translateX(40px)';
+
+  setTimeout(()=>{
+
+    this.style.transform='';
+
+    if(t) t.style.display='none';
+
+  },150);
+
+  replyToMessage('${msg.id}');
+
+}
+"
 
   style="
     background:${
@@ -41634,6 +41999,7 @@ shouldShowTranslate(msg.language_code)
 ? `
 <div
 id="translateMessageBtn-${msg.id}"
+onclick="translateMessage('${msg.id}')"
 style="
 margin-top:6px;
 font-size:13px;
@@ -41696,6 +42062,7 @@ ${
         )
         .map(([emoji,count])=>`
           <div
+            onclick="event.stopPropagation(); showReactionDetails('${msg.id}','${emoji}')"
             style="
               background:#2b2b2b;
               border-radius:20px;
@@ -42430,16 +42797,22 @@ window.messageOptions = async function(messageId) {
 
   document.body.appendChild(menu);
 
-  const closeMessageMenu108 = (e) => {
-    const m = document.getElementById("messageMenu108");
-    const picker = document.getElementById("emojiPicker");
-    if (!m) { document.removeEventListener("pointerdown", closeMessageMenu108, true); return; }
-    if (m.contains(e.target) || picker?.contains(e.target)) return;
-    m.remove();
-    picker?.remove();
-    document.removeEventListener("pointerdown", closeMessageMenu108, true);
-  };
-  setTimeout(() => document.addEventListener("pointerdown", closeMessageMenu108, true), 300);
+  setTimeout(() => {
+    const closeMessageMenu = (e) => {
+      const m = document.getElementById("messageMenu108");
+      const picker = document.getElementById("emojiPicker");
+      const sel = document.getElementById("selectionActionsSheet108");
+      if (m && !m.contains(e.target) && !picker?.contains(e.target)) {
+        m.remove();
+        picker?.remove();
+      }
+      if (sel && !sel.contains(e.target)) sel.remove();
+      if (!document.getElementById("messageMenu108") && !document.getElementById("selectionActionsSheet108")) {
+        document.removeEventListener("pointerdown", closeMessageMenu, true);
+      }
+    };
+    document.addEventListener("pointerdown", closeMessageMenu, true);
+  }, 100);
 };
 
 if (!window.chatRealtimeSubscription) {
@@ -42507,6 +42880,7 @@ margin-bottom:10px;
 >
 
 <button
+onclick="document.getElementById('emojiPicker')?.remove()"
 style="
 background:none;
 border:none;
@@ -42822,6 +43196,7 @@ All (${users.length})
 
 ${[...new Set(users.map(u => u.reaction))].map(r => `
 <span
+onclick="filterReaction('${r}')"
 style="font-size:24px;cursor:pointer;">
 ${r}
 </span>
@@ -42859,7 +43234,8 @@ window.renderReactionUsers = function(users) {
 
   list.innerHTML = users.map(u => `
 
-<divUser"}')"
+<div
+  onclick="openProfile('${u.profiles?.id}','${u.profiles?.name || "User"}')"
   style="
     display:flex;
     align-items:center;
@@ -43536,34 +43912,77 @@ window.previousSearchResult = function () {
 
 };
 
-function renderSelectionActions108(){ document.getElementById("selectionActionsSheet108")?.remove(); }
+function renderSelectionActions108(){
+  document.getElementById("selectionActionsSheet108")?.remove();
+}
 
 function updateSelectionAllBox108(){
-  const box=document.getElementById("selectionAllBox108"); if(!box) return;
+  const box=document.getElementById("selectionAllBox108");
+  if(!box) return;
   const msgs=[...document.querySelectorAll("#chatMessages .chatMessage")];
-  box.style.setProperty("display", selectionMode && selectedMessages.length ? "flex" : "none", "important");
+  const active=window.selectionMode===true && selectedMessages.length>0;
+  box.style.display=active ? "flex" : "none";
   const all=msgs.length>0 && msgs.every(m=>selectedMessages.includes(m.id));
-  box.classList.toggle("active108",all); box.setAttribute("aria-pressed",all?"true":"false");
+  box.classList.toggle("active108",all);
+  box.setAttribute("aria-pressed",all?"true":"false");
 }
-window.toggleMessageSelection=function(id){
-  const el=document.getElementById(id); if(!el) return;
-  selectionMode=true; const i=selectedMessages.indexOf(id); const check=el.querySelector(".messageCheck");
-  if(i>=0){selectedMessages.splice(i,1);el.classList.remove("chat-selected");if(check)check.style.display="none";}
-  else{selectedMessages.push(id);el.classList.add("chat-selected");if(check)check.style.display="flex";}
-  document.getElementById("selectionBar")?.style && (document.getElementById("selectionBar").style.display="none");
+
+window.toggleMessageSelection = function(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+
+  window.selectionMode=true;
+  const i=selectedMessages.indexOf(id);
+  const check=el.querySelector(".messageCheck");
+
+  if(i>=0){
+    selectedMessages.splice(i,1);
+    el.classList.remove("chat-selected");
+    if(check) check.style.display="none";
+  }else{
+    selectedMessages.push(id);
+    el.classList.add("chat-selected");
+    if(check) check.style.display="flex";
+  }
+
   document.getElementById("selectionActionsSheet108")?.remove();
-  const header=document.getElementById("chatHeader"); if(header)header.style.display="flex";
-  if(selectedMessages.length===0) window.cancelSelection(); else updateSelectionAllBox108();
+  const header=document.getElementById("chatHeader");
+  if(header) header.style.display="flex";
+
+  if(selectedMessages.length===0) window.cancelSelection();
+  else updateSelectionAllBox108();
 };
-window.cancelSelection=function(){
-  selectionMode=false; selectedMessages=[]; document.getElementById("selectionActionsSheet108")?.remove();
-  document.querySelectorAll(".chatMessage").forEach(m=>{m.classList.remove("chat-selected");m.style.outline="";});
-  document.querySelectorAll(".messageCheck").forEach(c=>c.style.display="none"); updateSelectionAllBox108();
+
+window.cancelSelection = function(){
+  window.selectionMode=false;
+  selectedMessages=[];
+  document.getElementById("selectionActionsSheet108")?.remove();
+  const header=document.getElementById("chatHeader");
+  if(header) header.style.display="flex";
+  document.querySelectorAll(".chatMessage").forEach(msg=>{
+    msg.classList.remove("chat-selected");
+    msg.style.outline="";
+  });
+  document.querySelectorAll(".messageCheck").forEach(check=>check.style.display="none");
+  updateSelectionAllBox108();
 };
-window.selectAllMessages=function(){
-  selectionMode=true; selectedMessages=[]; document.querySelectorAll("#chatMessages .chatMessage").forEach(m=>{if(!m.id)return;selectedMessages.push(m.id);m.classList.add("chat-selected");const c=m.querySelector(".messageCheck");if(c)c.style.display="flex";});
-  document.getElementById("selectionActionsSheet108")?.remove(); const h=document.getElementById("chatHeader");if(h)h.style.display="flex"; updateSelectionAllBox108();
+
+window.selectAllMessages = function(){
+  window.selectionMode=true;
+  selectedMessages=[];
+  document.querySelectorAll("#chatMessages .chatMessage").forEach(msg=>{
+    if(!msg.id) return;
+    selectedMessages.push(msg.id);
+    msg.classList.add("chat-selected");
+    const check=msg.querySelector(".messageCheck");
+    if(check) check.style.display="flex";
+  });
+  document.getElementById("selectionActionsSheet108")?.remove();
+  const header=document.getElementById("chatHeader");
+  if(header) header.style.display="flex";
+  updateSelectionAllBox108();
 };
+
 
 window.formatLastSeen = function(date){
 
@@ -46581,6 +47000,7 @@ const bg =
       return `
 
         <div
+          onclick="openNotification('${escapeHtml(String(n.id))}')"
           style="
             display:flex;
             gap:12px;
@@ -52060,90 +52480,6 @@ document.addEventListener("selectstart", function(e) {
   observer.observe(document.body,{childList:true,subtree:true});
 })();
 </script>
-
-<style id="chatAttachmentCleanV12">#chatScreen label[for="chatMedia"]{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;padding:0!important;margin:0!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;border-radius:50%!important;line-height:0!important;font-size:0!important;color:var(--screen-text,#fff)!important;}#chatScreen label[for="chatMedia"]::before{content:"";width:22px;height:22px;display:block;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;}</style>
-
-
-
-<script id="chatSelectionTouchV18">
-(function(){
-  let timer=null, startX=0, startY=0, activeMsg=null, moved=false, longPressed=false;
-  function msgFromEvent(e){
-    const t=e.target;
-    return t && t.closest ? t.closest('#chatMessages .chatMessage') : null;
-  }
-  function clear(){ if(timer){clearTimeout(timer);timer=null;} }
-  function start(e){
-    const msg=msgFromEvent(e);
-    if(!msg || typeof selectionMode !== 'boolean') return;
-    if(selectionMode) return;
-    const touch=e.touches && e.touches[0];
-    if(!touch) return;
-    activeMsg=msg; startX=touch.clientX; startY=touch.clientY; moved=false; longPressed=false;
-    clear();
-    timer=setTimeout(function(){
-      timer=null;
-      if(!activeMsg || moved || selectionMode) return;
-      longPressed=true;
-      window.__suppressMessageClick=true;
-      if(typeof window.messageOptions==='function') window.messageOptions(activeMsg.id);
-    },700);
-  }
-  function move(e){
-    if(!activeMsg || !e.touches || !e.touches[0]) return;
-    const t=e.touches[0];
-    if(Math.abs(t.clientX-startX)>12 || Math.abs(t.clientY-startY)>12){
-      moved=true; clear();
-    }
-  }
-  function end(e){
-    if(!activeMsg) return;
-    clear();
-    const msg=activeMsg;
-    const wasLong=longPressed;
-    const wasMoved=moved;
-    activeMsg=null; moved=false; longPressed=false;
-    if(wasLong){
-      window.__suppressMessageClick=true;
-      if(e){e.preventDefault(); e.stopPropagation();}
-      return;
-    }
-    if(wasMoved) return;
-    if(typeof selectionMode==='boolean' && selectionMode){
-      if(e){e.preventDefault(); e.stopPropagation();}
-      window.toggleMessageSelection && window.toggleMessageSelection(msg.id);
-    }
-  }
-  function cancel(){ clear(); activeMsg=null; moved=false; longPressed=false; }
-
-  document.addEventListener('touchstart',start,true);
-  document.addEventListener('touchmove',move,true);
-  document.addEventListener('touchend',end,true);
-  document.addEventListener('touchcancel',cancel,true);
-
-  // Android may also issue contextmenu for a long press. Use it only as a
-  // fallback; never use it to enter selection mode.
-  document.addEventListener('contextmenu',function(e){
-    const msg=msgFromEvent(e);
-    if(!msg || typeof selectionMode!=='boolean' || selectionMode) return;
-    e.preventDefault();
-    clear();
-    activeMsg=null; moved=false; longPressed=true;
-    window.__suppressMessageClick=true;
-    if(typeof window.messageOptions==='function') window.messageOptions(msg.id);
-  },true);
-
-  // Consume the synthetic click generated after a long press.
-  document.addEventListener('click',function(e){
-    if(window.__suppressMessageClick){
-      const menu=document.getElementById('messageMenu108');
-      if(menu && menu.contains(e.target)) return;
-      window.__suppressMessageClick=false;
-      e.preventDefault(); e.stopPropagation();
-    }
-  },true);
-})();
-</script>
 </body>
 </html>
-the end
+hgfgjhghhgg
