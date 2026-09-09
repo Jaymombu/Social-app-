@@ -5350,19 +5350,29 @@ padding:8px;
   ">
 
     <label for="chatMedia"
+    id="chatAttachmentBtn"
     style="
       width:42px;
+      min-width:42px;
       height:42px;
+      min-height:42px;
+      flex:0 0 42px;
       border-radius:50%;
       background:#1f1f1f;
       display:flex;
       justify-content:center;
       align-items:center;
-      font-size:22px;
+      padding:0;
+      margin:0;
+      box-sizing:border-box;
       cursor:pointer;
       color:white;
+      line-height:0;
+      overflow:hidden;
     ">
-      📎
+      <svg viewBox="0 0 24 24" aria-hidden="true" style="width:22px;height:22px;display:block;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;">
+        <path d="m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7"/>
+      </svg>
     </label>
 
     <input
@@ -5420,7 +5430,10 @@ pointer-events:auto;
         font-size:20px;
         cursor:pointer;
       ">
-      ➤
+      <svg viewBox="0 0 24 24" aria-hidden="true" style="width:24px;height:24px;display:block;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;">
+        <path d="M4 4.8 20 12 4 19.2 7.2 12 4 4.8Z"/>
+        <path d="M7.2 12H20"/>
+      </svg>
     </button>
 
   </div>
@@ -41800,88 +41813,7 @@ if(selectionMode){
 }
 "
 
-oncontextmenu="
-  event.preventDefault();
-  toggleMessageSelection('${msg.id}')
-"
-
-ontouchstart="
-swipeStartX = event.changedTouches[0].clientX;
-swipeStartY = event.changedTouches[0].clientY;
-window.__messageTouchMoved = false;
-
-// Once selection mode is active, a normal touch is a tap-to-select/deselect.
-if(selectionMode) return;
-
-clearTimeout(window.pressTimer);
-window.__messageLongPressTriggered = false;
-window.pressTimer = setTimeout(() => {
-  window.__messageLongPressTriggered = true;
-  messageOptions('${msg.id}');
-}, 650);
-"
-
-ontouchmove="
-window.__messageTouchMoved = true;
-clearTimeout(window.pressTimer);
-
-if(selectionMode) return;
-
-moveX = event.changedTouches[0].clientX - swipeStartX;
-
-if(moveX>0 && moveX<80){
-
-  this.style.transform='translateX('+moveX+'px)';
-
-  const t=this.querySelector('.messageTime');
-
-  if(t) t.style.display='block';
-
-}
-"
-
-ontouchend="
-clearTimeout(window.pressTimer);
-
-// A long-press opens the message options menu and must not also perform a
-// normal tap action when the finger is released.
-if(window.__messageLongPressTriggered){
-  window.__skipNextMessageSelectionClick = true;
-  window.__messageLongPressTriggered = false;
-  return;
-}
-
-// In selection mode a normal tap selects/deselects immediately. Suppress the
-// synthetic click that Android normally emits after touchend.
-if(selectionMode){
-  window.__skipNextMessageSelectionClick = true;
-  toggleMessageSelection('${msg.id}');
-  return;
-}
-
-moveX = event.changedTouches[0].clientX - swipeStartX;
-
-this.style.transform='';
-
-const t = this.querySelector('.messageTime');
-if(t) t.style.display='none';
-
-if(moveX>70 && !selectionMode){
-
-  this.style.transform='translateX(40px)';
-
-  setTimeout(()=>{
-
-    this.style.transform='';
-
-    if(t) t.style.display='none';
-
-  },150);
-
-  replyToMessage('${msg.id}');
-
-}
-"
+data-message-touch-target="true"
 
   style="
     background:${
@@ -52787,6 +52719,167 @@ document.addEventListener("selectstart", function(e) {
     }
   });
   observer.observe(document.body, {childList:true, subtree:true});
+})();
+</script>
+
+<!-- =====================================================
+     MESSAGE SELECTION V8 — SINGLE LONG-PRESS + TAP SELECTION
+     Removes the old per-message inline touch/context behavior and owns
+     the complete touch lifecycle here.
+     ===================================================== -->
+<script id="chatSelectionV8">
+(function(){
+  const state = {
+    msg:null, startX:0, startY:0, timer:null, moved:false, longPressed:false
+  };
+
+  function messageFrom(target){
+    return target && target.closest ? target.closest('#chatMessages .chatMessage') : null;
+  }
+  function clear(){
+    if(state.timer){ clearTimeout(state.timer); state.timer=null; }
+  }
+  function suppressClick(){
+    window.__chatSelectionSuppressClick = true;
+    clearTimeout(window.__chatSelectionSuppressClickTimer);
+    window.__chatSelectionSuppressClickTimer=setTimeout(()=>window.__chatSelectionSuppressClick=false,900);
+  }
+
+  // IMPORTANT: never let the browser's contextmenu handler select a message.
+  // A long press must open the normal message-options panel first.
+  document.addEventListener('contextmenu', function(e){
+    const msg=messageFrom(e.target);
+    if(!msg) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    clear();
+    if(!selectionMode && typeof window.messageOptions==='function'){
+      window.messageOptions(msg.id);
+    }
+  }, true);
+
+  // Own the touch interaction before the old inline handlers.
+  document.addEventListener('touchstart', function(e){
+    const msg=messageFrom(e.target);
+    if(!msg) return;
+    if(e.target.closest('.messageReactions')) return;
+
+    state.msg=msg;
+    state.startX=e.touches[0]?.clientX||0;
+    state.startY=e.touches[0]?.clientY||0;
+    state.moved=false;
+    state.longPressed=false;
+    clear();
+
+    // Prevent the old inline touchstart from creating another timer.
+    e.stopImmediatePropagation();
+
+    // Selection mode = ordinary tap only. No long press.
+    if(selectionMode) return;
+
+    state.timer=setTimeout(function(){
+      state.timer=null;
+      if(!state.msg || state.msg!==msg || state.moved) return;
+      state.longPressed=true;
+      suppressClick();
+      if(typeof window.messageOptions==='function') window.messageOptions(msg.id);
+    },480);
+  }, true);
+
+  document.addEventListener('touchmove', function(e){
+    if(!state.msg) return;
+    const msg=messageFrom(e.target);
+    if(msg!==state.msg) return;
+    const t=e.touches[0]; if(!t) return;
+    const dx=t.clientX-state.startX, dy=t.clientY-state.startY;
+    if(Math.abs(dx)>10 || Math.abs(dy)>10){ state.moved=true; clear(); }
+    // Keep native vertical scrolling.
+  }, true);
+
+  document.addEventListener('touchend', function(e){
+    const msg=state.msg;
+    if(!msg) return;
+    const t=e.changedTouches[0];
+    const dx=t ? t.clientX-state.startX : 0;
+    const dy=t ? t.clientY-state.startY : 0;
+    clear();
+    state.msg=null;
+
+    if(state.longPressed){
+      state.longPressed=false;
+      suppressClick();
+      e.stopImmediatePropagation();
+      return;
+    }
+
+    if(selectionMode && !state.moved && Math.abs(dx)<15 && Math.abs(dy)<15){
+      suppressClick();
+      if(typeof window.toggleMessageSelection==='function') window.toggleMessageSelection(msg.id);
+      e.stopImmediatePropagation();
+      return;
+    }
+
+    // Preserve right-swipe reply when not selecting.
+    if(!selectionMode && !state.moved && dx>70 && Math.abs(dx)>Math.abs(dy)){
+      if(typeof window.replyToMessage==='function') window.replyToMessage(msg.id);
+      e.stopImmediatePropagation();
+      return;
+    }
+
+    e.stopImmediatePropagation();
+  }, true);
+
+  document.addEventListener('touchcancel', function(){ clear(); state.msg=null; state.moved=false; state.longPressed=false; }, true);
+
+  // The select-all control must always be visible as soon as one message is selected.
+  window.__refreshSelectAllBoxV8=function(){
+    const box=document.getElementById('selectionAllBox108');
+    if(!box) return;
+    const visible=[...document.querySelectorAll('#chatMessages .chatMessage')];
+    const show=!!selectionMode && Array.isArray(selectedMessages) && selectedMessages.length>0;
+    box.style.setProperty('display',show?'flex':'none','important');
+    const all=show && visible.length>0 && visible.every(m=>selectedMessages.includes(m.id));
+    box.classList.toggle('active108',all);
+    box.setAttribute('aria-pressed',all?'true':'false');
+  };
+
+  // Wrap selection functions so every selection immediately refreshes the header box.
+  const wait=setInterval(function(){
+    if(typeof window.toggleMessageSelection!=='function' || typeof window.cancelSelection!=='function') return;
+    clearInterval(wait);
+    const oldToggle=window.toggleMessageSelection;
+    const oldCancel=window.cancelSelection;
+    window.toggleMessageSelection=function(id){
+      oldToggle(id);
+      window.__refreshSelectAllBoxV8();
+    };
+    window.cancelSelection=function(){
+      oldCancel();
+      window.__refreshSelectAllBoxV8();
+    };
+  },10);
+
+  // Make the attachment icon independent of the emoji-to-icon converter.
+  const style=document.createElement('style');
+  style.textContent=`
+    #chatAttachmentBtn{
+      width:42px !important;height:42px !important;min-width:42px !important;min-height:42px !important;
+      flex:0 0 42px !important;display:flex !important;align-items:center !important;justify-content:center !important;
+      padding:0 !important;margin:0 !important;box-sizing:border-box !important;line-height:0 !important;
+    }
+    #chatAttachmentBtn svg{width:22px !important;height:22px !important;display:block !important;margin:0 !important;
+      fill:none !important;stroke:currentColor !important;stroke-width:1.9 !important;
+      stroke-linecap:round !important;stroke-linejoin:round !important;}
+    #chatScreen button[onclick="sendMessage()"]{
+      width:50px !important;height:50px !important;min-width:50px !important;min-height:50px !important;
+      flex:0 0 50px !important;display:flex !important;align-items:center !important;justify-content:center !important;
+      padding:0 !important;line-height:0 !important;box-sizing:border-box !important;
+    }
+    #chatScreen button[onclick="sendMessage()"] svg{width:24px !important;height:24px !important;display:block !important;margin:0 !important;}
+    #selectionAllBox108{position:relative !important;z-index:1000000 !important;}
+    #chatHeader > #selectionAllBox108[style*="display: flex"]{display:flex !important;}
+  `;
+  document.head.appendChild(style);
 })();
 </script>
 
