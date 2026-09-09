@@ -4997,6 +4997,16 @@ body:not(.dark) #chatMessages .chatMessage .messageReactions{
 }
 </style>
 
+
+<style id="chatTopBarVisibilityFixV32">
+/* The main app top bar must never appear over the Messages/chat screen. */
+body.chat-screen-active #topBar {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+</style>
 </head>
 <body class="dark">
   
@@ -27413,6 +27423,14 @@ window.profileNavigationUserId =
     // BACKGROUND
     // =================================================
 
+    // Reaction users sheet must never remain visible over Profile.
+    // Its return state is preserved so it can be restored when Back
+    // returns to the same chat.
+    if (window.messageReactionProfileReturn) {
+        document.getElementById("reactionPopup")?.remove();
+        document.getElementById("reactionPopupBackdrop")?.remove();
+    }
+
     hideTopBar();
     lockBackground();
 
@@ -40518,6 +40536,20 @@ window.openChat = async function (
     }
 
     // =====================================================
+    // CHAT OWNS THE VIEWPORT — HIDE MAIN APP TOP BAR
+    // =====================================================
+
+    document.body.classList.add("chat-screen-active");
+
+    const mainAppTopBar = document.getElementById("topBar");
+    if (mainAppTopBar) {
+        mainAppTopBar.style.setProperty("display", "none", "important");
+        mainAppTopBar.style.setProperty("visibility", "hidden", "important");
+        mainAppTopBar.style.setProperty("opacity", "0", "important");
+        mainAppTopBar.style.setProperty("pointer-events", "none", "important");
+    }
+
+    // =====================================================
     // LOCK BACKGROUND
     // =====================================================
 
@@ -43262,11 +43294,11 @@ window.loadReactionDetails = async function(messageId, emoji) {
     return;
   }
 
-  showReactionPopup(emoji, data || []);
+  showReactionPopup(emoji, data || [], messageId);
 
 };
 
-window.showReactionPopup = function(emoji, users) {
+window.showReactionPopup = function(emoji, users, messageId = null) {
 
   document.getElementById("reactionPopup")?.remove();
 
@@ -43374,6 +43406,7 @@ window.showReactionPopup = function(emoji, users) {
 
   window.allReactionUsers = Array.isArray(users) ? users : [];
   window.currentReactionPopupEmoji = emoji;
+  window.currentReactionPopupMessageId = messageId ? String(messageId) : null;
 
   document.body.appendChild(backdrop);
   document.body.appendChild(popup);
@@ -43387,6 +43420,50 @@ window.showReactionPopup = function(emoji, users) {
 
   renderReactionUsers(window.allReactionUsers);
 
+};
+
+// =====================================================
+// REACTION USER → PROFILE
+// Keep the reaction sheet hidden while the profile is open.
+// It is restored only when navigation returns to the chat.
+// =====================================================
+window.openReactionUserProfile = async function(userId, name) {
+  if (!userId) return;
+
+  const popup = document.getElementById("reactionPopup");
+  const backdrop = document.getElementById("reactionPopupBackdrop");
+
+  window.messageReactionProfileReturn = {
+    messageId: window.currentReactionPopupMessageId
+      ? String(window.currentReactionPopupMessageId)
+      : null,
+    emoji: window.currentReactionPopupEmoji || null,
+    users: Array.isArray(window.allReactionUsers)
+      ? window.allReactionUsers.slice()
+      : []
+  };
+
+  // Hide/remove the sheet while Profile is visible.
+  popup?.remove();
+  backdrop?.remove();
+
+  if (typeof window.openProfile !== "function") {
+    console.error("❌ openProfile() not found for reaction user");
+    return;
+  }
+
+  try {
+    await window.openProfile(userId, name || "User", {
+      returnSource: "chat",
+      source: "chat",
+      sourceData: {
+        userId: window.__activeChatUserId || currentChatUser || null,
+        name: document.getElementById("chatName")?.innerText || "User"
+      }
+    });
+  } catch (error) {
+    console.error("❌ REACTION USER PROFILE OPEN FAILED:", error);
+  }
 };
 
 window.renderReactionUsers = function(users) {
@@ -43417,7 +43494,7 @@ window.renderReactionUsers = function(users) {
 
     return `
       <div
-        onclick="openProfile('${escapeHtml(userId)}','${escapeHtml(name)}')"
+        onclick="openReactionUserProfile('${escapeHtml(userId)}','${escapeHtml(name)}')"
         style="
           display:flex;
           align-items:center;
@@ -43464,6 +43541,25 @@ window.renderReactionUsers = function(users) {
 // all users at once instead of filtering them into separate tabs.
 window.filterReaction = function(reaction){
   renderReactionUsers(window.allReactionUsers || []);
+};
+
+// =====================================================
+// RESTORE MESSAGE REACTION SHEET AFTER PROFILE → CHAT
+// =====================================================
+window.restoreMessageReactionPopup = function() {
+  const state = window.messageReactionProfileReturn;
+  if (!state || !state.messageId || !state.emoji) return false;
+
+  // Avoid duplicating the sheet if it is already open.
+  if (document.getElementById("reactionPopup")) return true;
+
+  showReactionPopup(
+    state.emoji,
+    Array.isArray(state.users) ? state.users : [],
+    state.messageId
+  );
+
+  return true;
 };
 
 window.pinMessage = async function(messageId) {
@@ -43751,6 +43847,10 @@ window.closeChat = async function () {
   // a reload. The next chat open will detach/replace it safely.
 
   console.log("🔙 CLOSE CHAT");
+
+  // The main app top bar may be restored by the destination screen.
+  // Remove the chat-only lock before leaving Messages.
+  document.body.classList.remove("chat-screen-active");
 
   // =====================================================
   // STOP TYPING
@@ -50248,6 +50348,14 @@ if (
                         null
                 }
             );
+
+            // If Profile was opened from the reaction users sheet,
+            // restore that exact sheet only after returning to Chat.
+            if (typeof window.restoreMessageReactionPopup === "function") {
+                requestAnimationFrame(() => {
+                    window.restoreMessageReactionPopup();
+                });
+            }
 
             return true;
 
