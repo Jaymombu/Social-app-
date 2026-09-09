@@ -41674,28 +41674,6 @@ chat.innerHTML +=`
 
   data-message="${escapeHtml(msg.content || "").toLowerCase()}"
 
-  onpointerdown="
-    if(event.pointerType==='mouse' && event.button!==0) return;
-    this.__longPressed=false;
-    this.__pressX=event.clientX; this.__pressY=event.clientY;
-    clearTimeout(this.__longPressTimer);
-    this.__longPressTimer=setTimeout(()=>{
-      this.__longPressed=true;
-      if(!selectionMode) messageOptions('${msg.id}');
-    },650);
-  "
-
-  onpointermove="
-    if(Math.abs(event.clientX-this.__pressX)>10 || Math.abs(event.clientY-this.__pressY)>10) clearTimeout(this.__longPressTimer);
-  "
-
-  onpointerup="
-    clearTimeout(this.__longPressTimer);
-    if(selectionMode){ event.preventDefault(); event.stopPropagation(); toggleMessageSelection('${msg.id}'); return; }
-    if(this.__longPressed){ event.preventDefault(); event.stopPropagation(); }
-  "
-
-  onpointercancel="clearTimeout(this.__longPressTimer);"
 
   style="
     background:${
@@ -52353,24 +52331,74 @@ document.addEventListener("selectstart", function(e) {
   observer.observe(document.body,{childList:true,subtree:true});
 })();
 </script>
-<script id="chatSelectionCleanV12">
+
+<style id="chatAttachmentCleanV12">#chatScreen label[for="chatMedia"]{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;padding:0!important;margin:0!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;border-radius:50%!important;line-height:0!important;font-size:0!important;color:var(--screen-text,#fff)!important;}#chatScreen label[for="chatMedia"]::before{content:"";width:22px;height:22px;display:block;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;}</style>
+
+<script id="chatMessageTouchAuthoritative">
 (function(){
- let s=null; const HOLD=650,MOVE=12;
- const msg=t=>t?.closest?.("#chatMessages .chatMessage")||null;
- const interactive=t=>!!t?.closest?.("button,a,input,textarea,select,label,.messageReactions,video,[data-reaction-button='true']");
- document.addEventListener("pointerdown",e=>{
-   if(e.pointerType!=="touch")return; const m=msg(e.target); if(!m||interactive(e.target))return;
-   if(s?.timer)clearTimeout(s.timer); s={m,x:e.clientX,y:e.clientY,moved:false,long:false,timer:null};
-   if(selectionMode)return;
-   s.timer=setTimeout(()=>{if(!s||s.moved||selectionMode)return;s.long=true;window.messageOptions?.(s.m.id);},HOLD);
- },true);
- document.addEventListener("pointermove",e=>{if(!s)return;if(Math.abs(e.clientX-s.x)>MOVE||Math.abs(e.clientY-s.y)>MOVE){s.moved=true;if(s.timer)clearTimeout(s.timer);s.timer=null;}},true);
- document.addEventListener("pointerup",e=>{if(!s)return;const q=s;if(q.timer)clearTimeout(q.timer);s=null;if(q.long||q.moved)return;if(selectionMode){e.preventDefault();e.stopPropagation();window.toggleMessageSelection?.(q.m.id);}},true);
- document.addEventListener("pointercancel",()=>{if(s?.timer)clearTimeout(s.timer);s=null;},true);
- document.addEventListener("contextmenu",e=>{if(msg(e.target)){e.preventDefault();e.stopPropagation();}},true);
+  const HOLD=650, MOVE=12;
+  let state=null;
+  function getMessage(target){
+    return target && target.closest ? target.closest('#chatMessages .chatMessage') : null;
+  }
+  function isInteractive(target){
+    return !!(target && target.closest && target.closest('button,a,input,textarea,select,label,video,[contenteditable="true"],.messageReactions,[data-reaction-button="true"]'));
+  }
+  const host=document.getElementById('chatMessages');
+  if(!host) return;
+
+  host.addEventListener('touchstart', function(e){
+    if(!e.touches || e.touches.length!==1) return;
+    const target=e.target;
+    const msg=getMessage(target);
+    if(!msg || isInteractive(target)) return;
+    const t=e.touches[0];
+    if(state && state.timer) clearTimeout(state.timer);
+    state={msg:msg,x:t.clientX,y:t.clientY,moved:false,long:false,timer:null};
+    if(selectionMode) return;
+    state.timer=setTimeout(function(){
+      if(!state || state.moved || selectionMode) return;
+      state.long=true;
+      window.messageOptions && window.messageOptions(state.msg.id);
+    },HOLD);
+  }, {passive:false});
+
+  host.addEventListener('touchmove', function(e){
+    if(!state || !e.touches || e.touches.length!==1) return;
+    const t=e.touches[0];
+    if(Math.abs(t.clientX-state.x)>MOVE || Math.abs(t.clientY-state.y)>MOVE){
+      state.moved=true;
+      clearTimeout(state.timer);
+      state.timer=null;
+    }
+  }, {passive:true});
+
+  host.addEventListener('touchend', function(e){
+    if(!state) return;
+    const q=state;
+    clearTimeout(q.timer);
+    state=null;
+    if(q.moved || q.long) return;
+    if(selectionMode){
+      e.preventDefault();
+      e.stopPropagation();
+      window.toggleMessageSelection && window.toggleMessageSelection(q.msg.id);
+    }
+  }, {passive:false});
+
+  host.addEventListener('touchcancel', function(){
+    if(state) clearTimeout(state.timer);
+    state=null;
+  }, {passive:true});
+
+  host.addEventListener('contextmenu', function(e){
+    if(getMessage(e.target)){
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
 })();
 </script>
-<style id="chatAttachmentCleanV12">#chatMedia + label[for="chatMedia"]{width:42px!important;height:42px!important;min-width:42px!important;min-height:42px!important;padding:0!important;margin:0!important;box-sizing:border-box!important;display:flex!important;align-items:center!important;justify-content:center!important;border-radius:50%!important;line-height:0!important;font-size:0!important;color:var(--screen-text,#fff)!important;}#chatMedia + label[for="chatMedia"]::before{content:"";width:22px;height:22px;display:block;background:currentColor;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m8 12.5 5.8-5.8a3.2 3.2 0 0 1 4.5 4.5l-7.2 7.2a4.7 4.7 0 0 1-6.6-6.6l7-7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;}</style>
 </body>
 </html>
-end..2
+ended...
