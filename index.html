@@ -42149,14 +42149,22 @@ ${
   padding-left:4px;
   flex-wrap:nowrap;
 ">
-      ${
-        Object.entries(
-          msg.reactions.reduce((a,r)=>{
-            a[r.reaction]=(a[r.reaction]||0)+1;
-            return a;
-          },{})
-        )
-        .map(([emoji,count])=>`
+      ${(() => {
+        const reactions = Array.isArray(msg.reactions) ? msg.reactions : [];
+        const myId = (typeof currentUser !== "undefined" && currentUser?.id) || window.currentUser?.id || null;
+
+        // Show ONLY the current reaction in one position. Prefer the reaction
+        // made by the current user; otherwise use the most recent reaction.
+        const currentReaction =
+          (myId && [...reactions].reverse().find(r => String(r.user_id || r.userId || r.uid) === String(myId))) ||
+          reactions[reactions.length - 1];
+
+        if (!currentReaction?.reaction) return "";
+
+        const emoji = currentReaction.reaction;
+        const count = reactions.length;
+
+        return `
           <div
             onclick="event.stopPropagation(); showReactionDetails('${msg.id}','${emoji}')"
             style="
@@ -42170,11 +42178,12 @@ ${
               align-items:center;
               flex:0 0 auto;
               box-shadow:none;
+              white-space:nowrap;
             ">
             ${emoji} ${count}
           </div>
-        `).join("")
-      }
+        `;
+      })()}
     </div>
     `
     : ""
@@ -43231,6 +43240,8 @@ window.showReactionDetails = function(messageId, emoji) {
 
 window.loadReactionDetails = async function(messageId, emoji) {
 
+  // Load ALL reactions for this message.  The badge itself shows the
+  // current reaction + total count; opening it shows every user/reaction.
   const { data, error } = await supabase
     .from("message_reactions")
     .select(`
@@ -43244,15 +43255,14 @@ window.loadReactionDetails = async function(messageId, emoji) {
         verified
       )
     `)
-    .eq("message_id", messageId)
-    .eq("reaction", emoji);
+    .eq("message_id", messageId);
 
   if (error) {
     alert(error.message);
     return;
   }
 
-showReactionPopup(emoji, data || []);
+  showReactionPopup(emoji, data || []);
 
 };
 
@@ -43261,143 +43271,199 @@ window.showReactionPopup = function(emoji, users) {
   document.getElementById("reactionPopup")?.remove();
 
   const popup = document.createElement("div");
-
   popup.id = "reactionPopup";
 
-  popup.style = `
+  // Theme-aware backdrop.
+  const backdrop = document.createElement("div");
+  backdrop.id = "reactionPopupBackdrop";
+  backdrop.style.cssText = `
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.42);
+    z-index:999998;
+  `;
+  backdrop.addEventListener("click", () => popup.remove());
+
+  popup.style.cssText = `
     position:fixed;
     left:0;
     right:0;
     bottom:0;
-    height:420px;
-    background:#18191a;
+    max-height:72vh;
+    min-height:280px;
+    background:var(--screen-surface, var(--bg-color, #18191a));
+    color:var(--screen-text, #fff);
+    border-top:1px solid var(--screen-border, #333);
     border-top-left-radius:24px;
     border-top-right-radius:24px;
     z-index:999999;
-    overflow:auto;
-    padding:15px;
+    overflow:hidden;
+    padding:12px 15px calc(18px + env(safe-area-inset-bottom, 0px));
+    box-sizing:border-box;
     animation:slideUp .25s ease;
+    box-shadow:0 -8px 35px rgba(0,0,0,.35);
   `;
 
   popup.innerHTML = `
-<div style="
-display:flex;
-justify-content:space-around;
-align-items:center;
-padding-bottom:12px;
-border-bottom:1px solid #333;
-margin-bottom:15px;
-">
+    <div style="
+      width:42px;
+      height:4px;
+      border-radius:999px;
+      background:var(--screen-muted,#999);
+      opacity:.65;
+      margin:0 auto 12px;
+    "></div>
 
-<span onclick="filterReaction('all')" style="font-size:18px;">
-All (${users.length})
-</span>
+    <div style="
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:2px 2px 13px;
+      border-bottom:1px solid var(--screen-border,#333);
+    ">
+      <div style="
+        width:44px;
+        height:44px;
+        border-radius:50%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:var(--screen-input,#242424);
+        font-size:25px;
+        flex:0 0 44px;
+      ">${escapeHtml(emoji || "💬")}</div>
 
-${[...new Set(users.map(u => u.reaction))].map(r => `
-<span
-onclick="filterReaction('${r}')"
-style="font-size:24px;cursor:pointer;">
-${r}
-</span>
-`).join("")}
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:18px;font-weight:700;color:var(--screen-text,#fff);">
+          Reactions
+        </div>
+        <div style="font-size:13px;color:var(--screen-muted,#999);margin-top:2px;">
+          ${users.length} ${users.length === 1 ? "person" : "people"} reacted
+        </div>
+      </div>
 
-</div>
+      <button
+        type="button"
+        id="reactionPopupClose"
+        aria-label="Close reactions"
+        style="
+          width:38px;
+          height:38px;
+          border:1px solid var(--screen-border,#333);
+          border-radius:50%;
+          background:var(--screen-input,#242424);
+          color:var(--screen-text,#fff);
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          padding:0;
+          font-size:25px;
+          line-height:1;
+          cursor:pointer;
+        "
+      >×</button>
+    </div>
 
-<div id="reactionUsers"></div>
-`;
+    <div id="reactionUsers" style="
+      overflow-y:auto;
+      max-height:calc(72vh - 100px);
+      padding-top:4px;
+      -webkit-overflow-scrolling:touch;
+    "></div>
+  `;
 
-window.allReactionUsers = users;
+  window.allReactionUsers = Array.isArray(users) ? users : [];
+  window.currentReactionPopupEmoji = emoji;
 
-document.body.appendChild(popup);
+  document.body.appendChild(backdrop);
+  document.body.appendChild(popup);
 
-renderReactionUsers(users);
+  popup.querySelector("#reactionPopupClose")?.addEventListener("click", function(e){
+    e.preventDefault();
+    e.stopPropagation();
+    popup.remove();
+    backdrop.remove();
+  });
 
-  setTimeout(() => {
-
-    document.onclick = () => {
-
-      document.getElementById("reactionPopup")?.remove();
-
-      document.onclick = null;
-
-    };
-
-  }, 100);
+  renderReactionUsers(window.allReactionUsers);
 
 };
 
 window.renderReactionUsers = function(users) {
 
-  const list =
-    document.getElementById("reactionUsers");
+  const list = document.getElementById("reactionUsers");
+  if (!list) return;
 
-  list.innerHTML = users.map(u => `
+  if (!Array.isArray(users) || users.length === 0) {
+    list.innerHTML = `
+      <div style="
+        text-align:center;
+        padding:35px 15px;
+        color:var(--screen-muted,#999);
+      ">
+        No reactions yet
+      </div>
+    `;
+    return;
+  }
 
-<div
-  onclick="openProfile('${u.profiles?.id}','${u.profiles?.name || "User"}')"
-  style="
-    display:flex;
-    align-items:center;
-    gap:12px;
-    padding:12px 0;
-    border-bottom:1px solid #333;
-    cursor:pointer;
-  ">
+  list.innerHTML = users.map(u => {
+    const profile = u?.profiles || {};
+    const userId = String(profile.id || "");
+    const name = profile.name || "Unknown";
+    const reaction = u?.reaction || "";
+    const avatar = profile.avatar_url ||
+      "https://ui-avatars.com/api/?name=" + encodeURIComponent(name);
 
-<span class="avatar-wrap" data-user-id="${escapeHtml(String(u.profiles?.id || ''))}" data-online="${u.profiles?.online ? "true" : "false"}">
-<img
-src="${
-  u.profiles?.avatar_url ||
-  'https://ui-avatars.com/api/?name=' +
-  encodeURIComponent(u.profiles?.name || 'User')
-}"
-style="
-width:45px;
-height:45px;
-border-radius:50%;
-object-fit:cover;
-">
-${u.profiles?.online ? '<span class="online-indicator" aria-label="Online"></span>' : ''}
-</span>
+    return `
+      <div
+        onclick="openProfile('${escapeHtml(userId)}','${escapeHtml(name)}')"
+        style="
+          display:flex;
+          align-items:center;
+          gap:12px;
+          padding:12px 4px;
+          border-bottom:1px solid var(--screen-border,#333);
+          cursor:pointer;
+          color:var(--screen-text,#fff);
+        "
+      >
+        <span class="avatar-wrap" style="position:relative;flex:0 0 45px;">
+          <img
+            src="${escapeHtml(avatar)}"
+            alt="${escapeHtml(name)}"
+            style="
+              width:45px;
+              height:45px;
+              border-radius:50%;
+              object-fit:cover;
+              display:block;
+            "
+          >
+          ${profile.online ? '<span class="online-indicator" aria-label="Online"></span>' : ''}
+        </span>
 
-<div style="flex:1;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;color:var(--screen-text,#fff);">
+            ${escapeHtml(name)}${profile.verified ? ' <span style="color:#3897f0;">✓</span>' : ''}
+          </div>
+          <div style="font-size:13px;color:var(--screen-muted,#999);margin-top:2px;">
+            Reacted with ${escapeHtml(reaction)}
+          </div>
+        </div>
 
-<div style="font-weight:bold;">
-${u.profiles?.name || "Unknown"}
-</div>
-
-<div style="
-font-size:13px;
-color:#aaa;
-">
-Reacted with ${u.reaction}
-</div>
-
-</div>
-
-<div style="font-size:24px;">
-${u.reaction}
-</div>
-
-</div>
-
-`).join("");
-
+        <div style="font-size:23px;flex:0 0 auto;">
+          ${escapeHtml(reaction)}
+        </div>
+      </div>
+    `;
+  }).join("");
 };
 
+// Kept for compatibility with older callers; the reaction sheet now shows
+// all users at once instead of filtering them into separate tabs.
 window.filterReaction = function(reaction){
-
-if(reaction==="all"){
-renderReactionUsers(window.allReactionUsers);
-return;
-}
-
-renderReactionUsers(
-window.allReactionUsers.filter(
-u=>u.reaction===reaction
-)
-);
-
+  renderReactionUsers(window.allReactionUsers || []);
 };
 
 window.pinMessage = async function(messageId) {
