@@ -41708,6 +41708,10 @@ chat.innerHTML +=`
   data-message="${escapeHtml(msg.content || "").toLowerCase()}"
   
   onclick="
+if(window.__skipNextMessageSelectionClick){
+  window.__skipNextMessageSelectionClick = false;
+  return;
+}
 if(selectionMode){
   toggleMessageSelection('${msg.id}');
 }
@@ -41722,9 +41726,6 @@ ontouchstart="
 swipeStartX = event.changedTouches[0].clientX;
 swipeStartY = event.changedTouches[0].clientY;
 
-// Once selection mode is active, a normal touch is always a tap-to-select/deselect.
-// Do not start the long-press timer again, otherwise every message would require
-// another hold and could reopen the message-options panel.
 if(selectionMode) return;
 
 window.pressTimer = setTimeout(() => {
@@ -41754,6 +41755,12 @@ if(moveX>0 && moveX<80){
 
 ontouchend="
 clearTimeout(window.pressTimer);
+
+if(selectionMode){
+  window.__skipNextMessageSelectionClick = true;
+  toggleMessageSelection('${msg.id}');
+  return;
+}
 
 moveX = event.changedTouches[0].clientX - swipeStartX;
 
