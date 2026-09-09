@@ -3285,6 +3285,9 @@ body {
   background:#1877f2 !important;
   color:#fff !important;
 }
+/* The box is shown only after at least one message is selected. */
+#selectionAllBox108.selection-visible108{display:flex !important;}
+
 #chatHeader > .chat-header-search{
   display:flex !important;
   align-items:center !important;
@@ -4979,6 +4982,35 @@ body, #posts, #chatMessages, .comments-list, .search-results, .notifications-lis
   stroke-linecap:round !important;
   stroke-linejoin:round !important;
 }
+</style>
+
+<style id="chat-composer-final-visibility">
+/* Final composer visibility fix: keep the existing circular backgrounds and
+   make the attachment/send glyphs explicitly visible in both themes. */
+#chatScreen #chatMedia + label{
+  width:42px !important; height:42px !important; min-width:42px !important;
+  flex:0 0 42px !important;
+  display:flex !important; align-items:center !important; justify-content:center !important;
+  visibility:visible !important; opacity:1 !important;
+  position:relative !important; z-index:5 !important;
+}
+#chatScreen #chatMedia + label .chat-attach-icon{
+  width:23px !important; height:23px !important;
+  min-width:23px !important; min-height:23px !important;
+  display:block !important; visibility:visible !important; opacity:1 !important;
+  stroke:#171717 !important; color:#171717 !important;
+  fill:none !important;
+}
+#chatScreen button[onclick="sendMessage()"] .chat-send-icon{
+  width:24px !important; height:24px !important;
+  min-width:24px !important; min-height:24px !important;
+  display:block !important; visibility:visible !important; opacity:1 !important;
+  stroke:#fff !important; color:#fff !important; fill:none !important;
+}
+body.dark #chatScreen #chatMedia + label{background:#1f1f1f !important;color:#fff !important;}
+body.dark #chatScreen #chatMedia + label .chat-attach-icon{stroke:#fff !important;color:#fff !important;}
+body:not(.dark) #chatScreen #chatMedia + label{background:#f1f1f1 !important;color:#171717 !important;}
+body:not(.dark) #chatScreen #chatMedia + label .chat-attach-icon{stroke:#171717 !important;color:#171717 !important;}
 </style>
 </head>
 <body class="dark">
@@ -44057,7 +44089,7 @@ window.toggleMessageSelection = function(id){
   if(header) header.style.display="flex";
 
   const box=document.getElementById("selectionAllBox108");
-  if(box) box.style.display = selectedMessages.length ? "flex" : "none";
+  if(box) box.classList.toggle("selection-visible108", selectedMessages.length > 0);
   updateSelectionAllBox108();
 
   if(selectedMessages.length===0) cancelSelection();
@@ -44069,7 +44101,7 @@ window.cancelSelection = function(){
   document.getElementById("selectionBar")?.style && (document.getElementById("selectionBar").style.display="none");
   document.getElementById("selectionActionsSheet108")?.remove();
   const box=document.getElementById("selectionAllBox108");
-  if(box) { box.style.display="none"; box.classList.remove("active108"); box.setAttribute("aria-pressed","false"); }
+  if(box) { box.classList.remove("selection-visible108","active108"); box.setAttribute("aria-pressed","false"); }
   const header=document.getElementById("chatHeader");
   if(header) header.style.display="flex";
 
@@ -44094,7 +44126,7 @@ window.selectAllMessages = function(){
   const header=document.getElementById("chatHeader");
   if(header) header.style.display="flex";
   const box=document.getElementById("selectionAllBox108");
-  if(box) box.style.display="flex";
+  if(box) box.classList.add("selection-visible108");
   updateSelectionAllBox108();
 };
 
@@ -52672,7 +52704,7 @@ document.addEventListener("selectstart", function(e) {
     // Stop the old inline touchstart from starting a second timer.
     e.stopPropagation();
 
-    if(window.selectionMode){
+    if(typeof selectionMode !== "undefined" && selectionMode){
       // In selection mode there is NO long press. A normal touch is handled
       // on touchend as an immediate select/deselect.
       return;
@@ -52727,7 +52759,7 @@ document.addEventListener("selectstart", function(e) {
       return;
     }
 
-    if(window.selectionMode && !moved && Math.abs(dx) < 15 && Math.abs(dy) < 15){
+    if(typeof selectionMode !== "undefined" && selectionMode && !moved && Math.abs(dx) < 15 && Math.abs(dy) < 15){
       suppressNextClick();
       if(typeof window.toggleMessageSelection === 'function'){
         window.toggleMessageSelection(msg.id);
@@ -52759,7 +52791,7 @@ document.addEventListener("selectstart", function(e) {
     const box = document.getElementById('selectionAllBox108');
     if(!box) return;
     if(typeof selectionMode === 'undefined' || !selectionMode || !Array.isArray(selectedMessages) || selectedMessages.length === 0){
-      box.style.display = 'none';
+      box.classList.remove('selection-visible108');
     }
   });
   observer.observe(document.body, {childList:true, subtree:true});
