@@ -3255,7 +3255,7 @@ body {
   overflow:hidden !important;
 }
 #selectionAllBox108{
-  display:none !important;
+  display:none;
   flex:0 0 34px !important;
   width:34px !important;
   min-width:34px !important;
@@ -3285,9 +3285,6 @@ body {
   background:#1877f2 !important;
   color:#fff !important;
 }
-/* The box is shown only after at least one message is selected. */
-#selectionAllBox108.selection-visible108{display:flex !important;}
-
 #chatHeader > .chat-header-search{
   display:flex !important;
   align-items:center !important;
@@ -3906,6 +3903,72 @@ body.dark{
 #chatVoiceBtn{
   background:var(--screen-input) !important;
   color:var(--screen-text) !important;
+}
+/* Chat composer icon positioning: the attachment label is BEFORE the file input,
+   so #chatMedia + label cannot style it. Target it directly instead. */
+#chatMessages ~ div label[for="chatMedia"]{
+  width:42px !important;
+  min-width:42px !important;
+  height:42px !important;
+  flex:0 0 42px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:0 !important;
+  margin:0 !important;
+  box-sizing:border-box !important;
+  background:var(--screen-input,#1f1f1f) !important;
+  color:var(--screen-text,#fff) !important;
+  line-height:1 !important;
+  overflow:visible !important;
+}
+#chatMessages ~ div label[for="chatMedia"] .global-mono-ui-icon{
+  width:22px !important;
+  height:22px !important;
+  margin:0 !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  color:currentColor !important;
+}
+#chatMessages ~ div label[for="chatMedia"] .global-mono-ui-icon svg{
+  width:22px !important;
+  height:22px !important;
+  display:block !important;
+  fill:none !important;
+  stroke:currentColor !important;
+  stroke-width:1.8 !important;
+  stroke-linecap:round !important;
+  stroke-linejoin:round !important;
+}
+#chatMessages ~ div button[onclick="sendMessage()"]{
+  width:50px !important;
+  min-width:50px !important;
+  height:50px !important;
+  flex:0 0 50px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:0 !important;
+  margin:0 !important;
+  box-sizing:border-box !important;
+  line-height:1 !important;
+  color:#fff !important;
+}
+#chatMessages ~ div button[onclick="sendMessage()"] .global-mono-ui-icon{
+  width:23px !important;
+  height:23px !important;
+  margin:0 !important;
+}
+#chatMessages ~ div button[onclick="sendMessage()"] .global-mono-ui-icon svg{
+  width:23px !important;
+  height:23px !important;
+  display:block !important;
+  fill:none !important;
+  stroke:currentColor !important;
+  stroke-width:1.8 !important;
+  stroke-linecap:round !important;
+  stroke-linejoin:round !important;
 }
 
 /* Selection bar */
@@ -4936,81 +4999,21 @@ body, #posts, #chatMessages, .comments-list, .search-results, .notifications-lis
 </style>
 
 
-<style id="chat-composer-icon-alignment">
-/* Keep the attachment and send icons optically centered inside their circular backgrounds. */
-#chatScreen #chatMedia + label{
-  box-sizing:border-box !important;
-  display:flex !important;
+<style id="selection-composer-final-fix">
+#selectionAllBox108[aria-pressed="true"],
+#selectionAllBox108[aria-pressed="false"]{
   align-items:center !important;
   justify-content:center !important;
-  padding:0 !important;
-  line-height:0 !important;
-  flex:0 0 42px !important;
-  overflow:hidden !important;
 }
-#chatScreen #chatMedia + label .chat-attach-icon{
-  width:22px !important;
-  height:22px !important;
-  display:block !important;
-  flex:0 0 22px !important;
-  margin:0 !important;
-  fill:none !important;
-  stroke:currentColor !important;
-  stroke-width:1.9 !important;
-  stroke-linecap:round !important;
-  stroke-linejoin:round !important;
+#selectionAllBox108 svg{pointer-events:none !important;}
+#messageMenu108{
+  pointer-events:auto !important;
+  touch-action:pan-y !important;
 }
-#chatScreen button[onclick="sendMessage()"]{
-  box-sizing:border-box !important;
-  display:flex !important;
-  align-items:center !important;
-  justify-content:center !important;
-  padding:0 !important;
-  line-height:0 !important;
-  flex:0 0 50px !important;
-  overflow:hidden !important;
+#messageMenu108 .action-row108{
+  pointer-events:auto !important;
+  touch-action:manipulation !important;
 }
-#chatScreen button[onclick="sendMessage()"] .chat-send-icon{
-  width:23px !important;
-  height:23px !important;
-  display:block !important;
-  flex:0 0 23px !important;
-  margin:0 !important;
-  fill:none !important;
-  stroke:currentColor !important;
-  stroke-width:1.9 !important;
-  stroke-linecap:round !important;
-  stroke-linejoin:round !important;
-}
-</style>
-
-<style id="chat-composer-final-visibility">
-/* Final composer visibility fix: keep the existing circular backgrounds and
-   make the attachment/send glyphs explicitly visible in both themes. */
-#chatScreen #chatMedia + label{
-  width:42px !important; height:42px !important; min-width:42px !important;
-  flex:0 0 42px !important;
-  display:flex !important; align-items:center !important; justify-content:center !important;
-  visibility:visible !important; opacity:1 !important;
-  position:relative !important; z-index:5 !important;
-}
-#chatScreen #chatMedia + label .chat-attach-icon{
-  width:23px !important; height:23px !important;
-  min-width:23px !important; min-height:23px !important;
-  display:block !important; visibility:visible !important; opacity:1 !important;
-  stroke:#171717 !important; color:#171717 !important;
-  fill:none !important;
-}
-#chatScreen button[onclick="sendMessage()"] .chat-send-icon{
-  width:24px !important; height:24px !important;
-  min-width:24px !important; min-height:24px !important;
-  display:block !important; visibility:visible !important; opacity:1 !important;
-  stroke:#fff !important; color:#fff !important; fill:none !important;
-}
-body.dark #chatScreen #chatMedia + label{background:#1f1f1f !important;color:#fff !important;}
-body.dark #chatScreen #chatMedia + label .chat-attach-icon{stroke:#fff !important;color:#fff !important;}
-body:not(.dark) #chatScreen #chatMedia + label{background:#f1f1f1 !important;color:#171717 !important;}
-body:not(.dark) #chatScreen #chatMedia + label .chat-attach-icon{stroke:#171717 !important;color:#171717 !important;}
 </style>
 </head>
 <body class="dark">
@@ -5359,9 +5362,7 @@ padding:8px;
       cursor:pointer;
       color:white;
     ">
-      <svg class="chat-attach-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M21.4 11.6 12.9 20a6 6 0 0 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9 9a2 2 0 0 1-2.8-2.8l8.2-8.2"/>
-      </svg>
+      📎
     </label>
 
     <input
@@ -5409,7 +5410,6 @@ pointer-events:auto;
 
     <button
       onclick="sendMessage()"
-      aria-label="Send message"
       style="
         width:50px;
         height:50px;
@@ -5419,16 +5419,8 @@ pointer-events:auto;
         color:white;
         font-size:20px;
         cursor:pointer;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        padding:0;
-        line-height:0;
       ">
-      <svg class="chat-send-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M21 3 10 14"/>
-        <path d="m21 3-7 18-4-7-7-4Z"/>
-      </svg>
+      ➤
     </button>
 
   </div>
@@ -44089,7 +44081,7 @@ window.toggleMessageSelection = function(id){
   if(header) header.style.display="flex";
 
   const box=document.getElementById("selectionAllBox108");
-  if(box) box.classList.toggle("selection-visible108", selectedMessages.length > 0);
+  if(box) box.style.display = selectedMessages.length ? "flex" : "none";
   updateSelectionAllBox108();
 
   if(selectedMessages.length===0) cancelSelection();
@@ -44101,7 +44093,7 @@ window.cancelSelection = function(){
   document.getElementById("selectionBar")?.style && (document.getElementById("selectionBar").style.display="none");
   document.getElementById("selectionActionsSheet108")?.remove();
   const box=document.getElementById("selectionAllBox108");
-  if(box) { box.classList.remove("selection-visible108","active108"); box.setAttribute("aria-pressed","false"); }
+  if(box) { box.style.display="none"; box.classList.remove("active108"); box.setAttribute("aria-pressed","false"); }
   const header=document.getElementById("chatHeader");
   if(header) header.style.display="flex";
 
@@ -44126,7 +44118,7 @@ window.selectAllMessages = function(){
   const header=document.getElementById("chatHeader");
   if(header) header.style.display="flex";
   const box=document.getElementById("selectionAllBox108");
-  if(box) box.classList.add("selection-visible108");
+  if(box) box.style.display="flex";
   updateSelectionAllBox108();
 };
 
@@ -52704,7 +52696,7 @@ document.addEventListener("selectstart", function(e) {
     // Stop the old inline touchstart from starting a second timer.
     e.stopPropagation();
 
-    if(typeof selectionMode !== "undefined" && selectionMode){
+    if(selectionMode){
       // In selection mode there is NO long press. A normal touch is handled
       // on touchend as an immediate select/deselect.
       return;
@@ -52759,7 +52751,7 @@ document.addEventListener("selectstart", function(e) {
       return;
     }
 
-    if(typeof selectionMode !== "undefined" && selectionMode && !moved && Math.abs(dx) < 15 && Math.abs(dy) < 15){
+    if(selectionMode && !moved && Math.abs(dx) < 15 && Math.abs(dy) < 15){
       suppressNextClick();
       if(typeof window.toggleMessageSelection === 'function'){
         window.toggleMessageSelection(msg.id);
@@ -52769,7 +52761,7 @@ document.addEventListener("selectstart", function(e) {
     }
 
     // Preserve the existing right-swipe-to-reply behavior.
-    if(!window.selectionMode && !moved && dx > 70 && Math.abs(dx) > Math.abs(dy)){
+    if(!selectionMode && !moved && dx > 70 && Math.abs(dx) > Math.abs(dy)){
       if(typeof window.replyToMessage === 'function'){
         window.replyToMessage(msg.id);
       }
@@ -52791,7 +52783,7 @@ document.addEventListener("selectstart", function(e) {
     const box = document.getElementById('selectionAllBox108');
     if(!box) return;
     if(typeof selectionMode === 'undefined' || !selectionMode || !Array.isArray(selectedMessages) || selectedMessages.length === 0){
-      box.classList.remove('selection-visible108');
+      box.style.display = 'none';
     }
   });
   observer.observe(document.body, {childList:true, subtree:true});
