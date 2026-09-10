@@ -51468,7 +51468,8 @@ window.addEventListener(
                     "profileScreen",
                     "profileSettingsScreen",
                     "notificationsScreen",
-                    "storyViewer"
+                    "storyViewer",
+                    "chatScreen"
                 ]);
 
                 if (screensWithHiddenTopBar.has(restoreState.screen)) {
@@ -51477,6 +51478,16 @@ window.addEventListener(
                     }
                 } else if (typeof window.restoreTopBar === "function") {
                     window.restoreTopBar();
+                }
+
+                // Messages/chat owns the full viewport.  The main app topbar
+                // must never be restored while chatScreen is the destination,
+                // including after Profile -> Back and reaction-user -> Profile -> Back.
+                if (restoreState.screen === "chatScreen") {
+                    document.body.classList.add("chat-screen-active");
+                    if (typeof window.hideTopBar === "function") {
+                        window.hideTopBar();
+                    }
                 }
 
 
