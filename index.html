@@ -50349,6 +50349,12 @@ if (
                 }
             );
 
+            // Chat is a full-screen child screen: the main app topbar
+            // must remain hidden even when returning from Profile.
+            if (typeof window.hideTopBar === "function") {
+                window.hideTopBar();
+            }
+
             // If Profile was opened from the reaction users sheet,
             // restore that exact sheet only after returning to Chat.
             if (typeof window.restoreMessageReactionPopup === "function") {
