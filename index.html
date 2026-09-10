@@ -5042,6 +5042,40 @@ body.dark #chatViewOnceBar{background:#1f1f1f;color:#fff;border-color:#333;}
 body:not(.dark) #chatViewOnceBar{background:#f3f3f3;color:#222;border-color:#ddd;}
 body:not(.dark) .chat-view-once-bubble .vo-icon{background:rgba(0,0,0,.08);}
 </style>
+
+<style id="chatViewOncePreviewAboveComposerV43">
+/* Keep media/View Once preview above the composer so it never pushes
+   the send button off the right edge of the screen. */
+#chatScreen #chatViewOnceBar{
+  width:100% !important;
+  max-width:100% !important;
+  box-sizing:border-box !important;
+  flex:0 0 auto !important;
+  min-height:50px !important;
+  margin:0 0 8px !important;
+  overflow:hidden !important;
+}
+#chatScreen #chatViewOnceBar.active{
+  display:flex !important;
+}
+#chatScreen #chatViewOnceBar .view-once-label{
+  flex:1 1 auto !important;
+  min-width:0 !important;
+  overflow:hidden !important;
+}
+#chatScreen #chatViewOnceBar .view-once-file{
+  max-width:none !important;
+  min-width:0 !important;
+}
+#chatScreen #chatViewOnceBar button{
+  flex:0 0 auto !important;
+}
+#chatScreen #chatComposerRow{
+  width:100% !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+}
+</style>
 </head>
 <body class="dark">
   
@@ -5365,16 +5399,34 @@ padding:8px;
     </button>
   </div>
 
-  <div style="
+  <!-- VIEW ONCE / MEDIA PREVIEW: separate row above the composer. -->
+  <div id="chatViewOnceBar" aria-live="polite">
+    <div class="view-once-label">
+      <span>◉</span>
+      <div>
+        <div style="font-weight:600;">View once</div>
+        <div id="chatViewOnceFile" class="view-once-file">Photo / video</div>
+      </div>
+    </div>
+    <button type="button" id="chatViewOnceToggle" aria-label="Toggle view once">OFF</button>
+    <button type="button" id="chatViewOnceClear" aria-label="Clear media">✕</button>
+  </div>
+
+  <div id="chatComposerRow" style="
     display:flex;
     align-items:center;
     gap:8px;
+    width:100%;
+    min-width:0;
+    box-sizing:border-box;
   ">
 
     <label for="chatMedia"
     style="
       width:42px;
       height:42px;
+      min-width:42px;
+      flex:0 0 42px;
       border-radius:50%;
       background:#1f1f1f;
       display:flex;
@@ -5383,79 +5435,61 @@ padding:8px;
       font-size:22px;
       cursor:pointer;
       color:white;
+      box-sizing:border-box;
     ">
       📎
     </label>
 
-    <input
-      type="file"
-      id="chatMedia"
-      accept="image/*,video/*"
-      style="display:none;"
-    >
+    <input type="file" id="chatMedia" accept="image/*,video/*" style="display:none;">
 
-    <div id="chatViewOnceBar" aria-live="polite">
-      <div class="view-once-label">
-        <span>◉</span>
-        <div>
-          <div style="font-weight:600;">View once</div>
-          <div id="chatViewOnceFile" class="view-once-file">Photo / video</div>
-        </div>
-      </div>
-      <button type="button" id="chatViewOnceToggle" aria-label="Toggle view once">OFF</button>
-      <button type="button" id="chatViewOnceClear" aria-label="Clear media">✕</button>
-    </div>
+    <input id="chatInput" placeholder="Type a message..." style="
+      flex:1 1 auto;
+      min-width:0;
+      width:0;
+      height:44px;
+      background:#1f1f1f;
+      border:none;
+      border-radius:25px;
+      color:white;
+      padding:0 15px;
+      outline:none;
+      box-sizing:border-box;
+    ">
 
-    <input
-      id="chatInput"
-      placeholder="Type a message..."
-      style="
-        flex:1;
-        height:44px;
-        background:#1f1f1f;
-        border:none;
-        border-radius:25px;
-        color:white;
-        padding:0 15px;
-        outline:none;
-      "
-    >
-    
-    <button
-id="chatVoiceBtn"
-type="button"
-style="
-width:46px;
-height:46px;
-border:none;
-border-radius:50%;
-background:#1f1f1f;
-color:white;
-font-size:20px;
-cursor:pointer;
-touch-action:none;
-user-select:none;
--webkit-user-select:none;
--webkit-touch-callout:none;
-pointer-events:auto;
-">
-<svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg>
-</button>
-
-    <button
-      onclick="sendMessage()"
-      style="
-        width:50px;
-        height:50px;
-        border:none;
-        border-radius:50%;
-        background:#0084ff;
-        color:white;
-        font-size:20px;
-        cursor:pointer;
-      ">
-      ➤
+    <button id="chatVoiceBtn" type="button" style="
+      width:46px;
+      height:46px;
+      min-width:46px;
+      flex:0 0 46px;
+      border:none;
+      border-radius:50%;
+      background:#1f1f1f;
+      color:white;
+      font-size:20px;
+      cursor:pointer;
+      touch-action:none;
+      user-select:none;
+      -webkit-user-select:none;
+      -webkit-touch-callout:none;
+      pointer-events:auto;
+      box-sizing:border-box;
+    ">
+      <svg class="comment-ui-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"/></svg>
     </button>
+
+    <button onclick="sendMessage()" style="
+      width:50px;
+      height:50px;
+      min-width:50px;
+      flex:0 0 50px;
+      border:none;
+      border-radius:50%;
+      background:#0084ff;
+      color:white;
+      font-size:20px;
+      cursor:pointer;
+      box-sizing:border-box;
+    ">➤</button>
 
   </div>
 
