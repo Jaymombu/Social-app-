@@ -5007,6 +5007,27 @@ body.chat-screen-active #topBar {
   pointer-events: none !important;
 }
 </style>
+
+<style id="messageReactionCompactV38">
+/* Compact reaction badge attached to each chat message. */
+#chatMessages .chatMessage .messageReactions{
+  min-height:20px !important;
+  height:20px !important;
+  padding:1px 5px !important;
+  border-radius:11px !important;
+  gap:2px !important;
+  bottom:-13px !important;
+  font-size:12px !important;
+  line-height:18px !important;
+}
+#chatMessages .chatMessage .messageReactions > div{
+  min-height:18px !important;
+  height:18px !important;
+  padding:0 1px !important;
+  font-size:12px !important;
+  line-height:18px !important;
+}
+</style>
 </head>
 <body class="dark">
   
@@ -40429,6 +40450,8 @@ window.openChat = async function (
     if (chatOpenToken !== window.__chatOpenToken) return;
 
     currentChatUser = userId;
+    clearInterval(window.__chatMessageSyncTimer);
+    window.__chatMessageSyncTimer = null;
     window.__activeChatUserId = userId;
     window.__chatForceBottom = true;
 
@@ -40698,6 +40721,7 @@ window.openChat = async function (
 
     listenForSeenMessages(userId);
     startChatStatusPolling(userId);
+    startOpenChatMessageSync(userId);
 
     console.log(
         "💬 CHAT OPENED SUCCESSFULLY:",
@@ -42854,6 +42878,55 @@ function startChatStatusPolling(userId) {
   refreshOpenChatStatuses(userId);
 }
 
+
+// =====================================================
+// OPEN CHAT MESSAGE SYNC FALLBACK
+// Supabase UPDATE events can arrive even when an INSERT event is missed by
+// the browser/realtime connection. Keep the open conversation synchronized
+// without requiring a manual refresh.
+// =====================================================
+function startOpenChatMessageSync(userId) {
+  clearInterval(window.__chatMessageSyncTimer);
+  window.__chatMessageSyncUser = String(userId);
+  window.__chatMessageSyncTimer = setInterval(async () => {
+    if (String(currentChatUser || "") !== String(userId) || !isChatScreenVisible()) {
+      clearInterval(window.__chatMessageSyncTimer);
+      window.__chatMessageSyncTimer = null;
+      return;
+    }
+
+    const chat = document.getElementById("chatMessages");
+    if (!chat || String(chat.dataset.chatUserId || "") !== String(userId)) return;
+
+    const myId = session?.user?.id || currentUser?.id || window.currentUser?.id;
+    if (!myId) return;
+
+    const { data, error } = await supabase
+      .from("messages")
+      .select(`
+        *,
+        replied:reply_to(id,content,media_url,media_type),
+        reactions:message_reactions(user_id,reaction)
+      `)
+      .or(`and(sender_id.eq.${myId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${myId})`)
+      .order("created_at", { ascending: true });
+
+    if (error || !Array.isArray(data)) return;
+    if (String(currentChatUser || "") !== String(userId) || !isChatScreenVisible()) return;
+
+    // Only append rows that are genuinely missing. This avoids rebuilding the
+    // whole chat and therefore preserves the user's current scroll position.
+    let added = false;
+    for (const msg of data) {
+      if (msg.sender_id !== myId && msg.deleted_for_receiver === true) continue;
+      if (msg.sender_id === myId && msg.deleted_for_sender === true) continue;
+      if (document.getElementById(String(msg.id))) continue;
+      if (window.appendInstantChatMessage?.(msg)) added = true;
+    }
+
+    if (added) chat.scrollTop = chat.scrollHeight;
+  }, 900);
+}
 
 function listenForSeenMessages(userId) {
   if (window.messageSeenChannel) {
