@@ -1,4 +1,4 @@
-const CACHE_NAME = "social-app-v265";
+const CACHE_NAME = "social-app-v267";
 
 const urlsToCache = [
   "./",
@@ -26,11 +26,9 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
 
   event.waitUntil(
-
     caches.keys().then((keys) => {
 
       return Promise.all(
-
         keys.map((key) => {
 
           if (key !== CACHE_NAME) {
@@ -38,11 +36,9 @@ self.addEventListener("activate", (event) => {
           }
 
         })
-
       );
 
     })
-
   );
 
   self.clients.claim();
@@ -52,42 +48,93 @@ self.addEventListener("activate", (event) => {
 // FETCH
 self.addEventListener("fetch", (event) => {
 
+  const request = event.request;
+  const url = new URL(request.url);
+
   // NEVER CACHE SUPABASE
-  if (event.request.url.includes("supabase")) {
-
-    event.respondWith(fetch(event.request));
+  if (url.hostname.includes("supabase")) {
+    event.respondWith(fetch(request));
     return;
-
   }
 
-  event.respondWith(
+  // NEVER INTERCEPT NON-GET REQUESTS
+  if (request.method !== "GET") {
+    return;
+  }
 
-    caches.match(event.request)
+  // NETWORK-FIRST FOR THE APP SHELL
+  const isAppShell =
+    request.mode === "navigate" ||
+    url.pathname.endsWith("/index.html") ||
+    url.pathname === new URL("./", self.location.href).pathname;
 
-      .then((cachedResponse) => {
+  if (isAppShell) {
 
-        // RETURN CACHE
-        if (cachedResponse) {
-          return cachedResponse;
-        }
+    event.respondWith(
 
-        // FETCH NETWORK
-        return fetch(event.request)
+      fetch(request)
 
-          .then((networkResponse) => {
+        .then((networkResponse) => {
+
+          if (networkResponse && networkResponse.ok) {
 
             const responseClone =
               networkResponse.clone();
 
             caches.open(CACHE_NAME)
               .then((cache) => {
-
-                cache.put(
-                  event.request,
-                  responseClone
-                );
-
+                cache.put(request, responseClone);
               });
+
+          }
+
+          return networkResponse;
+
+        })
+
+        .catch(() => {
+
+          return caches.match(request)
+            .then((cachedResponse) => {
+
+              return cachedResponse ||
+                caches.match("./index.html");
+
+            });
+
+        })
+
+    );
+
+    return;
+  }
+
+  // CACHE-FIRST FOR STATIC ASSETS
+  event.respondWith(
+
+    caches.match(request)
+
+      .then((cachedResponse) => {
+
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+
+        return fetch(request)
+
+          .then((networkResponse) => {
+
+            if (networkResponse && networkResponse.ok) {
+
+              const responseClone =
+                networkResponse.clone();
+
+              caches.open(CACHE_NAME)
+                .then((cache) => {
+                  cache.put(request, responseClone);
+                });
+
+            }
 
             return networkResponse;
 
@@ -105,13 +152,18 @@ self.addEventListener("fetch", (event) => {
 
 });
 
+// PUSH NOTIFICATIONS
 self.addEventListener("push", (event) => {
 
-  const data = event.data ? event.data.json() : {};
+  const data =
+    event.data ? event.data.json() : {};
 
   event.waitUntil(
+
     self.registration.showNotification(
+
       data.title || "New notification",
+
       {
         body: data.body || "You have a new update",
         icon: "/icon-192.png",
@@ -120,11 +172,14 @@ self.addEventListener("push", (event) => {
         tag: "social-app",
         renotify: true
       }
+
     )
+
   );
 
 });
 
+// NOTIFICATION CLICK
 self.addEventListener("notificationclick", (event) => {
 
   event.notification.close();
@@ -134,4 +189,5 @@ self.addEventListener("notificationclick", (event) => {
   event.waitUntil(
     clients.openWindow("/")
   );
+
 });
