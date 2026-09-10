@@ -4755,7 +4755,7 @@ body.light .avatar-wrap .online-indicator,body.light .story-avatar-wrap .online-
   border-top-right-radius:26px !important;
   padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px)) !important;
   box-shadow:0 -8px 30px rgba(0,0,0,.48) !important;
-  max-height:min(72vh,620px) !important;
+  max-height:min(38vh,360px) !important;
   overflow-y:auto !important;
   -webkit-overflow-scrolling:touch !important;
 }
@@ -42882,8 +42882,10 @@ function listenForSeenMessages(userId) {
       }
 
       if (channelToken !== window.__chatOpenToken || currentChatUser !== userId) return;
-      // The global messages subscription performs the single chat render.
-      // Avoid a second load here, which used to race it and cause blinking.
+      // Paint the incoming message directly from this chat subscription.
+      // This is the realtime path that is already receiving the delivery event,
+      // so the message must not wait for a later refresh or another channel.
+      window.appendInstantChatMessage?.(msg);
       await loadUnreadMessages();
       window.scheduleInboxRefresh?.();
     })
@@ -43352,8 +43354,8 @@ window.showReactionPopup = function(emoji, users, messageId = null) {
     left:0;
     right:0;
     bottom:0;
-    max-height:50vh;
-    min-height:210px;
+    max-height:min(38vh,360px);
+    min-height:0;
     background:var(--screen-surface, var(--bg-color, #18191a));
     color:var(--screen-text, #fff);
     border-top:1px solid var(--screen-border, #333);
@@ -43429,7 +43431,7 @@ window.showReactionPopup = function(emoji, users, messageId = null) {
 
     <div id="reactionUsers" style="
       overflow-y:auto;
-      max-height:calc(50vh - 100px);
+      max-height:calc(min(38vh,360px) - 100px);
       padding-top:4px;
       -webkit-overflow-scrolling:touch;
     "></div>
