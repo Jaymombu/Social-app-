@@ -41822,6 +41822,7 @@ swipeStartX = event.changedTouches[0].clientX;
 swipeStartY = event.changedTouches[0].clientY;
 window.__messageLongPressed=false;
 window.__messageMoved=false;
+window.__messageSwiping=false;
 clearTimeout(window.pressTimer);
 
 if(window.selectionMode) return;
@@ -41834,72 +41835,77 @@ window.pressTimer = setTimeout(() => {
 "
 
 ontouchmove="
-if(!window.selectionMode){
-  const tx=event.changedTouches[0].clientX;
-  const ty=event.changedTouches[0].clientY;
-  if(Math.abs(tx-swipeStartX)>12 || Math.abs(ty-swipeStartY)>12){
-    window.__messageMoved=true;
-    clearTimeout(window.pressTimer);
-  }
-}
-
 if(window.selectionMode) return;
 
-moveX = event.changedTouches[0].clientX - swipeStartX;
+const tx=event.changedTouches[0].clientX;
+const ty=event.changedTouches[0].clientY;
+const dx=tx-swipeStartX;
+const dy=ty-swipeStartY;
+const absX=Math.abs(dx);
+const absY=Math.abs(dy);
 
-if(moveX>0 && moveX<80){
+if(absX>10 || absY>10) clearTimeout(window.pressTimer);
 
-  this.style.transform='translateX('+moveX+'px)';
+if(absX>10 && absX>absY){
+  window.__messageMoved=true;
+  window.__messageSwiping=(dx>0);
 
-  const t=this.querySelector('.messageTime');
-
-  if(t) t.style.display='block';
-
+  if(dx>0){
+    const amount=Math.min(dx,80);
+    this.style.transform='translateX('+amount+'px)';
+    const t=this.querySelector('.messageTime');
+    if(t) t.style.display='block';
+  }
+} else if(absY>10){
+  window.__messageMoved=true;
+  window.__messageSwiping=false;
 }
 "
 
 ontouchend="
 clearTimeout(window.pressTimer);
 
+const endX=event.changedTouches[0].clientX;
+const endY=event.changedTouches[0].clientY;
+const finalDx=endX-swipeStartX;
+const finalDy=endY-swipeStartY;
+const isHorizontalSwipe=Math.abs(finalDx)>Math.abs(finalDy);
+
 if(window.__messageLongPressed){
   window.__messageLongPressed=false;
   window.__suppressMessageClick=true;
+  this.style.transform='';
+  const longPressTime=this.querySelector('.messageTime');
+  if(longPressTime) longPressTime.style.display='none';
   return;
 }
-
-if(window.__messageMoved){
-  window.__messageMoved=false;
-  return;
-}
-
-moveX = event.changedTouches[0].clientX - swipeStartX;
 
 this.style.transform='';
-
 const t = this.querySelector('.messageTime');
 if(t) t.style.display='none';
 
 if(window.selectionMode){
   event.preventDefault();
   toggleMessageSelection('${msg.id}');
+  window.__messageMoved=false;
+  window.__messageSwiping=false;
   return;
 }
 
-if(moveX>70){
-
+if(isHorizontalSwipe && finalDx>70){
+  event.preventDefault();
   this.style.transform='translateX(40px)';
 
   setTimeout(()=>{
-
     this.style.transform='';
-
     if(t) t.style.display='none';
-
   },150);
 
   replyToMessage('${msg.id}');
-
 }
+
+window.__messageMoved=false;
+window.__messageSwiping=false;
 "
 
   style="
