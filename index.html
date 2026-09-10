@@ -5028,6 +5028,20 @@ body.chat-screen-active #topBar {
   line-height:18px !important;
 }
 </style>
+<style id="chat-view-once-style">
+#chatViewOnceBar{display:none;align-items:center;justify-content:space-between;gap:10px;margin:0 0 8px;padding:8px 10px;border-radius:12px;background:var(--surface-2,#1f1f1f);color:var(--text,#fff);border:1px solid var(--border,#333);font-size:13px;}
+#chatViewOnceBar.active{display:flex;}
+#chatViewOnceBar .view-once-label{display:flex;align-items:center;gap:8px;min-width:0;}
+#chatViewOnceBar .view-once-file{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.72;max-width:46vw;}
+#chatViewOnceBar button{border:0;background:transparent;color:inherit;font-size:18px;line-height:1;cursor:pointer;padding:4px;}
+.chat-view-once-bubble{width:min(230px,72vw);min-height:58px;padding:12px 14px;border-radius:16px;display:flex;align-items:center;gap:10px;cursor:pointer;box-sizing:border-box;}
+.chat-view-once-bubble .vo-icon{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.14);font-size:18px;flex:0 0 auto;}
+.chat-view-once-bubble .vo-title{font-weight:600;font-size:14px;line-height:1.2;}
+.chat-view-once-bubble .vo-sub{font-size:11px;opacity:.7;margin-top:3px;}
+body.dark #chatViewOnceBar{background:#1f1f1f;color:#fff;border-color:#333;}
+body:not(.dark) #chatViewOnceBar{background:#f3f3f3;color:#222;border-color:#ddd;}
+body:not(.dark) .chat-view-once-bubble .vo-icon{background:rgba(0,0,0,.08);}
+</style>
 </head>
 <body class="dark">
   
@@ -5379,6 +5393,18 @@ padding:8px;
       accept="image/*,video/*"
       style="display:none;"
     >
+
+    <div id="chatViewOnceBar" aria-live="polite">
+      <div class="view-once-label">
+        <span>◉</span>
+        <div>
+          <div style="font-weight:600;">View once</div>
+          <div id="chatViewOnceFile" class="view-once-file">Photo / video</div>
+        </div>
+      </div>
+      <button type="button" id="chatViewOnceToggle" aria-label="Toggle view once">OFF</button>
+      <button type="button" id="chatViewOnceClear" aria-label="Clear media">✕</button>
+    </div>
 
     <input
       id="chatInput"
@@ -41649,6 +41675,16 @@ async function loadMessages(chatUserId = currentChatUser, openToken = window.__c
 
       const url = target.dataset.chatMediaUrl;
       const type = target.dataset.chatMediaType === "video" ? "video" : "image";
+
+      if (target.dataset.chatViewOnce === "true") {
+        if (target.dataset.chatViewOnceUsed === "true") return;
+        const messageId = target.dataset.messageId || target.closest(".chatMessage")?.id;
+        if (messageId && url) {
+          consumeChatViewOnce(messageId, url, type);
+        }
+        return;
+      }
+
       if (url && typeof window.openMedia === "function") {
         window.openMedia(url, type, { sourceScreen: "chatScreen" });
       } else if (target.dataset.chatReplyOpen === "message" && target.dataset.chatMessageId) {
@@ -42061,57 +42097,17 @@ ${
 
 ${
   msg.media_type === "image"
-      ? `
-        <img
-  src="${msg.media_url}"
-
-  data-chat-media-open="true"
-  data-chat-media-url="${escapeHtml(String(msg.media_url))}"
-  data-chat-media-type="image"
-  data-message-id="${msg.id}"
-
-  style="
-    max-width:100%;
-    width:auto;
-    height:auto;
-    max-height:320px;
-    object-fit:contain;
-    display:block;
-    margin:auto;
-    border-radius:16px;
-    margin-bottom:6px;
-    cursor:pointer;
-  "
-/>
-      `
+      ? (isChatViewOnceMessage(msg)
+          ? `<div class="chat-view-once-bubble" data-chat-media-open="true" data-chat-view-once="true" data-chat-view-once-used="${isChatViewOnceUsed(msg) ? "true" : "false"}" data-chat-media-url="${escapeHtml(String(msg.media_url || ""))}" data-chat-media-type="image" data-message-id="${escapeHtml(String(msg.id))}" style="background:${mine ? "#0084ff" : "var(--surface-2,#222)"};color:white;"><div class="vo-icon">◉</div><div><div class="vo-title">Photo · View once</div><div class="vo-sub">${isChatViewOnceUsed(msg) ? "Opened" : (mine ? "Sent" : "Tap to view once")}</div></div></div>`
+          : `<img src="${msg.media_url}" data-chat-media-open="true" data-chat-media-url="${escapeHtml(String(msg.media_url))}" data-chat-media-type="image" data-message-id="${msg.id}" style="max-width:100%;width:auto;height:auto;max-height:320px;object-fit:contain;display:block;margin:auto;border-radius:16px;margin-bottom:6px;cursor:pointer;"/>`)
       : ""
   }
 
         ${
           msg.media_type === "video"
-            ? `
-             <video
-  src="${msg.media_url}"
-
-  ${selectionMode ? "" : "controls"}
-
-  data-chat-media-open="true"
-  data-chat-media-url="${escapeHtml(String(msg.media_url))}"
-  data-chat-media-type="video"
-  data-message-id="${msg.id}"
-
-  style="
-    width:100%;
-    max-width:260px;
-    max-height:320px;
-    object-fit:cover;
-    border-radius:16px;
-    margin-bottom:6px;
-    background:black;
-    cursor:pointer;
-  "
-></video>
-            `
+            ? (isChatViewOnceMessage(msg)
+                ? `<div class="chat-view-once-bubble" data-chat-media-open="true" data-chat-view-once="true" data-chat-view-once-used="${isChatViewOnceUsed(msg) ? "true" : "false"}" data-chat-media-url="${escapeHtml(String(msg.media_url || ""))}" data-chat-media-type="video" data-message-id="${escapeHtml(String(msg.id))}" style="background:${mine ? "#0084ff" : "var(--surface-2,#222)"};color:white;"><div class="vo-icon">▶</div><div><div class="vo-title">Video · View once</div><div class="vo-sub">${isChatViewOnceUsed(msg) ? "Opened" : (mine ? "Sent" : "Tap to view once")}</div></div></div>`
+                : `<video src="${msg.media_url}" ${selectionMode ? "" : "controls"} data-chat-media-open="true" data-chat-media-url="${escapeHtml(String(msg.media_url))}" data-chat-media-type="video" data-message-id="${msg.id}" style="width:100%;max-width:260px;max-height:320px;object-fit:cover;border-radius:16px;margin-bottom:6px;background:black;cursor:pointer;"></video>`)
             : ""
         }
 
@@ -42330,9 +42326,17 @@ window.appendInstantChatMessage = function(msg) {
 
   let media = "";
   if (msg.media_type === "image" && msg.media_url) {
-    media = `<img src="${escapeHtml(String(msg.media_url))}" data-chat-media-open="true" data-chat-media-url="${escapeHtml(String(msg.media_url))}" data-chat-media-type="image" data-message-id="${escapeHtml(String(msg.id))}" style="max-width:100%;max-height:320px;object-fit:contain;display:block;border-radius:16px;margin-bottom:6px;cursor:pointer;">`;
+    if (isChatViewOnceMessage(msg)) {
+      media = `<div class="chat-view-once-bubble" data-chat-media-open="true" data-chat-view-once="true" data-chat-view-once-used="${isChatViewOnceUsed(msg) ? "true" : "false"}" data-chat-media-url="${escapeHtml(String(msg.media_url))}" data-chat-media-type="image" data-message-id="${escapeHtml(String(msg.id))}" style="background:${mine ? "#0084ff" : "var(--surface-2,#222)"};color:white;"><div class="vo-icon">◉</div><div><div class="vo-title">Photo · View once</div><div class="vo-sub">${isChatViewOnceUsed(msg) ? "Opened" : (mine ? "Sent" : "Tap to view once")}</div></div></div>`;
+    } else {
+      media = `<img src="${escapeHtml(String(msg.media_url))}" data-chat-media-open="true" data-chat-media-url="${escapeHtml(String(msg.media_url))}" data-chat-media-type="image" data-message-id="${escapeHtml(String(msg.id))}" style="max-width:100%;max-height:320px;object-fit:contain;display:block;border-radius:16px;margin-bottom:6px;cursor:pointer;">`;
+    }
   } else if (msg.media_type === "video" && msg.media_url) {
-    media = `<video src="${escapeHtml(String(msg.media_url))}" controls data-chat-media-open="true" data-chat-media-url="${escapeHtml(String(msg.media_url))}" data-chat-media-type="video" data-message-id="${escapeHtml(String(msg.id))}" style="width:100%;max-width:260px;max-height:320px;object-fit:cover;border-radius:16px;margin-bottom:6px;background:black;cursor:pointer;"></video>`;
+    if (isChatViewOnceMessage(msg)) {
+      media = `<div class="chat-view-once-bubble" data-chat-media-open="true" data-chat-view-once="true" data-chat-view-once-used="${isChatViewOnceUsed(msg) ? "true" : "false"}" data-chat-media-url="${escapeHtml(String(msg.media_url))}" data-chat-media-type="video" data-message-id="${escapeHtml(String(msg.id))}" style="background:${mine ? "#0084ff" : "var(--surface-2,#222)"};color:white;"><div class="vo-icon">▶</div><div><div class="vo-title">Video · View once</div><div class="vo-sub">${isChatViewOnceUsed(msg) ? "Opened" : (mine ? "Sent" : "Tap to view once")}</div></div></div>`;
+    } else {
+      media = `<video src="${escapeHtml(String(msg.media_url))}" controls data-chat-media-open="true" data-chat-media-url="${escapeHtml(String(msg.media_url))}" data-chat-media-type="video" data-message-id="${escapeHtml(String(msg.id))}" style="width:100%;max-width:260px;max-height:320px;object-fit:cover;border-radius:16px;margin-bottom:6px;background:black;cursor:pointer;"></video>`;
+    }
   }
   const content = msg.content ? `<div style="word-break:break-word;">${escapeHtml(String(msg.content))}</div>` : "";
   const status = mine ? `<span class="messageStatus sent">✓</span>` : "";
@@ -42519,6 +42523,101 @@ window.deleteForEveryone = async function(messageId) {
 
 };
 
+// =====================================================
+// VIEW ONCE CHAT MEDIA
+// =====================================================
+window.chatViewOnce = false;
+const CHAT_VIEW_ONCE_PREFIX = "__VIEW_ONCE__";
+const CHAT_VIEW_ONCE_USED_PREFIX = "__VIEW_ONCE_USED__";
+
+function isChatViewOnceMessage(msg){
+  const name = String(msg?.file_name || "");
+  return name.startsWith(CHAT_VIEW_ONCE_PREFIX) || name.startsWith(CHAT_VIEW_ONCE_USED_PREFIX);
+}
+function isChatViewOnceUsed(msg){
+  return String(msg?.file_name || "").startsWith(CHAT_VIEW_ONCE_USED_PREFIX);
+}
+function cleanChatViewOnceFileName(name){
+  return String(name || "").replace(CHAT_VIEW_ONCE_USED_PREFIX, "").replace(CHAT_VIEW_ONCE_PREFIX, "");
+}
+
+window.toggleChatViewOnce = function(){
+  const input = document.getElementById("chatMedia");
+  if (!input?.files?.length) return;
+  window.chatViewOnce = !window.chatViewOnce;
+  const btn = document.getElementById("chatViewOnceToggle");
+  if (btn) {
+    btn.textContent = window.chatViewOnce ? "ON" : "OFF";
+    btn.style.fontWeight = window.chatViewOnce ? "700" : "400";
+  }
+};
+window.clearChatMedia = function(){
+  const input = document.getElementById("chatMedia");
+  if (input) input.value = "";
+  window.chatViewOnce = false;
+  const bar = document.getElementById("chatViewOnceBar");
+  if (bar) bar.classList.remove("active");
+  const btn = document.getElementById("chatViewOnceToggle");
+  if (btn) btn.textContent = "OFF";
+};
+
+(function bindChatViewOncePicker(){
+  const input = document.getElementById("chatMedia");
+  if (!input || input.dataset.viewOnceBound) return;
+  input.dataset.viewOnceBound = "true";
+  input.addEventListener("change", () => {
+    const file = input.files?.[0];
+    const bar = document.getElementById("chatViewOnceBar");
+    const name = document.getElementById("chatViewOnceFile");
+    if (!file) {
+      window.clearChatMedia();
+      return;
+    }
+    window.chatViewOnce = false;
+    if (bar) bar.classList.add("active");
+    if (name) name.textContent = file.name || (file.type.startsWith("video") ? "Video" : "Photo");
+    const btn = document.getElementById("chatViewOnceToggle");
+    if (btn) btn.textContent = "OFF";
+  });
+  document.getElementById("chatViewOnceToggle")?.addEventListener("click", window.toggleChatViewOnce);
+  document.getElementById("chatViewOnceClear")?.addEventListener("click", window.clearChatMedia);
+})();
+
+async function consumeChatViewOnce(messageId, url, type){
+  if (!messageId || !url) return false;
+  const me = currentUser?.id || window.currentUser?.id || session?.user?.id || null;
+  if (!me) return false;
+  const { data: row, error: readError } = await supabase
+    .from("messages")
+    .select("id,sender_id,receiver_id,file_name,media_url,media_type")
+    .eq("id", messageId)
+    .single();
+  if (readError || !row || !isChatViewOnceMessage(row) || isChatViewOnceUsed(row)) return false;
+  // Only the recipient consumes a view-once message. The sender's copy stays a
+  // closed "View once" placeholder and cannot consume it.
+  if (String(row.receiver_id) !== String(me) || String(row.sender_id) === String(me)) return false;
+
+  const originalName = cleanChatViewOnceFileName(row.file_name);
+  const { error } = await supabase
+    .from("messages")
+    .update({ file_name: CHAT_VIEW_ONCE_USED_PREFIX + originalName })
+    .eq("id", messageId)
+    .eq("receiver_id", me)
+    .eq("file_name", row.file_name);
+  if (error) {
+    console.warn("View once could not be consumed:", error.message);
+    return false;
+  }
+
+  // Open only after the server-side consume succeeds, preventing a second
+  // device/session from opening the same view-once media at the same time.
+  if (typeof window.openMedia === "function") {
+    window.openMedia(url, type, { sourceScreen:"chatScreen", viewOnce:true });
+  }
+  setTimeout(() => loadMessages(currentChatUser, window.__chatOpenToken), 100);
+  return true;
+}
+
 async function sendMessage() {
 
   const input =
@@ -42619,7 +42718,9 @@ await supabase
     content: text,
     media_url: mediaUrl,
     media_type: mediaType,
-    file_name: fileName,
+    file_name: window.chatViewOnce && fileName
+      ? CHAT_VIEW_ONCE_PREFIX + fileName
+      : fileName,
     reply_to: replyingTo
 })
 .select()
@@ -42651,6 +42752,10 @@ await supabase
   const sentReplyPreview = document.getElementById("replyPreview");
   if (sentReplyPreview) sentReplyPreview.style.display = "none";
   fileInput.value = "";
+  window.chatViewOnce = false;
+  document.getElementById("chatViewOnceBar")?.classList.remove("active");
+  const resetViewOnceBtn = document.getElementById("chatViewOnceToggle");
+  if (resetViewOnceBtn) resetViewOnceBtn.textContent = "OFF";
 
   // Notify the receiver (skip self-notifications for self-chat)
 if (currentChatUser === session.user.id) {
@@ -42668,6 +42773,10 @@ if (currentChatUser === session.user.id) {
   const selfReplyPreview = document.getElementById("replyPreview");
   if (selfReplyPreview) selfReplyPreview.style.display = "none";
   fileInput.value = "";
+  window.chatViewOnce = false;
+  document.getElementById("chatViewOnceBar")?.classList.remove("active");
+  const resetViewOnceBtn2 = document.getElementById("chatViewOnceToggle");
+  if (resetViewOnceBtn2) resetViewOnceBtn2.textContent = "OFF";
   loadMessages();
   return;
 }
@@ -44513,6 +44622,97 @@ if (window.visualViewport) {
     window.visualViewport.addEventListener("scroll", adjustMediaViewerViewport, { passive: true });
 }
 
+// =====================================================
+// VIEW-ONCE MEDIA PROTECTION (BEST EFFORT IN BROWSER)
+// =====================================================
+// Web pages cannot access Android's FLAG_SECURE API, so a normal browser
+// cannot guarantee that OS screenshots/screen recordings are blocked.
+// These protections prevent common save/copy actions and immediately close
+// the view-once viewer when the page becomes hidden/backgrounded.
+window.__viewOnceSecurityCleanup = null;
+
+/*
+ * Native Android View Once security bridge.
+ *
+ * In the Android WebView wrapper, AndroidSecure.setViewOnceSecure(true)
+ * applies WindowManager.LayoutParams.FLAG_SECURE. In a normal browser/PWA
+ * this interface does not exist, so the app safely falls back to the
+ * browser-level protections below.
+ */
+window.isNativeViewOnceSecurityAvailable = function(){
+    try {
+        return !!(window.AndroidSecure && typeof window.AndroidSecure.setViewOnceSecure === "function");
+    } catch (e) {
+        return false;
+    }
+};
+
+window.setNativeViewOnceSecurity = function(enabled){
+    try {
+        const bridge = window.AndroidSecure;
+        if (bridge && typeof bridge.setViewOnceSecure === "function") {
+            bridge.setViewOnceSecure(Boolean(enabled));
+            return true;
+        }
+    } catch (e) {
+        console.warn("View Once native security bridge unavailable:", e);
+    }
+    return false;
+};
+
+window.enableViewOnceProtection = function(viewer){
+    if (!viewer) return;
+    if (typeof window.__viewOnceSecurityCleanup === "function") {
+        try { window.__viewOnceSecurityCleanup(); } catch(e) {}
+    }
+
+    const block = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+    };
+    const onVisibility = () => {
+        if (document.visibilityState !== "visible") {
+            // Closing on background prevents the media from remaining visible
+            // in an app-switcher/recording transition where the browser allows it.
+            try { window.closeMedia(); } catch(e) {}
+        }
+    };
+    const onKey = (e) => {
+        const key = String(e.key || "").toLowerCase();
+        if ((e.ctrlKey || e.metaKey) && ["s","c","x","p"].includes(key)) block(e);
+        if (e.key === "PrintScreen") block(e);
+    };
+
+    viewer.addEventListener("contextmenu", block, true);
+    viewer.addEventListener("copy", block, true);
+    viewer.addEventListener("cut", block, true);
+    viewer.addEventListener("dragstart", block, true);
+    viewer.addEventListener("selectstart", block, true);
+    document.addEventListener("keydown", onKey, true);
+    document.addEventListener("visibilitychange", onVisibility, true);
+
+    // Discourage long-press image saving and text selection.
+    viewer.style.setProperty("-webkit-user-select", "none", "important");
+    viewer.style.setProperty("user-select", "none", "important");
+    viewer.style.setProperty("-webkit-touch-callout", "none", "important");
+
+    window.__viewOnceSecurityCleanup = () => {
+        // Release Android FLAG_SECURE as soon as the View Once protection
+        // session ends.
+        window.setNativeViewOnceSecurity(false);
+
+        viewer.removeEventListener("contextmenu", block, true);
+        viewer.removeEventListener("copy", block, true);
+        viewer.removeEventListener("cut", block, true);
+        viewer.removeEventListener("dragstart", block, true);
+        viewer.removeEventListener("selectstart", block, true);
+        document.removeEventListener("keydown", onKey, true);
+        document.removeEventListener("visibilitychange", onVisibility, true);
+        window.__viewOnceSecurityCleanup = null;
+    };
+};
+
 window.openMedia = function (
     url,
     type = "image",
@@ -44573,6 +44773,17 @@ window.openMedia = function (
             restoring
         }
     );
+
+    // View-once media gets browser-level protection plus native Android
+    // FLAG_SECURE when this page is running inside our Android WebView.
+    if (options?.viewOnce === true) {
+        window.enableViewOnceProtection(viewer);
+        window.setNativeViewOnceSecurity(true);
+    } else {
+        // Make sure a previous View Once session cannot leave the native
+        // Activity locked after normal media is opened.
+        window.setNativeViewOnceSecurity(false);
+    }
 
     // =================================================
     // CAPTURE SOURCE SCREEN
@@ -48346,6 +48557,12 @@ window.closeMedia = function () {
     console.log(
         "🔙 CLOSE HOME MEDIA VIEWER"
     );
+
+    if (typeof window.__viewOnceSecurityCleanup === "function") {
+        try { window.__viewOnceSecurityCleanup(); } catch (e) {}
+    }
+    // Safety fallback in case cleanup was already consumed.
+    window.setNativeViewOnceSecurity(false);
 
     // Stop and fully release any video.
     viewer
