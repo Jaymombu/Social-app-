@@ -42282,22 +42282,23 @@ min-height:14px;
 // loadMessages() call can still reconcile the complete server state later,
 // but the user never has to wait for that network round-trip to see the row.
 window.appendInstantChatMessage = function(msg) {
-  if (!msg?.id || !session?.user || !currentChatUser) return false;
+  const me = currentUser?.id || window.currentUser?.id || session?.user?.id || null;
+  if (!msg?.id || !me || !currentChatUser) return false;
   if (!isChatScreenVisible()) return false;
-  if (String(msg.sender_id) !== String(session.user.id) &&
+  if (String(msg.sender_id) !== String(me) &&
       String(msg.sender_id) !== String(currentChatUser)) return false;
-  if (!((String(msg.sender_id) === String(session.user.id) && String(msg.receiver_id) === String(currentChatUser)) ||
-        (String(msg.sender_id) === String(currentChatUser) && String(msg.receiver_id) === String(session.user.id)))) return false;
+  if (!((String(msg.sender_id) === String(me) && String(msg.receiver_id) === String(currentChatUser)) ||
+        (String(msg.sender_id) === String(currentChatUser) && String(msg.receiver_id) === String(me)))) return false;
   if (document.getElementById(String(msg.id))) return false;
 
   const chat = document.getElementById("chatMessages");
   if (!chat || String(chat.dataset.chatUserId || "") !== String(currentChatUser)) return false;
 
-  const mine = String(msg.sender_id) === String(session.user.id);
+  const mine = String(msg.sender_id) === String(me);
   const time = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}) : "now";
   const wrap = document.createElement("div");
   wrap.dataset.instantMessage = "true";
-  wrap.style.cssText = `display:flex;justify-content:${mine ? "flex-end" : "flex-start"};margin-bottom:50px;position:relative;`;
+  wrap.style.cssText = `display:flex;justify-content:${mine ? "flex-end" : "flex-start"};margin-bottom:22px;position:relative;`;
   const bubble = document.createElement("div");
   bubble.id = String(msg.id);
   bubble.className = "chatMessage instant-chat-message";
@@ -42311,7 +42312,17 @@ window.appendInstantChatMessage = function(msg) {
   }
   const content = msg.content ? `<div style="word-break:break-word;">${escapeHtml(String(msg.content))}</div>` : "";
   const status = mine ? `<span class="messageStatus sent">✓</span>` : "";
-  bubble.innerHTML = `<div>${media}${content}</div><div class="messageTime" style="display:flex;align-items:center;justify-content:flex-end;gap:4px;position:absolute;right:4px;bottom:-30px;margin:0;font-size:11px;color:var(--screen-muted,#999);white-space:nowrap;min-height:14px;">${time} ${status}</div>`;
+  let reactionHtml = "";
+  const instantReactions = Array.isArray(msg.reactions) ? msg.reactions : [];
+  if (instantReactions.length) {
+    const mineReaction = instantReactions.slice().reverse().find(r => String(r.user_id || r.userId || r.uid) === String(me));
+    const currentReaction = mineReaction || instantReactions[instantReactions.length - 1];
+    if (currentReaction?.reaction) {
+      const reactionEmoji = escapeHtml(String(currentReaction.reaction));
+      reactionHtml = `<div class="messageReactions" style="display:flex;align-items:center;justify-content:${mine ? "flex-end" : "flex-start"};margin-top:4px;padding-left:4px;white-space:nowrap;"><div style="font-size:14px;cursor:pointer;" onclick="event.stopPropagation();showReactionDetails('${String(msg.id)}','${reactionEmoji}')">${reactionEmoji} ${instantReactions.length}</div></div>`;
+    }
+  }
+  bubble.innerHTML = `<div>${media}${content}</div>${reactionHtml}<div class="messageTime" style="display:flex;align-items:center;justify-content:flex-end;gap:4px;position:absolute;right:4px;bottom:-30px;margin:0;font-size:11px;color:var(--screen-muted,#999);white-space:nowrap;min-height:14px;">${time} ${status}</div>`;
   wrap.appendChild(bubble);
   chat.appendChild(wrap);
   chat.scrollTop = chat.scrollHeight;
@@ -42602,6 +42613,20 @@ await supabase
   // Paint locally immediately. The server/realtime reconciliation below may
   // replace it later, but the message is visible with no extra refresh wait.
   window.appendInstantChatMessage?.(insertedMessage);
+
+  // Reconcile in the background; the local bubble is already visible.
+  setTimeout(() => {
+    if (currentChatUser && isChatScreenVisible()) {
+      loadMessages(currentChatUser, window.__chatOpenToken);
+    }
+  }, 250);
+
+  // Clear the composer immediately after the database confirms the send.
+  input.value = "";
+  replyingTo = null;
+  const sentReplyPreview = document.getElementById("replyPreview");
+  if (sentReplyPreview) sentReplyPreview.style.display = "none";
+  fileInput.value = "";
 
   // Notify the receiver (skip self-notifications for self-chat)
 if (currentChatUser === session.user.id) {
@@ -43327,8 +43352,8 @@ window.showReactionPopup = function(emoji, users, messageId = null) {
     left:0;
     right:0;
     bottom:0;
-    max-height:72vh;
-    min-height:280px;
+    max-height:50vh;
+    min-height:210px;
     background:var(--screen-surface, var(--bg-color, #18191a));
     color:var(--screen-text, #fff);
     border-top:1px solid var(--screen-border, #333);
@@ -43404,7 +43429,7 @@ window.showReactionPopup = function(emoji, users, messageId = null) {
 
     <div id="reactionUsers" style="
       overflow-y:auto;
-      max-height:calc(72vh - 100px);
+      max-height:calc(50vh - 100px);
       padding-top:4px;
       -webkit-overflow-scrolling:touch;
     "></div>
