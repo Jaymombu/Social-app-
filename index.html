@@ -37235,14 +37235,25 @@ function attachEvents() {
   }
 
   const loginBtn = document.getElementById("login");
-  if (loginBtn) {
-    loginBtn.onclick = async () => {
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: { redirectTo: window.location.origin }
-      });
-    };
-  }
+
+if (loginBtn) {
+
+  loginBtn.onclick = async () => {
+
+    await supabase.auth.signInWithOAuth({
+
+      provider: "google",
+
+      options: {
+        redirectTo:
+          window.location.origin + "/Social-app-/"
+      }
+
+    });
+
+  };
+
+}
 
   const storyBtn = document.getElementById("storyBtn");
   if (storyBtn) {
@@ -53428,7 +53439,7 @@ document.addEventListener("selectstart", function(e) {
         <div style="min-width:0;flex:1;">
           <b>${esc(u.name||"User")}${u.verified?" ✓":""}</b>
           <div style="color:${t.muted};font-size:12px;">@${esc(u.username||"")}</div>
-          <div style="font-size:11px;color:${u.account_status==="active"?t.muted:"#ff7070"};">${esc(u.account_status||"active")}</div>
+          <div style="font-size:11px;color:${u.private_account?"#ff7070":t.muted};">${u.private_account?"restricted":"active"}</div>
         </div>
         <button onclick="window.adminOpenUser('${esc(u.id)}')" style="border:0;border-radius:10px;padding:9px 11px;background:#1877f2;color:#fff;font-weight:700;">Manage</button>
       </div>
@@ -53471,7 +53482,7 @@ document.addEventListener("selectstart", function(e) {
         </div>
         ${owner
           ?`<div style="margin-top:18px;padding:13px;border-radius:12px;background:rgba(24,119,242,.10);border:1px solid rgba(24,119,242,.30);line-height:1.5;"><b>🔐 Protected administrator</b><br><span style="font-size:13px;color:${t.muted};">This account is the single administrator. It cannot be promoted, demoted, transferred, banned, suspended or deleted from this panel.</span></div>`
-          :`<div style="display:grid;gap:10px;margin-top:18px;"><label style="font-size:12px;color:${t.muted};">ACCOUNT STATUS<select id="as" style="display:block;width:100%;margin-top:5px;padding:12px;border-radius:10px;background:${t.input};color:${t.text};border:1px solid ${t.border};"><option ${u.account_status==="active"?"selected":""}>active</option><option ${u.account_status==="suspended"?"selected":""}>suspended</option><option ${u.account_status==="banned"?"selected":""}>banned</option></select></label><button id="av" style="padding:12px;border:0;border-radius:10px;background:#1877f2;color:#fff;font-weight:800;">${u.verified?"Unverify user":"Verify user"}</button><button id="au" style="padding:12px;border:0;border-radius:10px;background:#22a06b;color:#fff;font-weight:800;">Save status</button><button id="ax" style="padding:12px;border:0;border-radius:10px;background:#ff4d4d;color:#fff;font-weight:800;">Disable + anonymize profile</button></div>`}
+          :`<div style="display:grid;gap:10px;margin-top:18px;"><label style="font-size:12px;color:${t.muted};">ACCOUNT STATUS<select id="as" style="display:block;width:100%;margin-top:5px;padding:12px;border-radius:10px;background:${t.input};color:${t.text};border:1px solid ${t.border};"><option ${!u.private_account?"selected":""} value="active">active</option><option ${u.private_account?"selected":""} value="restricted">restricted</option></select></label><button id="av" style="padding:12px;border:0;border-radius:10px;background:#1877f2;color:#fff;font-weight:800;">${u.verified?"Unverify user":"Verify user"}</button><button id="au" style="padding:12px;border:0;border-radius:10px;background:#22a06b;color:#fff;font-weight:800;">Save status</button><button id="ax" style="padding:12px;border:0;border-radius:10px;background:#ff4d4d;color:#fff;font-weight:800;">Disable + anonymize profile</button></div>`}
       </div>`;
 
       if(owner)return;
