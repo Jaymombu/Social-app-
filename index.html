@@ -53259,22 +53259,71 @@ document.addEventListener("selectstart", function(e) {
   // STRICT OWNER CHECK
   // NEVER reads profiles.role.
   // -----------------------------------------------------------
+  function showAdminDebug(title, lines=[]){
+    let box=document.getElementById("adminDebugOverlay");
+    if(!box){
+      box=document.createElement("div");
+      box.id="adminDebugOverlay";
+      box.style.cssText="position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;";
+      document.body.appendChild(box);
+    }
+    box.innerHTML=`<div style="width:min(520px,100%);max-height:85vh;overflow:auto;background:#151515;color:#fff;border:1px solid #1877f2;border-radius:16px;padding:18px;box-sizing:border-box;font-family:Arial,sans-serif;box-shadow:0 12px 40px rgba(0,0,0,.6);">
+      <div style="font-size:18px;font-weight:800;margin-bottom:12px;">${esc(title)}</div>
+      <pre style="white-space:pre-wrap;word-break:break-word;margin:0;color:#ddd;font:13px/1.55 monospace;">${esc(lines.join("\n"))}</pre>
+      <button type="button" onclick="document.getElementById('adminDebugOverlay')?.remove()" style="margin-top:16px;width:100%;padding:12px;border:0;border-radius:10px;background:#1877f2;color:#fff;font-weight:700;">Close Debug</button>
+    </div>`;
+  }
+
   async function isAdmin(force=false){
     if(!force && adminCache !== null) return adminCache;
 
+    const debug=[];
     try{
+      const {data:{session},error:sessionError}=await sb.auth.getSession();
+      debug.push("Session: " + (session ? "YES" : "NO"));
+      debug.push("User ID: " + (session?.user?.id || "not available"));
+      if(sessionError){
+        debug.push("Session error: " + String(sessionError.message || sessionError));
+      }
+
+      if(!session){
+        adminCache=false;
+        debug.push("RPC: NOT CALLED (no authenticated session)");
+        debug.push("Admin result: FALSE");
+        showAdminDebug("Temporary Admin Debug",debug);
+        return false;
+      }
+
       const {data,error} = await sb.rpc("admin_api",{
         p_action:"whoami",
         p_payload:{}
       });
 
-      if(error) throw error;
+      debug.push("RPC: CALLED");
+      debug.push("RPC data: " + JSON.stringify(data ?? null));
+
+      if(error){
+        debug.push("RPC error message: " + String(error.message || "unknown"));
+        if(error.code) debug.push("RPC error code: " + String(error.code));
+        if(error.details) debug.push("RPC error details: " + String(error.details));
+        if(error.hint) debug.push("RPC error hint: " + String(error.hint));
+        adminCache=false;
+        debug.push("Admin result: FALSE");
+        showAdminDebug("Temporary Admin Debug",debug);
+        return false;
+      }
 
       adminCache = data?.is_admin === true;
+      debug.push("Admin result: " + (adminCache ? "TRUE" : "FALSE"));
+      debug.push("Admin section check will run next.");
+      showAdminDebug("Temporary Admin Debug",debug);
       return adminCache;
     }catch(e){
       console.warn("STRICT ADMIN CHECK:",e);
       adminCache = false;
+      debug.push("Exception: " + String(e?.message || e));
+      debug.push("Admin result: FALSE");
+      showAdminDebug("Temporary Admin Debug",debug);
       return false;
     }
   }
@@ -53603,22 +53652,31 @@ document.addEventListener("selectstart", function(e) {
 
     // Never decide administrator visibility until Supabase has
     // finished restoring the current authenticated session.
+    let session=null;
     try{
-      const {data:{session}}=await sb.auth.getSession();
-      if(!session){
-        sec.style.display="none";
-        btn.onclick=null;
-        return;
-      }
+      const {data,error}=await sb.auth.getSession();
+      session=data?.session || null;
+      if(error) console.warn("ADMIN SESSION CHECK:",error);
     }catch(e){
       console.warn("ADMIN SESSION CHECK:",e);
-      sec.style.display="none";
-      btn.onclick=null;
-      return;
     }
 
     const allowed=await isAdmin(true);
     sec.style.display=allowed?"block":"none";
+
+    // Add the final UI state to the temporary debug popup without exposing tokens.
+    const debugBox=document.getElementById("adminDebugOverlay");
+    if(debugBox){
+      const pre=debugBox.querySelector("pre");
+      if(pre){
+        pre.textContent += "\n\nAdmin section found: YES"
+          + "\nButton found: YES"
+          + "\nSession at bindSettings: " + (session ? "YES" : "NO")
+          + "\nSection display: " + sec.style.display
+          + "\nButton display: " + getComputedStyle(btn).display
+          + "\nButton visibility: " + getComputedStyle(btn).visibility;
+      }
+    }
 
     if(allowed){
       btn.onclick=()=>window.openAdminPanel(true);
