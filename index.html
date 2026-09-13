@@ -33591,6 +33591,48 @@ window.openProfileSettings = async function (addHistory = true) {
 
                 </div>
 
+                <!-- ADMINISTRATION -->
+                <div id="settingsAdminSection" style="display:none;">
+                    <div style="
+                        font-size:13px;
+                        color:#888;
+                        font-weight:700;
+                        margin:24px 4px 10px;
+                        text-transform:uppercase;
+                    ">
+                        Administration
+                    </div>
+
+                    <div style="
+                        background:#111;
+                        border-radius:14px;
+                        overflow:hidden;
+                        border:1px solid rgba(24,119,242,.35);
+                    ">
+                        <button
+                            type="button"
+                            id="settingsAdminBtn"
+                            style="
+                                width:100%;
+                                min-height:58px;
+                                padding:0 16px;
+                                border:0;
+                                background:#111;
+                                color:#fff;
+                                display:flex;
+                                align-items:center;
+                                text-align:left;
+                                font-size:16px;
+                                cursor:pointer;
+                            "
+                        >
+                            <span style="font-size:21px;width:36px;">🛡️</span>
+                            <span style="flex:1;">Admin Panel</span>
+                            <span style="color:#777;font-size:22px;">›</span>
+                        </button>
+                    </div>
+                </div>
+
 
                 <!-- APPEARANCE -->
                 <div style="
@@ -53166,6 +53208,404 @@ document.addEventListener("selectstart", function(e) {
     }
   });
   observer.observe(document.body,{childList:true,subtree:true});
+})();
+</script>
+<script>
+// =============================================================
+// STRICT SINGLE-ADMINISTRATOR SYSTEM
+// DOES NOT TOUCH startApp()
+// SECURITY AUTHORITY = private.admin_owner / private.admin_api
+// =============================================================
+(function(){
+  "use strict";
+
+  const sb = window.supabase;
+  if(!sb) return;
+
+  let adminCache = null;
+  let searchTimer = null;
+
+  const esc = v => String(v ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/\"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+
+  const theme = () => {
+    const d = document.body.classList.contains("dark");
+    return {
+      bg:d ? "#000" : "#f5f5f5",
+      card:d ? "#151515" : "#fff",
+      text:d ? "#fff" : "#171717",
+      muted:d ? "#999" : "#666",
+      border:d ? "#2a2a2a" : "#ddd",
+      input:d ? "#242424" : "#eee"
+    };
+  };
+
+  // -----------------------------------------------------------
+  // STRICT OWNER CHECK
+  // NEVER reads profiles.role.
+  // -----------------------------------------------------------
+  async function isAdmin(force=false){
+    if(!force && adminCache !== null) return adminCache;
+
+    try{
+      const {data,error} = await sb.rpc("admin_api",{
+        p_action:"whoami",
+        p_payload:{}
+      });
+
+      if(error) throw error;
+
+      adminCache = data?.is_admin === true;
+      return adminCache;
+    }catch(e){
+      console.warn("STRICT ADMIN CHECK:",e);
+      adminCache = false;
+      return false;
+    }
+  }
+
+  // -----------------------------------------------------------
+  // ALL PRIVILEGED OPERATIONS GO THROUGH THE DATABASE API.
+  // There is intentionally no owner-management action.
+  // -----------------------------------------------------------
+  async function call(action,payload={}){
+    if(!(await isAdmin())){
+      throw new Error("ADMIN_ACCESS_DENIED");
+    }
+
+    const {data,error} = await sb.rpc("admin_api",{
+      p_action:action,
+      p_payload:payload
+    });
+
+    if(error) throw error;
+    return data;
+  }
+
+  function screen(){
+    let s=document.getElementById("adminPanelScreen");
+    if(s) return s;
+    s=document.createElement("div");
+    s.id="adminPanelScreen";
+    document.body.appendChild(s);
+    return s;
+  }
+
+  function hideOthers(){
+    ["app","commentsScreen","profileScreen","searchScreen",
+     "notificationsScreen","inboxScreen","chatScreen","storyViewer",
+     "mediaViewer","profileSettingsScreen","editProfileScreen",
+     "languageSettingsScreen","privacySettingsScreen",
+     "followRequestsScreen","savedPostsScreen"]
+    .forEach(id=>{
+      if(typeof window.hideScreen === "function") window.hideScreen(id);
+    });
+  }
+
+  function nav(tab){
+    const labels={
+      dashboard:"📊 Dashboard",
+      users:"👥 Users",
+      posts:"📝 Posts",
+      comments:"💬 Comments",
+      reports:"🚩 Reports"
+    };
+
+    return ["dashboard","users","posts","comments","reports"]
+      .map(x=>`<button data-admin-tab="${x}" style="flex:1;min-width:85px;border:0;border-radius:10px;padding:10px 6px;background:${tab===x?"#1877f2":"transparent"};color:#fff;font-weight:700;">${labels[x]}</button>`)
+      .join("");
+  }
+
+  function shell(tab,body){
+    const t=theme();
+    const title=tab==="dashboard"
+      ? "Administrator"
+      : tab[0].toUpperCase()+tab.slice(1);
+
+    return `<div style="min-height:100%;background:${t.bg};color:${t.text};">
+      <div style="position:sticky;top:0;z-index:20;background:${t.bg};border-bottom:1px solid ${t.border};padding:8px 10px;">
+        <div style="height:48px;display:flex;align-items:center;gap:8px;">
+          <button id="adminBack" style="width:42px;height:42px;border:0;border-radius:50%;background:${t.card};color:${t.text};font-size:23px;">←</button>
+          <div style="flex:1;text-align:center;font-size:19px;font-weight:800;">${title}</div>
+          <button id="adminRefresh" style="width:42px;height:42px;border:0;border-radius:50%;background:${t.card};color:${t.text};font-size:19px;">↻</button>
+        </div>
+        <div style="display:flex;gap:4px;overflow:auto;padding-top:6px;">${nav(tab)}</div>
+      </div>
+      <div id="adminContent" style="padding:14px 12px 40px;">${body}</div>
+    </div>`;
+  }
+
+  function loading(){
+    return `<div style="padding:55px 20px;text-align:center;color:${theme().muted};">Loading administrator data…</div>`;
+  }
+
+  function stats(d){
+    const t=theme();
+    const a=[
+      ["Users",d?.users,"👥"],
+      ["Posts",d?.posts,"📝"],
+      ["Comments",d?.comments,"💬"],
+      ["Open reports",d?.open_reports ?? d?.reports,"🚩"],
+      ["Restricted users",d?.restricted_users,"⛔"],
+      ["Administrators",d?.administrator_count ?? 1,"🛡️"]
+    ];
+
+    return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+      ${a.map(x=>`<div style="background:${t.card};border:1px solid ${t.border};border-radius:15px;padding:15px;">
+        <div style="font-size:24px;">${x[2]}</div>
+        <div style="font-size:25px;font-weight:800;margin-top:6px;">${esc(x[1]??0)}</div>
+        <div style="font-size:12px;color:${t.muted};">${x[0]}</div>
+      </div>`).join("")}
+    </div>
+    <div style="margin-top:14px;background:${t.card};border:1px solid ${t.border};border-radius:15px;padding:16px;">
+      <b>Strict administrator protection</b>
+      <div style="color:${t.muted};font-size:13px;line-height:1.55;margin-top:8px;">
+        This application has one administrator only. Ownership is stored outside the public profile role system. The app provides no action for creating, deleting, transferring or demoting the administrator.
+      </div>
+    </div>`;
+  }
+
+  function bind(tab){
+    const s=screen();
+    document.getElementById("adminBack").onclick=()=>window.closeAdminPanel();
+    document.getElementById("adminRefresh").onclick=()=>load(tab);
+    s.querySelectorAll("[data-admin-tab]").forEach(b=>{
+      b.onclick=()=>load(b.dataset.adminTab);
+    });
+  }
+
+  async function load(tab="dashboard"){
+    if(!(await isAdmin(true))){
+      alert("Administrator access required.");
+      return false;
+    }
+
+    hideOthers();
+
+    const s=screen();
+    const t=theme();
+
+    s.style.cssText=`position:fixed;inset:0;display:block;visibility:visible;opacity:1;pointer-events:auto;background:${t.bg};color:${t.text};z-index:2147483000;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;`;
+    s.dataset.tab=tab;
+    s.innerHTML=shell(tab,loading());
+    bind(tab);
+
+    try{
+      if(tab==="dashboard"){
+        const d=await call("dashboard");
+        document.getElementById("adminContent").innerHTML=stats(d);
+      }else if(tab==="users"){
+        await users();
+      }else if(tab==="posts"){
+        await posts();
+      }else if(tab==="comments"){
+        await comments();
+      }else{
+        await reports();
+      }
+    }catch(e){
+      document.getElementById("adminContent").innerHTML=`<div style="padding:18px;border:1px solid rgba(255,77,77,.35);border-radius:14px;color:#ff7070;line-height:1.5;"><b>Administrator database error</b><br>${esc(e.message||e)}</div>`;
+      console.error("ADMIN:",e);
+    }
+
+    return true;
+  }
+
+  function input(id,value,placeholder){
+    const t=theme();
+    return `<input id="${id}" value="${esc(value||"")}" placeholder="${placeholder}" style="width:100%;box-sizing:border-box;padding:13px 14px;border-radius:12px;border:1px solid ${t.border};background:${t.input};color:${t.text};outline:none;margin-bottom:12px;">`;
+  }
+
+  function userRow(u){
+    const t=theme();
+    return `<div style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;">
+      <div style="display:flex;gap:11px;align-items:center;">
+        <img src="${esc(u.avatar_url||"https://via.placeholder.com/48")}" style="width:46px;height:46px;border-radius:50%;object-fit:cover;background:#333;">
+        <div style="min-width:0;flex:1;">
+          <b>${esc(u.name||"User")}${u.verified?" ✓":""}</b>
+          <div style="color:${t.muted};font-size:12px;">@${esc(u.username||"")}</div>
+          <div style="font-size:11px;color:${u.account_status==="active"?t.muted:"#ff7070"};">${esc(u.account_status||"active")}</div>
+        </div>
+        <button onclick="window.adminOpenUser('${esc(u.id)}')" style="border:0;border-radius:10px;padding:9px 11px;background:#1877f2;color:#fff;font-weight:700;">Manage</button>
+      </div>
+    </div>`;
+  }
+
+  async function users(q=""){
+    const d=await call("users",{search:q,limit:50});
+    const c=document.getElementById("adminContent");
+    c.innerHTML=input("adminUserSearch",q,"Search users…")+
+      (Array.isArray(d)&&d.length
+        ?d.map(userRow).join("")
+        :`<div style="padding:40px;text-align:center;color:${theme().muted};">No users found.</div>`);
+
+    const i=document.getElementById("adminUserSearch");
+    if(i)i.oninput=()=>{
+      clearTimeout(searchTimer);
+      searchTimer=setTimeout(()=>users(i.value.trim()),350);
+    };
+  }
+
+  // -----------------------------------------------------------
+  // USER MANAGEMENT
+  // IMPORTANT: NO ROLE SELECTOR.
+  // The administrator is never managed through profiles.role.
+  // -----------------------------------------------------------
+  window.adminOpenUser=async function(id){
+    try{
+      const u=await call("user",{user_id:id});
+      const t=theme();
+      const owner=(u?.is_admin_owner===true);
+
+      document.getElementById("adminContent").innerHTML=`<div style="background:${t.card};border:1px solid ${t.border};border-radius:15px;padding:16px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <img src="${esc(u?.avatar_url||"https://via.placeholder.com/64")}" style="width:62px;height:62px;border-radius:50%;object-fit:cover;">
+          <div>
+            <div style="font-size:18px;font-weight:800;">${esc(u?.name||"User")}</div>
+            <div style="color:${t.muted};">@${esc(u?.username||"")}</div>
+          </div>
+        </div>
+        ${owner
+          ?`<div style="margin-top:18px;padding:13px;border-radius:12px;background:rgba(24,119,242,.10);border:1px solid rgba(24,119,242,.30);line-height:1.5;"><b>🔐 Protected administrator</b><br><span style="font-size:13px;color:${t.muted};">This account is the single administrator. It cannot be promoted, demoted, transferred, banned, suspended or deleted from this panel.</span></div>`
+          :`<div style="display:grid;gap:10px;margin-top:18px;"><label style="font-size:12px;color:${t.muted};">ACCOUNT STATUS<select id="as" style="display:block;width:100%;margin-top:5px;padding:12px;border-radius:10px;background:${t.input};color:${t.text};border:1px solid ${t.border};"><option ${u.account_status==="active"?"selected":""}>active</option><option ${u.account_status==="suspended"?"selected":""}>suspended</option><option ${u.account_status==="banned"?"selected":""}>banned</option></select></label><button id="av" style="padding:12px;border:0;border-radius:10px;background:#1877f2;color:#fff;font-weight:800;">${u.verified?"Unverify user":"Verify user"}</button><button id="au" style="padding:12px;border:0;border-radius:10px;background:#22a06b;color:#fff;font-weight:800;">Save status</button><button id="ax" style="padding:12px;border:0;border-radius:10px;background:#ff4d4d;color:#fff;font-weight:800;">Disable + anonymize profile</button></div>`}
+      </div>`;
+
+      if(owner)return;
+
+      document.getElementById("au").onclick=async()=>{
+        await call("set_user_status",{user_id:id,status:document.getElementById("as").value});
+        alert("User status updated.");
+        await users();
+      };
+
+      document.getElementById("av").onclick=async()=>{
+        await call("verify_user",{user_id:id,verified:!u.verified});
+        await window.adminOpenUser(id);
+      };
+
+      document.getElementById("ax").onclick=async()=>{
+        if(!confirm("Disable and anonymize this profile? This does not delete the Auth account."))return;
+        await call("delete_user",{user_id:id});
+        alert("Profile removed.");
+        await users();
+      };
+    }catch(e){
+      alert(e.message||"Unable to manage user.");
+    }
+  };
+
+  function postRow(p){
+    const t=theme();
+    return `<div style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;"><b>${esc(p.name||"User")}</b><div style="font-size:13px;line-height:1.45;margin-top:6px;white-space:pre-wrap;">${esc((p.content||"").slice(0,500))}</div><div style="font-size:11px;color:${t.muted};margin-top:8px;">${esc(p.created_at||"")} · ${p.pinned?"Pinned":"Not pinned"}</div><div style="display:flex;gap:7px;margin-top:10px;"><button onclick="window.adminPostAction('${esc(p.id)}','delete')" style="border:0;border-radius:9px;padding:9px 11px;background:#ff4d4d;color:#fff;font-weight:700;">Delete</button><button onclick="window.adminPostAction('${esc(p.id)}','pin')" style="border:0;border-radius:9px;padding:9px 11px;background:#1877f2;color:#fff;font-weight:700;">${p.pinned?"Unpin":"Pin"}</button></div></div>`;
+  }
+
+  async function posts(q=""){
+    const d=await call("posts",{search:q,limit:50});
+    const c=document.getElementById("adminContent");
+    c.innerHTML=input("adminPostSearch",q,"Search posts…")+
+      (Array.isArray(d)&&d.length?d.map(postRow).join(""):`<div style="padding:40px;text-align:center;color:${theme().muted};">No posts found.</div>`);
+    const i=document.getElementById("adminPostSearch");
+    if(i)i.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>posts(i.value.trim()),350);};
+  }
+
+  window.adminPostAction=async function(id,a){
+    if(a==="delete"&&!confirm("Delete this post permanently?"))return;
+    try{
+      await call(a==="delete"?"delete_post":"toggle_pin_post",{post_id:id});
+      await posts();
+    }catch(e){alert(e.message||"Post action failed.");}
+  };
+
+  function commentRow(x){
+    const t=theme();
+    return `<div style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;"><b>${esc(x.author_name||"User")}</b><div style="font-size:13px;margin-top:6px;white-space:pre-wrap;">${esc((x.content||"").slice(0,600))}</div><div style="font-size:11px;color:${t.muted};margin-top:8px;">${esc(x.created_at||"")} · ${x.hidden?"Hidden":"Visible"}</div><div style="display:flex;gap:7px;margin-top:10px;"><button onclick="window.adminCommentAction('${esc(x.id)}','hide')" style="border:0;border-radius:9px;padding:9px 11px;background:#1877f2;color:#fff;font-weight:700;">${x.hidden?"Unhide":"Hide"}</button><button onclick="window.adminCommentAction('${esc(x.id)}','delete')" style="border:0;border-radius:9px;padding:9px 11px;background:#ff4d4d;color:#fff;font-weight:700;">Delete</button></div></div>`;
+  }
+
+  async function comments(q=""){
+    const d=await call("comments",{search:q,limit:50});
+    const c=document.getElementById("adminContent");
+    c.innerHTML=input("adminCommentSearch",q,"Search comments…")+
+      (Array.isArray(d)&&d.length?d.map(commentRow).join(""):`<div style="padding:40px;text-align:center;color:${theme().muted};">No comments found.</div>`);
+    const i=document.getElementById("adminCommentSearch");
+    if(i)i.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>comments(i.value.trim()),350);};
+  }
+
+  window.adminCommentAction=async function(id,a){
+    if(a==="delete"&&!confirm("Delete this comment permanently?"))return;
+    try{
+      await call(a==="delete"?"delete_comment":"toggle_comment_hidden",{comment_id:id});
+      await comments();
+    }catch(e){alert(e.message||"Comment action failed.");}
+  };
+
+  function reportRow(r){
+    const t=theme();
+    return `<div style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;"><b>${esc(r.reason||"Report")}</b><div style="font-size:13px;margin-top:6px;">Target: ${esc(r.target_type||"unknown")} · ${esc(r.target_id||"")}</div><div style="font-size:11px;color:${t.muted};margin-top:7px;">${esc(r.created_at||"")} · ${esc(r.status||"open")}</div><button onclick="window.adminResolveReport('${esc(r.id)}')" style="margin-top:10px;border:0;border-radius:9px;padding:9px 11px;background:#22a06b;color:#fff;font-weight:700;">Resolve</button></div>`;
+  }
+
+  async function reports(){
+    const d=await call("reports",{limit:50});
+    document.getElementById("adminContent").innerHTML=
+      (Array.isArray(d)&&d.length?d.map(reportRow).join(""):`<div style="padding:55px 20px;text-align:center;color:${theme().muted};">No open reports.</div>`);
+  }
+
+  window.adminResolveReport=async function(id){
+    try{
+      await call("resolve_report",{report_id:id});
+      await reports();
+    }catch(e){alert(e.message||"Unable to resolve report.");}
+  };
+
+  window.openAdminPanel=async function(addHistory=true){
+    if(!(await isAdmin(true))){
+      alert("Administrator access required.");
+      return false;
+    }
+
+    if(typeof window.navigateToScreen==="function"){
+      window.navigateToScreen("adminPanelScreen",{source:"profileSettings"},addHistory);
+    }
+
+    await load("dashboard");
+    return true;
+  };
+
+  window.closeAdminPanel=function(){
+    const s=document.getElementById("adminPanelScreen");
+    if(s){
+      s.style.display="none";
+      s.style.pointerEvents="none";
+    }
+
+    if(typeof window.unlockBackground==="function")window.unlockBackground();
+    if(typeof window.openProfileSettings==="function")window.openProfileSettings(false);
+  };
+
+  async function bindSettings(){
+    const sec=document.getElementById("settingsAdminSection");
+    const btn=document.getElementById("settingsAdminBtn");
+    if(!sec||!btn)return;
+
+    const allowed=await isAdmin(true);
+    sec.style.display=allowed?"block":"none";
+
+    if(allowed)btn.onclick=()=>window.openAdminPanel(true);
+    else btn.onclick=null;
+  }
+
+  new MutationObserver(()=>{
+    if(document.getElementById("profileSettingsScreen"))bindSettings();
+  }).observe(document.body,{childList:true,subtree:true});
+
+  sb.auth.onAuthStateChange(()=>{
+    adminCache=null;
+    setTimeout(bindSettings,0);
+  });
+
 })();
 </script>
 </body>
