@@ -37234,7 +37234,7 @@ function attachEvents() {
     postBtn.onclick = createPost;
   }
 
-  const loginBtn = document.getElementById("login");
+const loginBtn = document.getElementById("login");
 
 if (loginBtn) {
 
@@ -53601,20 +53601,48 @@ document.addEventListener("selectstart", function(e) {
     const btn=document.getElementById("settingsAdminBtn");
     if(!sec||!btn)return;
 
+    // Never decide administrator visibility until Supabase has
+    // finished restoring the current authenticated session.
+    try{
+      const {data:{session}}=await sb.auth.getSession();
+      if(!session){
+        sec.style.display="none";
+        btn.onclick=null;
+        return;
+      }
+    }catch(e){
+      console.warn("ADMIN SESSION CHECK:",e);
+      sec.style.display="none";
+      btn.onclick=null;
+      return;
+    }
+
     const allowed=await isAdmin(true);
     sec.style.display=allowed?"block":"none";
 
-    if(allowed)btn.onclick=()=>window.openAdminPanel(true);
-    else btn.onclick=null;
+    if(allowed){
+      btn.onclick=()=>window.openAdminPanel(true);
+    }else{
+      btn.onclick=null;
+    }
   }
 
+  // Settings is dynamically created by the main app, so observe it.
   new MutationObserver(()=>{
-    if(document.getElementById("profileSettingsScreen"))bindSettings();
+    if(document.getElementById("profileSettingsScreen")){
+      bindSettings();
+    }
   }).observe(document.body,{childList:true,subtree:true});
 
+  // Initial session restore.
+  setTimeout(bindSettings,500);
+  setTimeout(bindSettings,1500);
+
+  // Re-check after login, logout, refresh and session restoration.
   sb.auth.onAuthStateChange(()=>{
     adminCache=null;
-    setTimeout(bindSettings,0);
+    setTimeout(bindSettings,250);
+    setTimeout(bindSettings,1000);
   });
 
 })();
