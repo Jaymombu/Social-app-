@@ -9529,6 +9529,28 @@ const isOwner =
     </button>
 
 
+    ${
+      !isOwner
+        ? `
+    <button
+      type="button"
+      onclick="event.stopPropagation(); reportPost('${post.id}')"
+      style="
+        margin-top:8px;
+        margin-left:6px;
+        background:transparent;
+        color:#ff9800;
+        border:1px solid rgba(255,152,0,.45);
+        padding:5px 9px;
+        border-radius:5px;
+      "
+    >
+      ⚑ Report
+    </button>
+        `
+        : ""
+    }
+
     <button
       onclick="toggleSavePost('${post.id}')"
 
@@ -25270,36 +25292,12 @@ async function unhideComment(commentId) {
 }
 
 async function reportComment(commentId) {
-
     closeCommentMenu();
-
-    const {
-        data: { session }
-    } = await supabase.auth.getSession();
-
-    if (!session) return;
-
-    const reason = prompt(
-        "Why are you reporting this comment?\n\nExamples:\nSpam\nHarassment\nHate speech\nOther"
-    );
-
-    if (reason === null) return;
-
-    const { error } = await supabase
-        .from("comment_reports")
-        .upsert({
-            comment_id: commentId,
-            reporter_id: session.user.id,
-            reason: reason.trim()
-        });
-
-    if (error) {
-        console.log(error);
-        showToast("You already reported this comment.");
-        return;
+    if(typeof window.submitUserReport === "function") {
+        return window.submitUserReport("comment", commentId);
     }
-
-    showToast("Comment reported.");
+    showToast?.("Report system is not ready yet.");
+    return false;
 }
 
 async function translateComment(commentId) {
@@ -27312,6 +27310,29 @@ window.openProfile = async function (
                         "
                     >
                         💬 Message
+                    </button>
+                    `
+                            : ""
+                    }
+
+                    ${
+                        session?.user?.id &&
+                        String(session.user.id) !== String(userId)
+                            ? `
+                    <button
+                        id="profileReportButton"
+                        type="button"
+                        onclick="event.preventDefault();event.stopPropagation();reportProfile('${userId}')"
+                        style="
+                            padding:8px 16px;
+                            border:1px solid rgba(255,152,0,.5);
+                            border-radius:8px;
+                            background:transparent;
+                            color:#ff9800;
+                            cursor:pointer;
+                        "
+                    >
+                        ⚑ Report
                     </button>
                     `
                             : ""
@@ -43228,6 +43249,10 @@ window.messageOptions = async function(messageId) {
   <span class="action-icon108"><svg viewBox="0 0 24 24"><path d="m13 5 7 7-7 7"/><path d="M20 12H7a4 4 0 0 0-4 4v2"/></svg></span><span>Forward</span>
 </div>
 
+<div class="action-row108" onclick="document.getElementById('messageMenu108')?.remove();reportMessage('${messageId}')">
+  <span class="action-icon108"><svg viewBox="0 0 24 24"><path d="M6 20V4m0 1h11l-2.5 4L17 13H6"/></svg></span><span>Report Message</span>
+</div>
+
 <div class="action-row108 danger108" onclick="deleteForEveryone('${messageId}')">
   <span class="action-icon108"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 8 8 8"/></svg></span><span>Delete for Everyone</span>
 </div>
@@ -53401,21 +53426,34 @@ function initAdminSystem(){
 
   function bind(tab){
     const s=screen();
-    document.getElementById("adminBack").onclick=()=>window.closeAdminPanel();
-    document.getElementById("adminRefresh").onclick=()=>window.adminLoad(tab);
+    if(!s) return;
+    s.style.pointerEvents="auto";
+    s.style.touchAction="pan-y";
+
+    const back=document.getElementById("adminBack");
+    const refresh=document.getElementById("adminRefresh");
+    if(back) back.onclick=(e)=>{e.preventDefault();e.stopPropagation();window.closeAdminPanel();};
+    if(refresh) refresh.onclick=(e)=>{e.preventDefault();e.stopPropagation();window.adminLoad(tab);};
+
     s.querySelectorAll("[data-admin-tab]").forEach(b=>{
+      b.type="button";
+      b.style.pointerEvents="auto";
+      b.style.touchAction="manipulation";
       b.onclick=(e)=>{
         e.preventDefault();
         e.stopPropagation();
         window.adminLoad(b.dataset.adminTab);
       };
     });
+
     s.querySelectorAll("[data-admin-stat]").forEach(b=>{
+      b.type="button";
+      b.style.pointerEvents="auto";
+      b.style.touchAction="manipulation";
       b.onclick=(e)=>{
         e.preventDefault();
         e.stopPropagation();
-        const target=b.dataset.adminStat;
-        window.adminLoad(target);
+        window.adminLoad(b.dataset.adminStat);
       };
     });
   }
@@ -53439,7 +53477,14 @@ function initAdminSystem(){
     try{
       if(tab==="dashboard"){
         const d=await window.adminCall("dashboard");
+        try{
+          const reports=await window.adminCall("reports",{limit:100,status:"open"});
+          if(d) d.open_reports=Array.isArray(reports)?reports.length:(d.open_reports??d.reports??0);
+        }catch(reportError){
+          console.warn("REPORT COUNT:",reportError);
+        }
         document.getElementById("adminContent").innerHTML=stats(d);
+        bind(tab);
       }else if(tab==="users"){
         await users();
       }else if(tab==="posts"){
@@ -53675,7 +53720,7 @@ function initAdminSystem(){
   }
 
   window.adminReports = async function(){
-    const d=await window.adminCall("reports",{limit:50});
+    const d=await window.adminCall("reports",{limit:50,status:"open"});
     document.getElementById("adminContent").innerHTML=
       (Array.isArray(d)&&d.length?d.map(reportRow).join(""):`<div style="padding:55px 20px;text-align:center;color:${theme().muted};">No open reports.</div>`);
   };
@@ -53789,13 +53834,8 @@ window.submitUserReport=async function(targetType,targetId){
     const id=String(targetId||"").trim(); if(!id){showToast?.("Unable to identify this item.");return false;}
     const reason=prompt("Why are you reporting this "+targetType+"?\n\nSpam\nHarassment\nHate speech\nScam\nOther");
     if(reason===null)return false; const clean=reason.trim(); if(!clean){showToast?.("Please enter a reason.");return false;}
-    /* Comments already have a dedicated table in this app. */
-    if(String(targetType).toLowerCase()==="comment"){
-      const {error}=await supabase.from("comment_reports").upsert({comment_id:id,reporter_id:session.user.id,reason:clean});
-      if(error){console.error("COMMENT REPORT:",error);showToast?.(error.code==="23505"?"You already reported this comment.":"Report failed: "+error.message);return false;}
-      showToast?.("Comment reported."); return true;
-    }
-    /* Other report types use the central reports table consumed by admin_reports_api. */
+    /* ALL report types use the same central table consumed by admin_reports_api.
+       This keeps post/comment/message/profile reports in one admin queue. */
     const {error}=await supabase.from("reports").insert({reporter_id:session.user.id,target_type:String(targetType).toLowerCase(),target_id:id,reason:clean,status:"open"});
     if(error){
       console.error("REPORT INSERT:",error);
