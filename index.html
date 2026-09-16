@@ -53277,7 +53277,7 @@ function initAdminSystem(){
 
       if(error) throw error;
 
-      window.adminCache = data?.is_admin === true;
+      window.adminCache = data?.is_admin === true || data?.data?.is_admin === true || data === true;
       return window.adminCache;
     }catch(e){
       console.warn("STRICT ADMIN CHECK:",e);
@@ -53722,12 +53722,22 @@ function initAdminSystem(){
       console.warn("ADMIN SESSION CHECK:",e);
     }
 
-    const allowed=await window.isAdmin(true);
-    sec.style.display=allowed?"block":"none";
+    // Do not hide the section while authentication is still restoring.
+    if(!session){
+      sec.style.display="none";
+      btn.onclick=null;
+      return;
+    }
 
+    const allowed=await window.isAdmin(true);
+    // Only change visibility after a real authenticated admin check.
+    // This prevents a temporary RPC/session race from making the button disappear.
     if(allowed){
-      btn.onclick=()=>window.openAdminPanel(true);
-    }else{
+      sec.style.display="block";
+      btn.style.display="flex";
+      btn.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();window.openAdminPanel(true);};
+    }else if(window.adminCache===false){
+      sec.style.display="none";
       btn.onclick=null;
     }
   }
