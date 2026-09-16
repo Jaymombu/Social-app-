@@ -30448,7 +30448,7 @@ window.observeProfileVideos = function (container) {
                         // -------------------------------------------------
                         // IMPORTANT:
                         // DO NOT reset currentTime.
-                        // DO NOT call window.adminLoad().
+                        // DO NOT call load().
                         //
                         // The observer is responsible for automatic
                         // playback, but it does not repeatedly seek.
@@ -31173,7 +31173,7 @@ console.log(
     // Position selected video.
     //
     // No play()
-    // No window.adminLoad()
+    // No load()
     // No currentTime reset
     // -----------------------------------------------------
 
@@ -53227,20 +53227,13 @@ document.addEventListener("selectstart", function(e) {
 // DOES NOT TOUCH startApp()
 // SECURITY AUTHORITY = private.admin_owner / private.admin_api
 // =============================================================
-function initAdminSystem(){
+(function(){
   "use strict";
 
-  // Supabase is created inside a deferred ES module above.
-  // This admin block is a classic script, so it can execute first.
-  // Wait until window.supabase exists before initializing anything.
-  if(!window.supabase){
-    setTimeout(initAdminSystem,50);
-    return;
-  }
-
   const sb = window.supabase;
+  if(!sb) return;
 
-  window.adminCache = null;
+  let adminCache = null;
   let searchTimer = null;
 
   const esc = v => String(v ?? "")
@@ -53266,32 +53259,81 @@ function initAdminSystem(){
   // STRICT OWNER CHECK
   // NEVER reads profiles.role.
   // -----------------------------------------------------------
-  window.isAdmin = async function(force=false){
-    if(!force && window.adminCache !== null) return window.adminCache;
+  function showAdminDebug(title, lines=[]){
+    let box=document.getElementById("adminDebugOverlay");
+    if(!box){
+      box=document.createElement("div");
+      box.id="adminDebugOverlay";
+      box.style.cssText="position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;";
+      document.body.appendChild(box);
+    }
+    box.innerHTML=`<div style="width:min(520px,100%);max-height:85vh;overflow:auto;background:#151515;color:#fff;border:1px solid #1877f2;border-radius:16px;padding:18px;box-sizing:border-box;font-family:Arial,sans-serif;box-shadow:0 12px 40px rgba(0,0,0,.6);">
+      <div style="font-size:18px;font-weight:800;margin-bottom:12px;">${esc(title)}</div>
+      <pre style="white-space:pre-wrap;word-break:break-word;margin:0;color:#ddd;font:13px/1.55 monospace;">${esc(lines.join("\n"))}</pre>
+      <button type="button" onclick="document.getElementById('adminDebugOverlay')?.remove()" style="margin-top:16px;width:100%;padding:12px;border:0;border-radius:10px;background:#1877f2;color:#fff;font-weight:700;">Close Debug</button>
+    </div>`;
+  }
 
+  window.isAdmin = async function(force=false){
+    if(!force && adminCache !== null) return adminCache;
+
+    const debug=[];
     try{
+      const {data:{session},error:sessionError}=await sb.auth.getSession();
+      debug.push("Session: " + (session ? "YES" : "NO"));
+      debug.push("User ID: " + (session?.user?.id || "not available"));
+      if(sessionError){
+        debug.push("Session error: " + String(sessionError.message || sessionError));
+      }
+
+      if(!session){
+        adminCache=false;
+        debug.push("RPC: NOT CALLED (no authenticated session)");
+        debug.push("Admin result: FALSE");
+        showAdminDebug("Temporary Admin Debug",debug);
+        return false;
+      }
+
       const {data,error} = await sb.rpc("admin_api",{
         p_action:"whoami",
         p_payload:{}
       });
 
-      if(error) throw error;
+      debug.push("RPC: CALLED");
+      debug.push("RPC data: " + JSON.stringify(data ?? null));
 
-      window.adminCache = data?.is_admin === true;
-      return window.adminCache;
+      if(error){
+        debug.push("RPC error message: " + String(error.message || "unknown"));
+        if(error.code) debug.push("RPC error code: " + String(error.code));
+        if(error.details) debug.push("RPC error details: " + String(error.details));
+        if(error.hint) debug.push("RPC error hint: " + String(error.hint));
+        adminCache=false;
+        debug.push("Admin result: FALSE");
+        showAdminDebug("Temporary Admin Debug",debug);
+        return false;
+      }
+
+      adminCache = data?.is_admin === true;
+      debug.push("Admin result: " + (adminCache ? "TRUE" : "FALSE"));
+      debug.push("Admin section check will run next.");
+      showAdminDebug("Temporary Admin Debug",debug);
+      return adminCache;
     }catch(e){
       console.warn("STRICT ADMIN CHECK:",e);
-      window.adminCache = false;
+      adminCache = false;
+      debug.push("Exception: " + String(e?.message || e));
+      debug.push("Admin result: FALSE");
+      showAdminDebug("Temporary Admin Debug",debug);
       return false;
     }
-  };
+  }
 
   // -----------------------------------------------------------
   // ALL PRIVILEGED OPERATIONS GO THROUGH THE DATABASE API.
   // There is intentionally no owner-management action.
   // -----------------------------------------------------------
   window.adminCall = async function(action,payload={}){
-    if(!(await window.isAdmin())){
+    if(!(await isAdmin())){
       throw new Error("ADMIN_ACCESS_DENIED");
     }
 
@@ -53390,14 +53432,14 @@ function initAdminSystem(){
   function bind(tab){
     const s=screen();
     document.getElementById("adminBack").onclick=()=>window.closeAdminPanel();
-    document.getElementById("adminRefresh").onclick=()=>window.adminLoad(tab);
+    document.getElementById("adminRefresh").onclick=()=>load(tab);
     s.querySelectorAll("[data-admin-tab]").forEach(b=>{
-      b.onclick=()=>window.adminLoad(b.dataset.adminTab);
+      b.onclick=()=>load(b.dataset.adminTab);
     });
   }
 
-  window.adminLoad = async function(tab="dashboard"){
-    if(!(await window.isAdmin(true))){
+  async function load(tab="dashboard"){
+    if(!(await isAdmin(true))){
       alert("Administrator access required.");
       return false;
     }
@@ -53414,7 +53456,7 @@ function initAdminSystem(){
 
     try{
       if(tab==="dashboard"){
-        const d=await window.adminCall("dashboard");
+        const d=await call("dashboard");
         document.getElementById("adminContent").innerHTML=stats(d);
       }else if(tab==="users"){
         await users();
@@ -53423,7 +53465,7 @@ function initAdminSystem(){
       }else if(tab==="comments"){
         await comments();
       }else{
-        await reports();
+        await window.reports();
       }
     }catch(e){
       document.getElementById("adminContent").innerHTML=`<div style="padding:18px;border:1px solid rgba(255,77,77,.35);border-radius:14px;color:#ff7070;line-height:1.5;"><b>Administrator database error</b><br>${esc(e.message||e)}</div>`;
@@ -53454,7 +53496,7 @@ function initAdminSystem(){
   }
 
   async function users(q=""){
-    const d=await window.adminCall("users",{search:q,limit:50});
+    const d=await call("users",{search:q,limit:50});
     const c=document.getElementById("adminContent");
     c.innerHTML=input("adminUserSearch",q,"Search users…")+
       (Array.isArray(d)&&d.length
@@ -53475,7 +53517,7 @@ function initAdminSystem(){
   // -----------------------------------------------------------
   window.adminOpenUser=async function(id){
     try{
-      const u=await window.adminCall("user",{user_id:id});
+      const u=await call("user",{user_id:id});
       const t=theme();
       const owner=(u?.is_admin_owner===true);
 
@@ -53495,19 +53537,19 @@ function initAdminSystem(){
       if(owner)return;
 
       document.getElementById("au").onclick=async()=>{
-        await window.adminCall("set_user_status",{user_id:id,status:document.getElementById("as").value});
+        await call("set_user_status",{user_id:id,status:document.getElementById("as").value});
         alert("User status updated.");
         await users();
       };
 
       document.getElementById("av").onclick=async()=>{
-        await window.adminCall("verify_user",{user_id:id,verified:!u.verified});
+        await call("verify_user",{user_id:id,verified:!u.verified});
         await window.adminOpenUser(id);
       };
 
       document.getElementById("ax").onclick=async()=>{
         if(!confirm("Disable and anonymize this profile? This does not delete the Auth account."))return;
-        await window.adminCall("delete_user",{user_id:id});
+        await call("delete_user",{user_id:id});
         alert("Profile removed.");
         await users();
       };
@@ -53522,7 +53564,7 @@ function initAdminSystem(){
   }
 
   async function posts(q=""){
-    const d=await window.adminCall("posts",{search:q,limit:50});
+    const d=await call("posts",{search:q,limit:50});
     const c=document.getElementById("adminContent");
     c.innerHTML=input("adminPostSearch",q,"Search posts…")+
       (Array.isArray(d)&&d.length?d.map(postRow).join(""):`<div style="padding:40px;text-align:center;color:${theme().muted};">No posts found.</div>`);
@@ -53533,7 +53575,7 @@ function initAdminSystem(){
   window.adminPostAction=async function(id,a){
     if(a==="delete"&&!confirm("Delete this post permanently?"))return;
     try{
-      await window.adminCall(a==="delete"?"delete_post":"toggle_pin_post",{post_id:id});
+      await call(a==="delete"?"delete_post":"toggle_pin_post",{post_id:id});
       await posts();
     }catch(e){alert(e.message||"Post action failed.");}
   };
@@ -53544,7 +53586,7 @@ function initAdminSystem(){
   }
 
   async function comments(q=""){
-    const d=await window.adminCall("comments",{search:q,limit:50});
+    const d=await call("comments",{search:q,limit:50});
     const c=document.getElementById("adminContent");
     c.innerHTML=input("adminCommentSearch",q,"Search comments…")+
       (Array.isArray(d)&&d.length?d.map(commentRow).join(""):`<div style="padding:40px;text-align:center;color:${theme().muted};">No comments found.</div>`);
@@ -53555,7 +53597,7 @@ function initAdminSystem(){
   window.adminCommentAction=async function(id,a){
     if(a==="delete"&&!confirm("Delete this comment permanently?"))return;
     try{
-      await window.adminCall(a==="delete"?"delete_comment":"toggle_comment_hidden",{comment_id:id});
+      await call(a==="delete"?"delete_comment":"toggle_comment_hidden",{comment_id:id});
       await comments();
     }catch(e){alert(e.message||"Comment action failed.");}
   };
@@ -53565,7 +53607,7 @@ function initAdminSystem(){
     return `<div style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;"><b>${esc(r.reason||"Report")}</b><div style="font-size:13px;margin-top:6px;">Target: ${esc(r.target_type||"unknown")} · ${esc(r.target_id||"")}</div><div style="font-size:11px;color:${t.muted};margin-top:7px;">${esc(r.created_at||"")} · ${esc(r.status||"open")}</div><button onclick="window.adminResolveReport('${esc(r.id)}')" style="margin-top:10px;border:0;border-radius:9px;padding:9px 11px;background:#22a06b;color:#fff;font-weight:700;">Resolve</button></div>`;
   }
 
-  window.adminReports = async function(){
+  window.reports = async function(){
     const d=await window.adminCall("reports",{limit:50});
     document.getElementById("adminContent").innerHTML=
       (Array.isArray(d)&&d.length?d.map(reportRow).join(""):`<div style="padding:55px 20px;text-align:center;color:${theme().muted};">No open reports.</div>`);
@@ -53573,13 +53615,13 @@ function initAdminSystem(){
 
   window.adminResolveReport=async function(id){
     try{
-      await window.adminCall("resolve_report",{report_id:id});
-      await reports();
+      await call("resolve_report",{report_id:id});
+      await window.reports();
     }catch(e){alert(e.message||"Unable to resolve report.");}
   };
 
   window.openAdminPanel=async function(addHistory=true){
-    if(!(await window.isAdmin(true))){
+    if(!(await isAdmin(true))){
       alert("Administrator access required.");
       return false;
     }
@@ -53588,7 +53630,7 @@ function initAdminSystem(){
       window.navigateToScreen("adminPanelScreen",{source:"profileSettings"},addHistory);
     }
 
-    await window.adminLoad("dashboard");
+    await load("dashboard");
     return true;
   };
 
@@ -53603,7 +53645,7 @@ function initAdminSystem(){
     if(typeof window.openProfileSettings==="function")window.openProfileSettings(false);
   };
 
-  window.bindAdminSettings = async function(){
+  async function bindSettings(){
     const sec=document.getElementById("settingsAdminSection");
     const btn=document.getElementById("settingsAdminBtn");
     if(!sec||!btn)return;
@@ -53619,8 +53661,22 @@ function initAdminSystem(){
       console.warn("ADMIN SESSION CHECK:",e);
     }
 
-    const allowed=await window.isAdmin(true);
+    const allowed=await isAdmin(true);
     sec.style.display=allowed?"block":"none";
+
+    // Add the final UI state to the temporary debug popup without exposing tokens.
+    const debugBox=document.getElementById("adminDebugOverlay");
+    if(debugBox){
+      const pre=debugBox.querySelector("pre");
+      if(pre){
+        pre.textContent += "\n\nAdmin section found: YES"
+          + "\nButton found: YES"
+          + "\nSession at bindSettings: " + (session ? "YES" : "NO")
+          + "\nSection display: " + sec.style.display
+          + "\nButton display: " + getComputedStyle(btn).display
+          + "\nButton visibility: " + getComputedStyle(btn).visibility;
+      }
+    }
 
     if(allowed){
       btn.onclick=()=>window.openAdminPanel(true);
@@ -53632,26 +53688,26 @@ function initAdminSystem(){
   // Settings is dynamically created by the main app, so observe it.
   new MutationObserver(()=>{
     if(document.getElementById("profileSettingsScreen")){
-      window.bindAdminSettings();
+      bindSettings();
     }
   }).observe(document.body,{childList:true,subtree:true});
 
   // Initial session restore.
-  setTimeout(window.bindAdminSettings,500);
-  setTimeout(window.bindAdminSettings,1500);
+  setTimeout(bindSettings,500);
+  setTimeout(bindSettings,1500);
 
   // Re-check after login, logout, refresh and session restoration.
   sb.auth.onAuthStateChange(()=>{
-    window.adminCache=null;
-    setTimeout(window.bindAdminSettings,250);
-    setTimeout(window.bindAdminSettings,1000);
+    adminCache=null;
+    setTimeout(bindSettings,250);
+    setTimeout(bindSettings,1000);
   });
 
-}
-
-// Start immediately; the initializer waits for window.supabase.
-initAdminSystem();
+})();
 
 </script>
 </body>
 </html>
+<script>
+alert("LIVE SOCIAL-APP INDEX.HTML LOADED");
+</script>
