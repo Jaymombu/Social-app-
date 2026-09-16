@@ -53832,7 +53832,7 @@ window.submitUserReport=async function(targetType,targetId){
     const {data:{session}}=await supabase.auth.getSession();
     if(!session?.user?.id){showToast?.("Please log in first.");return false;}
     const id=String(targetId||"").trim(); if(!id){showToast?.("Unable to identify this item.");return false;}
-    const reason=prompt("Why are you reporting this "+targetType+"?\n\nSpam\nHarassment\nHate speech\nScam\nOther");
+    const reason=prompt("Why are you reporting this "+targetType+"?\n\n1 Spam\n2 Harassment\n3 Hate speech\n4 Scam\n5 Other");
     if(reason===null)return false; const clean=reason.trim(); if(!clean){showToast?.("Please enter a reason.");return false;}
     /* ALL report types use the same central table consumed by admin_reports_api.
        This keeps post/comment/message/profile reports in one admin queue. */
