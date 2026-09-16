@@ -53346,7 +53346,7 @@ function initAdminSystem(){
     };
 
     return ["dashboard","users","posts","comments","reports"]
-      .map(x=>`<button data-admin-tab="${x}" style="flex:1;min-width:85px;border:0;border-radius:10px;padding:10px 6px;background:${tab===x?"#1877f2":"transparent"};color:#fff;font-weight:700;">${labels[x]}</button>`)
+      .map(x=>`<button type="button" data-admin-tab="${x}" style="flex:1;min-width:85px;border:0;border-radius:10px;padding:10px 6px;background:${tab===x?"#1877f2":"transparent"};color:#fff;font-weight:700;">${labels[x]}</button>`)
       .join("");
   }
 
@@ -53359,9 +53359,9 @@ function initAdminSystem(){
     return `<div style="min-height:100%;background:${t.bg};color:${t.text};">
       <div style="position:sticky;top:0;z-index:20;background:${t.bg};border-bottom:1px solid ${t.border};padding:8px 10px;">
         <div style="height:48px;display:flex;align-items:center;gap:8px;">
-          <button id="adminBack" style="width:42px;height:42px;border:0;border-radius:50%;background:${t.card};color:${t.text};font-size:23px;">←</button>
+          <button type="button" id="adminBack" style="width:42px;height:42px;border:0;border-radius:50%;background:${t.card};color:${t.text};font-size:23px;">←</button>
           <div style="flex:1;text-align:center;font-size:19px;font-weight:800;">${title}</div>
-          <button id="adminRefresh" style="width:42px;height:42px;border:0;border-radius:50%;background:${t.card};color:${t.text};font-size:19px;">↻</button>
+          <button type="button" id="adminRefresh" style="width:42px;height:42px;border:0;border-radius:50%;background:${t.card};color:${t.text};font-size:19px;">↻</button>
         </div>
         <div style="display:flex;gap:4px;overflow:auto;padding-top:6px;">${nav(tab)}</div>
       </div>
@@ -53401,10 +53401,16 @@ function initAdminSystem(){
 
   function bind(tab){
     const s=screen();
-    document.getElementById("adminBack").onclick=()=>window.closeAdminPanel();
-    document.getElementById("adminRefresh").onclick=()=>window.adminLoad(tab);
+    // Bind with delegation so buttons remain clickable after innerHTML updates.
+    s.style.pointerEvents="auto";
+    s.style.touchAction="pan-y";
+    const back=document.getElementById("adminBack");
+    const refresh=document.getElementById("adminRefresh");
+    if(back) back.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();window.closeAdminPanel();};
+    if(refresh) refresh.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();window.adminLoad(tab);};
     s.querySelectorAll("[data-admin-tab]").forEach(b=>{
-      b.onclick=()=>window.adminLoad(b.dataset.adminTab);
+      b.type="button";
+      b.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();window.adminLoad(b.dataset.adminTab);};
     });
   }
 
@@ -53578,15 +53584,22 @@ function initAdminSystem(){
   }
 
   window.adminReports = async function(){
-    const d=await window.adminCall("reports",{limit:50});
-    document.getElementById("adminContent").innerHTML=
-      (Array.isArray(d)&&d.length?d.map(reportRow).join(""):`<div style="padding:55px 20px;text-align:center;color:${theme().muted};">No open reports.</div>`);
+    const d=await window.adminCall("reports",{limit:50,status:"open"});
+    const c=document.getElementById("adminContent");
+    if(!c)return;
+    c.innerHTML=(Array.isArray(d)&&d.length
+      ?d.map(reportRow).join("")
+      :`<div style="padding:55px 20px;text-align:center;color:${theme().muted};">No open reports.</div>`);
+    // Keep report controls usable after the list is replaced.
+    c.querySelectorAll("button").forEach(b=>{b.type="button";b.style.pointerEvents="auto";});
   };
 
   window.adminResolveReport=async function(id){
     try{
       await window.adminCall("resolve_report",{report_id:id});
       await window.adminReports();
+      // Refresh dashboard totals too, so the open-report number updates immediately.
+      if(screen().dataset.tab==="dashboard") await window.adminLoad("dashboard");
     }catch(e){alert(e.message||"Unable to resolve report.");}
   };
 
