@@ -53781,72 +53781,35 @@ initAdminSystem();
 
 </script>
 <script>
-/* ================= REPORT ACTIONS ================= */
-window.submitUserReport = async function(targetType,targetId){
+/* REPORT SUBMISSION FIX */
+window.submitUserReport=async function(targetType,targetId){
   try{
     const {data:{session}}=await supabase.auth.getSession();
-    if(!session?.user?.id){ showToast?.("Please log in to report."); return; }
-    if(!targetId){ showToast?.("Unable to identify this item."); return; }
-    const reason=prompt("Why are you reporting this " + targetType + "?\n\nExamples:\nSpam\nHarassment\nHate speech\nOther");
-    if(reason===null)return;
-    const clean=reason.trim();
-    if(!clean){showToast?.("Please enter a reason.");return;}
-    const {error}=await supabase.from("reports").insert({
-      reporter_id:session.user.id,
-      target_type:targetType,
-      target_id:String(targetId),
-      reason:clean,
-      status:"open"
-    });
+    if(!session?.user?.id){showToast?.("Please log in first.");return false;}
+    const id=String(targetId||"").trim(); if(!id){showToast?.("Unable to identify this item.");return false;}
+    const reason=prompt("Why are you reporting this "+targetType+"?\n\nSpam\nHarassment\nHate speech\nScam\nOther");
+    if(reason===null)return false; const clean=reason.trim(); if(!clean){showToast?.("Please enter a reason.");return false;}
+    /* Comments already have a dedicated table in this app. */
+    if(String(targetType).toLowerCase()==="comment"){
+      const {error}=await supabase.from("comment_reports").upsert({comment_id:id,reporter_id:session.user.id,reason:clean});
+      if(error){console.error("COMMENT REPORT:",error);showToast?.(error.code==="23505"?"You already reported this comment.":"Report failed: "+error.message);return false;}
+      showToast?.("Comment reported."); return true;
+    }
+    /* Other report types use the central reports table consumed by admin_reports_api. */
+    const {error}=await supabase.from("reports").insert({reporter_id:session.user.id,target_type:String(targetType).toLowerCase(),target_id:id,reason:clean,status:"open"});
     if(error){
       console.error("REPORT INSERT:",error);
-      showToast?.(error.code==="23505"?"You already reported this item.":"Unable to submit report.");
-      return;
+      if(error.code==="23505"){showToast?.("You already reported this item.");return false;}
+      if(error.code==="42501"||/row-level security|permission denied/i.test(error.message||"")){showToast?.("Report blocked by Supabase security rules. Add the report INSERT policy shown below.");return false;}
+      showToast?.("Report failed: "+(error.message||"database error"));return false;
     }
-    showToast?.((targetType[0].toUpperCase()+targetType.slice(1))+" reported.");
-  }catch(e){console.error(e);showToast?.("Unable to submit report.");}
+    showToast?.((String(targetType)[0].toUpperCase()+String(targetType).slice(1))+" reported.");return true;
+  }catch(e){console.error("REPORT:",e);showToast?.("Report failed: "+(e.message||e));return false;}
 };
-window.reportPost= id => window.submitUserReport("post",id);
-window.reportMessage= id => window.submitUserReport("message",id);
-window.reportProfile= id => window.submitUserReport("profile",id);
-/* Keep the existing comment-report implementation, but make it available everywhere. */
-if(typeof window.reportComment !== "function") window.reportComment=id=>window.submitUserReport("comment",id);
-
-(function installReportButtons(){
-  const STYLE='display:inline-flex;align-items:center;justify-content:center;gap:5px;border:0;border-radius:9px;padding:7px 10px;margin:6px 4px 0 0;background:transparent;color:#ff9800;font-size:13px;font-weight:700;cursor:pointer;pointer-events:auto;touch-action:manipulation;';
-  function add(parent,type,id,label){
-    if(!parent||!id||parent.querySelector(':scope > .user-report-button'))return;
-    const b=document.createElement('button'); b.type='button'; b.className='user-report-button'; b.textContent='⚑ '+label; b.setAttribute('aria-label','Report '+label.toLowerCase()); b.style.cssText=STYLE;
-    b.onclick=e=>{e.preventDefault();e.stopPropagation();window.submitUserReport(type,String(id));};
-    parent.appendChild(b);
-  }
-  function scan(){
-    /* Comments: exact comment card. */
-    document.querySelectorAll('.commentItem[data-comment-id]').forEach(el=>add(el,'comment',el.dataset.commentId,'Comment'));
-    /* Chat: exact message bubble. Media elements carry the message id; the parent bubble is .chatMessage. */
-    document.querySelectorAll('.chatMessage').forEach(el=>{
-      const media=el.querySelector('[data-message-id]');
-      const id=media?.getAttribute('data-message-id') || el.dataset.messageId;
-      add(el,'message',id,'Message');
-    });
-    /* Posts: locate the post id from its controls/content and add to the rendered post wrapper. */
-    document.querySelectorAll('[id^="postContent-"]').forEach(content=>{
-      const id=content.id.slice('postContent-'.length); add(content.closest('div')?.parentElement?.parentElement || content.parentElement,'post',id,'Post');
-    });
-    /* Profile: one report control on the open profile screen. */
-    const ps=document.getElementById('profileScreen');
-    if(ps && ps.style.display!=='none' && !ps.querySelector('.user-report-profile-button')){
-      const id=window.currentProfileId || window.currentProfileUserId || ps.dataset.userId;
-      if(id){
-        const b=document.createElement('button'); b.type='button'; b.className='user-report-button user-report-profile-button'; b.textContent='⚑ Report Profile'; b.style.cssText=STYLE+'display:flex;width:100%;margin:14px 0;'; b.onclick=e=>{e.preventDefault();e.stopPropagation();window.reportProfile(String(id));};
-        const content=ps.querySelector('.profile-theme-content') || ps.firstElementChild || ps; content.appendChild(b);
-      }
-    }
-  }
-  const mo=new MutationObserver(()=>scan());
-  mo.observe(document.body,{childList:true,subtree:true});
-  setTimeout(scan,500);setTimeout(scan,1500);setTimeout(scan,3000);
-})();
+window.reportPost=id=>window.submitUserReport("post",id);
+window.reportMessage=id=>window.submitUserReport("message",id);
+window.reportProfile=id=>window.submitUserReport("profile",id);
+window.reportComment=id=>window.submitUserReport("comment",id);
 </script>
 </body>
 </html>
