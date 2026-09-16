@@ -9551,27 +9551,6 @@ const isOwner =
 
 
     ${
-      !isOwner
-        ? `
-          <button
-            onclick="window.reportPost('${post.id}')"
-            style="
-              margin-top:8px;
-              margin-left:6px;
-              background:#333;
-              border:none;
-              color:#ff9800;
-              padding:5px 8px;
-              border-radius:5px;
-            "
-          >
-            🚩 Report
-          </button>
-        `
-        : ""
-    }
-
-    ${
       isOwner
         ? `
           <button
@@ -25290,71 +25269,37 @@ async function unhideComment(commentId) {
     closeCommentMenu();
 }
 
-// =====================================================
-// UNIFIED REPORT SYSTEM
-// Post / Comment / Profile / Message
-// =====================================================
-window.submitReport = async function(targetType, targetId, details = {}) {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-        showToast("Please login first.");
-        return false;
-    }
-    if (!targetType || !targetId) return false;
+async function reportComment(commentId) {
+
+    closeCommentMenu();
+
+    const {
+        data: { session }
+    } = await supabase.auth.getSession();
+
+    if (!session) return;
 
     const reason = prompt(
-        "Why are you reporting this?\n\nExamples:\nSpam\nHarassment\nHate speech\nScam\nViolence\nOther"
+        "Why are you reporting this comment?\n\nExamples:\nSpam\nHarassment\nHate speech\nOther"
     );
-    if (reason === null) return false;
 
-    const cleanReason = reason.trim();
-    if (!cleanReason) {
-        showToast("Please enter a reason.");
-        return false;
-    }
+    if (reason === null) return;
 
-    try {
-        const { data, error } = await supabase.rpc("submit_report", {
-            p_target_type: String(targetType),
-            p_target_id: String(targetId),
-            p_reason: cleanReason,
-            p_details: details || {}
+    const { error } = await supabase
+        .from("comment_reports")
+        .upsert({
+            comment_id: commentId,
+            reporter_id: session.user.id,
+            reason: reason.trim()
         });
-        if (error) throw error;
-        if (data?.already_reported) {
-            showToast("You already reported this.");
-            return false;
-        }
-        showToast("Report submitted.");
-        return true;
-    } catch (e) {
-        console.error("REPORT ERROR:", e);
-        showToast(e?.message || "Unable to submit report.");
-        return false;
+
+    if (error) {
+        console.log(error);
+        showToast("You already reported this comment.");
+        return;
     }
-};
 
-window.reportPost = function(postId) {
-    return window.submitReport("post", postId);
-};
-
-window.reportComment = function(commentId) {
-    if (typeof closeCommentMenu === "function") closeCommentMenu();
-    return window.submitReport("comment", commentId);
-};
-
-window.reportProfile = function(userId) {
-    return window.submitReport("profile", userId);
-};
-
-window.reportMessage = function(messageId) {
-    document.getElementById("messageMenu108")?.remove();
-    document.getElementById("messageMenu")?.remove();
-    return window.submitReport("message", messageId);
-};
-
-async function reportCommentLegacy(commentId) {
-    return window.reportComment(commentId);
+    showToast("Comment reported.");
 }
 
 async function translateComment(commentId) {
@@ -27367,29 +27312,6 @@ window.openProfile = async function (
                         "
                     >
                         💬 Message
-                    </button>
-                    `
-                            : ""
-                    }
-
-                    ${
-                        session?.user?.id &&
-                        String(session.user.id) !== String(userId)
-                            ? `
-                    <button
-                        id="profileReportButton"
-                        type="button"
-                        onclick="window.reportProfile('${userId}')"
-                        style="
-                            padding:8px 16px;
-                            border:none;
-                            border-radius:8px;
-                            background:#333;
-                            color:#ff9800;
-                            cursor:pointer;
-                        "
-                    >
-                        🚩 Report
                     </button>
                     `
                             : ""
@@ -43251,10 +43173,6 @@ window.messageOptions = async function(messageId) {
 
 <div class="action-row108" onclick="forwardMessage('${messageId}')">
   <span class="action-icon108"><svg viewBox="0 0 24 24"><path d="m13 5 7 7-7 7"/><path d="M20 12H7a4 4 0 0 0-4 4v2"/></svg></span><span>Forward</span>
-</div>
-
-<div class="action-row108" onclick="window.reportMessage('${messageId}')">
-  <span class="action-icon108"><svg viewBox="0 0 24 24"><path d="M6 20V4m0 1h11l-2.5 4L17 13H6"/></svg></span><span>Report Message</span>
 </div>
 
 <div class="action-row108 danger108" onclick="deleteForEveryone('${messageId}')">
