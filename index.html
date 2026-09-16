@@ -53376,21 +53376,23 @@ function initAdminSystem(){
   function stats(d){
     const t=theme();
     const a=[
-      ["Users",d?.users,"👥"],
-      ["Posts",d?.posts,"📝"],
-      ["Comments",d?.comments,"💬"],
-      ["Open reports",d?.open_reports ?? d?.reports,"🚩"],
-      ["Restricted users",d?.restricted_users,"⛔"],
-      ["Administrators",d?.administrator_count ?? 1,"🛡️"]
+      ["Users",d?.users,"👥","users"],
+      ["Posts",d?.posts,"📝","posts"],
+      ["Comments",d?.comments,"💬","comments"],
+      ["Open reports",d?.open_reports ?? d?.reports ?? 0,"🚩","reports"],
+      ["Restricted users",d?.restricted_users,"⛔","users"],
+      ["Administrators",d?.administrator_count ?? 1,"🛡️","dashboard"]
     ];
-
     return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
-      ${a.map(x=>`<div style="background:${t.card};border:1px solid ${t.border};border-radius:15px;padding:15px;">
+      ${a.map(x=>`<button type="button" data-admin-stat="${x[3]}" style="display:block;width:100%;min-height:125px;text-align:left;cursor:pointer;touch-action:manipulation;pointer-events:auto;background:${t.card};color:${t.text};border:1px solid ${t.border};border-radius:15px;padding:15px;">
         <div style="font-size:24px;">${x[2]}</div>
         <div style="font-size:25px;font-weight:800;margin-top:6px;">${esc(x[1]??0)}</div>
         <div style="font-size:12px;color:${t.muted};">${x[0]}</div>
-      </div>`).join("")}
-    </div>
+      </button>`).join("")}
+    </div>`+`<div style="margin-top:14px;background:${t.card};border:1px solid ${t.border};border-radius:15px;padding:16px;">
+      <b>Strict administrator protection</b><div style="color:${t.muted};font-size:13px;line-height:1.55;margin-top:8px;">This application has one administrator only. Ownership is stored outside the public profile role system.</div>
+    </div>`;
+  }
     <div style="margin-top:14px;background:${t.card};border:1px solid ${t.border};border-radius:15px;padding:16px;">
       <b>Strict administrator protection</b>
       <div style="color:${t.muted};font-size:13px;line-height:1.55;margin-top:8px;">
@@ -53412,6 +53414,10 @@ function initAdminSystem(){
       b.type="button";
       b.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();window.adminLoad(b.dataset.adminTab);};
     });
+    s.querySelectorAll("[data-admin-stat]").forEach(b=>{
+      b.type="button";
+      b.onclick=(ev)=>{ev.preventDefault();ev.stopPropagation();window.adminLoad(b.dataset.adminStat);};
+    });
   }
 
   window.adminLoad = async function(tab="dashboard"){
@@ -53426,6 +53432,7 @@ function initAdminSystem(){
     const t=theme();
 
     s.style.cssText=`position:fixed;inset:0;display:block;visibility:visible;opacity:1;pointer-events:auto;background:${t.bg};color:${t.text};z-index:2147483000;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;`;
+    if(!document.getElementById("adminReportHighlightStyle")){const st=document.createElement("style");st.id="adminReportHighlightStyle";st.textContent=".admin-report-highlight{outline:4px solid #ffcc00!important;outline-offset:4px!important;background:rgba(255,204,0,.18)!important;transition:outline .2s ease!important;}";document.head.appendChild(st);}
     s.dataset.tab=tab;
     s.innerHTML=shell(tab,loading());
     bind(tab);
@@ -53433,7 +53440,12 @@ function initAdminSystem(){
     try{
       if(tab==="dashboard"){
         const d=await window.adminCall("dashboard");
+        try{
+          const reports=await window.adminCall("reports",{limit:100});
+          if(d) d.open_reports=normalizeAdminReports(reports).length;
+        }catch(reportError){ console.warn("REPORT COUNT:",reportError); }
         document.getElementById("adminContent").innerHTML=stats(d);
+        bind(tab);
       }else if(tab==="users"){
         await users();
       }else if(tab==="posts"){
@@ -53578,13 +53590,79 @@ function initAdminSystem(){
     }catch(e){alert(e.message||"Comment action failed.");}
   };
 
+  function normalizeAdminReports(value){
+    if(Array.isArray(value)) return value;
+    if(Array.isArray(value?.reports)) return value.reports;
+    if(Array.isArray(value?.data)) return value.data;
+    if(Array.isArray(value?.rows)) return value.rows;
+    return [];
+  }
+
+  function highlightAdminTarget(id, type){
+    if(!id)return;
+    const safeId=CSS.escape(String(id));
+    const selectors = type === "profile"
+      ? `[data-user-id="${safeId}"],#profile-${safeId}`
+      : type === "post"
+      ? `[data-post-id="${CSS.escape(String(id))}"],#post-${CSS.escape(String(id))}`
+      : type === "comment"
+        ? `[data-comment-id="${CSS.escape(String(id))}"],#comment-${CSS.escape(String(id))}`
+        : `[data-message-id="${CSS.escape(String(id))}"],#message-${CSS.escape(String(id))}`;
+    setTimeout(()=>{
+      document.querySelectorAll(".admin-report-highlight").forEach(el=>el.classList.remove("admin-report-highlight"));
+      const el=document.querySelector(selectors);
+      if(el){
+        el.classList.add("admin-report-highlight");
+        el.scrollIntoView({behavior:"smooth",block:"center"});
+      }
+    },500);
+  }
+
+  window.adminOpenReportedTarget=async function(r){
+    try{
+      const type=String(r?.target_type||r?.type||"").toLowerCase().replace(/s$/," ").trim();
+      const id=r?.target_id||r?.targetId||r?.id_target;
+      if(!id) throw new Error("This report has no target ID.");
+      if(type.includes("profile")||type.includes("user")||type.includes("account")){
+        await window.openProfile(String(id),r?.target_name||"User");
+        highlightAdminTarget(id,"profile");
+        return;
+      }
+      if(type.includes("post")||type.includes("publication")){
+        if(typeof window.openComments!=="function")throw new Error("Post viewer is unavailable.");
+        await window.openComments(String(id));
+        highlightAdminTarget(id,"post");
+        return;
+      }
+      if(type.includes("comment")){
+        const postId=r?.post_id||r?.parent_post_id;
+        if(postId&&typeof window.openComments==="function"){
+          await window.openComments(String(postId));
+          highlightAdminTarget(id,"comment");
+          return;
+        }
+        throw new Error("This comment report is missing its post ID.");
+      }
+      if(type.includes("message")||type.includes("chat")){
+        const otherUser=r?.user_id||r?.sender_id||r?.receiver_id||r?.chat_user_id;
+        if(otherUser&&typeof window.openChat==="function"){
+          await window.openChat(String(otherUser));
+          highlightAdminTarget(id,"message");
+          return;
+        }
+        throw new Error("This message report is missing the conversation user ID.");
+      }
+      throw new Error("Unsupported report target type: "+(r?.target_type||"unknown"));
+    }catch(e){alert(e.message||"Unable to open reported target.");}
+  };
+
   function reportRow(r){
     const t=theme();
-    return `<div style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;"><b>${esc(r.reason||"Report")}</b><div style="font-size:13px;margin-top:6px;">Target: ${esc(r.target_type||"unknown")} · ${esc(r.target_id||"")}</div><div style="font-size:11px;color:${t.muted};margin-top:7px;">${esc(r.created_at||"")} · ${esc(r.status||"open")}</div><button onclick="window.adminResolveReport('${esc(r.id)}')" style="margin-top:10px;border:0;border-radius:9px;padding:9px 11px;background:#22a06b;color:#fff;font-weight:700;">Resolve</button></div>`;
+    return `<div style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;"><b>${esc(r.reason||"Report")}</b><div style="font-size:13px;margin-top:6px;">Target: ${esc(r.target_type||"unknown")} · ${esc(r.target_id||"")}</div><div style="font-size:11px;color:${t.muted};margin-top:7px;">${esc(r.created_at||"")} · ${esc(r.status||"open")}</div><div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:10px;"><button type="button" onclick="window.adminOpenReportedTarget(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(r))}')))" style="border:0;border-radius:9px;padding:9px 11px;background:#1877f2;color:#fff;font-weight:700;">Open target</button><button type="button" onclick="window.adminResolveReport('${esc(r.id)}')" style="border:0;border-radius:9px;padding:9px 11px;background:#22a06b;color:#fff;font-weight:700;">Resolve</button></div></div>`;
   }
 
   window.adminReports = async function(){
-    const d=await window.adminCall("reports",{limit:50,status:"open"});
+    const d=normalizeAdminReports(await window.adminCall("reports",{limit:50}));
     const c=document.getElementById("adminContent");
     if(!c)return;
     c.innerHTML=(Array.isArray(d)&&d.length
