@@ -53385,7 +53385,7 @@ function initAdminSystem(){
     ];
 
     return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
-      ${a.map(x=>`<button type="button" data-admin-stat="${x[3]}" onclick="event.preventDefault();event.stopPropagation();window.adminLoad('${x[3]}');return false;" style="appearance:none;-webkit-appearance:none;width:100%;min-height:125px;text-align:left;background:${t.card};color:${t.text};border:1px solid ${t.border};border-radius:15px;padding:15px;cursor:pointer;pointer-events:auto;touch-action:manipulation;position:relative;z-index:2;">
+      ${a.map(x=>`<button type="button" data-admin-stat="${x[3]}" style="appearance:none;-webkit-appearance:none;width:100%;min-height:125px;text-align:left;background:${t.card};color:${t.text};border:1px solid ${t.border};border-radius:15px;padding:15px;cursor:pointer;pointer-events:auto;touch-action:manipulation;">
         <div style="font-size:24px;">${x[2]}</div>
         <div style="font-size:25px;font-weight:800;margin-top:6px;">${esc(x[1]??0)}</div>
         <div style="font-size:12px;color:${t.muted};">${x[0]}</div>
@@ -53440,8 +53440,6 @@ function initAdminSystem(){
       if(tab==="dashboard"){
         const d=await window.adminCall("dashboard");
         document.getElementById("adminContent").innerHTML=stats(d);
-        // stats() is rendered after the initial bind(), so bind the new cards too.
-        bind(tab);
       }else if(tab==="users"){
         await users();
       }else if(tab==="posts"){
@@ -53586,9 +53584,94 @@ function initAdminSystem(){
     }catch(e){alert(e.message||"Comment action failed.");}
   };
 
+  // Open the exact object referenced by an administrator report.
+  // Post reports open the exact post's comment/media screen; comment reports
+  // open that post and highlight the exact comment; message reports open the
+  // exact conversation and jump to the exact message; profile reports open
+  // the exact profile.
+  window.adminOpenReport = async function(r){
+    if(!r) return false;
+
+    const type = String(r.target_type || r.type || "").toLowerCase().trim();
+    const id = String(r.target_id || r.targetId || r.post_id || r.comment_id || r.message_id || r.user_id || "").trim();
+    if(!id){ alert("This report has no target ID."); return false; }
+
+    try{
+      // Leave the admin screen before opening the reported object.
+      const adminScreen=document.getElementById("adminPanelScreen");
+      if(adminScreen){
+        adminScreen.style.display="none";
+        adminScreen.style.pointerEvents="none";
+      }
+
+      if(type.includes("profile") || type.includes("user") || type.includes("account")){
+        window.profileNavigationSource="admin";
+        await window.openProfile(id,"User",{source:"admin"});
+        window.__adminReportReturn=true;
+        return true;
+      }
+
+      if(type.includes("message") || type.includes("chat") || type.includes("dm")){
+        let m=null;
+        try{
+          m=await window.adminCall("message",{message_id:id});
+        }catch(e){}
+        if(!m){
+          const q=await supabase.from("messages").select("id,sender_id,receiver_id").eq("id",id).maybeSingle();
+          if(q.data) m=q.data;
+        }
+        if(!m){ alert("The reported message could not be found."); return false; }
+        const me=session?.user?.id;
+        const other=String(m.sender_id)===String(me)?m.receiver_id:m.sender_id;
+        let name="User";
+        try{ const q=await supabase.from("profiles").select("name").eq("id",other).maybeSingle(); name=q.data?.name||name; }catch(e){}
+        await window.openChat(other,name,{source:"admin",reportMessageId:id});
+        window.__adminReportMessageId=id;
+        setTimeout(()=>{ if(typeof window.jumpToMessage==="function") window.jumpToMessage(id); },500);
+        setTimeout(()=>{ if(typeof window.jumpToMessage==="function") window.jumpToMessage(id); },1200);
+        return true;
+      }
+
+      if(type.includes("comment")){
+        let c=null;
+        try{ c=await window.adminCall("comment",{comment_id:id}); }catch(e){}
+        if(!c){
+          const q=await supabase.from("comments").select("id,post_id").eq("id",id).maybeSingle();
+          if(q.data) c=q.data;
+        }
+        const postId=c?.post_id || r.post_id;
+        if(!postId){ alert("The reported comment's post could not be found."); return false; }
+        window.commentsReturnCommentId=String(id);
+        await window.openComments(postId,id,true);
+        setTimeout(()=>{ if(typeof window.highlightNotificationComment==="function") window.highlightNotificationComment(id); },500);
+        return true;
+      }
+
+      // Default to a post target. This also handles target_type values such as
+      // "post", "posts", "publication" and unknown post-like records.
+      await window.openComments(id,null,true);
+      return true;
+    }catch(e){
+      console.error("ADMIN REPORT OPEN ERROR:",e);
+      alert(e.message||"Unable to open the reported item.");
+      const adminScreen=document.getElementById("adminPanelScreen");
+      if(adminScreen){ adminScreen.style.display="block"; adminScreen.style.pointerEvents="auto"; }
+      return false;
+    }
+  };
+
   function reportRow(r){
     const t=theme();
-    return `<div style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;"><b>${esc(r.reason||"Report")}</b><div style="font-size:13px;margin-top:6px;">Target: ${esc(r.target_type||"unknown")} · ${esc(r.target_id||"")}</div><div style="font-size:11px;color:${t.muted};margin-top:7px;">${esc(r.created_at||"")} · ${esc(r.status||"open")}</div><button onclick="window.adminResolveReport('${esc(r.id)}')" style="margin-top:10px;border:0;border-radius:9px;padding:9px 11px;background:#22a06b;color:#fff;font-weight:700;">Resolve</button></div>`;
+    const rid=esc(r.id||"");
+    return `<div onclick='window.adminOpenReport(${JSON.stringify(r)})' style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;cursor:pointer;pointer-events:auto;touch-action:manipulation;position:relative;">
+      <b>${esc(r.reason||"Report")}</b>
+      <div style="font-size:13px;margin-top:6px;">Target: ${esc(r.target_type||"unknown")} · ${esc(r.target_id||"")}</div>
+      <div style="font-size:11px;color:${t.muted};margin-top:7px;">${esc(r.created_at||"")} · ${esc(r.status||"open")}</div>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button type="button" onclick="event.preventDefault();event.stopPropagation();window.adminOpenReport(${JSON.stringify(r)})" style="border:0;border-radius:9px;padding:9px 11px;background:#1877f2;color:#fff;font-weight:700;">Open exact item</button>
+        <button type="button" onclick="event.preventDefault();event.stopPropagation();window.adminResolveReport('${rid}')" style="border:0;border-radius:9px;padding:9px 11px;background:#22a06b;color:#fff;font-weight:700;">Resolve</button>
+      </div>
+    </div>`;
   }
 
   window.adminReports = async function(){
