@@ -30448,7 +30448,7 @@ window.observeProfileVideos = function (container) {
                         // -------------------------------------------------
                         // IMPORTANT:
                         // DO NOT reset currentTime.
-                        // DO NOT call load().
+                        // DO NOT call window.adminLoad().
                         //
                         // The observer is responsible for automatic
                         // playback, but it does not repeatedly seek.
@@ -31173,7 +31173,7 @@ console.log(
     // Position selected video.
     //
     // No play()
-    // No load()
+    // No window.adminLoad()
     // No currentTime reset
     // -----------------------------------------------------
 
@@ -53233,7 +53233,7 @@ document.addEventListener("selectstart", function(e) {
   const sb = window.supabase;
   if(!sb) return;
 
-  let adminCache = null;
+  window.adminCache = null;
   let searchTimer = null;
 
   const esc = v => String(v ?? "")
@@ -53274,8 +53274,8 @@ document.addEventListener("selectstart", function(e) {
     </div>`;
   }
 
-  async function isAdmin(force=false){
-    if(!force && adminCache !== null) return adminCache;
+  window.isAdmin = async function(force=false){
+    if(!force && window.adminCache !== null) return window.adminCache;
 
     const debug=[];
     try{
@@ -53313,14 +53313,14 @@ document.addEventListener("selectstart", function(e) {
         return false;
       }
 
-      adminCache = data?.is_admin === true;
+      window.adminCache = data?.is_admin === true;
       debug.push("Admin result: " + (adminCache ? "TRUE" : "FALSE"));
       debug.push("Admin section check will run next.");
       showAdminDebug("Temporary Admin Debug",debug);
-      return adminCache;
+      return window.adminCache;
     }catch(e){
       console.warn("STRICT ADMIN CHECK:",e);
-      adminCache = false;
+      window.adminCache = false;
       debug.push("Exception: " + String(e?.message || e));
       debug.push("Admin result: FALSE");
       showAdminDebug("Temporary Admin Debug",debug);
@@ -53332,8 +53332,8 @@ document.addEventListener("selectstart", function(e) {
   // ALL PRIVILEGED OPERATIONS GO THROUGH THE DATABASE API.
   // There is intentionally no owner-management action.
   // -----------------------------------------------------------
-  async function call(action,payload={}){
-    if(!(await isAdmin())){
+  window.adminCall = async function(action,payload={}){
+    if(!(await window.isAdmin())){
       throw new Error("ADMIN_ACCESS_DENIED");
     }
 
@@ -53432,14 +53432,14 @@ document.addEventListener("selectstart", function(e) {
   function bind(tab){
     const s=screen();
     document.getElementById("adminBack").onclick=()=>window.closeAdminPanel();
-    document.getElementById("adminRefresh").onclick=()=>load(tab);
+    document.getElementById("adminRefresh").onclick=()=>window.adminLoad(tab);
     s.querySelectorAll("[data-admin-tab]").forEach(b=>{
-      b.onclick=()=>load(b.dataset.adminTab);
+      b.onclick=()=>window.adminLoad(b.dataset.adminTab);
     });
   }
 
-  async function load(tab="dashboard"){
-    if(!(await isAdmin(true))){
+  window.adminLoad = async function(tab="dashboard"){
+    if(!(await window.isAdmin(true))){
       alert("Administrator access required.");
       return false;
     }
@@ -53456,7 +53456,7 @@ document.addEventListener("selectstart", function(e) {
 
     try{
       if(tab==="dashboard"){
-        const d=await call("dashboard");
+        const d=await window.adminCall("dashboard");
         document.getElementById("adminContent").innerHTML=stats(d);
       }else if(tab==="users"){
         await users();
@@ -53496,7 +53496,7 @@ document.addEventListener("selectstart", function(e) {
   }
 
   async function users(q=""){
-    const d=await call("users",{search:q,limit:50});
+    const d=await window.adminCall("users",{search:q,limit:50});
     const c=document.getElementById("adminContent");
     c.innerHTML=input("adminUserSearch",q,"Search users…")+
       (Array.isArray(d)&&d.length
@@ -53517,7 +53517,7 @@ document.addEventListener("selectstart", function(e) {
   // -----------------------------------------------------------
   window.adminOpenUser=async function(id){
     try{
-      const u=await call("user",{user_id:id});
+      const u=await window.adminCall("user",{user_id:id});
       const t=theme();
       const owner=(u?.is_admin_owner===true);
 
@@ -53537,19 +53537,19 @@ document.addEventListener("selectstart", function(e) {
       if(owner)return;
 
       document.getElementById("au").onclick=async()=>{
-        await call("set_user_status",{user_id:id,status:document.getElementById("as").value});
+        await window.adminCall("set_user_status",{user_id:id,status:document.getElementById("as").value});
         alert("User status updated.");
         await users();
       };
 
       document.getElementById("av").onclick=async()=>{
-        await call("verify_user",{user_id:id,verified:!u.verified});
+        await window.adminCall("verify_user",{user_id:id,verified:!u.verified});
         await window.adminOpenUser(id);
       };
 
       document.getElementById("ax").onclick=async()=>{
         if(!confirm("Disable and anonymize this profile? This does not delete the Auth account."))return;
-        await call("delete_user",{user_id:id});
+        await window.adminCall("delete_user",{user_id:id});
         alert("Profile removed.");
         await users();
       };
@@ -53564,7 +53564,7 @@ document.addEventListener("selectstart", function(e) {
   }
 
   async function posts(q=""){
-    const d=await call("posts",{search:q,limit:50});
+    const d=await window.adminCall("posts",{search:q,limit:50});
     const c=document.getElementById("adminContent");
     c.innerHTML=input("adminPostSearch",q,"Search posts…")+
       (Array.isArray(d)&&d.length?d.map(postRow).join(""):`<div style="padding:40px;text-align:center;color:${theme().muted};">No posts found.</div>`);
@@ -53575,7 +53575,7 @@ document.addEventListener("selectstart", function(e) {
   window.adminPostAction=async function(id,a){
     if(a==="delete"&&!confirm("Delete this post permanently?"))return;
     try{
-      await call(a==="delete"?"delete_post":"toggle_pin_post",{post_id:id});
+      await window.adminCall(a==="delete"?"delete_post":"toggle_pin_post",{post_id:id});
       await posts();
     }catch(e){alert(e.message||"Post action failed.");}
   };
@@ -53586,7 +53586,7 @@ document.addEventListener("selectstart", function(e) {
   }
 
   async function comments(q=""){
-    const d=await call("comments",{search:q,limit:50});
+    const d=await window.adminCall("comments",{search:q,limit:50});
     const c=document.getElementById("adminContent");
     c.innerHTML=input("adminCommentSearch",q,"Search comments…")+
       (Array.isArray(d)&&d.length?d.map(commentRow).join(""):`<div style="padding:40px;text-align:center;color:${theme().muted};">No comments found.</div>`);
@@ -53597,7 +53597,7 @@ document.addEventListener("selectstart", function(e) {
   window.adminCommentAction=async function(id,a){
     if(a==="delete"&&!confirm("Delete this comment permanently?"))return;
     try{
-      await call(a==="delete"?"delete_comment":"toggle_comment_hidden",{comment_id:id});
+      await window.adminCall(a==="delete"?"delete_comment":"toggle_comment_hidden",{comment_id:id});
       await comments();
     }catch(e){alert(e.message||"Comment action failed.");}
   };
@@ -53607,21 +53607,21 @@ document.addEventListener("selectstart", function(e) {
     return `<div style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;"><b>${esc(r.reason||"Report")}</b><div style="font-size:13px;margin-top:6px;">Target: ${esc(r.target_type||"unknown")} · ${esc(r.target_id||"")}</div><div style="font-size:11px;color:${t.muted};margin-top:7px;">${esc(r.created_at||"")} · ${esc(r.status||"open")}</div><button onclick="window.adminResolveReport('${esc(r.id)}')" style="margin-top:10px;border:0;border-radius:9px;padding:9px 11px;background:#22a06b;color:#fff;font-weight:700;">Resolve</button></div>`;
   }
 
-  async function reports(){
-    const d=await call("reports",{limit:50});
+  window.adminReports = async function(){
+    const d=await window.adminCall("reports",{limit:50});
     document.getElementById("adminContent").innerHTML=
       (Array.isArray(d)&&d.length?d.map(reportRow).join(""):`<div style="padding:55px 20px;text-align:center;color:${theme().muted};">No open reports.</div>`);
   }
 
   window.adminResolveReport=async function(id){
     try{
-      await call("resolve_report",{report_id:id});
+      await window.adminCall("resolve_report",{report_id:id});
       await reports();
     }catch(e){alert(e.message||"Unable to resolve report.");}
   };
 
   window.openAdminPanel=async function(addHistory=true){
-    if(!(await isAdmin(true))){
+    if(!(await window.isAdmin(true))){
       alert("Administrator access required.");
       return false;
     }
@@ -53630,7 +53630,7 @@ document.addEventListener("selectstart", function(e) {
       window.navigateToScreen("adminPanelScreen",{source:"profileSettings"},addHistory);
     }
 
-    await load("dashboard");
+    await window.adminLoad("dashboard");
     return true;
   };
 
@@ -53645,7 +53645,7 @@ document.addEventListener("selectstart", function(e) {
     if(typeof window.openProfileSettings==="function")window.openProfileSettings(false);
   };
 
-  async function bindSettings(){
+  window.bindAdminSettings = async function(){
     const sec=document.getElementById("settingsAdminSection");
     const btn=document.getElementById("settingsAdminBtn");
     if(!sec||!btn)return;
@@ -53661,7 +53661,7 @@ document.addEventListener("selectstart", function(e) {
       console.warn("ADMIN SESSION CHECK:",e);
     }
 
-    const allowed=await isAdmin(true);
+    const allowed=await window.isAdmin(true);
     sec.style.display=allowed?"block":"none";
 
     // Add the final UI state to the temporary debug popup without exposing tokens.
@@ -53688,19 +53688,19 @@ document.addEventListener("selectstart", function(e) {
   // Settings is dynamically created by the main app, so observe it.
   new MutationObserver(()=>{
     if(document.getElementById("profileSettingsScreen")){
-      bindSettings();
+      window.bindAdminSettings();
     }
   }).observe(document.body,{childList:true,subtree:true});
 
   // Initial session restore.
-  setTimeout(bindSettings,500);
-  setTimeout(bindSettings,1500);
+  setTimeout(window.bindAdminSettings,500);
+  setTimeout(window.bindAdminSettings,1500);
 
   // Re-check after login, logout, refresh and session restoration.
   sb.auth.onAuthStateChange(()=>{
-    adminCache=null;
-    setTimeout(bindSettings,250);
-    setTimeout(bindSettings,1000);
+    window.adminCache=null;
+    setTimeout(window.bindAdminSettings,250);
+    setTimeout(window.bindAdminSettings,1000);
   });
 
 })();
