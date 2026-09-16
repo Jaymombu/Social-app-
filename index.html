@@ -53290,19 +53290,54 @@ function initAdminSystem(){
   // ALL PRIVILEGED OPERATIONS GO THROUGH THE DATABASE API.
   // There is intentionally no owner-management action.
   // -----------------------------------------------------------
-  window.adminCall = async function(action,payload={}){
-    if(!(await window.isAdmin())){
-      throw new Error("ADMIN_ACCESS_DENIED");
+  window.adminCall = async function(action, payload = {}) {
+
+    if (!(await window.isAdmin())) {
+        throw new Error("ADMIN_ACCESS_DENIED");
     }
 
-    const {data,error} = await sb.rpc("admin_api",{
-      p_action:action,
-      p_payload:payload
-    });
+    // =====================================================
+    // REPORTS USE THEIR OWN PRIVILEGED DATABASE API
+    // =====================================================
 
-    if(error) throw error;
+    if (
+        action === "reports" ||
+        action === "resolve_report"
+    ) {
+
+        const { data, error } = await sb.rpc(
+            "admin_reports_api",
+            {
+                p_action: action,
+                p_payload: payload
+            }
+        );
+
+        if (error) {
+            throw error;
+        }
+
+        return data;
+    }
+
+    // =====================================================
+    // ALL OTHER ADMIN OPERATIONS
+    // =====================================================
+
+    const { data, error } = await sb.rpc(
+        "admin_api",
+        {
+            p_action: action,
+            p_payload: payload
+        }
+    );
+
+    if (error) {
+        throw error;
+    }
+
     return data;
-  }
+};
 
   function screen(){
     let s=document.getElementById("adminPanelScreen");
@@ -53571,12 +53606,29 @@ function initAdminSystem(){
       (Array.isArray(d)&&d.length?d.map(reportRow).join(""):`<div style="padding:55px 20px;text-align:center;color:${theme().muted};">No open reports.</div>`);
   }
 
-  window.adminResolveReport=async function(id){
+  window.adminResolveReport = async function(id){
+
     try{
-      await window.adminCall("resolve_report",{report_id:id});
-      await reports();
-    }catch(e){alert(e.message||"Unable to resolve report.");}
-  };
+
+        await window.adminCall(
+            "resolve_report",
+            {
+                report_id: id
+            }
+        );
+
+        await window.adminReports();
+
+    }catch(e){
+
+        alert(
+            e.message ||
+            "Unable to resolve report."
+        );
+
+    }
+
+};
 
   window.openAdminPanel=async function(addHistory=true){
     if(!(await window.isAdmin(true))){
