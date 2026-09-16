@@ -53426,6 +53426,8 @@ function initAdminSystem(){
 
   function bind(tab){
     const s=screen();
+    s.style.pointerEvents="auto";
+    s.style.touchAction="manipulation";
     if(!s) return;
     s.style.pointerEvents="auto";
     s.style.touchAction="pan-y";
@@ -53456,6 +53458,23 @@ function initAdminSystem(){
         window.adminLoad(b.dataset.adminStat);
       };
     });
+  }
+
+  // Delegated handlers survive every innerHTML replacement in the admin panel.
+  // This prevents dashboard/stat/tab buttons from becoming dead after a render.
+  if(!window.__adminDelegationBound){
+    window.__adminDelegationBound=true;
+    document.addEventListener("click",function(ev){
+      const root=document.getElementById("adminPanelScreen");
+      if(!root || root.style.display==="none") return;
+      const tabBtn=ev.target.closest?.("[data-admin-tab]");
+      const statBtn=ev.target.closest?.("[data-admin-stat]");
+      if(tabBtn || statBtn){
+        ev.preventDefault(); ev.stopPropagation();
+        const target=(tabBtn||statBtn).dataset.adminTab || (tabBtn||statBtn).dataset.adminStat;
+        if(target) window.adminLoad(target);
+      }
+    },true);
   }
 
   window.adminLoad = async function(tab="dashboard"){
@@ -53666,7 +53685,9 @@ function initAdminSystem(){
           if(q.data) m=q.data;
         }
         if(!m){ alert("The reported message could not be found."); return false; }
-        const me=session?.user?.id;
+        const {data:{session:adminSession}}=await sb.auth.getSession();
+        const me=adminSession?.user?.id;
+        if(!me){ alert("Administrator session expired. Please log in again."); return false; }
         const other=String(m.sender_id)===String(me)?m.receiver_id:m.sender_id;
         let name="User";
         try{ const q=await supabase.from("profiles").select("name").eq("id",other).maybeSingle(); name=q.data?.name||name; }catch(e){}
@@ -53832,7 +53853,7 @@ window.submitUserReport=async function(targetType,targetId){
     const {data:{session}}=await supabase.auth.getSession();
     if(!session?.user?.id){showToast?.("Please log in first.");return false;}
     const id=String(targetId||"").trim(); if(!id){showToast?.("Unable to identify this item.");return false;}
-    const reason=prompt("Why are you reporting this "+targetType+"?\n\n1 Spam\n2 Harassment\n3 Hate speech\n4 Scam\n5 Other");
+    const reason=prompt("Why are you reporting this "+targetType+"?\n\nSpam\nHarassment\nHate speech\nScam\nOther");
     if(reason===null)return false; const clean=reason.trim(); if(!clean){showToast?.("Please enter a reason.");return false;}
     /* ALL report types use the same central table consumed by admin_reports_api.
        This keeps post/comment/message/profile reports in one admin queue. */
