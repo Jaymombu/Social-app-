@@ -53227,11 +53227,18 @@ document.addEventListener("selectstart", function(e) {
 // DOES NOT TOUCH startApp()
 // SECURITY AUTHORITY = private.admin_owner / private.admin_api
 // =============================================================
-(function(){
+function initAdminSystem(){
   "use strict";
 
+  // Supabase is created inside a deferred ES module above.
+  // This admin block is a classic script, so it can execute first.
+  // Wait until window.supabase exists before initializing anything.
+  if(!window.supabase){
+    setTimeout(initAdminSystem,50);
+    return;
+  }
+
   const sb = window.supabase;
-  if(!sb) return;
 
   window.adminCache = null;
   let searchTimer = null;
@@ -53259,74 +53266,25 @@ document.addEventListener("selectstart", function(e) {
   // STRICT OWNER CHECK
   // NEVER reads profiles.role.
   // -----------------------------------------------------------
-  function showAdminDebug(title, lines=[]){
-    let box=document.getElementById("adminDebugOverlay");
-    if(!box){
-      box=document.createElement("div");
-      box.id="adminDebugOverlay";
-      box.style.cssText="position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;";
-      document.body.appendChild(box);
-    }
-    box.innerHTML=`<div style="width:min(520px,100%);max-height:85vh;overflow:auto;background:#151515;color:#fff;border:1px solid #1877f2;border-radius:16px;padding:18px;box-sizing:border-box;font-family:Arial,sans-serif;box-shadow:0 12px 40px rgba(0,0,0,.6);">
-      <div style="font-size:18px;font-weight:800;margin-bottom:12px;">${esc(title)}</div>
-      <pre style="white-space:pre-wrap;word-break:break-word;margin:0;color:#ddd;font:13px/1.55 monospace;">${esc(lines.join("\n"))}</pre>
-      <button type="button" onclick="document.getElementById('adminDebugOverlay')?.remove()" style="margin-top:16px;width:100%;padding:12px;border:0;border-radius:10px;background:#1877f2;color:#fff;font-weight:700;">Close Debug</button>
-    </div>`;
-  }
-
   window.isAdmin = async function(force=false){
     if(!force && window.adminCache !== null) return window.adminCache;
 
-    const debug=[];
     try{
-      const {data:{session},error:sessionError}=await sb.auth.getSession();
-      debug.push("Session: " + (session ? "YES" : "NO"));
-      debug.push("User ID: " + (session?.user?.id || "not available"));
-      if(sessionError){
-        debug.push("Session error: " + String(sessionError.message || sessionError));
-      }
-
-      if(!session){
-        adminCache=false;
-        debug.push("RPC: NOT CALLED (no authenticated session)");
-        debug.push("Admin result: FALSE");
-        showAdminDebug("Temporary Admin Debug",debug);
-        return false;
-      }
-
       const {data,error} = await sb.rpc("admin_api",{
         p_action:"whoami",
         p_payload:{}
       });
 
-      debug.push("RPC: CALLED");
-      debug.push("RPC data: " + JSON.stringify(data ?? null));
-
-      if(error){
-        debug.push("RPC error message: " + String(error.message || "unknown"));
-        if(error.code) debug.push("RPC error code: " + String(error.code));
-        if(error.details) debug.push("RPC error details: " + String(error.details));
-        if(error.hint) debug.push("RPC error hint: " + String(error.hint));
-        adminCache=false;
-        debug.push("Admin result: FALSE");
-        showAdminDebug("Temporary Admin Debug",debug);
-        return false;
-      }
+      if(error) throw error;
 
       window.adminCache = data?.is_admin === true;
-      debug.push("Admin result: " + (adminCache ? "TRUE" : "FALSE"));
-      debug.push("Admin section check will run next.");
-      showAdminDebug("Temporary Admin Debug",debug);
       return window.adminCache;
     }catch(e){
       console.warn("STRICT ADMIN CHECK:",e);
       window.adminCache = false;
-      debug.push("Exception: " + String(e?.message || e));
-      debug.push("Admin result: FALSE");
-      showAdminDebug("Temporary Admin Debug",debug);
       return false;
     }
-  }
+  };
 
   // -----------------------------------------------------------
   // ALL PRIVILEGED OPERATIONS GO THROUGH THE DATABASE API.
@@ -53664,20 +53622,6 @@ document.addEventListener("selectstart", function(e) {
     const allowed=await window.isAdmin(true);
     sec.style.display=allowed?"block":"none";
 
-    // Add the final UI state to the temporary debug popup without exposing tokens.
-    const debugBox=document.getElementById("adminDebugOverlay");
-    if(debugBox){
-      const pre=debugBox.querySelector("pre");
-      if(pre){
-        pre.textContent += "\n\nAdmin section found: YES"
-          + "\nButton found: YES"
-          + "\nSession at bindSettings: " + (session ? "YES" : "NO")
-          + "\nSection display: " + sec.style.display
-          + "\nButton display: " + getComputedStyle(btn).display
-          + "\nButton visibility: " + getComputedStyle(btn).visibility;
-      }
-    }
-
     if(allowed){
       btn.onclick=()=>window.openAdminPanel(true);
     }else{
@@ -53703,11 +53647,11 @@ document.addEventListener("selectstart", function(e) {
     setTimeout(window.bindAdminSettings,1000);
   });
 
-})();
+}
+
+// Start immediately; the initializer waits for window.supabase.
+initAdminSystem();
 
 </script>
 </body>
 </html>
-<script>
-alert("LIVE SOCIAL-APP INDEX.HTML LOADED");
-</script>
