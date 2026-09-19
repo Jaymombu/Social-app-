@@ -5092,6 +5092,7 @@ body:not(.dark) .chat-view-once-bubble .vo-icon{background:rgba(0,0,0,.08);}
   box-sizing:border-box !important;
 }
 </style>
+
 </head>
 <body class="dark">
   
@@ -26439,6 +26440,7 @@ window.closeProfile = function () {
                 scrollY:
                     previous.scrollY || 0
             });
+            window.restoreNavigationScroll?.(previous.screen, previous.scrollY || 0);
 
             return;
         }
@@ -39146,6 +39148,7 @@ window.updateHomePostBadge = function () {
     badge.style.display = "none";
 
   }
+  window.syncDefaultNavigationBadges?.();
 
 };
 
@@ -39208,10 +39211,38 @@ if (!topBar) {
 
     </button>
 
+    <button
+      id="profileTopBtn"
+      onclick="openMyTopProfile()"
+      aria-label="Profile"
+    >
+      👤
+    </button>
+
   `;
 
   document.body.appendChild(topBar);
 }
+
+// =====================================================
+// TOP PROFILE BUTTON
+// Same navigation/button behavior as the other top buttons.
+// =====================================================
+window.openMyTopProfile = async function(){
+  try{
+    const uid = session?.user?.id;
+    if(!uid){
+      alert("Please log in first.");
+      return false;
+    }
+    window.profileNavigationSource = "topBar";
+    return await window.openProfile(uid, "Profile", {source:"topBar"});
+  }catch(e){
+    console.error("TOP PROFILE ERROR:", e);
+    alert(e?.message || "Unable to open profile.");
+    return false;
+  }
+};
 
 // =====================================================
 // TOP BAR STYLE
@@ -39299,6 +39330,31 @@ updateHomePostBadge();
 
 let postsEl = null;
 let scrollTimeout;
+
+
+
+// =====================================================
+// TOP NAVIGATION STATE
+// Bottom/default navigation removed.
+// =====================================================
+window.updateDefaultNavigation = function(screen){
+  const map={
+    app:"homeBtn",
+    searchScreen:"searchBtn",
+    notificationsScreen:"notificationBtn",
+    inboxScreen:"chatBtn",
+    profileScreen:"profileTopBtn"
+  };
+  const id=map[screen];
+  if(id && typeof window.setActiveTopButton === "function") {
+    window.setActiveTopButton(id);
+  }
+};
+
+window.syncDefaultNavigationBadges=function(){
+  // Bottom navigation has been removed.
+  // The original top-bar badges remain the single source of truth.
+};
 
 window.startApp = async function () {
 
@@ -44171,6 +44227,28 @@ window.hideTopBar = function () {
 
 
 // =====================================================
+// UNIVERSAL EXACT BACK
+// Every nested screen can use this when it has no custom cleanup.
+// =====================================================
+window.defaultNavigationBack = async function(fallbackScreen="app"){
+  const state=history.state||null;
+  const current=window.appNavigation?.current||null;
+  if(state?.appScreen && state.appScreen!=="app"){
+    history.back();
+    return true;
+  }
+  if(current?.screen && current.screen!=="app"){
+    history.back();
+    return true;
+  }
+  if(typeof window.goHome==="function"){
+    await window.goHome(false);
+    return true;
+  }
+  return false;
+};
+
+// =====================================================
 // CLOSE CHAT
 // CENTRAL NAVIGATION SAFE
 // CHAT → PREVIOUS SCREEN
@@ -48985,6 +49063,62 @@ window.saveNavigationState = function (
 
 
 // =====================================================
+// EXACT SCREEN SCROLL CAPTURE
+// Saves the real scroll container of the screen we are leaving.
+// =====================================================
+window.getNavigationScrollState = function(screen){
+  const result={scrollY:0,scrollElement:"window"};
+  const selectors={
+    app:["#posts"],
+    searchScreen:["#searchResults",".search-results","#searchScreen"],
+    notificationsScreen:["#notificationsList",".notifications-list","#notificationsScreen"],
+    inboxScreen:["#inboxList",".inbox-list","#inboxScreen"],
+    chatScreen:["#chatMessages"],
+    commentsScreen:["#commentsBody"],
+    profileScreen:["#profileScrollContainer","#profileScroll"],
+    profileSettingsScreen:["[data-settings-scroll]",".settings-scroll","#profileSettingsScreen"],
+    editProfileScreen:["#editProfileScroll"],
+    languageSettingsScreen:["[data-settings-scroll]","#languageSettingsScreen"],
+    privacySettingsScreen:["[data-settings-scroll]","#privacySettingsScreen"]
+  };
+  const list=selectors[screen]||[];
+  for(const selector of list){
+    const el=document.querySelector(selector);
+    if(el && el.scrollHeight>el.clientHeight){
+      result.scrollY=Number(el.scrollTop)||0;
+      result.scrollElement=selector;
+      return result;
+    }
+  }
+  result.scrollY=Number(window.scrollY||document.documentElement.scrollTop||document.body.scrollTop||0)||0;
+  return result;
+};
+
+window.restoreNavigationScroll = function(screen,scrollY){
+  const y=Math.max(0,Number(scrollY)||0);
+  const selectors={
+    app:["#posts"],
+    searchScreen:["#searchResults",".search-results","#searchScreen"],
+    notificationsScreen:["#notificationsList",".notifications-list","#notificationsScreen"],
+    inboxScreen:["#inboxList",".inbox-list","#inboxScreen"],
+    chatScreen:["#chatMessages"],
+    commentsScreen:["#commentsBody"],
+    profileScreen:["#profileScrollContainer","#profileScroll"],
+    profileSettingsScreen:["[data-settings-scroll]",".settings-scroll","#profileSettingsScreen"],
+    editProfileScreen:["#editProfileScroll"]
+  };
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const list=selectors[screen]||[];
+    let restored=false;
+    for(const selector of list){
+      const el=document.querySelector(selector);
+      if(el){ el.scrollTop=y; restored=true; break; }
+    }
+    if(!restored) window.scrollTo({top:y,left:0,behavior:"auto"});
+  }));
+};
+
+// =====================================================
 // NAVIGATE TO SCREEN
 // CENTRAL NAVIGATION CONTROLLER
 // =====================================================
@@ -49035,29 +49169,14 @@ window.navigateToScreen = function (
 
 
     // =================================================
-    // DETERMINE CURRENT SCROLL
+    // DETERMINE CURRENT SCROLL OF THE SCREEN WE ARE LEAVING
     // =================================================
 
-    let currentScrollY =
-        window.scrollY || 0;
+    const previousScrollState =
+        window.getNavigationScrollState(previous?.screen || "app");
 
-
-    // Profile uses its own scroll container.
-    if (
-        screen === "profileScreen"
-    ) {
-
-        const profileScroll =
-            document.getElementById(
-                "profileScrollContainer"
-            );
-
-        if (profileScroll) {
-
-            currentScrollY =
-                profileScroll.scrollTop || 0;
-        }
-    }
+    const currentScrollY =
+        previousScrollState.scrollY;
 
 
     // =================================================
@@ -49072,6 +49191,15 @@ window.navigateToScreen = function (
             nextData,
 
         scrollY:
+            currentScrollY,
+
+        sourceScreen:
+            previous?.screen || null,
+
+        sourceData:
+            previous?.data ? { ...(previous.data || {}) } : {},
+
+        sourceScrollY:
             currentScrollY,
 
         timestamp:
@@ -49321,6 +49449,9 @@ window.navigateToScreen = function (
         window.syncNavigationSession(
             nextState
         );
+        if (typeof window.updateDefaultNavigation === "function") {
+            window.updateDefaultNavigation(screen);
+        }
 
 
         history.replaceState(
@@ -49395,6 +49526,9 @@ window.navigateToScreen = function (
     window.syncNavigationSession(
         nextState
     );
+    if (typeof window.updateDefaultNavigation === "function") {
+        window.updateDefaultNavigation(screen);
+    }
 
     // =================================================
     // BROWSER HISTORY
@@ -49463,6 +49597,16 @@ window.restoreNavigationState =
         )
             ? Number(state.scrollY)
             : 0;
+
+    // Restore the exact destination scroll after async lists/rendering settle.
+    if (screen !== "app" && typeof window.restoreNavigationScroll === "function") {
+        window.restoreNavigationScroll(screen, scrollY);
+        [80, 220, 500, 900].forEach(delay => {
+            setTimeout(() => {
+                try { window.restoreNavigationScroll(screen, scrollY); } catch (e) {}
+            }, delay);
+        });
+    }
 
     console.log(
         "🔄 RESTORING SCREEN:",
@@ -52281,6 +52425,7 @@ window.restoreNavigationAfterReload =
 // =====================================================
 
 window.initializeAppNavigation();
+window.updateDefaultNavigation?.(window.appNavigation?.current?.screen || "app");
 
 window.goHome = async function (explicitClick = false) {
 
@@ -52453,6 +52598,8 @@ if (explicitClick === true) {
   app.style.pointerEvents = "auto";
 
   setActiveTopButton("homeBtn");
+  window.updateDefaultNavigation?.("app");
+  window.syncDefaultNavigationBadges?.();
 
   if (typeof restoreTopBar === "function") {
     restoreTopBar();
@@ -54185,6 +54332,13 @@ function initAdminSystem(){
   window.closeAdminPanel=function(){
     if(typeof window.stopAdminReportPolling === "function"){
       window.stopAdminReportPolling();
+    }
+
+    const state=history.state||null;
+    const current=window.appNavigation?.current||null;
+    if(state?.appScreen==="adminPanelScreen" || current?.screen==="adminPanelScreen"){
+      history.back();
+      return true;
     }
 
     const s=document.getElementById("adminPanelScreen");
