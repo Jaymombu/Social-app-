@@ -53808,8 +53808,10 @@ function initAdminSystem(){
 
       if(currentIsAdmin){
         const adminData={...(hs.data||{}),tab};
+        if(adminData.adminDepth == null) adminData.adminDepth = 0;
 
         if(!fromHistory && !window.appNavigation?.restoring && currentTab && currentTab !== tab){
+          adminData.adminDepth = Number(hs?.data?.adminDepth || 0) + 1;
           history.pushState(
             {appScreen:"adminPanelScreen",data:adminData,scrollY:currentScroll},
             "",
@@ -53932,6 +53934,7 @@ function initAdminSystem(){
           const tab=root?.dataset?.tab || hs?.data?.tab || "users";
           const scrollY=Number(root?.scrollTop || hs?.scrollY || 0);
           const data={...(hs.data||{}),tab,adminView:"user",userId:String(id)};
+          data.adminDepth = Number(hs?.data?.adminDepth || 0) + 1;
           history.pushState({appScreen:"adminPanelScreen",data,scrollY},"","#adminPanelScreen");
           if(window.appNavigation){
             window.appNavigation.current={screen:"adminPanelScreen",data,scrollY,timestamp:Date.now()};
@@ -54571,10 +54574,26 @@ function initAdminSystem(){
     }
 
     if(typeof window.navigateToScreen==="function"){
-      window.navigateToScreen("adminPanelScreen",{source:"profileSettings"},addHistory);
+      window.navigateToScreen(
+        "adminPanelScreen",
+        {source:"profileSettings",adminDepth:0},
+        addHistory
+      );
     }
 
-    await window.adminLoad("dashboard");
+    // Administrator root is directly above Settings.
+    try{
+      const hs=history.state;
+      if(hs?.appScreen==="adminPanelScreen"){
+        history.replaceState(
+          {...hs,data:{...(hs.data||{}),adminDepth:0,tab:"dashboard"}},
+          "",
+          "#adminPanelScreen"
+        );
+      }
+    }catch(e){}
+
+    await window.adminLoad("dashboard",true);
     return true;
   };
 
@@ -54586,7 +54605,19 @@ function initAdminSystem(){
     const state=history.state||null;
     const current=window.appNavigation?.current||null;
     if(state?.appScreen==="adminPanelScreen" || current?.screen==="adminPanelScreen"){
-      history.back();
+      const adminDepth=Number(
+        state?.data?.adminDepth ??
+        current?.data?.adminDepth ??
+        0
+      );
+
+      // Close Administrator completely and return to the Settings entry
+      // that opened it, rather than stepping through Admin tabs first.
+      if(adminDepth>0){
+        history.go(-(adminDepth+1));
+      }else{
+        history.back();
+      }
       return true;
     }
 
