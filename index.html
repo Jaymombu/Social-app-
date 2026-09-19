@@ -53711,7 +53711,7 @@ function initAdminSystem(){
     return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
       ${a.map(x=>`<button type="button" data-admin-stat="${x[3]}" style="appearance:none;-webkit-appearance:none;width:100%;min-height:125px;text-align:left;background:${t.card};color:${t.text};border:1px solid ${t.border};border-radius:15px;padding:15px;cursor:pointer;pointer-events:auto;touch-action:manipulation;">
         <div style="font-size:24px;">${x[2]}</div>
-        <div data-admin-report-count="${x[3]==="reports" ? "true" : "false"}" style="font-size:25px;font-weight:800;margin-top:6px;">${esc(x[1]??0)}</div>
+        <div ${x[3]==="reports" ? 'data-admin-report-count="true"' : ''} style="font-size:25px;font-weight:800;margin-top:6px;">${esc(x[1]??0)}</div>
         <div style="font-size:12px;color:${t.muted};">${x[0]}</div>
       </button>`).join("")}
     </div>
@@ -54654,11 +54654,21 @@ function initAdminSystem(){
 
     const allowed=await window.isAdmin(true);
 
-    // Always keep the administration control mounted in Settings.
-    // The database/RPC check above remains the real security gate when it is
-    // opened, so merely displaying this control does not grant privileges.
-    // This also fixes the case where the asynchronous owner check temporarily
-    // returns false while the session is still being restored.
+    // The Administration control is PRIVATE.
+    // Only the authenticated administrator may see or use it.
+    if (!session?.user || allowed !== true) {
+      sec.style.display="none";
+      sec.style.visibility="hidden";
+      sec.style.opacity="0";
+      sec.style.pointerEvents="none";
+      btn.style.display="none";
+      btn.style.visibility="hidden";
+      btn.style.opacity="0";
+      btn.style.pointerEvents="none";
+      btn.onclick=null;
+      return;
+    }
+
     sec.style.display="block";
     sec.style.visibility="visible";
     sec.style.opacity="1";
