@@ -49860,7 +49860,10 @@ window.restoreNavigationState =
                 "dashboard";
 
             if(typeof window.adminLoad === "function"){
-                await window.adminLoad(adminTab);
+                await window.adminLoad(adminTab, true);
+                if(data.adminView === "user" && data.userId && typeof window.adminOpenUser === "function") {
+                    await window.adminOpenUser(String(data.userId), true);
+                }
                 if(typeof window.hideTopBar === "function"){
                     window.hideTopBar();
                 }
@@ -52027,8 +52030,16 @@ window.addEventListener(
                         await window.adminLoad(
                             adminState.data?.tab ||
                             adminScreen?.dataset?.tab ||
-                            "dashboard"
+                            "dashboard",
+                            true
                         );
+                    }
+
+                    // Restore Admin's internal detail pages without creating
+                    // another browser-history entry.  Back from a managed user
+                    // therefore returns to the Users list, not Home.
+                    if(adminState.data?.adminView === "user" && adminState.data?.userId && typeof window.adminOpenUser === "function") {
+                        await window.adminOpenUser(String(adminState.data.userId), true);
                     }
 
                     const restoreAdminScroll = () => {
@@ -53765,7 +53776,7 @@ function initAdminSystem(){
     },true);
   }
 
-  window.adminLoad = async function(tab="dashboard"){
+  window.adminLoad = async function(tab="dashboard", fromHistory=false){
     if(!(await window.isAdmin(true))){
       alert("Administrator access required.");
       return false;
@@ -53779,27 +53790,53 @@ function initAdminSystem(){
     s.style.cssText=`position:fixed;inset:0;display:block;visibility:visible;opacity:1;pointer-events:auto;background:${t.bg};color:${t.text};z-index:2147483000;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;`;
     s.dataset.tab=tab;
 
-    // Keep the browser history entry synchronized with the administrator
-    // tab.  This is important when Administrator opens a reported item:
-    // Back must restore the exact Administrator tab that was visible.
+    // ------------------------------------------------------------
+    // ADMINISTRATOR HISTORY
+    // Every administrator tab is a real browser-history step.
+    // Physical Android/browser Back therefore moves through Admin
+    // Dashboard -> Users -> Posts -> Comments -> Reports (or back
+    // to the exact previous Admin location) without leaving Admin.
+    // During popstate restoration we only synchronize the existing
+    // entry; we NEVER push another entry.
+    // ------------------------------------------------------------
     try{
       const hs=history.state;
-      if(hs?.appScreen === "adminPanelScreen"){
+      const currentTab=String(hs?.data?.tab || "");
+      const currentIsAdmin=hs?.appScreen === "adminPanelScreen";
+      const adminScreenEl=document.getElementById("adminPanelScreen");
+      const currentScroll=Number(adminScreenEl?.scrollTop || hs?.scrollY || 0);
+
+      if(currentIsAdmin){
         const adminData={...(hs.data||{}),tab};
-        history.replaceState(
-          {...hs,data:adminData},
-          "",
-          location.href
-        );
-        if(window.appNavigation?.current?.screen === "adminPanelScreen"){
-          window.appNavigation.current.data=adminData;
-        }
-        try{
-          sessionStorage.setItem(
-            "appNavigationState",
-            JSON.stringify(window.appNavigation.current||{})
+
+        if(!fromHistory && !window.appNavigation?.restoring && currentTab && currentTab !== tab){
+          history.pushState(
+            {appScreen:"adminPanelScreen",data:adminData,scrollY:currentScroll},
+            "",
+            "#adminPanelScreen"
           );
-        }catch(e){}
+        }else{
+          history.replaceState(
+            {...hs,data:adminData,scrollY:currentScroll},
+            "",
+            "#adminPanelScreen"
+          );
+        }
+
+        if(window.appNavigation){
+          window.appNavigation.current={
+            screen:"adminPanelScreen",
+            data:adminData,
+            scrollY:currentScroll,
+            timestamp:Date.now()
+          };
+          try{
+            sessionStorage.setItem(
+              "appNavigationState",
+              JSON.stringify(window.appNavigation.current)
+            );
+          }catch(e){}
+        }
       }
     }catch(e){
       console.warn("ADMIN HISTORY TAB SYNC:",e);
@@ -53886,8 +53923,23 @@ function initAdminSystem(){
   // IMPORTANT: NO ROLE SELECTOR.
   // The administrator is never managed through profiles.role.
   // -----------------------------------------------------------
-  window.adminOpenUser=async function(id){
+  window.adminOpenUser=async function(id, fromHistory=false){
     try{
+      if(!fromHistory){
+        const hs=history.state;
+        if(hs?.appScreen === "adminPanelScreen"){
+          const root=document.getElementById("adminPanelScreen");
+          const tab=root?.dataset?.tab || hs?.data?.tab || "users";
+          const scrollY=Number(root?.scrollTop || hs?.scrollY || 0);
+          const data={...(hs.data||{}),tab,adminView:"user",userId:String(id)};
+          history.pushState({appScreen:"adminPanelScreen",data,scrollY},"","#adminPanelScreen");
+          if(window.appNavigation){
+            window.appNavigation.current={screen:"adminPanelScreen",data,scrollY,timestamp:Date.now()};
+            try{sessionStorage.setItem("appNavigationState",JSON.stringify(window.appNavigation.current));}catch(e){}
+          }
+        }
+      }
+
       const u=await window.adminCall("user",{user_id:id});
       const t=theme();
       const owner=(u?.is_admin_owner===true);
