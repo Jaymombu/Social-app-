@@ -49842,6 +49842,39 @@ window.restoreNavigationState =
     }
 
     // =================================================
+    // ADMINISTRATOR
+    // =================================================
+    // Administrator is a real navigation destination.  Report targets can
+    // open Comments/Profile/Chat from it, so Android/browser Back must be
+    // able to restore Administrator instead of falling through to HOME.
+    // Restore the exact tab that was active before the report was opened.
+
+    if (
+        screen ===
+        "adminPanelScreen"
+    ) {
+        try{
+            const adminTab =
+                data.tab ||
+                document.getElementById("adminPanelScreen")?.dataset?.tab ||
+                "dashboard";
+
+            if(typeof window.adminLoad === "function"){
+                await window.adminLoad(adminTab);
+                if(typeof window.hideTopBar === "function"){
+                    window.hideTopBar();
+                }
+                return true;
+            }
+        }catch(error){
+            console.error("❌ ADMINISTRATOR RESTORE FAILED:",error);
+        }
+
+        await restoreHome();
+        return false;
+    }
+
+    // =================================================
     // COMMENTS
     // =================================================
 
@@ -51944,6 +51977,96 @@ window.addEventListener(
             }
 
             // =================================================
+            // ADMINISTRATOR REPORT TARGET RETURN
+            // =================================================
+            // Physical Android/browser Back from a reported post,
+            // comment, profile, or message returns to the exact
+            // Administrator tab that opened the report.
+            // In-app Back buttons are not changed by this branch.
+            // =================================================
+
+            if (event.state?.appScreen === "adminPanelScreen") {
+
+                const adminState = {
+                    screen: "adminPanelScreen",
+                    data: { ...(event.state.data || {}) },
+                    scrollY: Number(event.state.scrollY) || 0
+                };
+
+                console.log("↩️ ANDROID BACK → ADMINISTRATOR", adminState);
+
+                try {
+                    const adminScreen =
+                        document.getElementById("adminPanelScreen");
+
+                    if (adminScreen) {
+                        adminScreen.style.display = "block";
+                        adminScreen.style.visibility = "visible";
+                        adminScreen.style.opacity = "1";
+                        adminScreen.style.pointerEvents = "auto";
+                        adminScreen.style.zIndex = "2147483000";
+                    }
+
+                    if (typeof window.unlockBackground === "function") {
+                        window.unlockBackground();
+                    }
+
+                    if (typeof window.hideTopBar === "function") {
+                        window.hideTopBar();
+                    }
+
+                    if (typeof window.navigateToScreen === "function") {
+                        window.navigateToScreen(
+                            "adminPanelScreen",
+                            adminState.data,
+                            false
+                        );
+                    }
+
+                    if (typeof window.adminLoad === "function") {
+                        await window.adminLoad(
+                            adminState.data?.tab ||
+                            adminScreen?.dataset?.tab ||
+                            "dashboard"
+                        );
+                    }
+
+                    const restoreAdminScroll = () => {
+                        const s =
+                            document.getElementById("adminPanelScreen");
+                        if (s) {
+                            s.scrollTo(0, adminState.scrollY);
+                        }
+                    };
+
+                    requestAnimationFrame(restoreAdminScroll);
+                    setTimeout(restoreAdminScroll, 50);
+
+                    window.appNavigation.current = {
+                        screen: "adminPanelScreen",
+                        data: adminState.data,
+                        scrollY: adminState.scrollY,
+                        timestamp: Date.now()
+                    };
+
+                    try {
+                        sessionStorage.setItem(
+                            "appNavigationState",
+                            JSON.stringify(window.appNavigation.current)
+                        );
+                    } catch (error) {}
+
+                    return;
+
+                } catch (adminRestoreError) {
+                    console.error(
+                        "❌ ADMINISTRATOR BACK RESTORE FAILED:",
+                        adminRestoreError
+                    );
+                }
+            }
+
+            // =================================================
             // NORMAL APP HISTORY ENTRY
             // =================================================
 
@@ -52064,7 +52187,8 @@ window.addEventListener(
                     "profileSettingsScreen",
                     "notificationsScreen",
                     "storyViewer",
-                    "chatScreen"
+                    "chatScreen",
+                    "adminPanelScreen"
                 ]);
 
                 if (screensWithHiddenTopBar.has(restoreState.screen)) {
@@ -53308,6 +53432,7 @@ document.addEventListener("selectstart", function(e) {
     '🔍': '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
     '🔔': '<path d="M6 17h12l-1.3-2.2V10a4.7 4.7 0 0 0-9.4 0v4.8L6 17Z"/><path d="M10 20h4"/>',
     '💬': '<path d="M4 5.5h16v10H9l-5 4v-4H4z"/><path d="M8 9h8M8 12h5"/>',
+    '👤': '<circle cx="12" cy="8" r="3.5"/><path d="M5 21a7 7 0 0 1 14 0"/>',
     '←': '<path d="M19 12H5"/><path d="m11 6-6 6 6 6"/>',
     '→': '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
     '✕': '<path d="m6 6 12 12M18 6 6 18"/>',
@@ -53653,6 +53778,33 @@ function initAdminSystem(){
 
     s.style.cssText=`position:fixed;inset:0;display:block;visibility:visible;opacity:1;pointer-events:auto;background:${t.bg};color:${t.text};z-index:2147483000;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;`;
     s.dataset.tab=tab;
+
+    // Keep the browser history entry synchronized with the administrator
+    // tab.  This is important when Administrator opens a reported item:
+    // Back must restore the exact Administrator tab that was visible.
+    try{
+      const hs=history.state;
+      if(hs?.appScreen === "adminPanelScreen"){
+        const adminData={...(hs.data||{}),tab};
+        history.replaceState(
+          {...hs,data:adminData},
+          "",
+          location.href
+        );
+        if(window.appNavigation?.current?.screen === "adminPanelScreen"){
+          window.appNavigation.current.data=adminData;
+        }
+        try{
+          sessionStorage.setItem(
+            "appNavigationState",
+            JSON.stringify(window.appNavigation.current||{})
+          );
+        }catch(e){}
+      }
+    }catch(e){
+      console.warn("ADMIN HISTORY TAB SYNC:",e);
+    }
+
     s.innerHTML=shell(tab,loading());
     bind(tab);
 
@@ -53864,8 +54016,53 @@ function initAdminSystem(){
     const adminScreen = document.getElementById("adminPanelScreen");
 
     try{
-      // Leave the admin screen only after the target has been validated.
+      // Capture the exact Administrator location BEFORE leaving it.
+      // Android/browser Back will restore this exact tab and scroll position.
       if(adminScreen){
+        const adminTab = adminScreen.dataset.tab || "dashboard";
+        const adminScrollY = Number(adminScreen.scrollTop) || 0;
+
+        const adminReturnState = {
+          appScreen: "adminPanelScreen",
+          data: {
+            source: "adminReport",
+            tab: adminTab,
+            reportId: String(r.id || ""),
+            targetType: type,
+            targetId: id
+          },
+          scrollY: adminScrollY
+        };
+
+        try{
+          history.replaceState(
+            adminReturnState,
+            "",
+            "#adminPanelScreen"
+          );
+        }catch(historyError){
+          console.warn(
+            "⚠️ ADMIN REPORT HISTORY CAPTURE FAILED:",
+            historyError
+          );
+        }
+
+        if(window.appNavigation){
+          window.appNavigation.current = {
+            screen: "adminPanelScreen",
+            data: adminReturnState.data,
+            scrollY: adminScrollY,
+            timestamp: Date.now()
+          };
+
+          try{
+            sessionStorage.setItem(
+              "appNavigationState",
+              JSON.stringify(window.appNavigation.current)
+            );
+          }catch(error){}
+        }
+
         adminScreen.style.display = "none";
         adminScreen.style.pointerEvents = "none";
       }
