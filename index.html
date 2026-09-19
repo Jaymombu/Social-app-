@@ -53709,7 +53709,7 @@ function initAdminSystem(){
     ];
 
     return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
-      ${a.map(x=>`<button type="button" data-admin-stat="${x[3]}" style="appearance:none;-webkit-appearance:none;width:100%;min-height:125px;text-align:left;background:${t.card};color:${t.text};border:1px solid ${t.border};border-radius:15px;padding:15px;cursor:pointer;pointer-events:auto;touch-action:manipulation;">
+      ${a.map(x=>`<button type="button" data-admin-stat="${x[3]}" ${x[3]==="restricted_users" ? 'onclick="window.adminOpenRestrictedUsers(event)"' : x[3]==="administrators" ? 'onclick="window.adminOpenAdministrators(event)"' : ''} style="appearance:none;-webkit-appearance:none;width:100%;min-height:125px;text-align:left;background:${t.card};color:${t.text};border:1px solid ${t.border};border-radius:15px;padding:15px;cursor:pointer;pointer-events:auto;touch-action:manipulation;">
         <div style="font-size:24px;">${x[2]}</div>
         <div ${x[3]==="open_reports" ? 'data-admin-report-count="true"' : ''} style="font-size:25px;font-weight:800;margin-top:6px;">${esc(x[1]??0)}</div>
         <div style="font-size:12px;color:${t.muted};">${x[0]}</div>
@@ -53913,7 +53913,15 @@ function initAdminSystem(){
     const d=await window.adminCall("users",{search:q,limit:50});
     let list=Array.isArray(d)?d.slice():[];
 
-    if(view==="restricted") list=list.filter(u=>u?.private_account===true);
+    // Normalize Supabase/JSON boolean representations so the Restricted
+    // dashboard card never fails just because the value arrived as text/0/1.
+    const isRestricted = u =>
+      u?.private_account === true ||
+      u?.private_account === "true" ||
+      u?.private_account === 1 ||
+      u?.private_account === "1";
+
+    if(view==="restricted") list=list.filter(isRestricted);
     if(view==="administrators") list=list.filter(u=>u?.is_admin_owner===true);
 
     const c=document.getElementById("adminContent");
@@ -53942,6 +53950,20 @@ function initAdminSystem(){
       setTimeout(()=>window.adminOpenUser(String(row.id)),0);
     }
   }
+
+  // Dashboard shortcuts. These bypass any ambiguous generic stat routing
+  // and open the exact requested administrator point.
+  window.adminOpenRestrictedUsers = function(event){
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    return window.adminLoad("restricted_users");
+  };
+
+  window.adminOpenAdministrators = function(event){
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    return window.adminLoad("administrators");
+  };
 
   // -----------------------------------------------------------
   // USER MANAGEMENT
