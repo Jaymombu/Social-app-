@@ -53703,15 +53703,15 @@ function initAdminSystem(){
       ["Users",d?.users,"👥","users"],
       ["Posts",d?.posts,"📝","posts"],
       ["Comments",d?.comments,"💬","comments"],
-      ["Open reports",d?.open_reports ?? d?.reports ?? 0,"🚩","reports"],
-      ["Restricted users",d?.restricted_users,"⛔","users"],
-      ["Administrators",d?.administrator_count ?? 1,"🛡️","users"]
+      ["Open reports",d?.open_reports ?? d?.reports ?? 0,"🚩","open_reports"],
+      ["Restricted users",d?.restricted_users,"⛔","restricted_users"],
+      ["Administrators",d?.administrator_count ?? 1,"🛡️","administrators"]
     ];
 
     return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
       ${a.map(x=>`<button type="button" data-admin-stat="${x[3]}" style="appearance:none;-webkit-appearance:none;width:100%;min-height:125px;text-align:left;background:${t.card};color:${t.text};border:1px solid ${t.border};border-radius:15px;padding:15px;cursor:pointer;pointer-events:auto;touch-action:manipulation;">
         <div style="font-size:24px;">${x[2]}</div>
-        <div ${x[3]==="reports" ? 'data-admin-report-count="true"' : ''} style="font-size:25px;font-weight:800;margin-top:6px;">${esc(x[1]??0)}</div>
+        <div ${x[3]==="open_reports" ? 'data-admin-report-count="true"' : ''} style="font-size:25px;font-weight:800;margin-top:6px;">${esc(x[1]??0)}</div>
         <div style="font-size:12px;color:${t.muted};">${x[0]}</div>
       </button>`).join("")}
     </div>
@@ -53860,6 +53860,10 @@ function initAdminSystem(){
         bind(tab);
       }else if(tab==="users"){
         await users();
+      }else if(tab==="restricted_users"){
+        await users("", "restricted");
+      }else if(tab==="administrators"){
+        await users("", "administrators");
       }else if(tab==="posts"){
         await posts();
       }else if(tab==="comments"){
@@ -53905,19 +53909,38 @@ function initAdminSystem(){
     </div>`;
   }
 
-  async function users(q=""){
+  async function users(q="", view="all"){
     const d=await window.adminCall("users",{search:q,limit:50});
+    let list=Array.isArray(d)?d.slice():[];
+
+    if(view==="restricted") list=list.filter(u=>u?.private_account===true);
+    if(view==="administrators") list=list.filter(u=>u?.is_admin_owner===true);
+
     const c=document.getElementById("adminContent");
-    c.innerHTML=input("adminUserSearch",q,"Search users…")+
-      (Array.isArray(d)&&d.length
-        ?d.map(userRow).join("")
-        :`<div style="padding:40px;text-align:center;color:${theme().muted};">No users found.</div>`);
+    const title=view==="restricted"
+      ? "Restricted users"
+      : view==="administrators"
+        ? "Administrator"
+        : "Users";
+
+    c.innerHTML=`<div style="font-size:17px;font-weight:800;margin:2px 2px 12px;">${title}</div>`+
+      input("adminUserSearch",q,"Search users…")+
+      (list.length
+        ?list.map(userRow).join("")
+        :`<div style="padding:40px;text-align:center;color:${theme().muted};">No ${view==="restricted"?"restricted ":view==="administrators"?"administrator ":""}users found.</div>`);
 
     const i=document.getElementById("adminUserSearch");
     if(i)i.oninput=()=>{
       clearTimeout(searchTimer);
-      searchTimer=setTimeout(()=>users(i.value.trim()),350);
+      searchTimer=setTimeout(()=>users(i.value.trim(),view),350);
     };
+
+    // The Administrators card represents the actual single owner.
+    // Open that exact account rather than a generic Users page.
+    if(view==="administrators" && list.length===1){
+      const row=list[0];
+      setTimeout(()=>window.adminOpenUser(String(row.id)),0);
+    }
   }
 
   // -----------------------------------------------------------
