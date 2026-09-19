@@ -3276,6 +3276,22 @@ body {
   white-space:nowrap !important;
 }
 #chatHeader .chat-header-search span{display:block !important;}
+
+/* =====================================================
+   ADMIN REPORT TARGET HIGHLIGHT
+   ===================================================== */
+.admin-report-highlight{
+  animation:adminReportPulse 2.2s ease !important;
+  outline:3px solid #1877f2 !important;
+  outline-offset:2px !important;
+}
+@keyframes adminReportPulse{
+  0%   { box-shadow:0 0 0 0 rgba(24,119,242,0); }
+  20%  { box-shadow:0 0 0 7px rgba(24,119,242,.45); }
+  60%  { box-shadow:0 0 0 5px rgba(24,119,242,.22); }
+  100% { box-shadow:0 0 0 0 rgba(24,119,242,0); }
+}
+
 </style>
 
 <style id="story-navigation-final-fix">
@@ -53371,7 +53387,7 @@ function initAdminSystem(){
     };
 
     return ["dashboard","users","posts","comments","reports"]
-      .map(x=>`<button data-admin-tab="${x}" style="flex:1;min-width:85px;border:0;border-radius:10px;padding:10px 6px;background:${tab===x?"#1877f2":"transparent"};color:#fff;font-weight:700;">${labels[x]}</button>`)
+      .map(x=>`<button data-admin-tab="${x}" style="flex:1;min-width:85px;border:0;border-radius:10px;padding:10px 6px;background:${tab===x?"#1877f2":"transparent"};color:#fff;font-weight:700;">${x==="reports" ? `🚩 Reports <span data-admin-report-count style="display:inline-flex;min-width:18px;height:18px;padding:0 5px;align-items:center;justify-content:center;margin-left:4px;border-radius:999px;background:#ff3040;color:#fff;font-size:11px;">0</span>` : labels[x]}</button>`)
       .join("");
   }
 
@@ -53412,7 +53428,7 @@ function initAdminSystem(){
     return `<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
       ${a.map(x=>`<button type="button" data-admin-stat="${x[3]}" style="appearance:none;-webkit-appearance:none;width:100%;min-height:125px;text-align:left;background:${t.card};color:${t.text};border:1px solid ${t.border};border-radius:15px;padding:15px;cursor:pointer;pointer-events:auto;touch-action:manipulation;">
         <div style="font-size:24px;">${x[2]}</div>
-        <div style="font-size:25px;font-weight:800;margin-top:6px;">${esc(x[1]??0)}</div>
+        <div data-admin-report-count="${x[3]==="reports" ? "true" : "false"}" style="font-size:25px;font-weight:800;margin-top:6px;">${esc(x[1]??0)}</div>
         <div style="font-size:12px;color:${t.muted};">${x[0]}</div>
       </button>`).join("")}
     </div>
@@ -53517,6 +53533,16 @@ function initAdminSystem(){
       document.getElementById("adminContent").innerHTML=`<div style="padding:18px;border:1px solid rgba(255,77,77,.35);border-radius:14px;color:#ff7070;line-height:1.5;"><b>Administrator database error</b><br>${esc(e.message||e)}</div>`;
       console.error("ADMIN:",e);
     }
+
+    // Reports stay live while Administrator is open.
+    if(typeof window.startAdminReportPolling === "function"){
+      window.startAdminReportPolling();
+    }
+    setTimeout(()=>{
+      if(typeof window.refreshAdminReportCount === "function"){
+        window.refreshAdminReportCount();
+      }
+    }, 50);
 
     return true;
   }
@@ -53648,109 +53674,498 @@ function initAdminSystem(){
     }catch(e){alert(e.message||"Comment action failed.");}
   };
 
-  // Open the exact object referenced by an administrator report.
-  // Post reports open the exact post's comment/media screen; comment reports
-  // open that post and highlight the exact comment; message reports open the
-  // exact conversation and jump to the exact message; profile reports open
-  // the exact profile.
+  // ============================================================
+  // ADMIN REPORT TARGET OPENING
+  // Safe ID-based handlers — report JSON is NEVER embedded in HTML
+  // onclick attributes.
+  // ============================================================
+
+  window.__adminReportCache = window.__adminReportCache || Object.create(null);
+
+  window.adminOpenReportById = async function(reportId){
+    const key = String(reportId || "");
+    const report = window.__adminReportCache[key];
+    if(!report){
+      alert("This report is no longer available. Refresh the Reports tab.");
+      return false;
+    }
+    return window.adminOpenReport(report);
+  };
+
   window.adminOpenReport = async function(r){
     if(!r) return false;
 
-    const type = String(r.target_type || r.type || "").toLowerCase().trim();
-    const id = String(r.target_id || r.targetId || r.post_id || r.comment_id || r.message_id || r.user_id || "").trim();
-    if(!id){ alert("This report has no target ID."); return false; }
+    const type = String(
+      r.target_type || r.type || ""
+    ).toLowerCase().trim();
+
+    const id = String(
+      r.target_id ||
+      r.targetId ||
+      r.post_id ||
+      r.comment_id ||
+      r.message_id ||
+      r.user_id ||
+      ""
+    ).trim();
+
+    if(!id){
+      alert("This report has no target ID.");
+      return false;
+    }
+
+    const adminScreen = document.getElementById("adminPanelScreen");
 
     try{
-      // Leave the admin screen before opening the reported object.
-      const adminScreen=document.getElementById("adminPanelScreen");
+      // Leave the admin screen only after the target has been validated.
       if(adminScreen){
-        adminScreen.style.display="none";
-        adminScreen.style.pointerEvents="none";
+        adminScreen.style.display = "none";
+        adminScreen.style.pointerEvents = "none";
       }
 
-      if(type.includes("profile") || type.includes("user") || type.includes("account")){
-        window.profileNavigationSource="admin";
-        await window.openProfile(id,"User",{source:"admin"});
-        window.__adminReportReturn=true;
-        return true;
-      }
+      // ----------------------------------------------------------
+      // PROFILE
+      // ----------------------------------------------------------
+      if(
+        type.includes("profile") ||
+        type.includes("user") ||
+        type.includes("account")
+      ){
+        let name = "User";
 
-      if(type.includes("message") || type.includes("chat") || type.includes("dm")){
-        let m=null;
         try{
-          m=await window.adminCall("message",{message_id:id});
+          const q = await supabase
+            .from("profiles")
+            .select("id,name,username")
+            .eq("id", id)
+            .maybeSingle();
+
+          if(q.data){
+            name = q.data.name || q.data.username || "User";
+          }
         }catch(e){}
+
+        window.profileNavigationSource = "admin";
+        window.__adminReportProfileId = id;
+
+        await window.openProfile(id, name, {
+          source: "admin",
+          returnSource: "admin"
+        });
+
+        // Give the exact reported profile a visible focus treatment.
+        setTimeout(()=>{
+          const profile =
+            document.getElementById("profileScreen") ||
+            document.querySelector('[data-profile-user-id="' + id + '"]');
+
+          if(profile){
+            profile.classList.remove("admin-report-highlight");
+            void profile.offsetWidth;
+            profile.classList.add("admin-report-highlight");
+          }
+        }, 350);
+
+        return true;
+      }
+
+      // ----------------------------------------------------------
+      // MESSAGE
+      // ----------------------------------------------------------
+      if(
+        type.includes("message") ||
+        type.includes("chat") ||
+        type.includes("dm")
+      ){
+        let m = null;
+
+        try{
+          m = await window.adminCall("message", {
+            message_id: id
+          });
+        }catch(e){}
+
         if(!m){
-          const q=await supabase.from("messages").select("id,sender_id,receiver_id").eq("id",id).maybeSingle();
-          if(q.data) m=q.data;
+          const q = await supabase
+            .from("messages")
+            .select("id,sender_id,receiver_id")
+            .eq("id", id)
+            .maybeSingle();
+
+          if(q.data) m = q.data;
         }
-        if(!m){ alert("The reported message could not be found."); return false; }
-        const {data:{session:adminSession}}=await sb.auth.getSession();
-        const me=adminSession?.user?.id;
-        if(!me){ alert("Administrator session expired. Please log in again."); return false; }
-        const other=String(m.sender_id)===String(me)?m.receiver_id:m.sender_id;
-        let name="User";
-        try{ const q=await supabase.from("profiles").select("name").eq("id",other).maybeSingle(); name=q.data?.name||name; }catch(e){}
-        await window.openChat(other,name,{source:"admin",reportMessageId:id});
-        window.__adminReportMessageId=id;
-        setTimeout(()=>{ if(typeof window.jumpToMessage==="function") window.jumpToMessage(id); },500);
-        setTimeout(()=>{ if(typeof window.jumpToMessage==="function") window.jumpToMessage(id); },1200);
+
+        if(!m){
+          alert("The reported message could not be found.");
+          if(adminScreen){
+            adminScreen.style.display = "block";
+            adminScreen.style.pointerEvents = "auto";
+          }
+          return false;
+        }
+
+        const {data:{session:adminSession}} =
+          await sb.auth.getSession();
+
+        const me = adminSession?.user?.id;
+
+        if(!me){
+          alert("Administrator session expired. Please log in again.");
+          return false;
+        }
+
+        const other =
+          String(m.sender_id) === String(me)
+            ? m.receiver_id
+            : m.sender_id;
+
+        let name = "User";
+
+        try{
+          const q = await supabase
+            .from("profiles")
+            .select("name,username")
+            .eq("id", other)
+            .maybeSingle();
+
+          name = q.data?.name || q.data?.username || name;
+        }catch(e){}
+
+        window.__adminReportMessageId = String(id);
+
+        await window.openChat(other, name, {
+          source: "admin",
+          reportMessageId: String(id)
+        });
+
+        // openChat() loads the conversation asynchronously.
+        // Retry the exact message after the chat has painted.
+        const jump = (attempt = 0) => {
+          if(String(window.__adminReportMessageId || "") !== String(id)){
+            return;
+          }
+
+          if(typeof window.jumpToMessage === "function"){
+            try{
+              window.jumpToMessage(String(id));
+              return;
+            }catch(e){}
+          }
+
+          if(attempt < 8){
+            setTimeout(()=>jump(attempt + 1), 300);
+          }
+        };
+
+        setTimeout(()=>jump(0), 150);
         return true;
       }
 
+      // ----------------------------------------------------------
+      // COMMENT
+      // ----------------------------------------------------------
       if(type.includes("comment")){
-        let c=null;
-        try{ c=await window.adminCall("comment",{comment_id:id}); }catch(e){}
+        let c = null;
+
+        try{
+          c = await window.adminCall("comment", {
+            comment_id: id
+          });
+        }catch(e){}
+
         if(!c){
-          const q=await supabase.from("comments").select("id,post_id").eq("id",id).maybeSingle();
-          if(q.data) c=q.data;
+          const q = await supabase
+            .from("comments")
+            .select("id,post_id")
+            .eq("id", id)
+            .maybeSingle();
+
+          if(q.data) c = q.data;
         }
-        const postId=c?.post_id || r.post_id;
-        if(!postId){ alert("The reported comment's post could not be found."); return false; }
-        window.commentsReturnCommentId=String(id);
-        await window.openComments(postId,id,true);
-        setTimeout(()=>{ if(typeof window.highlightNotificationComment==="function") window.highlightNotificationComment(id); },500);
+
+        const postId = c?.post_id || r.post_id;
+
+        if(!postId){
+          alert("The reported comment's post could not be found.");
+          if(adminScreen){
+            adminScreen.style.display = "block";
+            adminScreen.style.pointerEvents = "auto";
+          }
+          return false;
+        }
+
+        window.commentsReturnCommentId = String(id);
+        window.__adminReportCommentId = String(id);
+
+        await window.openComments(postId, id, true);
+
+        const highlight = (attempt = 0) => {
+          if(typeof window.highlightNotificationComment === "function"){
+            try{
+              window.highlightNotificationComment(String(id));
+              return;
+            }catch(e){}
+          }
+
+          const el =
+            document.getElementById("comment-" + String(id));
+
+          if(el){
+            el.classList.remove("admin-report-highlight");
+            void el.offsetWidth;
+            el.classList.add("admin-report-highlight");
+            el.scrollIntoView({
+              behavior: "smooth",
+              block: "center"
+            });
+            return;
+          }
+
+          if(attempt < 8){
+            setTimeout(()=>highlight(attempt + 1), 300);
+          }
+        };
+
+        setTimeout(()=>highlight(0), 250);
         return true;
       }
 
-      // Default to a post target. This also handles target_type values such as
-      // "post", "posts", "publication" and unknown post-like records.
-      await window.openComments(id,null,true);
+      // ----------------------------------------------------------
+      // POST
+      // ----------------------------------------------------------
+      // This app's exact-post navigation is the comments/post viewer.
+      // Passing null as the comment target opens the exact reported post
+      // without guessing from the home feed.
+      window.__adminReportPostId = String(id);
+      await window.openComments(id, null, true);
+
+      // Add a post-level focus if the exact post container is rendered.
+      const highlightPost = (attempt = 0) => {
+        const candidates = [
+          document.getElementById("post-" + String(id)),
+          document.querySelector('[data-post-id="' + String(id) + '"]')
+        ];
+
+        const el = candidates.find(Boolean);
+
+        if(el){
+          el.classList.remove("admin-report-highlight");
+          void el.offsetWidth;
+          el.classList.add("admin-report-highlight");
+          el.scrollIntoView({
+            behavior: "smooth",
+            block: "center"
+          });
+          return;
+        }
+
+        if(attempt < 8){
+          setTimeout(()=>highlightPost(attempt + 1), 300);
+        }
+      };
+
+      setTimeout(()=>highlightPost(0), 250);
       return true;
+
     }catch(e){
-      console.error("ADMIN REPORT OPEN ERROR:",e);
-      alert(e.message||"Unable to open the reported item.");
-      const adminScreen=document.getElementById("adminPanelScreen");
-      if(adminScreen){ adminScreen.style.display="block"; adminScreen.style.pointerEvents="auto"; }
+      console.error("ADMIN REPORT OPEN ERROR:", e);
+      alert(e.message || "Unable to open the reported item.");
+
+      if(adminScreen){
+        adminScreen.style.display = "block";
+        adminScreen.style.pointerEvents = "auto";
+      }
+
       return false;
     }
   };
 
   function reportRow(r){
-    const t=theme();
-    const rid=esc(r.id||"");
-    return `<div onclick='window.adminOpenReport(${JSON.stringify(r)})' style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;cursor:pointer;pointer-events:auto;touch-action:manipulation;position:relative;">
-      <b>${esc(r.reason||"Report")}</b>
-      <div style="font-size:13px;margin-top:6px;">Target: ${esc(r.target_type||"unknown")} · ${esc(r.target_id||"")}</div>
-      <div style="font-size:11px;color:${t.muted};margin-top:7px;">${esc(r.created_at||"")} · ${esc(r.status||"open")}</div>
-      <div style="display:flex;gap:8px;margin-top:10px;">
-        <button type="button" onclick="event.preventDefault();event.stopPropagation();window.adminOpenReport(${JSON.stringify(r)})" style="border:0;border-radius:9px;padding:9px 11px;background:#1877f2;color:#fff;font-weight:700;">Open exact item</button>
-        <button type="button" onclick="event.preventDefault();event.stopPropagation();window.adminResolveReport('${rid}')" style="border:0;border-radius:9px;padding:9px 11px;background:#22a06b;color:#fff;font-weight:700;">Resolve</button>
+    const t = theme();
+    const rid = String(r.id || "").trim();
+
+    if(rid){
+      window.__adminReportCache[rid] = r;
+    }
+
+    return `<div
+      data-admin-report-id="${esc(rid)}"
+      style="background:${t.card};border:1px solid ${t.border};border-radius:14px;padding:13px;margin-bottom:9px;cursor:pointer;pointer-events:auto;touch-action:manipulation;position:relative;"
+    >
+      <b>${esc(r.reason || "Report")}</b>
+      <div style="font-size:13px;margin-top:6px;">
+        Target: ${esc(r.target_type || "unknown")} · ${esc(r.target_id || "")}
+      </div>
+      <div style="font-size:11px;color:${t.muted};margin-top:7px;">
+        ${esc(r.created_at || "")} · ${esc(r.status || "open")}
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button
+          type="button"
+          data-admin-open-report="${esc(rid)}"
+          style="border:0;border-radius:9px;padding:9px 11px;background:#1877f2;color:#fff;font-weight:700;pointer-events:auto;touch-action:manipulation;"
+        >Open exact item</button>
+
+        <button
+          type="button"
+          data-admin-resolve-report="${esc(rid)}"
+          style="border:0;border-radius:9px;padding:9px 11px;background:#22a06b;color:#fff;font-weight:700;pointer-events:auto;touch-action:manipulation;"
+        >Resolve</button>
       </div>
     </div>`;
   }
 
   window.adminReports = async function(){
-    const d=await window.adminCall("reports",{limit:50,status:"open"});
-    document.getElementById("adminContent").innerHTML=
-      (Array.isArray(d)&&d.length?d.map(reportRow).join(""):`<div style="padding:55px 20px;text-align:center;color:${theme().muted};">No open reports.</div>`);
+    const c = document.getElementById("adminContent");
+    if(!c) return;
+
+    const d = await window.adminCall(
+      "reports",
+      {limit:50,status:"open"}
+    );
+
+    window.__adminReportCache = Object.create(null);
+
+    c.innerHTML =
+      Array.isArray(d) && d.length
+        ? d.map(reportRow).join("")
+        : `<div style="padding:55px 20px;text-align:center;color:${theme().muted};">
+             No open reports.
+           </div>`;
+
+    window.__adminOpenReportIds =
+      Array.isArray(d) ? d.map(x => String(x.id || "")) : [];
+
+    // Keep report controls clickable even after innerHTML replacement.
+    c.querySelectorAll("[data-admin-open-report]").forEach(btn=>{
+      btn.onclick = (ev)=>{
+        ev.preventDefault();
+        ev.stopPropagation();
+        window.adminOpenReportById(btn.dataset.adminOpenReport);
+      };
+    });
+
+    c.querySelectorAll("[data-admin-resolve-report]").forEach(btn=>{
+      btn.onclick = (ev)=>{
+        ev.preventDefault();
+        ev.stopPropagation();
+        window.adminResolveReport(btn.dataset.adminResolveReport);
+      };
+    });
   };
 
-  window.adminResolveReport=async function(id){
+  window.adminResolveReport = async function(id){
     try{
-      await window.adminCall("resolve_report",{report_id:id});
+      await window.adminCall(
+        "resolve_report",
+        {report_id:String(id)}
+      );
+
       await window.adminReports();
-    }catch(e){alert(e.message||"Unable to resolve report.");}
+      await window.refreshAdminReportCount?.();
+
+    }catch(e){
+      alert(e.message || "Unable to resolve report.");
+    }
+  };
+
+  // ============================================================
+  // LIVE REPORT COUNT / LIVE REPORT LIST
+  // ============================================================
+
+  window.refreshAdminReportCount = async function(){
+    try{
+      const d = await window.adminCall(
+        "reports",
+        {limit:100,status:"open"}
+      );
+
+      const count = Array.isArray(d) ? d.length : 0;
+
+      document
+        .querySelectorAll("[data-admin-report-count]")
+        .forEach(el=>{
+          el.textContent = String(count);
+        });
+
+      const tab = document.querySelector(
+        '#adminPanelScreen [data-admin-tab="reports"]'
+      );
+
+      if(tab){
+        tab.innerHTML = `🚩 Reports${count ? ` <span style="display:inline-flex;min-width:18px;height:18px;padding:0 5px;align-items:center;justify-content:center;margin-left:4px;border-radius:999px;background:#ff3040;color:#fff;font-size:11px;">${count}</span>` : ""}`;
+      }
+
+      const screenEl = document.getElementById("adminPanelScreen");
+
+      if(
+        screenEl &&
+        screenEl.style.display !== "none" &&
+        screenEl.dataset.tab === "reports"
+      ){
+        // Refresh the actual report list so newly-created reports appear
+        // without closing/reopening Administrator.
+        const c = document.getElementById("adminContent");
+        if(c){
+          const currentIds =
+            Array.from(
+              c.querySelectorAll("[data-admin-report-id]")
+            ).map(el=>String(el.dataset.adminReportId));
+
+          const newIds =
+            d.map(x=>String(x.id || ""));
+
+          if(
+            currentIds.length !== newIds.length ||
+            currentIds.some((id,i)=>id !== newIds[i])
+          ){
+            window.__adminReportCache = Object.create(null);
+            c.innerHTML =
+              d.length
+                ? d.map(reportRow).join("")
+                : `<div style="padding:55px 20px;text-align:center;color:${theme().muted};">
+                     No open reports.
+                   </div>`;
+
+            c.querySelectorAll("[data-admin-open-report]").forEach(btn=>{
+              btn.onclick = (ev)=>{
+                ev.preventDefault();
+                ev.stopPropagation();
+                window.adminOpenReportById(btn.dataset.adminOpenReport);
+              };
+            });
+
+            c.querySelectorAll("[data-admin-resolve-report]").forEach(btn=>{
+              btn.onclick = (ev)=>{
+                ev.preventDefault();
+                ev.stopPropagation();
+                window.adminResolveReport(btn.dataset.adminResolveReport);
+              };
+            });
+          }
+        }
+      }
+
+      return count;
+    }catch(e){
+      console.warn("LIVE REPORT COUNT:",e);
+      return null;
+    }
+  };
+
+  window.startAdminReportPolling = function(){
+    clearInterval(window.__adminReportPollTimer);
+    window.__adminReportPollTimer = setInterval(()=>{
+      if(typeof window.refreshAdminReportCount === "function"){
+        window.refreshAdminReportCount();
+      }
+    }, 8000);
+  };
+
+  window.stopAdminReportPolling = function(){
+    clearInterval(window.__adminReportPollTimer);
+    window.__adminReportPollTimer = null;
   };
 
   window.openAdminPanel=async function(addHistory=true){
@@ -53768,6 +54183,10 @@ function initAdminSystem(){
   };
 
   window.closeAdminPanel=function(){
+    if(typeof window.stopAdminReportPolling === "function"){
+      window.stopAdminReportPolling();
+    }
+
     const s=document.getElementById("adminPanelScreen");
     if(s){
       s.style.display="none";
@@ -53855,14 +54274,38 @@ window.submitUserReport=async function(targetType,targetId){
     const id=String(targetId||"").trim(); if(!id){showToast?.("Unable to identify this item.");return false;}
     const reason=prompt("Why are you reporting this "+targetType+"?\n\nSpam\nHarassment\nHate speech\nScam\nOther");
     if(reason===null)return false; const clean=reason.trim(); if(!clean){showToast?.("Please enter a reason.");return false;}
-    /* ALL report types use the same central table consumed by admin_reports_api.
-       This keeps post/comment/message/profile reports in one admin queue. */
-    const {error}=await supabase.from("reports").insert({reporter_id:session.user.id,target_type:String(targetType).toLowerCase(),target_id:id,reason:clean,status:"open"});
+    /* ALL report types use the same secure RPC consumed by admin_reports_api.
+       The client never writes directly to the reports table. */
+    const {data,error}=await supabase.rpc("submit_report",{
+      p_target_type:String(targetType).toLowerCase(),
+      p_target_id:id,
+      p_reason:clean,
+      p_details:{}
+    });
+
     if(error){
-      console.error("REPORT INSERT:",error);
-      if(error.code==="23505"){showToast?.("You already reported this item.");return false;}
-      if(error.code==="42501"||/row-level security|permission denied/i.test(error.message||"")){showToast?.("Report blocked by Supabase security rules. Add the report INSERT policy shown below.");return false;}
-      showToast?.("Report failed: "+(error.message||"database error"));return false;
+      console.error("REPORT SUBMIT RPC:",error);
+
+      if(error.code==="23505"){
+        showToast?.("You already reported this item.");
+        return false;
+      }
+
+      if(
+        error.code==="42501" ||
+        /row-level security|permission denied/i.test(error.message||"")
+      ){
+        showToast?.("Report blocked by Supabase security rules.");
+        return false;
+      }
+
+      showToast?.("Report failed: "+(error.message||"database error"));
+      return false;
+    }
+
+    if(data?.already_reported){
+      showToast?.("You already reported this item.");
+      return false;
     }
     showToast?.((String(targetType)[0].toUpperCase()+String(targetType).slice(1))+" reported.");return true;
   }catch(e){console.error("REPORT:",e);showToast?.("Report failed: "+(e.message||e));return false;}
