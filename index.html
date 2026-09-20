@@ -6243,6 +6243,99 @@ const supabase = createClient(
 
 window.supabase = supabase;
 
+// =====================================================
+// PRIVATE STORAGE MEDIA HELPERS
+// =====================================================
+// These helpers keep Storage paths canonical in the database and resolve
+// them to short-lived signed URLs at display time. This allows the buckets
+// to be private while still preserving existing avatar/media URLs already
+// stored in the database.
+
+window.getCanonicalStorageUrl = function(bucket, path) {
+  if (!bucket || !path) return "";
+
+  const value = String(path).trim();
+  if (!value) return "";
+
+  if (/^(https?:|data:|blob:)/i.test(value)) {
+    return value;
+  }
+
+  if (value.startsWith("storage://")) {
+    const rest = value.slice("storage://".length);
+    const slash = rest.indexOf("/");
+    if (slash >= 0) {
+      const b = rest.slice(0, slash);
+      const filePath = rest.slice(slash + 1);
+      return supabase.storage.from(b).getPublicUrl(filePath).data?.publicUrl || "";
+    }
+  }
+
+  return supabase.storage.from(bucket).getPublicUrl(value).data?.publicUrl || "";
+};
+
+window.getAuthorizedStorageUrl = async function(bucket, value, expiresIn = 3600) {
+  if (!bucket || !value) return "";
+
+  let raw = String(value).trim();
+  if (!raw) return "";
+
+  // Non-Supabase URLs and local/object URLs should pass through untouched.
+  if (/^(data:|blob:)/i.test(raw)) return raw;
+  if (/^https?:\/\/(?![^/]*supabase\.co\/storage\/v1\/object\/)/i.test(raw)) {
+    return raw;
+  }
+
+  // Accept storage://bucket/path.
+  if (raw.startsWith("storage://")) {
+    const rest = raw.slice("storage://".length);
+    const slash = rest.indexOf("/");
+    if (slash >= 0) {
+      bucket = rest.slice(0, slash);
+      raw = rest.slice(slash + 1);
+    }
+  }
+
+  // Accept an existing Supabase public/signed URL and recover its path.
+  const markerPublic = `/storage/v1/object/public/${bucket}/`;
+  const markerSign = `/storage/v1/object/sign/${bucket}/`;
+  const markerRender = `/storage/v1/render/image/public/${bucket}/`;
+
+  try {
+    if (raw.includes(markerPublic)) {
+      raw = decodeURIComponent(raw.split(markerPublic)[1].split("?")[0]);
+    } else if (raw.includes(markerSign)) {
+      raw = decodeURIComponent(raw.split(markerSign)[1].split("?")[0]);
+    } else if (raw.includes(markerRender)) {
+      raw = decodeURIComponent(raw.split(markerRender)[1].split("?")[0]);
+    } else if (/^https?:\/\//i.test(raw)) {
+      // Unknown remote URL: don't try to sign it.
+      return raw;
+    }
+  } catch (_) {
+    return "";
+  }
+
+  const { data, error } = await supabase
+    .storage
+    .from(bucket)
+    .createSignedUrl(raw, expiresIn);
+
+  if (error || !data?.signedUrl) {
+    console.warn("Storage signed URL failed:", bucket, raw, error);
+    return "";
+  }
+
+  return data.signedUrl;
+};
+
+// Resolve a DB URL/path before placing it in an <img>, <video>, <audio>,
+// background-image, or media viewer.
+window.resolveStorageMediaUrl = async function(bucket, value, fallback = "") {
+  const url = await window.getAuthorizedStorageUrl(bucket, value);
+  return url || fallback || "";
+};
+
 let currentUser = null;
 let unreadCount = 0;
 
@@ -6269,6 +6362,125 @@ let batchTimer = null;
 // AUTHENTICATION
 // =====================================================
 
+// =====================================================
+// COMPLETE ACCOUNT RESTRICTION GATE
+// =====================================================
+// The administrator restriction is enforced here before the normal app
+// starts. startApp() is intentionally NOT modified.
+
+window.showAccountRestrictedScreen = function () {
+  window.__accountRestricted = true;
+
+  document.body.style.background = "#000";
+  document.documentElement.style.background = "#000";
+
+  const app = document.getElementById("app");
+  if (app) {
+    app.style.display = "none";
+    app.style.visibility = "hidden";
+    app.style.opacity = "0";
+    app.style.pointerEvents = "none";
+  }
+
+  let screen = document.getElementById("accountRestrictedScreen");
+  if (!screen) {
+    screen = document.createElement("div");
+    screen.id = "accountRestrictedScreen";
+    screen.style.cssText = [
+      "position:fixed",
+      "inset:0",
+      "z-index:2147483647",
+      "display:flex",
+      "align-items:center",
+      "justify-content:center",
+      "padding:24px",
+      "box-sizing:border-box",
+      "background:#000",
+      "color:#fff",
+      "font-family:Arial,sans-serif",
+      "text-align:center"
+    ].join(";");
+    screen.innerHTML = `
+      <div style="width:min(420px,100%);">
+        <div style="font-size:56px;margin-bottom:18px;">🔒</div>
+        <div style="font-size:25px;font-weight:800;margin-bottom:12px;">Account Restricted</div>
+        <div style="font-size:15px;line-height:1.6;color:#aaa;">
+          Your SocialApp account has been restricted by an administrator.
+          You cannot use SocialApp while this restriction is active.
+        </div>
+        <button id="restrictedLogoutBtn" style="margin-top:24px;padding:12px 22px;border:0;border-radius:12px;background:#1877f2;color:#fff;font-weight:800;font-size:15px;cursor:pointer;">Log out</button>
+      </div>
+    `;
+    document.body.appendChild(screen);
+
+    document.getElementById("restrictedLogoutBtn")?.addEventListener("click", async () => {
+      try {
+        await supabase.auth.signOut();
+      } finally {
+        window.__accountRestricted = false;
+        location.reload();
+      }
+    });
+  }
+
+  screen.style.display = "flex";
+};
+
+window.hideAccountRestrictedScreen = function () {
+  window.__accountRestricted = false;
+  document.getElementById("accountRestrictedScreen")?.remove();
+};
+
+window.checkAccountRestriction = async function (userId) {
+  if (!userId) return false;
+
+  // Prefer the SECURITY DEFINER RPC so the restriction gate still works even
+  // when restricted users are denied normal table access by RLS.
+  try {
+    const { data, error } = await supabase.rpc("get_my_account_status");
+    if (!error && data) {
+      const status = typeof data === "string" ? data : data.status;
+      const restricted =
+        status === "restricted" ||
+        data?.private_account === true ||
+        data?.account_status === "restricted";
+
+      if (restricted) {
+        window.showAccountRestrictedScreen();
+        return true;
+      }
+
+      window.hideAccountRestrictedScreen();
+      return false;
+    }
+  } catch (e) {
+    console.warn("Account status RPC unavailable; using profile fallback.", e);
+  }
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("private_account,account_status")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("Account restriction check failed:", error);
+    return false;
+  }
+
+  const restricted =
+    profile?.private_account === true ||
+    profile?.account_status === "restricted";
+
+  if (restricted) {
+    window.showAccountRestrictedScreen();
+    return true;
+  }
+
+  window.hideAccountRestrictedScreen();
+  return false;
+};
+
 async function initAuth() {
   const { data, error } = await supabase.auth.getSession();
 
@@ -6279,16 +6491,19 @@ async function initAuth() {
 
   session = data.session;
   currentUser = session?.user || null;
-  
+
   if (currentUser) {
-  await supabase
-    .from("profiles")
-    .update({
-      online: true,
-      last_seen: new Date()
-    })
-    .eq("id", currentUser.id);
-}
+    const restricted = await window.checkAccountRestriction(currentUser.id);
+    if (restricted) return;
+
+    await supabase
+      .from("profiles")
+      .update({
+        online: true,
+        last_seen: new Date()
+      })
+      .eq("id", currentUser.id);
+  }
 
   console.log("INIT SESSION:", session);
 
@@ -6303,8 +6518,8 @@ async function initAuth() {
   }
 
   if (!window.__appStarted) {
-  safeStart();
-}
+    safeStart();
+  }
 }
 
 initAuth();
@@ -6342,6 +6557,9 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
 
   if (currentUser) {
     console.log("SIGNED IN:", currentUser.id);
+
+    const restricted = await window.checkAccountRestriction(currentUser.id);
+    if (restricted) return;
 
     loadUnreadCount();
     loadNotifications();
@@ -6714,13 +6932,8 @@ document.getElementById("storyAudioInput")
     }
 
     // GET PUBLIC URL
-    const { data } =
-      supabase.storage
-        .from("stories")
-        .getPublicUrl(fileName);
-
     const publicUrl =
-      data.publicUrl;
+      window.getCanonicalStorageUrl("stories", fileName);
       
       let audioUrl = "";
 
@@ -6736,13 +6949,8 @@ if (audioFile) {
 
   if (!audioUploadError) {
 
-  const { data: audioData } =
-    supabase.storage
-      .from("stories")
-      .getPublicUrl(audioName);
-
   audioUrl =
-    audioData.publicUrl;
+    window.getCanonicalStorageUrl("stories", audioName);
 
 } else {
 
@@ -9027,12 +9235,8 @@ async function createPost() {
       return;
     }
 
-    const { data } =
-      supabase.storage
-  .from("posts_media")
-  .getPublicUrl(fileName);
-
-    mediaUrl = data.publicUrl;
+    mediaUrl =
+      window.getCanonicalStorageUrl("posts_media", fileName);
 
     if (file.type.startsWith("image")) {
       mediaType = "image";
@@ -22158,15 +22362,12 @@ window.uploadVoiceComment = async function (blob) {
     // PUBLIC URL
     // =================================================
 
-    const {
-        data: urlData
-    } =
-        supabase
-            .storage
-            .from("voice-notes")
-            .getPublicUrl(
-                fileName
-            );
+    const voiceUrl =
+        window.getCanonicalStorageUrl("voice-notes", fileName);
+
+    const urlData = {
+        publicUrl: voiceUrl
+    };
 
 
     if (
@@ -32815,19 +33016,11 @@ window.navigateToScreen(
                     return;
                 }
 
-                const {
-                    data: avatarPublic
-                } =
-                    supabase
-                    .storage
-                    .from("avatars")
-                    .getPublicUrl(
-                        avatarPath
-                    );
+                const avatarSignedUrl =
+                    await window.resolveStorageMediaUrl("avatars", avatarPath, avatarUrl);
 
                 avatarUrl =
-                    avatarPublic?.publicUrl ||
-                    avatarUrl;
+                    avatarSignedUrl || avatarUrl;
 
                 changes.push(
                     "avatar"
@@ -32888,19 +33081,11 @@ window.navigateToScreen(
                     return;
                 }
 
-                const {
-                    data: coverPublic
-                } =
-                    supabase
-                    .storage
-                    .from("avatars")
-                    .getPublicUrl(
-                        coverPath
-                    );
+                const coverSignedUrl =
+                    await window.resolveStorageMediaUrl("avatars", coverPath, coverUrl);
 
                 coverUrl =
-                    coverPublic?.publicUrl ||
-                    coverUrl;
+                    coverSignedUrl || coverUrl;
 
                 changes.push(
                     "cover"
@@ -37620,12 +37805,8 @@ if (selectedCommentMedia) {
         return;
     }
 
-    const { data } = supabase
-        .storage
-        .from("comment-media")
-        .getPublicUrl(fileName);
-
-    mediaUrl = data.publicUrl;
+    mediaUrl =
+        window.getCanonicalStorageUrl("comment-media", fileName);
 
     mediaType = selectedCommentMedia.type.startsWith("image")
         ? "image"
@@ -42877,12 +43058,8 @@ if (file && file.size > 50 * 1024 * 1024) {
       return;
     }
 
-    const { data } =
-      supabase.storage
-        .from("chat-media")
-        .getPublicUrl(fileName);
-
-    mediaUrl = data.publicUrl;
+    mediaUrl =
+      window.getCanonicalStorageUrl("chat-media", fileName);
   }
 
   // =====================
