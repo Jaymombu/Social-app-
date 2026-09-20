@@ -6336,6 +6336,202 @@ window.resolveStorageMediaUrl = async function(bucket, value, fallback = "") {
   return url || fallback || "";
 };
 
+// =====================================================
+// GLOBAL DISPLAY-SIDE STORAGE SECURITY
+// =====================================================
+// Existing rows in the database contain Storage public URLs. Rather than
+// requiring every renderer in this large single-file app to be rewritten at
+// once, this layer catches every rendered <img>, <video>, <audio>, <source>
+// and Storage background URL and converts Supabase Storage URLs into
+// authorized short-lived signed URLs.
+//
+// IMPORTANT: this does NOT touch data:, blob:, or unrelated external URLs.
+// It also leaves already-signed URLs alone.
+
+(function initializeGlobalStorageDisplaySecurity() {
+  if (window.__globalStorageDisplaySecurityInitialized) return;
+  window.__globalStorageDisplaySecurityInitialized = true;
+
+  const cache = new Map();
+  const CACHE_MS = 50 * 60 * 1000;
+  const EMPTY_MEDIA = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+
+  function parseStorageUrl(value) {
+    if (!value) return null;
+
+    const raw = String(value).trim();
+    if (!raw || /^(data:|blob:)/i.test(raw)) return null;
+
+    // Supabase public object URL.
+    let m = raw.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+?)(?:\?.*)?$/i);
+    if (m) {
+      return {
+        bucket: decodeURIComponent(m[1]),
+        path: decodeURIComponent(m[2])
+      };
+    }
+
+    // Supabase signed object URL. It is already usable and must not be
+    // repeatedly signed.
+    if (/\/storage\/v1\/object\/sign\//i.test(raw)) {
+      return { signed: true };
+    }
+
+    // Supabase image render URL from a public bucket.
+    m = raw.match(/\/storage\/v1\/render\/image\/public\/([^/]+)\/(.+?)(?:\?.*)?$/i);
+    if (m) {
+      return {
+        bucket: decodeURIComponent(m[1]),
+        path: decodeURIComponent(m[2])
+      };
+    }
+
+    return null;
+  }
+
+  async function sign(bucket, path) {
+    const key = bucket + "::" + path;
+    const now = Date.now();
+    const cached = cache.get(key);
+
+    if (cached && cached.expiresAt > now && cached.url) {
+      return cached.url;
+    }
+
+    const url = await window.getAuthorizedStorageUrl(bucket, path, 3600);
+
+    if (url) {
+      cache.set(key, {
+        url,
+        expiresAt: now + CACHE_MS
+      });
+    }
+
+    return url || "";
+  }
+
+  async function secureElementMedia(el) {
+    if (!el || el.nodeType !== 1) return;
+    if (el.dataset.storageSecurityProcessing === "true") return;
+
+    const tag = String(el.tagName || "").toLowerCase();
+    if (!["img", "video", "audio", "source"].includes(tag)) return;
+
+    const raw = el.getAttribute("src");
+    const parsed = parseStorageUrl(raw);
+
+    if (!parsed || parsed.signed) return;
+
+    el.dataset.storageSecurityProcessing = "true";
+
+    try {
+      const signed = await sign(parsed.bucket, parsed.path);
+
+      if (signed) {
+        el.setAttribute("src", signed);
+      } else {
+        // A failed signature normally means Storage RLS denied access. Do
+        // not leave the original public URL in the DOM.
+        el.setAttribute("src", EMPTY_MEDIA);
+        el.dataset.storageAccessDenied = "true";
+      }
+    } catch (error) {
+      console.warn("Global Storage media resolution failed:", error);
+      el.setAttribute("src", EMPTY_MEDIA);
+      el.dataset.storageAccessDenied = "true";
+    }
+  }
+
+  async function secureBackground(el) {
+    if (!el || el.nodeType !== 1) return;
+    if (el.dataset.storageBackgroundProcessing === "true") return;
+
+    const style = el.getAttribute("style") || "";
+    if (!/url\(/i.test(style) || !/supabase\.co\/storage\/v1\//i.test(style)) {
+      return;
+    }
+
+    const match = style.match(/url\((['"]?)(https?:\/\/[^)'\"]+supabase\.co\/storage\/v1\/[^)'\"]+)\1\)/i);
+    if (!match) return;
+
+    const parsed = parseStorageUrl(match[2]);
+    if (!parsed || parsed.signed) return;
+
+    el.dataset.storageBackgroundProcessing = "true";
+
+    try {
+      const signed = await sign(parsed.bucket, parsed.path);
+      if (signed) {
+        el.style.backgroundImage = `url("${signed.replace(/"/g, '\\"')}")`;
+      } else {
+        el.style.backgroundImage = "none";
+        el.dataset.storageAccessDenied = "true";
+      }
+    } catch (error) {
+      console.warn("Global Storage background resolution failed:", error);
+      el.style.backgroundImage = "none";
+      el.dataset.storageAccessDenied = "true";
+    }
+  }
+
+  function scan(root) {
+    if (!root || root.nodeType !== 1) return;
+
+    const elements = [];
+    const tag = String(root.tagName || "").toLowerCase();
+
+    if (["img", "video", "audio", "source"].includes(tag)) {
+      elements.push(root);
+    }
+
+    if (root.matches?.("[style*='url(']")) {
+      elements.push(root);
+    }
+
+    root.querySelectorAll?.("img,video,audio,source,[style*='url(']")
+      .forEach(el => elements.push(el));
+
+    elements.forEach(el => {
+      secureElementMedia(el);
+      secureBackground(el);
+    });
+  }
+
+  // Initial page scan.
+  scan(document.documentElement);
+
+  // Catch every screen/renderer that inserts media later.
+  const observer = new MutationObserver(mutations => {
+    for (const mutation of mutations) {
+      if (mutation.type === "childList") {
+        mutation.addedNodes.forEach(node => {
+          if (node.nodeType === 1) scan(node);
+        });
+      } else if (mutation.type === "attributes") {
+        if (mutation.target?.nodeType === 1) {
+          secureElementMedia(mutation.target);
+          secureBackground(mutation.target);
+        }
+      }
+    }
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["src", "style"]
+  });
+
+  window.__storageDisplaySecurity = {
+    scan,
+    clearCache: () => cache.clear(),
+    cache
+  };
+
+  console.log("🔐 GLOBAL STORAGE DISPLAY SECURITY INITIALIZED");
+})();
+
 let currentUser = null;
 let unreadCount = 0;
 
