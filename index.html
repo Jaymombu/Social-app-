@@ -6323,7 +6323,47 @@ window.getStorageRef = function(bucket, value) {
 
 window.getCanonicalStorageUrl = function(bucket, path) {
 
-  return window.getStorageRef(bucket, path);
+  if (!bucket || !path) return "";
+
+  const value = String(path).trim();
+
+  if (!value) return "";
+
+  if (/^(https?:|data:|blob:)/i.test(value)) {
+    return value;
+  }
+
+  if (value.startsWith("storage://")) {
+
+    const rest =
+      value.slice("storage://".length);
+
+    const slash =
+      rest.indexOf("/");
+
+    if (slash >= 0) {
+
+      const b =
+        rest.slice(0, slash);
+
+      const filePath =
+        rest.slice(slash + 1);
+
+      return (
+        supabase.storage
+          .from(b)
+          .getPublicUrl(filePath)
+          .data?.publicUrl || ""
+      );
+    }
+  }
+
+  return (
+    supabase.storage
+      .from(bucket)
+      .getPublicUrl(value)
+      .data?.publicUrl || ""
+  );
 };
 
 
@@ -6507,165 +6547,6 @@ window.resolveStorageMediaUrl = async function(
 
 
 // =====================================================
-// GLOBAL MEDIA AUTO-RESOLVER
-// =====================================================
-// Existing renderers throughout this large single-file app still place
-// media values directly into <img>, <video>, and <audio> src attributes.
-// Rather than rewriting dozens of renderers at once, this safe bridge
-// converts canonical storage:// references (and legacy Supabase URLs)
-// into signed URLs when the browser tries to load them.
-//
-// This does NOT use a MutationObserver and does not rebuild #app.
-
-window.__privateStorageResolving =
-  window.__privateStorageResolving || new WeakSet();
-
-window.__privateStorageBucketFromUrl = function(value) {
-
-  if (!value) return null;
-
-  const raw = String(value);
-
-  if (raw.startsWith("storage://")) {
-
-    const rest =
-      raw.slice("storage://".length);
-
-    const slash =
-      rest.indexOf("/");
-
-    return slash > 0
-      ? rest.slice(0, slash)
-      : null;
-  }
-
-  const patterns = [
-    /\/storage\/v1\/object\/public\/([^/]+)\//i,
-    /\/storage\/v1\/object\/sign\/([^/]+)\//i,
-    /\/storage\/v1\/render\/image\/public\/([^/]+)\//i
-  ];
-
-  for (const pattern of patterns) {
-
-    const match =
-      raw.match(pattern);
-
-    if (match?.[1]) {
-      return match[1];
-    }
-  }
-
-  return null;
-};
-
-window.__privateStorageResolveElement =
-  async function(element) {
-
-    if (!element) return;
-
-    if (
-      window.__privateStorageResolving.has(element)
-    ) {
-      return;
-    }
-
-    const current =
-      element.currentSrc ||
-      element.src ||
-      element.getAttribute("src") ||
-      "";
-
-    if (!current) return;
-
-    const bucket =
-      element.dataset?.storageBucket ||
-      window.__privateStorageBucketFromUrl(current);
-
-    if (!bucket) return;
-
-    window.__privateStorageResolving.add(element);
-
-    try {
-
-      const signed =
-        await window.resolveStorageMediaUrl(
-          bucket,
-          current
-        );
-
-      if (!signed) return;
-
-      element.dataset.storageResolved = "true";
-
-      if (
-        element.tagName === "IMG" ||
-        element.tagName === "VIDEO" ||
-        element.tagName === "AUDIO"
-      ) {
-
-        if (element.src !== signed) {
-          element.src = signed;
-        }
-      }
-
-    } finally {
-
-      setTimeout(() => {
-        try {
-          window.__privateStorageResolving.delete(element);
-        } catch (_) {}
-      }, 1000);
-    }
-  };
-
-window.addEventListener(
-  "error",
-  function(event) {
-
-    const element =
-      event.target;
-
-    if (!element) return;
-
-    const tag =
-      element.tagName;
-
-    if (
-      tag !== "IMG" &&
-      tag !== "VIDEO" &&
-      tag !== "AUDIO"
-    ) {
-      return;
-    }
-
-    window.__privateStorageResolveElement(
-      element
-    );
-
-  },
-  true
-);
-
-// =====================================================
-// STORAGE DATA-ATTRIBUTE RESOLVER
-// =====================================================
-// Used by chat/view-once/media controls that keep the media URL in a
-// data-* attribute instead of directly in src.
-
-window.resolveStorageDataUrl =
-  async function(
-    bucket,
-    value
-  ) {
-
-    return window.resolveStorageMediaUrl(
-      bucket,
-      value,
-      value || ""
-    );
-  };
-
-// =====================================================
 // CACHE CONTROL
 // =====================================================
 
@@ -6680,16 +6561,20 @@ window.clearStorageUrlCache = function() {
 };
 
 // =====================================================
-// PRIVATE STORAGE MIGRATION BRIDGE
+// GLOBAL DISPLAY-SIDE STORAGE SECURITY
 // =====================================================
-// New uploads now store canonical storage:// references.
-// Existing Supabase public/signed URLs are also recognized by the resolver.
-// Media elements are upgraded to signed URLs on load failure.
+// STAGING MODE:
+// Buckets remain public and existing renderers remain unchanged.
+// Do NOT make the buckets private yet.
 //
-// IMPORTANT:
-// The buckets must remain PUBLIC until the database Storage RLS policies
-// for each bucket have been verified. After those policies are ready,
-// the six buckets can be switched to private.
+// The next migration stage will replace direct media URLs in:
+//   posts
+//   comments
+//   stories
+//   profiles
+//   chats/messages
+//   voice notes
+// with resolveStorageMediaUrl() before bucket privacy is enabled.
 
 let currentUser = null;
 let unreadCount = 0;
@@ -9606,9 +9491,9 @@ async function createPost() {
       return;
     }
 
-    // Store canonical private-storage reference.
+    // Store the canonical private-storage reference.
     mediaUrl =
-      window.createStoragePath("posts_media", fileName);
+      `storage://posts_media/${fileName}`;
 
     if (file.type.startsWith("image")) {
       mediaType = "image";
@@ -9788,27 +9673,30 @@ function snapToNearestPost() {
   }
 }
 
-// =====================================================
-// PRIVATE POST MEDIA DISPLAY
-// =====================================================
-window.openPrivatePostMedia = async function (storageRef, mediaType) {
-  if (!storageRef) return;
-  const url = await window.resolveStorageMediaUrl(storageRef);
-  if (!url) return;
-  openMedia(url, mediaType);
-};
+  window.openPrivatePostMedia = async function(storageRef, mediaType) {
+    if (!storageRef) return;
+    const url = await window.resolveStorageMediaUrl("posts_media", storageRef);
+    if (!url) {
+      console.warn("Could not resolve post media:", storageRef);
+      return;
+    }
+    openMedia(url, mediaType);
+  };
 
-window.resolvePostMediaElement = async function (element) {
-  if (!element) return;
-  const storageRef = element.dataset?.storageRef || "";
-  if (!storageRef) return;
-  const url = await window.resolveStorageMediaUrl(storageRef);
-  if (!url) return;
-  element.src = url;
-  if (element.tagName === "VIDEO") {
-    try { element.load(); } catch (_) {}
+  async function resolveRenderedPostMedia(container) {
+    if (!container) return;
+    const elements = container.querySelectorAll("[data-post-storage-ref]");
+    for (const element of elements) {
+      const ref = element.getAttribute("data-post-storage-ref");
+      if (!ref) continue;
+      const url = await window.resolveStorageMediaUrl("posts_media", ref);
+      if (!url) continue;
+      element.src = url;
+      if (element.tagName === "VIDEO") {
+        try { element.load(); } catch (_) {}
+      }
+    }
   }
-};
 
   function renderPostElement(post) {
 
@@ -9892,14 +9780,12 @@ const isOwner =
   ) {
 
     const storageRef = String(post.file_url);
-    const directUrl = storageRef.startsWith("storage://") ? "" : storageRef;
 
     mediaHTML = `
       <img
-        src="${escapeHtml(directUrl)}"
-        data-storage-ref="${escapeHtml(storageRef)}"
+        src=""
+        data-post-storage-ref="${escapeHtml(storageRef)}"
         onclick="window.openPrivatePostMedia(${JSON.stringify(storageRef)}, 'image')"
-        onerror="window.resolvePostMediaElement(this)"
         style="
           max-width:100%;
           width:auto;
@@ -9922,13 +9808,11 @@ const isOwner =
   ) {
 
     const storageRef = String(post.file_url);
-    const directUrl = storageRef.startsWith("storage://") ? "" : storageRef;
 
     mediaHTML = `
       <video
-        src="${escapeHtml(directUrl)}"
-        data-storage-ref="${escapeHtml(storageRef)}"
-        onerror="window.resolvePostMediaElement(this)"
+        src=""
+        data-post-storage-ref="${escapeHtml(storageRef)}"
         controls
         playsinline
         muted
@@ -10210,13 +10094,7 @@ const isOwner =
 
   `
 
-  // Resolve canonical private media after the post DOM exists.
-  div.querySelectorAll("[data-storage-ref]").forEach(element => {
-    const ref = element.dataset.storageRef || "";
-    if (ref.startsWith("storage://")) {
-      window.resolvePostMediaElement(element);
-    }
-  });;
+  resolveRenderedPostMedia(div);;
 
 
   console.log(
