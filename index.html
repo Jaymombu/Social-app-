@@ -6244,452 +6244,106 @@ const supabase = createClient(
 window.supabase = supabase;
 
 // =====================================================
-// PRIVATE STORAGE MEDIA HELPERS — SAFE STAGING VERSION
+// PRIVATE STORAGE MEDIA HELPERS
 // =====================================================
-// This stage prepares the app for private buckets without changing the
-// existing public-URL behavior of the working feed.
-//
-// IMPORTANT:
-// - Existing renderers still expect normal HTTP(S) URLs.
-// - Therefore getCanonicalStorageUrl() intentionally remains compatible.
-// - New canonical storage references are available through getStorageRef().
-// - The database/upload renderers will be switched to storage:// references
-//   only after all media renderers have been migrated to resolve them.
-
-window.storageUrlCache =
-  window.storageUrlCache || new Map();
-
-window.getStorageRef = function(bucket, value) {
-
-  if (!bucket || !value) return "";
-
-  const raw = String(value).trim();
-
-  if (!raw) return "";
-
-  if (raw.startsWith("storage://")) {
-    return raw;
-  }
-
-  // Already a non-Supabase URL.
-  if (/^(data:|blob:)/i.test(raw)) {
-    return raw;
-  }
-
-  // Convert existing Supabase public URL to canonical storage:// form.
-  try {
-
-    const marker =
-      `/storage/v1/object/public/${bucket}/`;
-
-    if (raw.includes(marker)) {
-
-      const path =
-        decodeURIComponent(
-          raw.split(marker)[1].split("?")[0]
-        );
-
-      return `storage://${bucket}/${path}`;
-    }
-
-    const signMarker =
-      `/storage/v1/object/sign/${bucket}/`;
-
-    if (raw.includes(signMarker)) {
-
-      const path =
-        decodeURIComponent(
-          raw.split(signMarker)[1].split("?")[0]
-        );
-
-      return `storage://${bucket}/${path}`;
-    }
-
-  } catch (_) {}
-
-  // Raw Storage path.
-  return `storage://${bucket}/${raw.replace(/^\/+/, "")}`;
-};
-
-
-// =====================================================
-// COMPATIBILITY URL HELPER
-// =====================================================
-// KEEP THIS PUBLIC-URL BEHAVIOR FOR NOW.
-// Changing it to storage:// immediately would break existing
-// renderers that still place the returned value directly in src=.
-//
-// This will be changed only after the renderer migration is complete.
+// These helpers keep Storage paths canonical in the database and resolve
+// them to short-lived signed URLs at display time. This allows the buckets
+// to be private while still preserving existing avatar/media URLs already
+// stored in the database.
 
 window.getCanonicalStorageUrl = function(bucket, path) {
+  if (!bucket || !path) return "";
 
-  return window.getStorageRef(bucket, path);
+  const value = String(path).trim();
+  if (!value) return "";
+
+  if (/^(https?:|data:|blob:)/i.test(value)) {
+    return value;
+  }
+
+  if (value.startsWith("storage://")) {
+    const rest = value.slice("storage://".length);
+    const slash = rest.indexOf("/");
+    if (slash >= 0) {
+      const b = rest.slice(0, slash);
+      const filePath = rest.slice(slash + 1);
+      return supabase.storage.from(b).getPublicUrl(filePath).data?.publicUrl || "";
+    }
+  }
+
+  return supabase.storage.from(bucket).getPublicUrl(value).data?.publicUrl || "";
 };
 
-
-// =====================================================
-// AUTHORIZED PRIVATE STORAGE URL
-// =====================================================
-
-window.getAuthorizedStorageUrl = async function(
-  bucket,
-  value,
-  expiresIn = 3600
-) {
-
+window.getAuthorizedStorageUrl = async function(bucket, value, expiresIn = 3600) {
   if (!bucket || !value) return "";
 
-  let raw =
-    String(value).trim();
-
+  let raw = String(value).trim();
   if (!raw) return "";
 
-  if (/^(data:|blob:)/i.test(raw)) {
+  // Non-Supabase URLs and local/object URLs should pass through untouched.
+  if (/^(data:|blob:)/i.test(raw)) return raw;
+  if (/^https?:\/\/(?![^/]*supabase\.co\/storage\/v1\/object\/)/i.test(raw)) {
     return raw;
   }
 
-  // External URL.
-  if (
-    /^https?:\/\//i.test(raw) &&
-    !raw.includes("/storage/v1/")
-  ) {
-    return raw;
-  }
-
-  // storage://bucket/path
+  // Accept storage://bucket/path.
   if (raw.startsWith("storage://")) {
-
-    const rest =
-      raw.slice("storage://".length);
-
-    const slash =
-      rest.indexOf("/");
-
-    if (slash < 0) return "";
-
-    bucket =
-      rest.slice(0, slash);
-
-    raw =
-      rest.slice(slash + 1);
+    const rest = raw.slice("storage://".length);
+    const slash = rest.indexOf("/");
+    if (slash >= 0) {
+      bucket = rest.slice(0, slash);
+      raw = rest.slice(slash + 1);
+    }
   }
 
-  // Recover the path from existing Supabase URLs.
+  // Accept an existing Supabase public/signed URL and recover its path.
+  const markerPublic = `/storage/v1/object/public/${bucket}/`;
+  const markerSign = `/storage/v1/object/sign/${bucket}/`;
+  const markerRender = `/storage/v1/render/image/public/${bucket}/`;
+
   try {
-
-    const publicMarker =
-      `/storage/v1/object/public/${bucket}/`;
-
-    const signMarker =
-      `/storage/v1/object/sign/${bucket}/`;
-
-    const renderMarker =
-      `/storage/v1/render/image/public/${bucket}/`;
-
-    if (raw.includes(publicMarker)) {
-
-      raw =
-        decodeURIComponent(
-          raw.split(publicMarker)[1].split("?")[0]
-        );
-
-    } else if (raw.includes(signMarker)) {
-
-      raw =
-        decodeURIComponent(
-          raw.split(signMarker)[1].split("?")[0]
-        );
-
-    } else if (raw.includes(renderMarker)) {
-
-      raw =
-        decodeURIComponent(
-          raw.split(renderMarker)[1].split("?")[0]
-        );
-
+    if (raw.includes(markerPublic)) {
+      raw = decodeURIComponent(raw.split(markerPublic)[1].split("?")[0]);
+    } else if (raw.includes(markerSign)) {
+      raw = decodeURIComponent(raw.split(markerSign)[1].split("?")[0]);
+    } else if (raw.includes(markerRender)) {
+      raw = decodeURIComponent(raw.split(markerRender)[1].split("?")[0]);
     } else if (/^https?:\/\//i.test(raw)) {
-
+      // Unknown remote URL: don't try to sign it.
       return raw;
     }
-
   } catch (_) {
-
     return "";
   }
 
-  const cacheKey =
-    `${bucket}/${raw}`;
+  const { data, error } = await supabase
+    .storage
+    .from(bucket)
+    .createSignedUrl(raw, expiresIn);
 
-  const cached =
-    window.storageUrlCache.get(cacheKey);
-
-  if (
-    cached &&
-    cached.expiresAt > Date.now()
-  ) {
-    return cached.url;
+  if (error || !data?.signedUrl) {
+    console.warn("Storage signed URL failed:", bucket, raw, error);
+    return "";
   }
 
-  try {
-
-    const { data, error } =
-      await supabase
-        .storage
-        .from(bucket)
-        .createSignedUrl(
-          raw,
-          expiresIn
-        );
-
-    if (
-      !error &&
-      data?.signedUrl
-    ) {
-
-      // Keep the cached URL slightly shorter than its
-      // actual lifetime so expired URLs are never reused.
-
-      window.storageUrlCache.set(
-        cacheKey,
-        {
-          url: data.signedUrl,
-          expiresAt:
-            Date.now() +
-            Math.max(
-              30,
-              expiresIn - 60
-            ) * 1000
-        }
-      );
-
-      return data.signedUrl;
-    }
-
-    console.warn(
-      "Storage signed URL failed:",
-      bucket,
-      raw,
-      error
-    );
-
-  } catch (error) {
-
-    console.warn(
-      "Storage signed URL exception:",
-      bucket,
-      raw,
-      error
-    );
-  }
-
-  return "";
+  return data.signedUrl;
 };
 
-
-// =====================================================
-// DISPLAY-SIDE RESOLVER
-// =====================================================
-
-window.resolveStorageMediaUrl = async function(
-  bucket,
-  value,
-  fallback = ""
-) {
-
-  const url =
-    await window.getAuthorizedStorageUrl(
-      bucket,
-      value
-    );
-
+// Resolve a DB URL/path before placing it in an <img>, <video>, <audio>,
+// background-image, or media viewer.
+window.resolveStorageMediaUrl = async function(bucket, value, fallback = "") {
+  const url = await window.getAuthorizedStorageUrl(bucket, value);
   return url || fallback || "";
 };
 
-
 // =====================================================
-// GLOBAL MEDIA AUTO-RESOLVER
+// GLOBAL DISPLAY-SIDE STORAGE SECURITY
 // =====================================================
-// Existing renderers throughout this large single-file app still place
-// media values directly into <img>, <video>, and <audio> src attributes.
-// Rather than rewriting dozens of renderers at once, this safe bridge
-// converts canonical storage:// references (and legacy Supabase URLs)
-// into signed URLs when the browser tries to load them.
-//
-// This does NOT use a MutationObserver and does not rebuild #app.
+// DISABLED while Storage buckets are public.
+// Individual renderers can continue using their existing public URLs.
+// Signed URLs will be introduced renderer-by-renderer before buckets are
+// changed to private.
 
-window.__privateStorageResolving =
-  window.__privateStorageResolving || new WeakSet();
-
-window.__privateStorageBucketFromUrl = function(value) {
-
-  if (!value) return null;
-
-  const raw = String(value);
-
-  if (raw.startsWith("storage://")) {
-
-    const rest =
-      raw.slice("storage://".length);
-
-    const slash =
-      rest.indexOf("/");
-
-    return slash > 0
-      ? rest.slice(0, slash)
-      : null;
-  }
-
-  const patterns = [
-    /\/storage\/v1\/object\/public\/([^/]+)\//i,
-    /\/storage\/v1\/object\/sign\/([^/]+)\//i,
-    /\/storage\/v1\/render\/image\/public\/([^/]+)\//i
-  ];
-
-  for (const pattern of patterns) {
-
-    const match =
-      raw.match(pattern);
-
-    if (match?.[1]) {
-      return match[1];
-    }
-  }
-
-  return null;
-};
-
-window.__privateStorageResolveElement =
-  async function(element) {
-
-    if (!element) return;
-
-    if (
-      window.__privateStorageResolving.has(element)
-    ) {
-      return;
-    }
-
-    const current =
-      element.currentSrc ||
-      element.src ||
-      element.getAttribute("src") ||
-      "";
-
-    if (!current) return;
-
-    const bucket =
-      element.dataset?.storageBucket ||
-      window.__privateStorageBucketFromUrl(current);
-
-    if (!bucket) return;
-
-    window.__privateStorageResolving.add(element);
-
-    try {
-
-      const signed =
-        await window.resolveStorageMediaUrl(
-          bucket,
-          current
-        );
-
-      if (!signed) return;
-
-      element.dataset.storageResolved = "true";
-
-      if (
-        element.tagName === "IMG" ||
-        element.tagName === "VIDEO" ||
-        element.tagName === "AUDIO"
-      ) {
-
-        if (element.src !== signed) {
-          element.src = signed;
-        }
-      }
-
-    } finally {
-
-      setTimeout(() => {
-        try {
-          window.__privateStorageResolving.delete(element);
-        } catch (_) {}
-      }, 1000);
-    }
-  };
-
-window.addEventListener(
-  "error",
-  function(event) {
-
-    const element =
-      event.target;
-
-    if (!element) return;
-
-    const tag =
-      element.tagName;
-
-    if (
-      tag !== "IMG" &&
-      tag !== "VIDEO" &&
-      tag !== "AUDIO"
-    ) {
-      return;
-    }
-
-    window.__privateStorageResolveElement(
-      element
-    );
-
-  },
-  true
-);
-
-// =====================================================
-// STORAGE DATA-ATTRIBUTE RESOLVER
-// =====================================================
-// Used by chat/view-once/media controls that keep the media URL in a
-// data-* attribute instead of directly in src.
-
-window.resolveStorageDataUrl =
-  async function(
-    bucket,
-    value
-  ) {
-
-    return window.resolveStorageMediaUrl(
-      bucket,
-      value,
-      value || ""
-    );
-  };
-
-// =====================================================
-// CACHE CONTROL
-// =====================================================
-
-window.clearStorageUrlCache = function() {
-
-  if (
-    window.storageUrlCache &&
-    typeof window.storageUrlCache.clear === "function"
-  ) {
-    window.storageUrlCache.clear();
-  }
-};
-
-// =====================================================
-// PRIVATE STORAGE MIGRATION BRIDGE
-// =====================================================
-// New uploads now store canonical storage:// references.
-// Existing Supabase public/signed URLs are also recognized by the resolver.
-// Media elements are upgraded to signed URLs on load failure.
-//
-// IMPORTANT:
-// The buckets must remain PUBLIC until the database Storage RLS policies
-// for each bucket have been verified. After those policies are ready,
-// the six buckets can be switched to private.
 
 let currentUser = null;
 let unreadCount = 0;
@@ -9606,8 +9260,15 @@ async function createPost() {
       return;
     }
 
+    // Keep the existing post renderer compatible.
+    // New posts must store a normal public Storage URL for now.
+    // We will migrate post rendering to signed URLs before making
+    // the posts_media bucket private.
     mediaUrl =
-      window.getCanonicalStorageUrl("posts_media", fileName);
+      supabase.storage
+        .from("posts_media")
+        .getPublicUrl(fileName)
+        .data?.publicUrl || "";
 
     if (file.type.startsWith("image")) {
       mediaType = "image";
