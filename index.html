@@ -6530,117 +6530,19 @@ window.getAuthorizedStorageUrl = async function(
 // DISPLAY-SIDE RESOLVER
 // =====================================================
 
-window.normalizeStorageReference = function(bucket, value) {
-
-  if (!value) return "";
-
-  const raw = String(value).trim();
-
-  if (!raw) return "";
-
-  if (/^(data:|blob:|https?:\/\/)/i.test(raw)) {
-    return raw;
-  }
-
-  if (raw.startsWith("storage://")) {
-    return raw;
-  }
-
-  if (!bucket) return raw;
-
-  return `storage://${bucket}/${raw.replace(/^\/+/, "")}`;
-};
-
 window.resolveStorageMediaUrl = async function(
   bucket,
   value,
   fallback = ""
 ) {
 
-  const normalized =
-    window.normalizeStorageReference(
+  const url =
+    await window.getAuthorizedStorageUrl(
       bucket,
       value
     );
 
-  if (!normalized) {
-    return fallback || "";
-  }
-
-  // Normal URLs/data/blob URLs can be used directly.
-  if (/^(data:|blob:|https?:\/\/)/i.test(normalized)) {
-    return normalized;
-  }
-
-  const url =
-    await window.getAuthorizedStorageUrl(
-      bucket,
-      normalized
-    );
-
-  if (url) return url;
-
-  // Fallback for private buckets: download with the current
-  // authenticated session and expose the file through a blob URL.
-  try {
-
-    const rest =
-      normalized.startsWith("storage://")
-        ? normalized.slice("storage://".length)
-        : normalized;
-
-    const slash = rest.indexOf("/");
-
-    const resolvedBucket =
-      slash >= 0
-        ? rest.slice(0, slash)
-        : bucket;
-
-    const filePath =
-      slash >= 0
-        ? rest.slice(slash + 1)
-        : rest;
-
-    if (!resolvedBucket || !filePath) {
-      return fallback || "";
-    }
-
-    const { data, error } =
-      await supabase.storage
-        .from(resolvedBucket)
-        .download(filePath);
-
-    if (!error && data instanceof Blob) {
-      const blobUrl = URL.createObjectURL(data);
-
-      window.storageBlobUrlCache =
-        window.storageBlobUrlCache || new Map();
-
-      window.storageBlobUrlCache.set(
-        `${resolvedBucket}/${filePath}`,
-        blobUrl
-      );
-
-      return blobUrl;
-    }
-
-    console.warn(
-      "Storage download fallback failed:",
-      resolvedBucket,
-      filePath,
-      error
-    );
-
-  } catch (error) {
-
-    console.warn(
-      "Storage download fallback exception:",
-      normalized,
-      error
-    );
-  }
-
-  return fallback || "";
+  return url || fallback || "";
 };
 
 
@@ -6655,19 +6557,6 @@ window.clearStorageUrlCache = function() {
     typeof window.storageUrlCache.clear === "function"
   ) {
     window.storageUrlCache.clear();
-  }
-
-  if (
-    window.storageBlobUrlCache &&
-    typeof window.storageBlobUrlCache.forEach === "function"
-  ) {
-    window.storageBlobUrlCache.forEach((url) => {
-      try {
-        URL.revokeObjectURL(url);
-      } catch (_) {}
-    });
-
-    window.storageBlobUrlCache.clear();
   }
 };
 
@@ -9785,76 +9674,26 @@ function snapToNearestPost() {
 }
 
   window.openPrivatePostMedia = async function(storageRef, mediaType) {
-
     if (!storageRef) return;
-
-    const canonical =
-      window.normalizeStorageReference(
-        "posts_media",
-        storageRef
-      );
-
-    const url =
-      await window.resolveStorageMediaUrl(
-        "posts_media",
-        canonical
-      );
-
+    const url = await window.resolveStorageMediaUrl("posts_media", storageRef);
     if (!url) {
-      console.warn(
-        "Could not resolve post media:",
-        canonical
-      );
+      console.warn("Could not resolve post media:", storageRef);
       return;
     }
-
     openMedia(url, mediaType);
   };
 
   async function resolveRenderedPostMedia(container) {
-
     if (!container) return;
-
-    const elements =
-      container.querySelectorAll(
-        "[data-post-storage-ref]"
-      );
-
+    const elements = container.querySelectorAll("[data-post-storage-ref]");
     for (const element of elements) {
-
-      const ref =
-        element.getAttribute(
-          "data-post-storage-ref"
-        );
-
+      const ref = element.getAttribute("data-post-storage-ref");
       if (!ref) continue;
-
-      const canonical =
-        window.normalizeStorageReference(
-          "posts_media",
-          ref
-        );
-
-      const url =
-        await window.resolveStorageMediaUrl(
-          "posts_media",
-          canonical
-        );
-
-      if (!url) {
-        console.warn(
-          "Could not resolve rendered post media:",
-          canonical
-        );
-        continue;
-      }
-
+      const url = await window.resolveStorageMediaUrl("posts_media", ref);
+      if (!url) continue;
       element.src = url;
-
       if (element.tagName === "VIDEO") {
-        try {
-          element.load();
-        } catch (_) {}
+        try { element.load(); } catch (_) {}
       }
     }
   }
@@ -10255,9 +10094,6 @@ const isOwner =
 
   `
 
-  resolveRenderedPostMedia(div);;
-
-
   console.log(
     "RENDERING POST:",
     post.id
@@ -10290,6 +10126,12 @@ function renderFeed(posts) {
     if (el) {
       postsDiv.appendChild(el);
     }
+  });
+
+  // Resolve private post media only after the cards are attached to the live DOM.
+  // Storage access itself has been verified: signed URLs and download() succeed.
+  resolveRenderedPostMedia(postsDiv).catch(error => {
+    console.warn("Post media DOM resolution failed:", error);
   });
 }
 
@@ -55422,170 +55264,5 @@ window.reportMessage=id=>window.submitUserReport("message",id);
 window.reportProfile=id=>window.submitUserReport("profile",id);
 window.reportComment=id=>window.submitUserReport("comment",id);
 </script>
-
-<!-- =====================================================
-     TEMPORARY PRIVATE STORAGE MEDIA TEST PANEL
-     REMOVE AFTER MEDIA DIAGNOSIS
-     ===================================================== -->
-<style>
-#storageMediaTestButton{
-  position:fixed;right:14px;bottom:90px;z-index:2147483646;
-  border:0;border-radius:999px;padding:12px 15px;
-  background:#1877f2;color:#fff;font-weight:700;
-  box-shadow:0 4px 18px rgba(0,0,0,.45);
-}
-#storageMediaTestPanel{
-  position:fixed;left:12px;right:12px;bottom:12px;z-index:2147483647;
-  max-height:72vh;overflow:auto;display:none;
-  background:#111;color:#eee;border:1px solid #444;border-radius:16px;
-  padding:16px;box-shadow:0 10px 35px rgba(0,0,0,.7);
-  font-family:Arial,sans-serif;font-size:13px;
-}
-#storageMediaTestPanel h3{margin:0 0 10px;font-size:17px}
-.storage-test-row{border-top:1px solid #333;padding:12px 0}
-.storage-test-ok{color:#45e07b}.storage-test-bad{color:#ff6464}
-.storage-test-code{font-family:monospace;word-break:break-all;color:#bbb;margin-top:5px}
-.storage-test-btn{border:0;border-radius:8px;padding:9px 12px;margin:4px 4px 4px 0;background:#1877f2;color:#fff;font-weight:600}
-.storage-test-close{background:#444}
-</style>
-<button id="storageMediaTestButton" type="button">🔧 Test Media</button>
-<div id="storageMediaTestPanel">
-  <h3>Private Storage Media Test</h3>
-  <div id="storageMediaTestStatus">Testing has not started.</div>
-  <div style="margin:10px 0">
-    <button id="storageMediaRunTest" class="storage-test-btn" type="button">Run test</button>
-    <button id="storageMediaCloseTest" class="storage-test-btn storage-test-close" type="button">Close</button>
-  </div>
-  <div id="storageMediaTestResults"></div>
-</div>
-<script>
-(function(){
-  function esc(value){
-    return String(value ?? '').replace(/[&<>"']/g,function(c){
-      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
-    });
-  }
-
-  const openBtn=document.getElementById('storageMediaTestButton');
-  const panel=document.getElementById('storageMediaTestPanel');
-  const runBtn=document.getElementById('storageMediaRunTest');
-  const closeBtn=document.getElementById('storageMediaCloseTest');
-  const status=document.getElementById('storageMediaTestStatus');
-  const results=document.getElementById('storageMediaTestResults');
-
-  if(!openBtn || !panel || !runBtn || !closeBtn) return;
-
-  openBtn.onclick=function(){
-    panel.style.display='block';
-  };
-
-  closeBtn.onclick=function(){
-    panel.style.display='none';
-  };
-
-  function showResult(title,ok,detail){
-    const row=document.createElement('div');
-    row.className='storage-test-row';
-    row.innerHTML='<strong class="'+(ok?'storage-test-ok':'storage-test-bad')+'">'+
-      (ok?'✓ ':'✕ ')+esc(title)+'</strong>'+
-      '<div class="storage-test-code">'+esc(detail)+'</div>';
-    results.appendChild(row);
-  }
-
-  function pathFromValue(value,bucket){
-    if(!value) return '';
-    let raw=String(value).trim();
-    if(raw.indexOf('storage://')===0){
-      const rest=raw.slice(10);
-      const slash=rest.indexOf('/');
-      if(slash>=0){
-        return {bucket:rest.slice(0,slash),path:rest.slice(slash+1)};
-      }
-    }
-    const publicMarker='/storage/v1/object/public/'+bucket+'/';
-    const signMarker='/storage/v1/object/sign/'+bucket+'/';
-    const i1=raw.indexOf(publicMarker);
-    const i2=raw.indexOf(signMarker);
-    if(i1>=0) raw=decodeURIComponent(raw.slice(i1+publicMarker.length).split('?')[0]);
-    else if(i2>=0) raw=decodeURIComponent(raw.slice(i2+signMarker.length).split('?')[0]);
-    return {bucket:bucket,path:raw};
-  }
-
-  async function run(){
-    results.innerHTML='';
-    status.textContent='Running authenticated storage tests...';
-
-    if(typeof supabase==='undefined'){
-      showResult('Supabase client',false,'supabase is not available');
-      status.textContent='Test finished.';
-      return;
-    }
-
-    let sessionResult;
-    try{
-      sessionResult=await supabase.auth.getSession();
-      const user=sessionResult?.data?.session?.user;
-      showResult('Authenticated session',!!user,user?'User ID: '+user.id:'No active session');
-    }catch(e){
-      showResult('Authenticated session',false,e?.message||String(e));
-      status.textContent='Test finished.';
-      return;
-    }
-
-    let posts=[];
-    try{
-      const q=await supabase.from('posts')
-        .select('id,file_url,media_type,created_at,user_id')
-        .not('file_url','is',null)
-        .order('created_at',{ascending:false})
-        .limit(8);
-      if(q.error) throw q.error;
-      posts=q.data||[];
-      showResult('Posts query',true,'Found '+posts.length+' posts containing file_url');
-    }catch(e){
-      showResult('Posts query',false,e?.message||String(e));
-      status.textContent='Test finished.';
-      return;
-    }
-
-    if(!posts.length){
-      showResult('Media rows',false,'No posts with file_url were returned.');
-      status.textContent='Test finished.';
-      return;
-    }
-
-    for(const post of posts){
-      const parsed=pathFromValue(post.file_url,'posts_media');
-      const bucket=parsed?.bucket||'posts_media';
-      const path=parsed?.path||'';
-      const label=(post.media_type||'media')+' | '+post.id;
-
-      showResult('Post: '+label,!!path,'bucket='+bucket+' | path='+path+' | raw='+post.file_url);
-      if(!path) continue;
-
-      try{
-        const signed=await supabase.storage.from(bucket).createSignedUrl(path,3600);
-        showResult('createSignedUrl',!!signed?.data?.signedUrl,
-          signed?.data?.signedUrl ? signed.data.signedUrl : (signed?.error?.message||'No signedUrl returned'));
-      }catch(e){
-        showResult('createSignedUrl',false,e?.message||String(e));
-      }
-
-      try{
-        const downloaded=await supabase.storage.from(bucket).download(path);
-        showResult('download()',!!downloaded?.data,
-          downloaded?.data ? ('Blob size='+downloaded.data.size+' bytes; type='+downloaded.data.type) : (downloaded?.error?.message||'No Blob returned'));
-      }catch(e){
-        showResult('download()',false,e?.message||String(e));
-      }
-    }
-
-    status.textContent='Test finished. Send me a screenshot of this panel.';
-  }
-
-  runBtn.onclick=run;
-})();
-</script>
-
 </body>
 </html>
