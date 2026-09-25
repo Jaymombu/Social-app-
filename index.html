@@ -10094,6 +10094,9 @@ const isOwner =
 
   `
 
+  resolveRenderedPostMedia(div);;
+
+
   console.log(
     "RENDERING POST:",
     post.id
@@ -10126,12 +10129,6 @@ function renderFeed(posts) {
     if (el) {
       postsDiv.appendChild(el);
     }
-  });
-
-  // Resolve private post media only after the cards are attached to the live DOM.
-  // Storage access itself has been verified: signed URLs and download() succeed.
-  resolveRenderedPostMedia(postsDiv).catch(error => {
-    console.warn("Post media DOM resolution failed:", error);
   });
 }
 
@@ -29164,6 +29161,9 @@ window.loadProfilePosts = async function (userId) {
             }
         }
 
+        // The cards must be attached to the live DOM before private
+        // posts_media URLs are resolved into signed URLs.
+        await resolveRenderedPostMedia(container);
 
         console.log(
             "✅ PROFILE POSTS LOADED:",
@@ -29399,7 +29399,19 @@ window.loadProfilePhotos = async function (userId) {
             const image =
                 document.createElement("img");
 
-            image.src = url;
+            image.src = "";
+            image.dataset.postStorageRef = url;
+
+            // Private posts_media must use an authenticated signed URL.
+            window.resolveStorageMediaUrl("posts_media", url)
+                .then(resolvedUrl => {
+                    if (resolvedUrl) {
+                        image.src = resolvedUrl;
+                    }
+                })
+                .catch(error => {
+                    console.warn("⚠️ PROFILE PHOTO STORAGE RESOLUTION FAILED:", error);
+                });
 
             image.alt =
                 post.content ||
@@ -29619,7 +29631,8 @@ function createVideoPage(post, index) {
         return page;
     }
 
-    video.src = videoUrl;
+    video.src = "";
+    video.dataset.postStorageRef = videoUrl;
 
     video.autoplay = false;
     video.loop = false;
@@ -31682,6 +31695,24 @@ console.log(
         return;
     }
 
+    // Resolve private posts_media URLs only after the video pages exist in
+    // the viewer. This fixes the full-screen profile video viewer as well as
+    // the profile video thumbnails.
+    const profileVideoMedia = feed.querySelectorAll("video[data-post-storage-ref]");
+    for (const videoElement of profileVideoMedia) {
+        const storageRef = videoElement.getAttribute("data-post-storage-ref");
+        if (!storageRef) continue;
+        try {
+            const resolvedUrl = await window.resolveStorageMediaUrl("posts_media", storageRef);
+            if (resolvedUrl) {
+                videoElement.src = resolvedUrl;
+                try { videoElement.load(); } catch (_) {}
+            }
+        } catch (error) {
+            console.warn("⚠️ PROFILE FULL-SCREEN VIDEO STORAGE RESOLUTION FAILED:", error);
+        }
+    }
+
     // -----------------------------------------------------
     if (typeof window.adjustProfileVideoViewerViewport === "function") {
         window.adjustProfileVideoViewerViewport();
@@ -31975,8 +32006,19 @@ window.loadProfileVideos = async function (userId) {
                 const video =
                     document.createElement("video");
 
-                video.src =
-                    post.file_url;
+                video.src = "";
+                video.dataset.postStorageRef = post.file_url;
+
+                // Private posts_media video thumbnails need a signed URL.
+                window.resolveStorageMediaUrl("posts_media", post.file_url)
+                    .then(resolvedUrl => {
+                        if (resolvedUrl) {
+                            video.src = resolvedUrl;
+                        }
+                    })
+                    .catch(error => {
+                        console.warn("⚠️ PROFILE VIDEO THUMBNAIL STORAGE RESOLUTION FAILED:", error);
+                    });
 
                 video.muted = true;
                 video.playsInline = true;
@@ -46954,6 +46996,52 @@ window.openMedia = function (
 
     return true;
 };
+
+// =====================================================
+// PRIVATE STORAGE FULL-SCREEN MEDIA BRIDGE
+// =====================================================
+// openMedia is used by many parts of the app. Keep the existing viewer
+// implementation untouched, but resolve private Supabase storage references
+// before handing them to the full-screen viewer.
+(function installPrivateMediaOpenBridge(){
+  const coreOpenMedia = window.openMedia;
+  if (typeof coreOpenMedia !== "function" || window.__privateMediaOpenBridgeInstalled) return;
+
+  window.__privateMediaOpenBridgeInstalled = true;
+
+  window.openMedia = async function(url, type = "image", options = {}) {
+    let resolved = url;
+
+    try {
+      if (typeof url === "string" && url.trim()) {
+        const raw = url.trim();
+        let bucket = null;
+
+        if (raw.startsWith("storage://")) {
+          const rest = raw.slice("storage://".length);
+          const slash = rest.indexOf("/");
+          if (slash > 0) bucket = rest.slice(0, slash);
+        } else {
+          const match = raw.match(/\/storage\/v1\/(?:object\/(?:public|sign)|render\/image\/public)\/([^\/]+)\//);
+          if (match) bucket = match[1];
+        }
+
+        if (bucket) {
+          resolved = await window.resolveStorageMediaUrl(bucket, raw);
+        }
+      }
+    } catch (error) {
+      console.warn("⚠️ FULL-SCREEN STORAGE RESOLUTION FAILED:", error);
+    }
+
+    if (!resolved) {
+      console.warn("⚠️ FULL-SCREEN MEDIA URL EMPTY:", url);
+      return false;
+    }
+
+    return coreOpenMedia(resolved, type, options);
+  };
+})();
 
 // =====================================================
 // NOTIFICATIONS
