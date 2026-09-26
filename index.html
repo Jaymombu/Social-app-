@@ -6558,6 +6558,10 @@ let session = null;
 let currentProfileId = null;
 let currentProfileName = null;
 let activeTab = "explore";
+
+// Keep already-loaded Explore/Following feeds in memory so switching tabs
+// does not re-query or rebuild the posts unnecessarily.
+window.feedCache = window.feedCache || { explore: null, following: null };
 let storyPausedByUI = false;
 
 function safeStart() {
@@ -9893,6 +9897,17 @@ window.loadPosts = async function () {
 
   }
 
+  // Do not reload/re-render a feed simply because the user switched tabs.
+  // The cache is invalidated only when the app actually changes the feed data.
+  const cachedPosts = window.feedCache?.[activeTab];
+  if (Array.isArray(cachedPosts)) {
+    console.log("⚡ Using cached", activeTab, "feed");
+    window.postsState = cachedPosts;
+    renderFeed(window.postsState);
+    observeVideos();
+    return;
+  }
+
   let posts = [];
   let error = null;
 
@@ -9959,6 +9974,8 @@ window.loadPosts = async function () {
 
   posts = response.data;
   error = response.error;
+  
+  console.timeEnd("postsQuery");
 }
 
   if (error) {
@@ -10069,6 +10086,10 @@ posts = await Promise.all(posts.map(async post => ({
 })));
 
 window.postsState = posts || [];
+
+// Save the fully-resolved feed (including authorized private post media) so
+// changing between Explore and Following does not fetch/rebuild it again.
+window.feedCache[activeTab] = window.postsState;
 
 // Clear previously rendered posts
 window.renderedPosts = new Set();
@@ -33061,7 +33082,7 @@ window.navigateToScreen(
                         .toLowerCase();
 
                 const avatarPath =
-                    `avatars/${currentUserId}_${Date.now()}.${extension}`;
+                    `${currentUserId}_${Date.now()}.${extension}`;
 
                 const {
                     error: avatarUploadError
@@ -33094,11 +33115,15 @@ window.navigateToScreen(
                     return;
                 }
 
-                const avatarSignedUrl =
-                    await window.resolveStorageMediaUrl("avatars", avatarPath, avatarUrl);
+                const { data: avatarPublicData } =
+                    supabase.storage
+                    .from("avatars")
+                    .getPublicUrl(avatarPath);
 
                 avatarUrl =
-                    avatarSignedUrl || avatarUrl;
+                    avatarPublicData?.publicUrl
+                    ? avatarPublicData.publicUrl + "?t=" + Date.now()
+                    : avatarUrl;
 
                 changes.push(
                     "avatar"
@@ -33159,11 +33184,15 @@ window.navigateToScreen(
                     return;
                 }
 
-                const coverSignedUrl =
-                    await window.resolveStorageMediaUrl("avatars", coverPath, coverUrl);
+                const { data: coverPublicData } =
+                    supabase.storage
+                    .from("avatars")
+                    .getPublicUrl(coverPath);
 
                 coverUrl =
-                    coverSignedUrl || coverUrl;
+                    coverPublicData?.publicUrl
+                    ? coverPublicData.publicUrl + "?t=" + Date.now()
+                    : coverUrl;
 
                 changes.push(
                     "cover"
@@ -37518,7 +37547,13 @@ function attachEvents() {
       exploreTab.classList.add("active-tab");
       followingTab.classList.remove("active-tab");
 
-      loadPosts();
+      if (Array.isArray(window.feedCache?.explore)) {
+        window.postsState = window.feedCache.explore;
+        renderFeed(window.postsState);
+        observeVideos();
+      } else {
+        loadPosts();
+      }
     };
 
     followingTab.onclick = () => {
@@ -37527,7 +37562,13 @@ function attachEvents() {
       followingTab.classList.add("active-tab");
       exploreTab.classList.remove("active-tab");
 
-      loadPosts();
+      if (Array.isArray(window.feedCache?.following)) {
+        window.postsState = window.feedCache.following;
+        renderFeed(window.postsState);
+        observeVideos();
+      } else {
+        loadPosts();
+      }
     };
   }
 
