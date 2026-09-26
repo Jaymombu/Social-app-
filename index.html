@@ -9926,39 +9926,29 @@ window.loadPosts = async function () {
     return;
   }
 
-  const { data: follows, error: followsError } = await supabase
+  const { data: follows } = await supabase
     .from("follows")
-    .select("follower_id, following_id")
-    .or(`follower_id.eq.${userId},following_id.eq.${userId}`);
+    .select("following_id")
+    .eq("follower_id", userId);
 
-  if (followsError) {
-    console.error("❌ FOLLOW RELATION QUERY ERROR:", followsError);
-    postsDiv.innerHTML = "❌ Error loading following feed";
+  const followingIds =
+    follows?.map(f => f.following_id) || [];
+
+  if (followingIds.length === 0) {
+    postsDiv.innerHTML = "You're not following anyone";
     return;
   }
-
-  const visibleUserIds = new Set([userId]);
-
-  (follows || []).forEach(follow => {
-    if (String(follow.follower_id) === String(userId)) {
-      visibleUserIds.add(follow.following_id);
-    }
-    if (String(follow.following_id) === String(userId)) {
-      visibleUserIds.add(follow.follower_id);
-    }
-  });
-
-  const visibleIds = [...visibleUserIds].filter(Boolean);
 
   const response = await supabase
     .from("posts")
     .select("*")
-    .in("user_id", visibleIds)
-    .order("created_at", { ascending: false })
-    .range(0,19);
+    .in("user_id", followingIds)
+    .order("created_at", { ascending: false });
 
   posts = response.data;
   error = response.error;
+  
+  console.timeEnd("postsQuery");
 }
 
   if (error) {
