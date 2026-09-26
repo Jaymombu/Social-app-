@@ -6244,89 +6244,17 @@ const supabase = createClient(
 window.supabase = supabase;
 
 // =====================================================
-// PRIVATE STORAGE MEDIA HELPERS — SAFE STAGING VERSION
+// PRIVATE STORAGE MEDIA HELPERS
 // =====================================================
-// This stage prepares the app for private buckets without changing the
-// existing public-URL behavior of the working feed.
-//
-// IMPORTANT:
-// - Existing renderers still expect normal HTTP(S) URLs.
-// - Therefore getCanonicalStorageUrl() intentionally remains compatible.
-// - New canonical storage references are available through getStorageRef().
-// - The database/upload renderers will be switched to storage:// references
-//   only after all media renderers have been migrated to resolve them.
-
-window.storageUrlCache =
-  window.storageUrlCache || new Map();
-
-window.getStorageRef = function(bucket, value) {
-
-  if (!bucket || !value) return "";
-
-  const raw = String(value).trim();
-
-  if (!raw) return "";
-
-  if (raw.startsWith("storage://")) {
-    return raw;
-  }
-
-  // Already a non-Supabase URL.
-  if (/^(data:|blob:)/i.test(raw)) {
-    return raw;
-  }
-
-  // Convert existing Supabase public URL to canonical storage:// form.
-  try {
-
-    const marker =
-      `/storage/v1/object/public/${bucket}/`;
-
-    if (raw.includes(marker)) {
-
-      const path =
-        decodeURIComponent(
-          raw.split(marker)[1].split("?")[0]
-        );
-
-      return `storage://${bucket}/${path}`;
-    }
-
-    const signMarker =
-      `/storage/v1/object/sign/${bucket}/`;
-
-    if (raw.includes(signMarker)) {
-
-      const path =
-        decodeURIComponent(
-          raw.split(signMarker)[1].split("?")[0]
-        );
-
-      return `storage://${bucket}/${path}`;
-    }
-
-  } catch (_) {}
-
-  // Raw Storage path.
-  return `storage://${bucket}/${raw.replace(/^\/+/, "")}`;
-};
-
-
-// =====================================================
-// COMPATIBILITY URL HELPER
-// =====================================================
-// KEEP THIS PUBLIC-URL BEHAVIOR FOR NOW.
-// Changing it to storage:// immediately would break existing
-// renderers that still place the returned value directly in src=.
-//
-// This will be changed only after the renderer migration is complete.
+// These helpers keep Storage paths canonical in the database and resolve
+// them to short-lived signed URLs at display time. This allows the buckets
+// to be private while still preserving existing avatar/media URLs already
+// stored in the database.
 
 window.getCanonicalStorageUrl = function(bucket, path) {
-
   if (!bucket || !path) return "";
 
   const value = String(path).trim();
-
   if (!value) return "";
 
   if (/^(https?:|data:|blob:)/i.test(value)) {
@@ -6334,247 +6262,88 @@ window.getCanonicalStorageUrl = function(bucket, path) {
   }
 
   if (value.startsWith("storage://")) {
-
-    const rest =
-      value.slice("storage://".length);
-
-    const slash =
-      rest.indexOf("/");
-
+    const rest = value.slice("storage://".length);
+    const slash = rest.indexOf("/");
     if (slash >= 0) {
-
-      const b =
-        rest.slice(0, slash);
-
-      const filePath =
-        rest.slice(slash + 1);
-
-      return (
-        supabase.storage
-          .from(b)
-          .getPublicUrl(filePath)
-          .data?.publicUrl || ""
-      );
+      const b = rest.slice(0, slash);
+      const filePath = rest.slice(slash + 1);
+      return supabase.storage.from(b).getPublicUrl(filePath).data?.publicUrl || "";
     }
   }
 
-  return (
-    supabase.storage
-      .from(bucket)
-      .getPublicUrl(value)
-      .data?.publicUrl || ""
-  );
+  return supabase.storage.from(bucket).getPublicUrl(value).data?.publicUrl || "";
 };
 
-
-// =====================================================
-// AUTHORIZED PRIVATE STORAGE URL
-// =====================================================
-
-window.getAuthorizedStorageUrl = async function(
-  bucket,
-  value,
-  expiresIn = 3600
-) {
-
+window.getAuthorizedStorageUrl = async function(bucket, value, expiresIn = 3600) {
   if (!bucket || !value) return "";
 
-  let raw =
-    String(value).trim();
-
+  let raw = String(value).trim();
   if (!raw) return "";
 
-  if (/^(data:|blob:)/i.test(raw)) {
+  // Non-Supabase URLs and local/object URLs should pass through untouched.
+  if (/^(data:|blob:)/i.test(raw)) return raw;
+  if (/^https?:\/\/(?![^/]*supabase\.co\/storage\/v1\/object\/)/i.test(raw)) {
     return raw;
   }
 
-  // External URL.
-  if (
-    /^https?:\/\//i.test(raw) &&
-    !raw.includes("/storage/v1/")
-  ) {
-    return raw;
-  }
-
-  // storage://bucket/path
+  // Accept storage://bucket/path.
   if (raw.startsWith("storage://")) {
-
-    const rest =
-      raw.slice("storage://".length);
-
-    const slash =
-      rest.indexOf("/");
-
-    if (slash < 0) return "";
-
-    bucket =
-      rest.slice(0, slash);
-
-    raw =
-      rest.slice(slash + 1);
+    const rest = raw.slice("storage://".length);
+    const slash = rest.indexOf("/");
+    if (slash >= 0) {
+      bucket = rest.slice(0, slash);
+      raw = rest.slice(slash + 1);
+    }
   }
 
-  // Recover the path from existing Supabase URLs.
+  // Accept an existing Supabase public/signed URL and recover its path.
+  const markerPublic = `/storage/v1/object/public/${bucket}/`;
+  const markerSign = `/storage/v1/object/sign/${bucket}/`;
+  const markerRender = `/storage/v1/render/image/public/${bucket}/`;
+
   try {
-
-    const publicMarker =
-      `/storage/v1/object/public/${bucket}/`;
-
-    const signMarker =
-      `/storage/v1/object/sign/${bucket}/`;
-
-    const renderMarker =
-      `/storage/v1/render/image/public/${bucket}/`;
-
-    if (raw.includes(publicMarker)) {
-
-      raw =
-        decodeURIComponent(
-          raw.split(publicMarker)[1].split("?")[0]
-        );
-
-    } else if (raw.includes(signMarker)) {
-
-      raw =
-        decodeURIComponent(
-          raw.split(signMarker)[1].split("?")[0]
-        );
-
-    } else if (raw.includes(renderMarker)) {
-
-      raw =
-        decodeURIComponent(
-          raw.split(renderMarker)[1].split("?")[0]
-        );
-
+    if (raw.includes(markerPublic)) {
+      raw = decodeURIComponent(raw.split(markerPublic)[1].split("?")[0]);
+    } else if (raw.includes(markerSign)) {
+      raw = decodeURIComponent(raw.split(markerSign)[1].split("?")[0]);
+    } else if (raw.includes(markerRender)) {
+      raw = decodeURIComponent(raw.split(markerRender)[1].split("?")[0]);
     } else if (/^https?:\/\//i.test(raw)) {
-
+      // Unknown remote URL: don't try to sign it.
       return raw;
     }
-
   } catch (_) {
-
     return "";
   }
 
-  const cacheKey =
-    `${bucket}/${raw}`;
+  const { data, error } = await supabase
+    .storage
+    .from(bucket)
+    .createSignedUrl(raw, expiresIn);
 
-  const cached =
-    window.storageUrlCache.get(cacheKey);
-
-  if (
-    cached &&
-    cached.expiresAt > Date.now()
-  ) {
-    return cached.url;
+  if (error || !data?.signedUrl) {
+    console.warn("Storage signed URL failed:", bucket, raw, error);
+    return "";
   }
 
-  try {
-
-    const { data, error } =
-      await supabase
-        .storage
-        .from(bucket)
-        .createSignedUrl(
-          raw,
-          expiresIn
-        );
-
-    if (
-      !error &&
-      data?.signedUrl
-    ) {
-
-      // Keep the cached URL slightly shorter than its
-      // actual lifetime so expired URLs are never reused.
-
-      window.storageUrlCache.set(
-        cacheKey,
-        {
-          url: data.signedUrl,
-          expiresAt:
-            Date.now() +
-            Math.max(
-              30,
-              expiresIn - 60
-            ) * 1000
-        }
-      );
-
-      return data.signedUrl;
-    }
-
-    console.warn(
-      "Storage signed URL failed:",
-      bucket,
-      raw,
-      error
-    );
-
-  } catch (error) {
-
-    console.warn(
-      "Storage signed URL exception:",
-      bucket,
-      raw,
-      error
-    );
-  }
-
-  return "";
+  return data.signedUrl;
 };
 
-
-// =====================================================
-// DISPLAY-SIDE RESOLVER
-// =====================================================
-
-window.resolveStorageMediaUrl = async function(
-  bucket,
-  value,
-  fallback = ""
-) {
-
-  const url =
-    await window.getAuthorizedStorageUrl(
-      bucket,
-      value
-    );
-
+// Resolve a DB URL/path before placing it in an <img>, <video>, <audio>,
+// background-image, or media viewer.
+window.resolveStorageMediaUrl = async function(bucket, value, fallback = "") {
+  const url = await window.getAuthorizedStorageUrl(bucket, value);
   return url || fallback || "";
-};
-
-
-// =====================================================
-// CACHE CONTROL
-// =====================================================
-
-window.clearStorageUrlCache = function() {
-
-  if (
-    window.storageUrlCache &&
-    typeof window.storageUrlCache.clear === "function"
-  ) {
-    window.storageUrlCache.clear();
-  }
 };
 
 // =====================================================
 // GLOBAL DISPLAY-SIDE STORAGE SECURITY
 // =====================================================
-// STAGING MODE:
-// Buckets remain public and existing renderers remain unchanged.
-// Do NOT make the buckets private yet.
-//
-// The next migration stage will replace direct media URLs in:
-//   posts
-//   comments
-//   stories
-//   profiles
-//   chats/messages
-//   voice notes
-// with resolveStorageMediaUrl() before bucket privacy is enabled.
+// DISABLED while Storage buckets are public.
+// Individual renderers can continue using their existing public URLs.
+// Signed URLs will be introduced renderer-by-renderer before buckets are
+// changed to private.
+
 
 let currentUser = null;
 let unreadCount = 0;
@@ -9491,9 +9260,8 @@ async function createPost() {
       return;
     }
 
-    // Store the canonical private-storage reference.
     mediaUrl =
-      `storage://posts_media/${fileName}`;
+      window.getCanonicalStorageUrl("posts_media", fileName);
 
     if (file.type.startsWith("image")) {
       mediaType = "image";
@@ -9673,34 +9441,6 @@ function snapToNearestPost() {
   }
 }
 
-  window.openPrivatePostMedia = async function(storageRef, mediaType) {
-    if (!storageRef) return;
-    const url = await window.resolveStorageMediaUrl("posts_media", storageRef);
-    if (!url) {
-      console.warn("Could not resolve post media:", storageRef);
-      return;
-    }
-    // Already authorized above: do not send the signed URL through
-    // the private-storage bridge a second time.
-    const openViewer = window.__coreOpenMedia || window.openMedia;
-    return openViewer(url, mediaType);
-  };
-
-  async function resolveRenderedPostMedia(container) {
-    if (!container) return;
-    const elements = container.querySelectorAll("[data-post-storage-ref]");
-    for (const element of elements) {
-      const ref = element.getAttribute("data-post-storage-ref");
-      if (!ref) continue;
-      const url = await window.resolveStorageMediaUrl("posts_media", ref);
-      if (!url) continue;
-      element.src = url;
-      if (element.tagName === "VIDEO") {
-        try { element.load(); } catch (_) {}
-      }
-    }
-  }
-
   function renderPostElement(post) {
 
   console.log("renderPostElement started", post.id);
@@ -9782,13 +9522,17 @@ const isOwner =
     post.file_url
   ) {
 
-    const storageRef = String(post.file_url);
-
     mediaHTML = `
       <img
-        src=""
-        data-post-storage-ref="${escapeHtml(storageRef)}"
-        onclick="window.openPrivatePostMedia(${JSON.stringify(storageRef)}, 'image')"
+        src="${escapeHtml(post.file_url)}"
+
+        onclick="
+          openMedia(
+            '${post.file_url}',
+            'image'
+          )
+        "
+
         style="
           max-width:100%;
           width:auto;
@@ -9802,7 +9546,9 @@ const isOwner =
         "
       />
     `;
+
   }
+
 
   // VIDEO
   if (
@@ -9810,12 +9556,9 @@ const isOwner =
     post.file_url
   ) {
 
-    const storageRef = String(post.file_url);
-
     mediaHTML = `
       <video
-        src=""
-        data-post-storage-ref="${escapeHtml(storageRef)}"
+        src="${escapeHtml(post.file_url)}"
         controls
         playsinline
         muted
@@ -9829,6 +9572,7 @@ const isOwner =
         "
       ></video>
     `;
+
   }
 
 
@@ -10095,9 +9839,7 @@ const isOwner =
         : ""
     }
 
-  `
-
-  resolveRenderedPostMedia(div);;
+  `;
 
 
   console.log(
@@ -10306,6 +10048,15 @@ postsDiv.replaceChildren();
   }));
 
 }
+
+// Resolve private post media before the existing home renderer runs.
+// These signed URLs are display-only; database values remain unchanged.
+posts = await Promise.all(posts.map(async post => ({
+  ...post,
+  file_url: post.file_url
+    ? await window.getAuthorizedStorageUrl("posts_media", post.file_url)
+    : ""
+})));
 
 window.postsState = posts || [];
 
@@ -11464,6 +11215,13 @@ if (postError || !post) {
     );  
 
     return;  
+}
+
+// Resolve this post's private media for the comments preview.
+if (post.file_url || post.media_url) {
+    post.file_url = await window.getAuthorizedStorageUrl(
+        "posts_media", post.file_url || post.media_url
+    );
 }
 
 // ==========================================
@@ -29121,6 +28879,15 @@ window.loadProfilePosts = async function (userId) {
         });
 
 
+        // Sign private post media for the profile Posts tab.
+        await Promise.all(posts.map(async post => {
+            if (post.file_url) {
+                post.file_url = await window.getAuthorizedStorageUrl(
+                    "posts_media", post.file_url
+                );
+            }
+        }));
+
         // ---------------------------------------------
         // SAVE CURRENT POSTS
         // ---------------------------------------------
@@ -29164,9 +28931,6 @@ window.loadProfilePosts = async function (userId) {
             }
         }
 
-        // The cards must be attached to the live DOM before private
-        // posts_media URLs are resolved into signed URLs.
-        await resolveRenderedPostMedia(container);
 
         console.log(
             "✅ PROFILE POSTS LOADED:",
@@ -29326,6 +29090,15 @@ window.loadProfilePhotos = async function (userId) {
         });
 
 
+        // Sign private post images for the Photos grid and gallery.
+        await Promise.all(posts.map(async post => {
+            if (post.file_url) {
+                post.file_url = await window.getAuthorizedStorageUrl(
+                    "posts_media", post.file_url
+                );
+            }
+        }));
+
         // ---------------------------------------------
         // SAVE GALLERY DATA
         // ---------------------------------------------
@@ -29402,19 +29175,7 @@ window.loadProfilePhotos = async function (userId) {
             const image =
                 document.createElement("img");
 
-            image.src = "";
-            image.dataset.postStorageRef = url;
-
-            // Private posts_media must use an authenticated signed URL.
-            window.resolveStorageMediaUrl("posts_media", url)
-                .then(resolvedUrl => {
-                    if (resolvedUrl) {
-                        image.src = resolvedUrl;
-                    }
-                })
-                .catch(error => {
-                    console.warn("⚠️ PROFILE PHOTO STORAGE RESOLUTION FAILED:", error);
-                });
+            image.src = url;
 
             image.alt =
                 post.content ||
@@ -29634,8 +29395,7 @@ function createVideoPage(post, index) {
         return page;
     }
 
-    video.src = "";
-    video.dataset.postStorageRef = videoUrl;
+    video.src = videoUrl;
 
     video.autoplay = false;
     video.loop = false;
@@ -31698,24 +31458,6 @@ console.log(
         return;
     }
 
-    // Resolve private posts_media URLs only after the video pages exist in
-    // the viewer. This fixes the full-screen profile video viewer as well as
-    // the profile video thumbnails.
-    const profileVideoMedia = feed.querySelectorAll("video[data-post-storage-ref]");
-    for (const videoElement of profileVideoMedia) {
-        const storageRef = videoElement.getAttribute("data-post-storage-ref");
-        if (!storageRef) continue;
-        try {
-            const resolvedUrl = await window.resolveStorageMediaUrl("posts_media", storageRef);
-            if (resolvedUrl) {
-                videoElement.src = resolvedUrl;
-                try { videoElement.load(); } catch (_) {}
-            }
-        } catch (error) {
-            console.warn("⚠️ PROFILE FULL-SCREEN VIDEO STORAGE RESOLUTION FAILED:", error);
-        }
-    }
-
     // -----------------------------------------------------
     if (typeof window.adjustProfileVideoViewerViewport === "function") {
         window.adjustProfileVideoViewerViewport();
@@ -31917,6 +31659,15 @@ window.loadProfileVideos = async function (userId) {
 
         });
 
+        // Sign private post videos for the Videos grid and full-screen feed.
+        await Promise.all(posts.map(async post => {
+            if (post.file_url) {
+                post.file_url = await window.getAuthorizedStorageUrl(
+                    "posts_media", post.file_url
+                );
+            }
+        }));
+
         // =================================================
         // REMOVE INVALID VIDEO RECORDS
         // =================================================
@@ -32009,19 +31760,8 @@ window.loadProfileVideos = async function (userId) {
                 const video =
                     document.createElement("video");
 
-                video.src = "";
-                video.dataset.postStorageRef = post.file_url;
-
-                // Private posts_media video thumbnails need a signed URL.
-                window.resolveStorageMediaUrl("posts_media", post.file_url)
-                    .then(resolvedUrl => {
-                        if (resolvedUrl) {
-                            video.src = resolvedUrl;
-                        }
-                    })
-                    .catch(error => {
-                        console.warn("⚠️ PROFILE VIDEO THUMBNAIL STORAGE RESOLUTION FAILED:", error);
-                    });
+                video.src =
+                    post.file_url;
 
                 video.muted = true;
                 video.playsInline = true;
@@ -47001,60 +46741,6 @@ window.openMedia = function (
 };
 
 // =====================================================
-// PRIVATE STORAGE FULL-SCREEN MEDIA BRIDGE
-// =====================================================
-// openMedia is used by many parts of the app. Keep the existing viewer
-// implementation untouched, but resolve private Supabase storage references
-// before handing them to the full-screen viewer.
-(function installPrivateMediaOpenBridge(){
-  const coreOpenMedia = window.openMedia;
-  if (typeof coreOpenMedia !== "function" || window.__privateMediaOpenBridgeInstalled) return;
-
-  window.__privateMediaOpenBridgeInstalled = true;
-  window.__coreOpenMedia = coreOpenMedia;
-
-  window.openMedia = async function(url, type = "image", options = {}) {
-    let resolved = url;
-    // An already-signed URL must go straight to the viewer. Re-signing it
-    // can fail and is unnecessary after the first authorization.
-    if (typeof url === "string" &&
-        /\/storage\/v1\/object\/sign\//.test(url) &&
-        /[?&]token=/.test(url)) {
-      return coreOpenMedia(url, type, options);
-    }
-
-    try {
-      if (typeof url === "string" && url.trim()) {
-        const raw = url.trim();
-        let bucket = null;
-
-        if (raw.startsWith("storage://")) {
-          const rest = raw.slice("storage://".length);
-          const slash = rest.indexOf("/");
-          if (slash > 0) bucket = rest.slice(0, slash);
-        } else {
-          const match = raw.match(/\/storage\/v1\/(?:object\/(?:public|sign)|render\/image\/public)\/([^\/]+)\//);
-          if (match) bucket = match[1];
-        }
-
-        if (bucket) {
-          resolved = await window.resolveStorageMediaUrl(bucket, raw);
-        }
-      }
-    } catch (error) {
-      console.warn("⚠️ FULL-SCREEN STORAGE RESOLUTION FAILED:", error);
-    }
-
-    if (!resolved) {
-      console.warn("⚠️ FULL-SCREEN MEDIA URL EMPTY:", url);
-      return false;
-    }
-
-    return coreOpenMedia(resolved, type, options);
-  };
-})();
-
-// =====================================================
 // NOTIFICATIONS
 // =====================================================
 
@@ -51840,6 +51526,15 @@ if (requestedUserId) {
                         ? post.file_url.trim()
                         : "";
             });
+
+            // Sign private post videos when restoring the viewer silently.
+            await Promise.all(posts.map(async post => {
+                if (post.file_url) {
+                    post.file_url = await window.getAuthorizedStorageUrl(
+                        "posts_media", post.file_url
+                    );
+                }
+            }));
 
             // -----------------------------------------
             // REMOVE INVALID VIDEOS
