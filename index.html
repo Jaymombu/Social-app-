@@ -27560,21 +27560,21 @@ window.openProfile = async function (
                 }
 
 
-                ${
-                    profile.bio
-                        ? `
-                <div id="profileBioDisplay" class="profile-theme-content" style="
-                    margin-top:10px;
-                    color:#ddd;
-                    font-size:15px;
-                    line-height:1.4;
-                    white-space:pre-wrap;
-                ">
-                    ${escapeHtml(profile.bio)}
-                </div>
-                `
-                        : ""
-                }
+${
+ profile.bio
+     ? `
+<div id="profileBioDisplay" class="profile-theme-content" style="
+margin-top:10px;
+color:#ddd;
+font-size:15px;
+line-height:1.4;
+white-space:pre-wrap;
+">
+${escapeHtml(profile.bio)}
+</div>
+`
+       : ""
+ }
 
 
                 ${
