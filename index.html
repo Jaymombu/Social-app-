@@ -9882,197 +9882,201 @@ window.loadPosts = async function () {
 
   console.log("🔥 loadPosts running...");
 
-  const postsDiv = document.getElementById("posts");
+  const postsDiv =
+    document.getElementById("posts");
 
+  // IMPORTANT
   if (!postsDiv) {
+
     console.log("❌ posts div not found");
     return;
+
   }
 
   let posts = [];
   let error = null;
 
-  // =====================================================
-  // EXPLORE
-  // Show posts from EVERY user.
-  // =====================================================
   if (activeTab === "explore") {
-
+    
     console.time("postsQuery");
 
     const response = await supabase
-      .from("posts")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .range(0, 19);
+  .from("posts")
+  .select("*")
+  .order("created_at", {
+    ascending:false
+  })
+  .range(0,19);
 
-    posts = response.data || [];
+    posts = response.data;
     error = response.error;
-
+    
     console.timeEnd("postsQuery");
+    
+    
+
   }
 
-  // =====================================================
-  // FOLLOWING
-  // Show:
-  // 1. The current user's own posts
-  // 2. Posts from people the current user follows
-  // 3. Posts from people who follow the current user
-  // =====================================================
   if (activeTab === "following") {
 
-    const userId = session?.user?.id;
+  const userId = session?.user?.id;
 
-    if (!userId) {
-      postsDiv.innerHTML = "Login to view following feed";
-      return;
-    }
-
-    console.time("followingPostsQuery");
-
-    const { data: follows, error: followsError } = await supabase
-      .from("follows")
-      .select("follower_id, following_id")
-      .or(`follower_id.eq.${userId},following_id.eq.${userId}`);
-
-    if (followsError) {
-      console.error("❌ FOLLOW RELATION QUERY ERROR:", followsError);
-      postsDiv.innerHTML = "❌ Error loading following feed";
-      return;
-    }
-
-    // Always include the current user's own posts.
-    const visibleUserIds = new Set([userId]);
-
-    (follows || []).forEach(follow => {
-
-      // Current user follows this person.
-      if (String(follow.follower_id) === String(userId)) {
-        visibleUserIds.add(follow.following_id);
-      }
-
-      // This person follows the current user.
-      if (String(follow.following_id) === String(userId)) {
-        visibleUserIds.add(follow.follower_id);
-      }
-    });
-
-    const userIds = [...visibleUserIds].filter(Boolean);
-
-    if (userIds.length === 0) {
-      postsDiv.innerHTML = "No posts yet";
-      return;
-    }
-
-    const response = await supabase
-      .from("posts")
-      .select("*")
-      .in("user_id", userIds)
-      .order("created_at", { ascending: false })
-      .range(0, 19);
-
-    posts = response.data || [];
-    error = response.error;
-
-    console.timeEnd("followingPostsQuery");
-  }
-
-  if (error) {
-    console.error("❌ POSTS QUERY ERROR:", error);
-    postsDiv.innerHTML = "❌ Error loading posts";
+  if (!userId) {
+    postsDiv.innerHTML = "Login to view following feed";
     return;
   }
 
-  if (!posts || posts.length === 0) {
-    postsDiv.innerHTML = "😢 No posts yet";
+  const { data: follows, error: followsError } = await supabase
+    .from("follows")
+    .select("follower_id, following_id")
+    .or(`follower_id.eq.${userId},following_id.eq.${userId}`);
+
+  if (followsError) {
+    console.error("❌ FOLLOW RELATION QUERY ERROR:", followsError);
+    postsDiv.innerHTML = "❌ Error loading following feed";
     return;
   }
 
-  // =====================================================
-  // GET CURRENT PROFILE DATA FOR POST OWNERS
-  // =====================================================
-  const userIds = [
-    ...new Set(
-      posts
-        .map(post => post.user_id)
-        .filter(Boolean)
-    )
-  ];
+  // Include the current user, everyone they follow,
+  // and everyone who follows the current user.
+  const visibleUserIds = new Set([userId]);
 
-  if (userIds.length > 0) {
-
-    const { data: profiles, error: profilesError } = await supabase
-      .from("profiles")
-      .select(`
-        id,
-        name,
-        username,
-        avatar_url,
-        cover_url,
-        verified,
-        online,
-        last_seen,
-        private_account
-      `)
-      .in("id", userIds);
-
-    if (profilesError) {
-      console.log("❌ PROFILE FETCH ERROR:", profilesError);
-    } else {
-
-      const profileMap = new Map(
-        (profiles || []).map(profile => [profile.id, profile])
-      );
-
-      posts = posts.map(post => ({
-        ...post,
-        profile: profileMap.get(post.user_id) || null
-      }));
+  (follows || []).forEach(follow => {
+    if (String(follow.follower_id) === String(userId)) {
+      visibleUserIds.add(follow.following_id);
     }
-  }
 
-  postsDiv.replaceChildren();
-
-  if (session?.user && posts.length) {
-    try {
-      await Promise.all(
-        posts.map(async post => {
-          try {
-            if (post.file_url && typeof window.getAuthorizedStorageUrl === "function") {
-              post.authorized_file_url =
-                await window.getAuthorizedStorageUrl("posts_media", post.file_url);
-            }
-          } catch (mediaError) {
-            console.warn("⚠️ POST MEDIA URL ERROR:", mediaError);
-            post.authorized_file_url = "";
-          }
-        })
-      );
-    } catch (mediaBatchError) {
-      console.warn("⚠️ POST MEDIA AUTHORIZATION ERROR:", mediaBatchError);
-    }
-  }
-
-  window.postsState = posts;
-  window.renderedPosts = new Set();
-
-  posts.forEach(post => {
-    const el = renderPostElement(post);
-    if (el) {
-      postsDiv.appendChild(el);
+    if (String(follow.following_id) === String(userId)) {
+      visibleUserIds.add(follow.follower_id);
     }
   });
 
-  if (typeof observeVideos === "function") {
-    setTimeout(() => {
-      try {
-        observeVideos();
-      } catch (err) {
-        console.log("observeVideos error:", err);
-      }
-    }, 0);
+  const visibleIds = [...visibleUserIds].filter(Boolean);
+
+  const response = await supabase
+    .from("posts")
+    .select("*")
+    .in("user_id", visibleIds)
+    .order("created_at", { ascending: false })
+    .range(0,19);
+
+  posts = response.data;
+  error = response.error;
+}
+
+  if (error) {
+
+  postsDiv.innerHTML =
+    "❌ Error loading posts";
+
+  return;
+
+}
+
+if (!posts || posts.length === 0) {
+
+  postsDiv.innerHTML =
+    "😢 No posts yet";
+
+  return;
+
+}
+
+
+/* ==========================================
+   GET CURRENT PROFILE DATA FOR POST OWNERS
+========================================== */
+
+const userIds = [
+  ...new Set(
+    posts
+      .map(post => post.user_id)
+      .filter(Boolean)
+  )
+];
+
+if (userIds.length > 0) {
+
+  const { data: profiles, error: profilesError } =
+  await supabase
+    .from("profiles")
+    .select(`
+      id,
+      name,
+      username,
+      avatar_url,
+      cover_url,
+      verified,
+      online,
+      last_seen
+    `)
+    .in("id", userIds);
+
+  if (profilesError) {
+
+    console.log(
+      "❌ PROFILE FETCH ERROR:",
+      profilesError
+    );
+
+  } else {
+
+    const profileMap = new Map(
+      (profiles || []).map(profile => [
+        profile.id,
+        profile
+      ])
+    );
+
+    posts = posts.map(post => ({
+
+      ...post,
+
+      profile:
+        profileMap.get(post.user_id) || null
+
+    }));
+
   }
-};;
+
+}
+
+
+postsDiv.replaceChildren();
+  
+  if (session?.user && posts.length) {
+
+  const { data: savedPosts } = await supabase
+    .from("saved_posts")
+    .select("post_id")
+    .eq("user_id", session.user.id);
+
+  const savedIds = new Set(
+    (savedPosts || []).map(s => String(s.post_id))
+  );
+
+  posts = posts.map(post => ({
+    ...post,
+    saved: savedIds.has(String(post.id))
+  }));
+
+}
+
+window.postsState = posts || [];
+
+// Clear previously rendered posts
+window.renderedPosts = new Set();
+
+renderFeed(window.postsState);
+
+console.log(
+  "POST ELEMENTS AFTER RENDER:",
+  document.querySelectorAll(".post-card").length
+);
+
+  observeVideos();
+
+};
 
 window.toggleSavePost = async function(postId){
 
