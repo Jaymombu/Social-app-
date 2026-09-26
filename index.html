@@ -9680,7 +9680,10 @@ function snapToNearestPost() {
       console.warn("Could not resolve post media:", storageRef);
       return;
     }
-    openMedia(url, mediaType);
+    // Already authorized above: do not send the signed URL through
+    // the private-storage bridge a second time.
+    const openViewer = window.__coreOpenMedia || window.openMedia;
+    return openViewer(url, mediaType);
   };
 
   async function resolveRenderedPostMedia(container) {
@@ -47008,9 +47011,17 @@ window.openMedia = function (
   if (typeof coreOpenMedia !== "function" || window.__privateMediaOpenBridgeInstalled) return;
 
   window.__privateMediaOpenBridgeInstalled = true;
+  window.__coreOpenMedia = coreOpenMedia;
 
   window.openMedia = async function(url, type = "image", options = {}) {
     let resolved = url;
+    // An already-signed URL must go straight to the viewer. Re-signing it
+    // can fail and is unnecessary after the first authorization.
+    if (typeof url === "string" &&
+        /\/storage\/v1\/object\/sign\//.test(url) &&
+        /[?&]token=/.test(url)) {
+      return coreOpenMedia(url, type, options);
+    }
 
     try {
       if (typeof url === "string" && url.trim()) {
