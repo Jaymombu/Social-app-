@@ -6795,18 +6795,66 @@ const { data: stories, error } =
   }
 
   // GROUP STORIES BY USER
+  // Always resolve the current profile so old stories immediately
+  // use the user's latest name/avatar without rewriting story rows.
+  const storyUserIds = [
+    ...new Set(
+      stories
+        .map(story => story.user_id)
+        .filter(Boolean)
+    )
+  ];
+
+  let storyProfiles = new Map();
+
+  if (storyUserIds.length) {
+    const { data: profiles, error: profileError } =
+      await supabase
+        .from("profiles")
+        .select("id,name,avatar_url,verified,online,last_seen")
+        .in("id", storyUserIds);
+
+    if (profileError) {
+      console.warn("⚠️ STORY PROFILE FETCH ERROR:", profileError);
+    } else {
+      storyProfiles = new Map(
+        (profiles || []).map(profile => [profile.id, profile])
+      );
+    }
+  }
+
   const grouped = {};
-stories.forEach(story => {
+  stories.forEach(story => {
 
     const userId =
       story.user_id || "unknown";
+
+    const currentProfile =
+      storyProfiles.get(userId) || null;
+
+    // Keep the story object in sync in memory only. The historical
+    // stories row in Supabase is intentionally left unchanged.
+    story.name =
+      currentProfile?.name ||
+      story.name ||
+      "User";
+
+    story.avatar_url =
+      currentProfile?.avatar_url ||
+      story.avatar_url ||
+      "";
+
+    story.online =
+      currentProfile?.online ??
+      story.online ??
+      false;
 
     if (!grouped[userId]) {
 
       grouped[userId] = {
 
         name:
-          story.name || "User",
+          story.name,
 
         avatar:
           story.avatar_url &&
@@ -33383,23 +33431,75 @@ window.navigateToScreen(
             }
 
             // -----------------------------------------
-            // REFRESH MAIN FEED
+            // UPDATE ALREADY-LOADED CONTENT IN MEMORY
             // -----------------------------------------
+            // Do not call loadPosts() here. That would discard the
+            // Explore/Following feed cache and fetch/rebuild the feed.
+            // Instead, update the cached post/profile data in place.
 
-            if (
-                typeof window.loadPosts ===
-                "function"
-            ) {
+            const updatedProfile = {
+                id: currentUserId,
+                name: name || "User",
+                username: username || "",
+                website: website || null,
+                location: location || null,
+                bio: bio || null,
+                avatar_url: avatarUrl || "",
+                cover_url: coverUrl || null,
+                verified: profile.verified || false
+            };
 
+            Object.keys(window.feedCache || {}).forEach(tab => {
+                const cached = window.feedCache?.[tab];
+                if (!Array.isArray(cached)) return;
+
+                cached.forEach(post => {
+                    if (String(post.user_id) !== String(currentUserId)) return;
+
+                    post.profile = {
+                        ...(post.profile || {}),
+                        ...updatedProfile
+                    };
+                    post.name = updatedProfile.name;
+                    post.username = updatedProfile.username;
+                    post.avatar_url = updatedProfile.avatar_url;
+                    post.verified = updatedProfile.verified;
+                });
+            });
+
+            if (Array.isArray(window.postsState)) {
+                window.postsState.forEach(post => {
+                    if (String(post.user_id) !== String(currentUserId)) return;
+
+                    post.profile = {
+                        ...(post.profile || {}),
+                        ...updatedProfile
+                    };
+                    post.name = updatedProfile.name;
+                    post.username = updatedProfile.username;
+                    post.avatar_url = updatedProfile.avatar_url;
+                    post.verified = updatedProfile.verified;
+                });
+            }
+
+            // Refresh the story strip from the database, but resolve the
+            // current profile for each story owner so old stories update too.
+            if (typeof window.loadStories === "function") {
                 try {
-                    await window.loadPosts();
+                    await window.loadStories();
                 } catch (error) {
-
-                    console.warn(
-                        "⚠️ FEED REFRESH ERROR:",
-                        error
-                    );
+                    console.warn("⚠️ STORY PROFILE REFRESH ERROR:", error);
                 }
+            }
+
+            // Re-render the currently visible feed from the updated cache
+            // without querying Supabase again.
+            if (
+                Array.isArray(window.postsState) &&
+                document.getElementById("posts")
+            ) {
+                renderFeed(window.postsState);
+                observeVideos();
             }
 
             // -----------------------------------------
