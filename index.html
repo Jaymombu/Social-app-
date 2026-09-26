@@ -29397,6 +29397,104 @@ window.loadProfilePhotos = async function (userId) {
     }
 };
 
+
+// Profile Photos categories. Existing post-photo loading remains unchanged.
+// Avatar and cover uploads have unique paths, so older files stay in storage.
+const loadMainPostPhotos = window.loadProfilePhotos;
+window.profilePhotoCategory = "posts";
+window.loadProfilePhotos = async function(userId, category = "posts") {
+    window.profilePhotoCategory = category;
+    const container = document.getElementById("profilePosts");
+    if (!container) return;
+    const tabs = document.createElement("div");
+    tabs.id = "profilePhotoCategories";
+    tabs.style.cssText = "display:flex;gap:8px;padding:4px 0 14px;overflow-x:auto;";
+    [["posts","Post"],["avatar","Avatar"],["cover","Cover"]].forEach(([key,label]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.style.cssText = "flex:0 0 auto;border:1px solid #444;border-radius:20px;padding:9px 13px;color:white;cursor:pointer;background:" +
+            (category === key ? "#1877f2" : "#292929");
+        button.addEventListener("click", () => window.loadProfilePhotos(userId,key));
+        tabs.appendChild(button);
+    });
+    if (category === "posts") {
+        await loadMainPostPhotos(userId);
+        if (document.getElementById("profilePosts") === container) container.prepend(tabs);
+        return;
+    }
+    container.replaceChildren(tabs);
+    const status = document.createElement("div");
+    status.style.cssText = "padding:20px;text-align:center;color:#aaa;";
+    status.textContent = "Loading photos...";
+    container.appendChild(status);
+    try {
+        const {data: profile, error} = await supabase.from("profiles")
+            .select("id,name,username,avatar_url,cover_url,verified")
+            .eq("id",userId).maybeSingle();
+        if (error) throw error;
+        const current = category === "avatar" ? profile?.avatar_url : profile?.cover_url;
+        const folder = category === "cover" ? "covers" : "";
+        const {data: files, error: listError} = await supabase.storage
+            .from("avatars").list(folder,{limit:1000,sortBy:{column:"created_at",order:"desc"}});
+        // Some storage policies allow reading a known public URL but not listing
+        // another user's files. Always show the current photo in that case.
+        if (listError) console.warn("Photo history listing unavailable:",listError);
+        const urls = [];
+        const seen = new Set();
+        const add = (url) => {
+            if (!url) return;
+            const base = url.split("?")[0];
+            if (seen.has(base)) return;
+            seen.add(base);
+            urls.push(url);
+        };
+        add(current);
+        (files || []).filter(file =>
+            file.name.startsWith(userId + "_") &&
+            /\.(jpe?g|png|webp|gif|avif)$/i.test(file.name)
+        ).forEach(file => {
+            const path = folder ? folder + "/" + file.name : file.name;
+            add(supabase.storage.from("avatars").getPublicUrl(path).data?.publicUrl);
+        });
+        if (window.profilePhotoCategory !== category ||
+            document.getElementById("profilePosts") !== container) return;
+        status.remove();
+        if (!urls.length) {
+            const empty = document.createElement("div");
+            empty.style.cssText = "padding:30px;text-align:center;color:#888;";
+            empty.textContent = category === "avatar" ? "No avatar photos yet" : "No cover photos yet";
+            container.appendChild(empty);
+            window.profileGallery = [];
+            return;
+        }
+        window.profileGallery = urls.map((url,i) => ({
+            id:"profile-"+category+"-"+i, user_id:userId, file_url:url,
+            media_type:"image", name:profile?.name || "User",
+            avatar_url:profile?.avatar_url || "", profiles:profile
+        }));
+        window.profileGalleryIndex = 0;
+        const grid = document.createElement("div");
+        grid.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:4px;width:100%;";
+        urls.forEach((url,index) => {
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = category === "avatar" ? "Avatar photo" : "Cover photo";
+            img.loading = "lazy";
+            img.style.cssText = "width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;background:#222;";
+            img.addEventListener("click", () => {
+                window.profileGalleryIndex = index;
+                window.openPhotoGallery(index,userId);
+            });
+            grid.appendChild(img);
+        });
+        container.appendChild(grid);
+    } catch (error) {
+        console.error("Profile photo category error:",error);
+        status.textContent = "Could not load photos";
+    }
+};
+
 // =====================================================
 // PROFILE VIDEO VIEWER — VISIBLE VIEWPORT / BROWSER BAR
 // =====================================================
