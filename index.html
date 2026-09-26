@@ -27476,7 +27476,7 @@ window.openProfile = async function (
                 min-width:0;
             ">
 
-                <h2 style="
+                <h2 id="profileNameDisplay" style="
                     display:flex;
                     align-items:center;
                     gap:6px;
@@ -27547,7 +27547,7 @@ window.openProfile = async function (
                 ${
                     profile.username
                         ? `
-                <div style="
+                <div id="profileUsernameDisplay" style="
                     margin-top:8px;
                     color:#1d9bf0;
                     font-size:15px;
@@ -27563,7 +27563,7 @@ window.openProfile = async function (
                 ${
                     profile.bio
                         ? `
-                <div class="profile-theme-content" style="
+                <div id="profileBioDisplay" class="profile-theme-content" style="
                     margin-top:10px;
                     color:#ddd;
                     font-size:15px;
@@ -33509,6 +33509,69 @@ window.navigateToScreen(
             const profileTab =
                 window.currentProfileTab ||
                 "posts";
+
+            // -----------------------------------------
+            // UPDATE THE EXISTING PROFILE SCREEN IN PLACE
+            // -----------------------------------------
+            // history.back() returns to the already-rendered profile DOM.
+            // Update that DOM first so the saved profile is visible
+            // immediately, without reopening/reloading the feed.
+            const activeProfileScreen =
+                document.getElementById("profileScreen");
+
+            if (activeProfileScreen) {
+                const profileNameEl =
+                    activeProfileScreen.querySelector("#profileNameDisplay");
+                if (profileNameEl) {
+                    profileNameEl.innerHTML =
+                        `${escapeHtml(name || "User")} ${profile.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ""}`;
+                }
+
+                const avatarEl =
+                    activeProfileScreen.querySelector("#profileAvatarImage");
+                if (avatarEl && avatarUrl) {
+                    avatarEl.src = avatarUrl;
+                }
+
+                const coverEl =
+                    activeProfileScreen.querySelector("#profileCoverImage");
+                if (coverEl && coverUrl) {
+                    coverEl.src = coverUrl;
+                } else if (!coverEl && coverUrl) {
+                    const coverContainer =
+                        activeProfileScreen.querySelector("#profileScrollContainer > div:first-child");
+                    if (coverContainer) {
+                        const newCover = document.createElement("img");
+                        newCover.id = "profileCoverImage";
+                        newCover.src = coverUrl;
+                        newCover.alt = "Cover Photo";
+                        newCover.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;";
+                        coverContainer.insertBefore(newCover, coverContainer.firstChild);
+                    }
+                }
+
+                const usernameEl =
+                    activeProfileScreen.querySelector("#profileUsernameDisplay");
+                if (usernameEl) {
+                    usernameEl.textContent = username ? `@${username}` : "";
+                    usernameEl.style.display = username ? "block" : "none";
+                }
+
+                const bioEl =
+                    activeProfileScreen.querySelector("#profileBioDisplay");
+                if (bioEl) {
+                    bioEl.textContent = bio || "";
+                    bioEl.style.display = bio ? "block" : "none";
+                }
+
+                const websiteEl =
+                    activeProfileScreen.querySelector("#profileWebsiteLink");
+                if (websiteEl) {
+                    websiteEl.href = website || "";
+                    websiteEl.textContent = website || "";
+                    websiteEl.parentElement.style.display = website ? "block" : "none";
+                }
+            }
 
             // -----------------------------------------
             // REMOVE EDIT SCREEN
@@ -49274,6 +49337,47 @@ window.closeMedia = function () {
         // return state to affect a later media/profile close operation.
         window._mediaReturnState = null;
 
+        return;
+    }
+
+    // Home avatars and post media are overlays, not page navigation.
+    // Closing them must never traverse past Home and exit the PWA.
+    if (currentMediaData?.sourceScreen === "app" ||
+        (history.state?.appScreen === "mediaViewer" &&
+         window._mediaReturnState?.screen === "app")) {
+        const homeData = currentMediaData || {};
+        const homeScroll = Number(homeData.sourceScrollY ??
+            window._mediaReturnState?.scrollY ?? window.homeScrollPosition) || 0;
+        const homeState = {
+            appScreen: "app",
+            data: { ...(homeData.sourceData ||
+                window._mediaReturnState?.data || {}) },
+            scrollY: homeScroll
+        };
+        history.replaceState(homeState, "", location.href);
+        if (window.appNavigation) {
+            window.appNavigation.current = {
+                screen: "app",
+                data: homeState.data,
+                scrollY: homeScroll,
+                timestamp: Date.now()
+            };
+        }
+        if (typeof window.syncNavigationSession === "function") {
+            try { window.syncNavigationSession(homeState); } catch (error) {}
+        }
+        const home = document.getElementById("app");
+        if (home) {
+            home.style.display = "";
+            home.style.visibility = "visible";
+            home.style.opacity = "1";
+            home.style.pointerEvents = "auto";
+        }
+        if (typeof window.restoreTopBar === "function") {
+            window.restoreTopBar();
+        }
+        window._mediaReturnState = null;
+        requestAnimationFrame(() => window.scrollTo(0, homeScroll));
         return;
     }
 
