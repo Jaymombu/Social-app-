@@ -9937,15 +9937,12 @@ window.loadPosts = async function () {
     return;
   }
 
-  // Include the current user, everyone they follow,
-  // and everyone who follows the current user.
   const visibleUserIds = new Set([userId]);
 
   (follows || []).forEach(follow => {
     if (String(follow.follower_id) === String(userId)) {
       visibleUserIds.add(follow.following_id);
     }
-
     if (String(follow.following_id) === String(userId)) {
       visibleUserIds.add(follow.follower_id);
     }
@@ -10061,6 +10058,15 @@ postsDiv.replaceChildren();
   }));
 
 }
+
+// Resolve private post media before the existing home renderer runs.
+// These signed URLs are display-only; database values remain unchanged.
+posts = await Promise.all(posts.map(async post => ({
+  ...post,
+  file_url: post.file_url
+    ? await window.getAuthorizedStorageUrl("posts_media", post.file_url)
+    : ""
+})));
 
 window.postsState = posts || [];
 
@@ -11219,6 +11225,13 @@ if (postError || !post) {
     );  
 
     return;  
+}
+
+// Resolve this post's private media for the comments preview.
+if (post.file_url || post.media_url) {
+    post.file_url = await window.getAuthorizedStorageUrl(
+        "posts_media", post.file_url || post.media_url
+    );
 }
 
 // ==========================================
@@ -28876,6 +28889,15 @@ window.loadProfilePosts = async function (userId) {
         });
 
 
+        // Sign private post media for the profile Posts tab.
+        await Promise.all(posts.map(async post => {
+            if (post.file_url) {
+                post.file_url = await window.getAuthorizedStorageUrl(
+                    "posts_media", post.file_url
+                );
+            }
+        }));
+
         // ---------------------------------------------
         // SAVE CURRENT POSTS
         // ---------------------------------------------
@@ -29077,6 +29099,15 @@ window.loadProfilePhotos = async function (userId) {
 
         });
 
+
+        // Sign private post images for the Photos grid and gallery.
+        await Promise.all(posts.map(async post => {
+            if (post.file_url) {
+                post.file_url = await window.getAuthorizedStorageUrl(
+                    "posts_media", post.file_url
+                );
+            }
+        }));
 
         // ---------------------------------------------
         // SAVE GALLERY DATA
@@ -31637,6 +31668,15 @@ window.loadProfileVideos = async function (userId) {
                     : "";
 
         });
+
+        // Sign private post videos for the Videos grid and full-screen feed.
+        await Promise.all(posts.map(async post => {
+            if (post.file_url) {
+                post.file_url = await window.getAuthorizedStorageUrl(
+                    "posts_media", post.file_url
+                );
+            }
+        }));
 
         // =================================================
         // REMOVE INVALID VIDEO RECORDS
@@ -51496,6 +51536,15 @@ if (requestedUserId) {
                         ? post.file_url.trim()
                         : "";
             });
+
+            // Sign private post videos when restoring the viewer silently.
+            await Promise.all(posts.map(async post => {
+                if (post.file_url) {
+                    post.file_url = await window.getAuthorizedStorageUrl(
+                        "posts_media", post.file_url
+                    );
+                }
+            }));
 
             // -----------------------------------------
             // REMOVE INVALID VIDEOS
