@@ -9882,197 +9882,197 @@ window.loadPosts = async function () {
 
   console.log("🔥 loadPosts running...");
 
-  const postsDiv =
-    document.getElementById("posts");
+  const postsDiv = document.getElementById("posts");
 
-  // IMPORTANT
   if (!postsDiv) {
-
     console.log("❌ posts div not found");
     return;
-
   }
 
   let posts = [];
   let error = null;
 
+  // =====================================================
+  // EXPLORE
+  // Show posts from EVERY user.
+  // =====================================================
   if (activeTab === "explore") {
-    
+
     console.time("postsQuery");
 
     const response = await supabase
-  .from("posts")
-  .select("*")
-  .order("created_at", {
-    ascending:false
-  })
-  .range(0,19);
+      .from("posts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .range(0, 19);
 
-    posts = response.data;
+    posts = response.data || [];
     error = response.error;
-    
-    console.timeEnd("postsQuery");
-    
-    
 
+    console.timeEnd("postsQuery");
   }
 
+  // =====================================================
+  // FOLLOWING
+  // Show:
+  // 1. The current user's own posts
+  // 2. Posts from people the current user follows
+  // 3. Posts from people who follow the current user
+  // =====================================================
   if (activeTab === "following") {
 
-  const userId = session?.user?.id;
+    const userId = session?.user?.id;
 
-  if (!userId) {
-    postsDiv.innerHTML = "Login to view following feed";
-    return;
+    if (!userId) {
+      postsDiv.innerHTML = "Login to view following feed";
+      return;
+    }
+
+    console.time("followingPostsQuery");
+
+    const { data: follows, error: followsError } = await supabase
+      .from("follows")
+      .select("follower_id, following_id")
+      .or(`follower_id.eq.${userId},following_id.eq.${userId}`);
+
+    if (followsError) {
+      console.error("❌ FOLLOW RELATION QUERY ERROR:", followsError);
+      postsDiv.innerHTML = "❌ Error loading following feed";
+      return;
+    }
+
+    // Always include the current user's own posts.
+    const visibleUserIds = new Set([userId]);
+
+    (follows || []).forEach(follow => {
+
+      // Current user follows this person.
+      if (String(follow.follower_id) === String(userId)) {
+        visibleUserIds.add(follow.following_id);
+      }
+
+      // This person follows the current user.
+      if (String(follow.following_id) === String(userId)) {
+        visibleUserIds.add(follow.follower_id);
+      }
+    });
+
+    const userIds = [...visibleUserIds].filter(Boolean);
+
+    if (userIds.length === 0) {
+      postsDiv.innerHTML = "No posts yet";
+      return;
+    }
+
+    const response = await supabase
+      .from("posts")
+      .select("*")
+      .in("user_id", userIds)
+      .order("created_at", { ascending: false })
+      .range(0, 19);
+
+    posts = response.data || [];
+    error = response.error;
+
+    console.timeEnd("followingPostsQuery");
   }
-
-  const { data: follows } = await supabase
-    .from("follows")
-    .select("following_id")
-    .eq("follower_id", userId);
-
-  const followingIds =
-    follows?.map(f => f.following_id) || [];
-
-  if (followingIds.length === 0) {
-    postsDiv.innerHTML = "You're not following anyone";
-    return;
-  }
-
-  const response = await supabase
-    .from("posts")
-    .select("*")
-    .in("user_id", followingIds)
-    .order("created_at", { ascending: false });
-
-  posts = response.data;
-  error = response.error;
-  
-  console.timeEnd("postsQuery");
-}
 
   if (error) {
-
-  postsDiv.innerHTML =
-    "❌ Error loading posts";
-
-  return;
-
-}
-
-if (!posts || posts.length === 0) {
-
-  postsDiv.innerHTML =
-    "😢 No posts yet";
-
-  return;
-
-}
-
-
-/* ==========================================
-   GET CURRENT PROFILE DATA FOR POST OWNERS
-========================================== */
-
-const userIds = [
-  ...new Set(
-    posts
-      .map(post => post.user_id)
-      .filter(Boolean)
-  )
-];
-
-if (userIds.length > 0) {
-
-  const { data: profiles, error: profilesError } =
-  await supabase
-    .from("profiles")
-    .select(`
-      id,
-      name,
-      username,
-      avatar_url,
-      cover_url,
-      verified,
-      online,
-      last_seen
-    `)
-    .in("id", userIds);
-
-  if (profilesError) {
-
-    console.log(
-      "❌ PROFILE FETCH ERROR:",
-      profilesError
-    );
-
-  } else {
-
-    const profileMap = new Map(
-      (profiles || []).map(profile => [
-        profile.id,
-        profile
-      ])
-    );
-
-    posts = posts.map(post => ({
-
-      ...post,
-
-      profile:
-        profileMap.get(post.user_id) || null
-
-    }));
-
+    console.error("❌ POSTS QUERY ERROR:", error);
+    postsDiv.innerHTML = "❌ Error loading posts";
+    return;
   }
 
-}
+  if (!posts || posts.length === 0) {
+    postsDiv.innerHTML = "😢 No posts yet";
+    return;
+  }
 
+  // =====================================================
+  // GET CURRENT PROFILE DATA FOR POST OWNERS
+  // =====================================================
+  const userIds = [
+    ...new Set(
+      posts
+        .map(post => post.user_id)
+        .filter(Boolean)
+    )
+  ];
 
-postsDiv.replaceChildren();
-  
+  if (userIds.length > 0) {
+
+    const { data: profiles, error: profilesError } = await supabase
+      .from("profiles")
+      .select(`
+        id,
+        name,
+        username,
+        avatar_url,
+        cover_url,
+        verified,
+        online,
+        last_seen,
+        private_account
+      `)
+      .in("id", userIds);
+
+    if (profilesError) {
+      console.log("❌ PROFILE FETCH ERROR:", profilesError);
+    } else {
+
+      const profileMap = new Map(
+        (profiles || []).map(profile => [profile.id, profile])
+      );
+
+      posts = posts.map(post => ({
+        ...post,
+        profile: profileMap.get(post.user_id) || null
+      }));
+    }
+  }
+
+  postsDiv.replaceChildren();
+
   if (session?.user && posts.length) {
+    try {
+      await Promise.all(
+        posts.map(async post => {
+          try {
+            if (post.file_url && typeof window.getAuthorizedStorageUrl === "function") {
+              post.authorized_file_url =
+                await window.getAuthorizedStorageUrl("posts_media", post.file_url);
+            }
+          } catch (mediaError) {
+            console.warn("⚠️ POST MEDIA URL ERROR:", mediaError);
+            post.authorized_file_url = "";
+          }
+        })
+      );
+    } catch (mediaBatchError) {
+      console.warn("⚠️ POST MEDIA AUTHORIZATION ERROR:", mediaBatchError);
+    }
+  }
 
-  const { data: savedPosts } = await supabase
-    .from("saved_posts")
-    .select("post_id")
-    .eq("user_id", session.user.id);
+  window.postsState = posts;
+  window.renderedPosts = new Set();
 
-  const savedIds = new Set(
-    (savedPosts || []).map(s => String(s.post_id))
-  );
+  posts.forEach(post => {
+    const el = renderPostElement(post);
+    if (el) {
+      postsDiv.appendChild(el);
+    }
+  });
 
-  posts = posts.map(post => ({
-    ...post,
-    saved: savedIds.has(String(post.id))
-  }));
-
-}
-
-// Resolve private post media before the existing home renderer runs.
-// These signed URLs are display-only; database values remain unchanged.
-posts = await Promise.all(posts.map(async post => ({
-  ...post,
-  file_url: post.file_url
-    ? await window.getAuthorizedStorageUrl("posts_media", post.file_url)
-    : ""
-})));
-
-window.postsState = posts || [];
-
-// Clear previously rendered posts
-window.renderedPosts = new Set();
-
-renderFeed(window.postsState);
-
-console.log(
-  "POST ELEMENTS AFTER RENDER:",
-  document.querySelectorAll(".post-card").length
-);
-
-  observeVideos();
-
-};
+  if (typeof observeVideos === "function") {
+    setTimeout(() => {
+      try {
+        observeVideos();
+      } catch (err) {
+        console.log("observeVideos error:", err);
+      }
+    }, 0);
+  }
+};;
 
 window.toggleSavePost = async function(postId){
 
@@ -11215,13 +11215,6 @@ if (postError || !post) {
     );  
 
     return;  
-}
-
-// Resolve this post's private media for the comments preview.
-if (post.file_url || post.media_url) {
-    post.file_url = await window.getAuthorizedStorageUrl(
-        "posts_media", post.file_url || post.media_url
-    );
 }
 
 // ==========================================
@@ -28879,15 +28872,6 @@ window.loadProfilePosts = async function (userId) {
         });
 
 
-        // Sign private post media for the profile Posts tab.
-        await Promise.all(posts.map(async post => {
-            if (post.file_url) {
-                post.file_url = await window.getAuthorizedStorageUrl(
-                    "posts_media", post.file_url
-                );
-            }
-        }));
-
         // ---------------------------------------------
         // SAVE CURRENT POSTS
         // ---------------------------------------------
@@ -29089,15 +29073,6 @@ window.loadProfilePhotos = async function (userId) {
 
         });
 
-
-        // Sign private post images for the Photos grid and gallery.
-        await Promise.all(posts.map(async post => {
-            if (post.file_url) {
-                post.file_url = await window.getAuthorizedStorageUrl(
-                    "posts_media", post.file_url
-                );
-            }
-        }));
 
         // ---------------------------------------------
         // SAVE GALLERY DATA
@@ -31658,15 +31633,6 @@ window.loadProfileVideos = async function (userId) {
                     : "";
 
         });
-
-        // Sign private post videos for the Videos grid and full-screen feed.
-        await Promise.all(posts.map(async post => {
-            if (post.file_url) {
-                post.file_url = await window.getAuthorizedStorageUrl(
-                    "posts_media", post.file_url
-                );
-            }
-        }));
 
         // =================================================
         // REMOVE INVALID VIDEO RECORDS
@@ -51526,15 +51492,6 @@ if (requestedUserId) {
                         ? post.file_url.trim()
                         : "";
             });
-
-            // Sign private post videos when restoring the viewer silently.
-            await Promise.all(posts.map(async post => {
-                if (post.file_url) {
-                    post.file_url = await window.getAuthorizedStorageUrl(
-                        "posts_media", post.file_url
-                    );
-                }
-            }));
 
             // -----------------------------------------
             // REMOVE INVALID VIDEOS
