@@ -10385,10 +10385,20 @@ function upsertPost(updatedPost) {
     });
   }
 
-  // likePost already updates the visible button immediately. Re-render
-  // only when the post is in the active feed, preserving existing behavior
-  // while never displaying a partial post as a new card.
-  if (foundInActiveFeed) renderFeed(window.postsState);
+  // likePost already updates the visible Like button. Rebuilding the
+  // entire feed here removes and recreates every <video>, which pauses
+  // playback and can leave a blank video while its private URL reloads.
+  // Keep the existing DOM and playing video untouched. Cached post data
+  // above is already synchronized for both Explore and Following.
+  if (foundInActiveFeed) {
+    const card = document.getElementById(`post-${updatedPost.id}`);
+    const button = card?.querySelector('.like-btn');
+    if (button && Array.isArray(updatedPost.liked_by)) {
+      const liked = updatedPost.liked_by.includes(session?.user?.id);
+      button.innerHTML = `${liked ? '❤️ Liked' : '🤍 Like'} (${updatedPost.likes || 0})`;
+      button.style.background = liked ? '#ff4d6d' : '#222';
+    }
+  }
 }
 
 window.deletePost = async (id) => {
