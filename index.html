@@ -6559,9 +6559,53 @@ let currentProfileId = null;
 let currentProfileName = null;
 let activeTab = "explore";
 
-// Keep already-loaded Explore/Following feeds in memory so switching tabs
-// does not re-query or rebuild the posts unnecessarily.
-window.feedCache = window.feedCache || { explore: null, following: null };
+// Offline public text snapshot. Private profiles and all media are excluded.
+window.socialOffline = {
+  key(tab) { return "socialapp-offline-public-v1:" + (session?.user?.id || "guest") + ":" + tab; },
+  save(tab, posts) {
+    try {
+      const publicPosts = (posts || []).filter(p => p.profile?.private_account === false)
+        .slice(0,20).map(p => ({
+          id:p.id, user_id:p.user_id, content:p.content, created_at:p.created_at,
+          name:p.profile.name || p.name, username:p.profile.username || "",
+          likes:p.likes || 0, liked_by:[], file_url:"", media_type:null,
+          avatar_url:"", offline:true, saved:false,
+          profile:{id:p.user_id, name:p.profile.name || p.name,
+            username:p.profile.username || "", avatar_url:"",
+            verified:!!p.profile.verified, private_account:false}
+        }));
+      localStorage.setItem(this.key(tab),JSON.stringify(publicPosts));
+    } catch(e) { console.warn("Offline snapshot unavailable",e); }
+  },
+  show(tab) {
+    try {
+      const posts=JSON.parse(localStorage.getItem(this.key(tab)) || "[]");
+      if(!posts.length)return false;
+      window.postsState=posts;
+      renderFeed(posts);
+      return true;
+    } catch(e) {return false;}
+  }
+};
+function socialOfflineNotice() {
+  let el=document.getElementById("socialOfflineNotice");
+  if(!el) {
+    el=document.createElement("div"); el.id="socialOfflineNotice";
+    el.setAttribute("role","status");
+    el.style.cssText="position:fixed;bottom:12px;left:12px;right:12px;z-index:2147483646;padding:12px;border-radius:12px;background:#302448;color:#fff;text-align:center;font:14px sans-serif;box-shadow:0 2px 12px #0008;";
+    el.textContent="Offline: saved public text posts only. Reconnect to refresh or interact.";
+    document.body.appendChild(el);
+  }
+  el.style.display=navigator.onLine?"none":"block";
+}
+window.addEventListener("online",socialOfflineNotice);
+window.addEventListener("offline",socialOfflineNotice);
+if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",socialOfflineNotice,{once:true});
+else socialOfflineNotice();
+if("serviceWorker" in navigator)
+  window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js")
+    .catch(e=>console.warn("Offline app shell unavailable",e)),{once:true});
+
 let storyPausedByUI = false;
 
 function safeStart() {
@@ -6795,66 +6839,18 @@ const { data: stories, error } =
   }
 
   // GROUP STORIES BY USER
-  // Always resolve the current profile so old stories immediately
-  // use the user's latest name/avatar without rewriting story rows.
-  const storyUserIds = [
-    ...new Set(
-      stories
-        .map(story => story.user_id)
-        .filter(Boolean)
-    )
-  ];
-
-  let storyProfiles = new Map();
-
-  if (storyUserIds.length) {
-    const { data: profiles, error: profileError } =
-      await supabase
-        .from("profiles")
-        .select("id,name,avatar_url,verified,online,last_seen")
-        .in("id", storyUserIds);
-
-    if (profileError) {
-      console.warn("⚠️ STORY PROFILE FETCH ERROR:", profileError);
-    } else {
-      storyProfiles = new Map(
-        (profiles || []).map(profile => [profile.id, profile])
-      );
-    }
-  }
-
   const grouped = {};
-  stories.forEach(story => {
+stories.forEach(story => {
 
     const userId =
       story.user_id || "unknown";
-
-    const currentProfile =
-      storyProfiles.get(userId) || null;
-
-    // Keep the story object in sync in memory only. The historical
-    // stories row in Supabase is intentionally left unchanged.
-    story.name =
-      currentProfile?.name ||
-      story.name ||
-      "User";
-
-    story.avatar_url =
-      currentProfile?.avatar_url ||
-      story.avatar_url ||
-      "";
-
-    story.online =
-      currentProfile?.online ??
-      story.online ??
-      false;
 
     if (!grouped[userId]) {
 
       grouped[userId] = {
 
         name:
-          story.name,
+          story.name || "User",
 
         avatar:
           story.avatar_url &&
@@ -9917,16 +9913,16 @@ function renderFeed(posts) {
   const postsDiv = document.getElementById("posts");
   if (!postsDiv) return;
 
-  postsDiv.replaceChildren();
-
+  const fragment = document.createDocumentFragment();
   window.renderedPosts = new Set();
-
   posts.forEach(post => {
     const el = renderPostElement(post);
-    if (el) {
-      postsDiv.appendChild(el);
-    }
+    if (el) fragment.appendChild(el);
   });
+  postsDiv.replaceChildren(fragment);
+  if (!navigator.onLine) {
+    postsDiv.querySelectorAll("button,input,textarea").forEach(el => {el.disabled=true;});
+  }
 }
 
 // ✅ 3. DEFINE loadPosts
@@ -9945,17 +9941,11 @@ window.loadPosts = async function () {
 
   }
 
-  // Do not reload/re-render a feed simply because the user switched tabs.
-  // The cache is invalidated only when the app actually changes the feed data.
-  const cachedPosts = window.feedCache?.[activeTab];
-  if (Array.isArray(cachedPosts)) {
-    console.log("⚡ Using cached", activeTab, "feed");
-    window.postsState = cachedPosts;
-    renderFeed(window.postsState);
-    observeVideos();
+  if (!navigator.onLine) {
+    if (!window.socialOffline.show(activeTab))
+      postsDiv.textContent="No saved public posts yet. Connect to the internet first.";
     return;
   }
-
   let posts = [];
   let error = null;
 
@@ -9989,36 +9979,24 @@ window.loadPosts = async function () {
     return;
   }
 
-  const { data: follows, error: followsError } = await supabase
+  const { data: follows } = await supabase
     .from("follows")
-    .select("follower_id, following_id")
-    .or(`follower_id.eq.${userId},following_id.eq.${userId}`);
+    .select("following_id")
+    .eq("follower_id", userId);
 
-  if (followsError) {
-    console.error("❌ FOLLOW RELATION QUERY ERROR:", followsError);
-    postsDiv.innerHTML = "❌ Error loading following feed";
+  const followingIds =
+    follows?.map(f => f.following_id) || [];
+
+  if (followingIds.length === 0) {
+    postsDiv.innerHTML = "You're not following anyone";
     return;
   }
-
-  const visibleUserIds = new Set([userId]);
-
-  (follows || []).forEach(follow => {
-    if (String(follow.follower_id) === String(userId)) {
-      visibleUserIds.add(follow.following_id);
-    }
-    if (String(follow.following_id) === String(userId)) {
-      visibleUserIds.add(follow.follower_id);
-    }
-  });
-
-  const visibleIds = [...visibleUserIds].filter(Boolean);
 
   const response = await supabase
     .from("posts")
     .select("*")
-    .in("user_id", visibleIds)
-    .order("created_at", { ascending: false })
-    .range(0,19);
+    .in("user_id", followingIds)
+    .order("created_at", { ascending: false });
 
   posts = response.data;
   error = response.error;
@@ -10028,8 +10006,7 @@ window.loadPosts = async function () {
 
   if (error) {
 
-  postsDiv.innerHTML =
-    "❌ Error loading posts";
+  if(!window.socialOffline.show(activeTab)) postsDiv.textContent="Could not load posts";
 
   return;
 
@@ -10070,7 +10047,8 @@ if (userIds.length > 0) {
       cover_url,
       verified,
       online,
-      last_seen
+      last_seen,
+      private_account
     `)
     .in("id", userIds);
 
@@ -10134,10 +10112,7 @@ posts = await Promise.all(posts.map(async post => ({
 })));
 
 window.postsState = posts || [];
-
-// Save the fully-resolved feed (including authorized private post media) so
-// changing between Explore and Following does not fetch/rebuild it again.
-window.feedCache[activeTab] = window.postsState;
+window.socialOffline.save(activeTab,window.postsState);
 
 // Clear previously rendered posts
 window.renderedPosts = new Set();
@@ -27476,7 +27451,7 @@ window.openProfile = async function (
                 min-width:0;
             ">
 
-                <h2 id="profileNameDisplay" style="
+                <h2 style="
                     display:flex;
                     align-items:center;
                     gap:6px;
@@ -27547,7 +27522,7 @@ window.openProfile = async function (
                 ${
                     profile.username
                         ? `
-                <div id="profileUsernameDisplay" style="
+                <div style="
                     margin-top:8px;
                     color:#1d9bf0;
                     font-size:15px;
@@ -27560,21 +27535,21 @@ window.openProfile = async function (
                 }
 
 
-${
- profile.bio
-     ? `
-<div id="profileBioDisplay" class="profile-theme-content" style="
-margin-top:10px;
-color:#ddd;
-font-size:15px;
-line-height:1.4;
-white-space:pre-wrap;
-">
-${escapeHtml(profile.bio)}
-</div>
-`
-       : ""
- }
+                ${
+                    profile.bio
+                        ? `
+                <div class="profile-theme-content" style="
+                    margin-top:10px;
+                    color:#ddd;
+                    font-size:15px;
+                    line-height:1.4;
+                    white-space:pre-wrap;
+                ">
+                    ${escapeHtml(profile.bio)}
+                </div>
+                `
+                        : ""
+                }
 
 
                 ${
@@ -29394,104 +29369,6 @@ window.loadProfilePhotos = async function (userId) {
                 Error loading photos
             </div>
         `;
-    }
-};
-
-
-// Profile Photos categories. Existing post-photo loading remains unchanged.
-// Avatar and cover uploads have unique paths, so older files stay in storage.
-const loadMainPostPhotos = window.loadProfilePhotos;
-window.profilePhotoCategory = "posts";
-window.loadProfilePhotos = async function(userId, category = "posts") {
-    window.profilePhotoCategory = category;
-    const container = document.getElementById("profilePosts");
-    if (!container) return;
-    const tabs = document.createElement("div");
-    tabs.id = "profilePhotoCategories";
-    tabs.style.cssText = "display:flex;gap:8px;padding:4px 0 14px;overflow-x:auto;";
-    [["posts","Post"],["avatar","Avatar"],["cover","Cover"]].forEach(([key,label]) => {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = label;
-        button.style.cssText = "flex:0 0 auto;border:1px solid #444;border-radius:20px;padding:9px 13px;color:white;cursor:pointer;background:" +
-            (category === key ? "#1877f2" : "#292929");
-        button.addEventListener("click", () => window.loadProfilePhotos(userId,key));
-        tabs.appendChild(button);
-    });
-    if (category === "posts") {
-        await loadMainPostPhotos(userId);
-        if (document.getElementById("profilePosts") === container) container.prepend(tabs);
-        return;
-    }
-    container.replaceChildren(tabs);
-    const status = document.createElement("div");
-    status.style.cssText = "padding:20px;text-align:center;color:#aaa;";
-    status.textContent = "Loading photos...";
-    container.appendChild(status);
-    try {
-        const {data: profile, error} = await supabase.from("profiles")
-            .select("id,name,username,avatar_url,cover_url,verified")
-            .eq("id",userId).maybeSingle();
-        if (error) throw error;
-        const current = category === "avatar" ? profile?.avatar_url : profile?.cover_url;
-        const folder = category === "cover" ? "covers" : "";
-        const {data: files, error: listError} = await supabase.storage
-            .from("avatars").list(folder,{limit:1000,sortBy:{column:"created_at",order:"desc"}});
-        // Some storage policies allow reading a known public URL but not listing
-        // another user's files. Always show the current photo in that case.
-        if (listError) console.warn("Photo history listing unavailable:",listError);
-        const urls = [];
-        const seen = new Set();
-        const add = (url) => {
-            if (!url) return;
-            const base = url.split("?")[0];
-            if (seen.has(base)) return;
-            seen.add(base);
-            urls.push(url);
-        };
-        add(current);
-        (files || []).filter(file =>
-            file.name.startsWith(userId + "_") &&
-            /\.(jpe?g|png|webp|gif|avif)$/i.test(file.name)
-        ).forEach(file => {
-            const path = folder ? folder + "/" + file.name : file.name;
-            add(supabase.storage.from("avatars").getPublicUrl(path).data?.publicUrl);
-        });
-        if (window.profilePhotoCategory !== category ||
-            document.getElementById("profilePosts") !== container) return;
-        status.remove();
-        if (!urls.length) {
-            const empty = document.createElement("div");
-            empty.style.cssText = "padding:30px;text-align:center;color:#888;";
-            empty.textContent = category === "avatar" ? "No avatar photos yet" : "No cover photos yet";
-            container.appendChild(empty);
-            window.profileGallery = [];
-            return;
-        }
-        window.profileGallery = urls.map((url,i) => ({
-            id:"profile-"+category+"-"+i, user_id:userId, file_url:url,
-            media_type:"image", name:profile?.name || "User",
-            avatar_url:profile?.avatar_url || "", profiles:profile
-        }));
-        window.profileGalleryIndex = 0;
-        const grid = document.createElement("div");
-        grid.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:4px;width:100%;";
-        urls.forEach((url,index) => {
-            const img = document.createElement("img");
-            img.src = url;
-            img.alt = category === "avatar" ? "Avatar photo" : "Cover photo";
-            img.loading = "lazy";
-            img.style.cssText = "width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;background:#222;";
-            img.addEventListener("click", () => {
-                window.profileGalleryIndex = index;
-                window.openPhotoGallery(index,userId);
-            });
-            grid.appendChild(img);
-        });
-        container.appendChild(grid);
-    } catch (error) {
-        console.error("Profile photo category error:",error);
-        status.textContent = "Could not load photos";
     }
 };
 
@@ -33228,7 +33105,7 @@ window.navigateToScreen(
                         .toLowerCase();
 
                 const avatarPath =
-                    `${currentUserId}_${Date.now()}.${extension}`;
+                    `avatars/${currentUserId}_${Date.now()}.${extension}`;
 
                 const {
                     error: avatarUploadError
@@ -33261,15 +33138,11 @@ window.navigateToScreen(
                     return;
                 }
 
-                const { data: avatarPublicData } =
-                    supabase.storage
-                    .from("avatars")
-                    .getPublicUrl(avatarPath);
+                const avatarSignedUrl =
+                    await window.resolveStorageMediaUrl("avatars", avatarPath, avatarUrl);
 
                 avatarUrl =
-                    avatarPublicData?.publicUrl
-                    ? avatarPublicData.publicUrl + "?t=" + Date.now()
-                    : avatarUrl;
+                    avatarSignedUrl || avatarUrl;
 
                 changes.push(
                     "avatar"
@@ -33330,15 +33203,11 @@ window.navigateToScreen(
                     return;
                 }
 
-                const { data: coverPublicData } =
-                    supabase.storage
-                    .from("avatars")
-                    .getPublicUrl(coverPath);
+                const coverSignedUrl =
+                    await window.resolveStorageMediaUrl("avatars", coverPath, coverUrl);
 
                 coverUrl =
-                    coverPublicData?.publicUrl
-                    ? coverPublicData.publicUrl + "?t=" + Date.now()
-                    : coverUrl;
+                    coverSignedUrl || coverUrl;
 
                 changes.push(
                     "cover"
@@ -33529,75 +33398,23 @@ window.navigateToScreen(
             }
 
             // -----------------------------------------
-            // UPDATE ALREADY-LOADED CONTENT IN MEMORY
+            // REFRESH MAIN FEED
             // -----------------------------------------
-            // Do not call loadPosts() here. That would discard the
-            // Explore/Following feed cache and fetch/rebuild the feed.
-            // Instead, update the cached post/profile data in place.
 
-            const updatedProfile = {
-                id: currentUserId,
-                name: name || "User",
-                username: username || "",
-                website: website || null,
-                location: location || null,
-                bio: bio || null,
-                avatar_url: avatarUrl || "",
-                cover_url: coverUrl || null,
-                verified: profile.verified || false
-            };
-
-            Object.keys(window.feedCache || {}).forEach(tab => {
-                const cached = window.feedCache?.[tab];
-                if (!Array.isArray(cached)) return;
-
-                cached.forEach(post => {
-                    if (String(post.user_id) !== String(currentUserId)) return;
-
-                    post.profile = {
-                        ...(post.profile || {}),
-                        ...updatedProfile
-                    };
-                    post.name = updatedProfile.name;
-                    post.username = updatedProfile.username;
-                    post.avatar_url = updatedProfile.avatar_url;
-                    post.verified = updatedProfile.verified;
-                });
-            });
-
-            if (Array.isArray(window.postsState)) {
-                window.postsState.forEach(post => {
-                    if (String(post.user_id) !== String(currentUserId)) return;
-
-                    post.profile = {
-                        ...(post.profile || {}),
-                        ...updatedProfile
-                    };
-                    post.name = updatedProfile.name;
-                    post.username = updatedProfile.username;
-                    post.avatar_url = updatedProfile.avatar_url;
-                    post.verified = updatedProfile.verified;
-                });
-            }
-
-            // Refresh the story strip from the database, but resolve the
-            // current profile for each story owner so old stories update too.
-            if (typeof window.loadStories === "function") {
-                try {
-                    await window.loadStories();
-                } catch (error) {
-                    console.warn("⚠️ STORY PROFILE REFRESH ERROR:", error);
-                }
-            }
-
-            // Re-render the currently visible feed from the updated cache
-            // without querying Supabase again.
             if (
-                Array.isArray(window.postsState) &&
-                document.getElementById("posts")
+                typeof window.loadPosts ===
+                "function"
             ) {
-                renderFeed(window.postsState);
-                observeVideos();
+
+                try {
+                    await window.loadPosts();
+                } catch (error) {
+
+                    console.warn(
+                        "⚠️ FEED REFRESH ERROR:",
+                        error
+                    );
+                }
             }
 
             // -----------------------------------------
@@ -33607,69 +33424,6 @@ window.navigateToScreen(
             const profileTab =
                 window.currentProfileTab ||
                 "posts";
-
-            // -----------------------------------------
-            // UPDATE THE EXISTING PROFILE SCREEN IN PLACE
-            // -----------------------------------------
-            // history.back() returns to the already-rendered profile DOM.
-            // Update that DOM first so the saved profile is visible
-            // immediately, without reopening/reloading the feed.
-            const activeProfileScreen =
-                document.getElementById("profileScreen");
-
-            if (activeProfileScreen) {
-                const profileNameEl =
-                    activeProfileScreen.querySelector("#profileNameDisplay");
-                if (profileNameEl) {
-                    profileNameEl.innerHTML =
-                        `${escapeHtml(name || "User")} ${profile.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ""}`;
-                }
-
-                const avatarEl =
-                    activeProfileScreen.querySelector("#profileAvatarImage");
-                if (avatarEl && avatarUrl) {
-                    avatarEl.src = avatarUrl;
-                }
-
-                const coverEl =
-                    activeProfileScreen.querySelector("#profileCoverImage");
-                if (coverEl && coverUrl) {
-                    coverEl.src = coverUrl;
-                } else if (!coverEl && coverUrl) {
-                    const coverContainer =
-                        activeProfileScreen.querySelector("#profileScrollContainer > div:first-child");
-                    if (coverContainer) {
-                        const newCover = document.createElement("img");
-                        newCover.id = "profileCoverImage";
-                        newCover.src = coverUrl;
-                        newCover.alt = "Cover Photo";
-                        newCover.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;";
-                        coverContainer.insertBefore(newCover, coverContainer.firstChild);
-                    }
-                }
-
-                const usernameEl =
-                    activeProfileScreen.querySelector("#profileUsernameDisplay");
-                if (usernameEl) {
-                    usernameEl.textContent = username ? `@${username}` : "";
-                    usernameEl.style.display = username ? "block" : "none";
-                }
-
-                const bioEl =
-                    activeProfileScreen.querySelector("#profileBioDisplay");
-                if (bioEl) {
-                    bioEl.textContent = bio || "";
-                    bioEl.style.display = bio ? "block" : "none";
-                }
-
-                const websiteEl =
-                    activeProfileScreen.querySelector("#profileWebsiteLink");
-                if (websiteEl) {
-                    websiteEl.href = website || "";
-                    websiteEl.textContent = website || "";
-                    websiteEl.parentElement.style.display = website ? "block" : "none";
-                }
-            }
 
             // -----------------------------------------
             // REMOVE EDIT SCREEN
@@ -37808,13 +37562,7 @@ function attachEvents() {
       exploreTab.classList.add("active-tab");
       followingTab.classList.remove("active-tab");
 
-      if (Array.isArray(window.feedCache?.explore)) {
-        window.postsState = window.feedCache.explore;
-        renderFeed(window.postsState);
-        observeVideos();
-      } else {
-        loadPosts();
-      }
+      loadPosts();
     };
 
     followingTab.onclick = () => {
@@ -37823,13 +37571,7 @@ function attachEvents() {
       followingTab.classList.add("active-tab");
       exploreTab.classList.remove("active-tab");
 
-      if (Array.isArray(window.feedCache?.following)) {
-        window.postsState = window.feedCache.following;
-        renderFeed(window.postsState);
-        observeVideos();
-      } else {
-        loadPosts();
-      }
+      loadPosts();
     };
   }
 
@@ -49435,47 +49177,6 @@ window.closeMedia = function () {
         // return state to affect a later media/profile close operation.
         window._mediaReturnState = null;
 
-        return;
-    }
-
-    // Home avatars and post media are overlays, not page navigation.
-    // Closing them must never traverse past Home and exit the PWA.
-    if (currentMediaData?.sourceScreen === "app" ||
-        (history.state?.appScreen === "mediaViewer" &&
-         window._mediaReturnState?.screen === "app")) {
-        const homeData = currentMediaData || {};
-        const homeScroll = Number(homeData.sourceScrollY ??
-            window._mediaReturnState?.scrollY ?? window.homeScrollPosition) || 0;
-        const homeState = {
-            appScreen: "app",
-            data: { ...(homeData.sourceData ||
-                window._mediaReturnState?.data || {}) },
-            scrollY: homeScroll
-        };
-        history.replaceState(homeState, "", location.href);
-        if (window.appNavigation) {
-            window.appNavigation.current = {
-                screen: "app",
-                data: homeState.data,
-                scrollY: homeScroll,
-                timestamp: Date.now()
-            };
-        }
-        if (typeof window.syncNavigationSession === "function") {
-            try { window.syncNavigationSession(homeState); } catch (error) {}
-        }
-        const home = document.getElementById("app");
-        if (home) {
-            home.style.display = "";
-            home.style.visibility = "visible";
-            home.style.opacity = "1";
-            home.style.pointerEvents = "auto";
-        }
-        if (typeof window.restoreTopBar === "function") {
-            window.restoreTopBar();
-        }
-        window._mediaReturnState = null;
-        requestAnimationFrame(() => window.scrollTo(0, homeScroll));
         return;
     }
 
