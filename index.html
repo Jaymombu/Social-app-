@@ -9905,6 +9905,17 @@ function renderFeed(posts) {
   const postsDiv = document.getElementById("posts");
   if (!postsDiv || !Array.isArray(posts)) return;
 
+  // Capture the exact Home position before changing the feed DOM. This keeps
+  // the reader at the same place when posts are refreshed or updated.
+  const isPostsScroller =
+    postsDiv.scrollHeight > postsDiv.clientHeight;
+  const savedPostsScrollTop = postsDiv.scrollTop;
+  const savedWindowScrollY =
+    window.scrollY ||
+    document.documentElement.scrollTop ||
+    document.body.scrollTop ||
+    0;
+
   // Reuse unchanged post cards. Rebuilding all 20 cards on every small
   // feed update forces Android Chrome to recalculate layout and repaint
   // videos/images, which can make scrolling feel heavy.
@@ -9914,7 +9925,6 @@ function renderFeed(posts) {
   });
 
   const fragment = document.createDocumentFragment();
-  const used = new Set();
   window.renderedPosts = new Set();
 
   posts.forEach(post => {
@@ -9926,7 +9936,6 @@ function renderFeed(posts) {
 
     if (el && el.dataset.renderSignature === signature) {
       // Nothing changed: keep the exact DOM node, including video position.
-      used.add(id);
       fragment.appendChild(el);
       window.renderedPosts.add(String(post.id));
       return;
@@ -9936,7 +9945,6 @@ function renderFeed(posts) {
     if (!el) return;
 
     el.dataset.renderSignature = signature;
-    used.add(id);
     fragment.appendChild(el);
     window.renderedPosts.add(String(post.id));
   });
@@ -9944,6 +9952,28 @@ function renderFeed(posts) {
   // Only replace the container's children once. Existing unchanged nodes
   // are moved rather than recreated, preserving their media state.
   postsDiv.replaceChildren(fragment);
+
+  // Restore immediately, then once after layout. The second restore handles
+  // images/video metadata changing the feed height on Android Chrome.
+  if (isPostsScroller || postsDiv.scrollHeight > postsDiv.clientHeight) {
+    postsDiv.scrollTop = savedPostsScrollTop;
+    requestAnimationFrame(() => {
+      postsDiv.scrollTop = savedPostsScrollTop;
+    });
+  } else {
+    window.scrollTo({
+      top: savedWindowScrollY,
+      left: 0,
+      behavior: "auto"
+    });
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: savedWindowScrollY,
+        left: 0,
+        behavior: "auto"
+      });
+    });
+  }
 }
 
 // ✅ 3. DEFINE loadPosts
@@ -49515,8 +49545,37 @@ window.closeMedia = function () {
         if (typeof window.restoreTopBar === "function") {
             window.restoreTopBar();
         }
+        // Restore the exact scroller that was active before opening the
+        // avatar/post media.  Home can scroll inside #posts rather than the
+        // window, so window.scrollTo() alone is not sufficient.
+        window.homeScrollY = homeScroll;
+        const homePosts = document.getElementById("posts");
+        if (homePosts && homePosts.scrollHeight > homePosts.clientHeight) {
+            window.homeScrollElement = "posts";
+        } else {
+            window.homeScrollElement = "window";
+        }
+
         window._mediaReturnState = null;
-        requestAnimationFrame(() => window.scrollTo(0, homeScroll));
+
+        const restoreExactHomePosition = () => {
+            try {
+                if (typeof window.restoreHomeScroll === "function") {
+                    window.restoreHomeScroll();
+                } else if (window.homeScrollElement === "posts" && homePosts) {
+                    homePosts.scrollTop = homeScroll;
+                } else {
+                    window.scrollTo({ top: homeScroll, left: 0, behavior: "auto" });
+                }
+            } catch (error) {
+                try { window.scrollTo(0, homeScroll); } catch (e) {}
+            }
+        };
+
+        // Restore after the overlay is removed and once more after media/layout
+        // cleanup, so image/video height changes cannot move the user.
+        requestAnimationFrame(restoreExactHomePosition);
+        setTimeout(restoreExactHomePosition, 50);
         return;
     }
 
@@ -53564,21 +53623,12 @@ document.addEventListener("scroll", window.trackHomeScrollLive, {
   capture: true
 });
 
-// #posts may be the actual scrolling element and may be created/replaced
-// after startup, so observe it whenever the feed exists.
+// The document capture listener above also receives scroll events from
+// #posts, so a second #posts listener would do the same work twice. Keep
+// this binder as a compatibility no-op because navigation code calls it.
 window.homePostsScrollHandler = null;
 window.bindHomePostsScrollTracker = function () {
-  const posts = document.getElementById("posts");
-  if (!posts) return;
-  if (window.homePostsScrollHandler &&
-      window.homePostsScrollElement === posts) return;
-  window.homePostsScrollHandler = () => {
-    window.trackHomeScrollLive();
-  };
-  window.homePostsScrollElement = posts;
-  posts.addEventListener("scroll", window.homePostsScrollHandler, {
-    passive: true
-  });
+  return document.getElementById("posts");
 };
 
 window.bindHomePostsScrollTracker();
