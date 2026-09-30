@@ -9903,15 +9903,46 @@ return div;
 
 function renderFeed(posts) {
   const postsDiv = document.getElementById("posts");
-  if (!postsDiv) return;
+  if (!postsDiv || !Array.isArray(posts)) return;
 
-  // Build off-screen: one DOM update instead of one per post.
-  const fragment = document.createDocumentFragment();
-  window.renderedPosts = new Set();
-  posts.forEach(post => {
-    const el = renderPostElement(post);
-    if (el) fragment.appendChild(el);
+  // Reuse unchanged post cards. Rebuilding all 20 cards on every small
+  // feed update forces Android Chrome to recalculate layout and repaint
+  // videos/images, which can make scrolling feel heavy.
+  const existing = new Map();
+  postsDiv.querySelectorAll(".post-card[id]").forEach(el => {
+    existing.set(el.id, el);
   });
+
+  const fragment = document.createDocumentFragment();
+  const used = new Set();
+  window.renderedPosts = new Set();
+
+  posts.forEach(post => {
+    if (!post?.id) return;
+
+    const id = `post-${post.id}`;
+    const signature = JSON.stringify(post);
+    let el = existing.get(id);
+
+    if (el && el.dataset.renderSignature === signature) {
+      // Nothing changed: keep the exact DOM node, including video position.
+      used.add(id);
+      fragment.appendChild(el);
+      window.renderedPosts.add(String(post.id));
+      return;
+    }
+
+    el = renderPostElement(post);
+    if (!el) return;
+
+    el.dataset.renderSignature = signature;
+    used.add(id);
+    fragment.appendChild(el);
+    window.renderedPosts.add(String(post.id));
+  });
+
+  // Only replace the container's children once. Existing unchanged nodes
+  // are moved rather than recreated, preserving their media state.
   postsDiv.replaceChildren(fragment);
 }
 
