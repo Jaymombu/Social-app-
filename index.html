@@ -3292,6 +3292,13 @@ body {
   100% { box-shadow:0 0 0 0 rgba(24,119,242,0); }
 }
 
+
+/* ===== SocialApp account authentication UI ===== */
+#socialAuthOverlay{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;background:rgba(0,0,0,.84);backdrop-filter:blur(8px)}
+#socialAuthOverlay.active{display:flex}
+#socialAuthCard{width:min(430px,100%);max-height:92vh;overflow:auto;padding:22px;box-sizing:border-box;border-radius:22px;background:#171717;color:#fff;border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 60px rgba(0,0,0,.55)}
+#socialAuthCard h2{margin:0 0 7px;font-size:24px} #socialAuthCard .auth-subtitle{margin:0 0 18px;color:#aaa;font-size:14px;line-height:1.45} #socialAuthCard label{display:block;margin:12px 0 6px;font-size:13px;color:#bbb} #socialAuthCard input{width:100%;box-sizing:border-box;padding:12px 13px;border-radius:12px;border:1px solid #333;background:#0e0e0e;color:#fff;outline:none;font:inherit} #socialAuthCard input:focus{border-color:#1877f2}
+.auth-primary,.auth-secondary,.auth-link{width:100%;box-sizing:border-box;border:0;cursor:pointer;font:inherit}.auth-primary{margin-top:16px;padding:12px;border-radius:12px;background:#1877f2;color:#fff;font-weight:700}.auth-secondary{margin-top:10px;padding:11px;border-radius:12px;background:#292929;color:#fff;font-weight:600}.auth-link{margin-top:12px;padding:4px;background:transparent;color:#58a6ff;font-size:14px}.auth-divider{display:flex;align-items:center;gap:10px;margin:16px 0;color:#777;font-size:12px}.auth-divider:before,.auth-divider:after{content:"";height:1px;flex:1;background:#333}.auth-close-row{display:flex;justify-content:flex-end}.auth-close{border:0;background:transparent;color:#aaa;font-size:24px;cursor:pointer}.auth-error,.auth-success{display:none;margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px;line-height:1.4}.auth-error{background:rgba(220,50,50,.12);color:#ff8e8e}.auth-success{background:rgba(30,180,100,.12);color:#8ff0b7}.auth-contact{margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);color:#888;font-size:12px;text-align:center}.auth-contact a{color:#58a6ff}
 </style>
 
 <style id="story-navigation-final-fix">
@@ -6558,6 +6565,10 @@ let session = null;
 let currentProfileId = null;
 let currentProfileName = null;
 let activeTab = "explore";
+
+// Keep already-loaded Explore/Following feeds in memory so switching tabs
+// does not re-query or rebuild the posts unnecessarily.
+window.feedCache = window.feedCache || { explore: null, following: null };
 let storyPausedByUI = false;
 
 function safeStart() {
@@ -6578,6 +6589,10 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
 
   session = newSession;
   currentUser = newSession?.user || null;
+
+  if (event === "PASSWORD_RECOVERY") {
+    setTimeout(() => window.openSocialAuth("updatePassword"), 0);
+  }
 
   if (currentUser) {
     console.log("SIGNED IN:", currentUser.id);
@@ -6791,18 +6806,66 @@ const { data: stories, error } =
   }
 
   // GROUP STORIES BY USER
+  // Always resolve the current profile so old stories immediately
+  // use the user's latest name/avatar without rewriting story rows.
+  const storyUserIds = [
+    ...new Set(
+      stories
+        .map(story => story.user_id)
+        .filter(Boolean)
+    )
+  ];
+
+  let storyProfiles = new Map();
+
+  if (storyUserIds.length) {
+    const { data: profiles, error: profileError } =
+      await supabase
+        .from("profiles")
+        .select("id,name,avatar_url,verified,online,last_seen")
+        .in("id", storyUserIds);
+
+    if (profileError) {
+      console.warn("⚠️ STORY PROFILE FETCH ERROR:", profileError);
+    } else {
+      storyProfiles = new Map(
+        (profiles || []).map(profile => [profile.id, profile])
+      );
+    }
+  }
+
   const grouped = {};
-stories.forEach(story => {
+  stories.forEach(story => {
 
     const userId =
       story.user_id || "unknown";
+
+    const currentProfile =
+      storyProfiles.get(userId) || null;
+
+    // Keep the story object in sync in memory only. The historical
+    // stories row in Supabase is intentionally left unchanged.
+    story.name =
+      currentProfile?.name ||
+      story.name ||
+      "User";
+
+    story.avatar_url =
+      currentProfile?.avatar_url ||
+      story.avatar_url ||
+      "";
+
+    story.online =
+      currentProfile?.online ??
+      story.online ??
+      false;
 
     if (!grouped[userId]) {
 
       grouped[userId] = {
 
         name:
-          story.name || "User",
+          story.name,
 
         avatar:
           story.avatar_url &&
@@ -9443,16 +9506,13 @@ function snapToNearestPost() {
 
   function renderPostElement(post) {
 
-  console.log("renderPostElement started", post.id);
-  console.log("Rendering:", post.id);
+console.log("Rendering:", post.id);
 
   if (!window.renderedPosts) {
     window.renderedPosts = new Set();
   }
 
-  console.log(post);
-
-  /* ==========================================
+/* ==========================================
      CURRENT PROFILE DATA
   ========================================== */
 
@@ -9524,6 +9584,8 @@ const isOwner =
 
     mediaHTML = `
       <img
+        loading="lazy"
+        decoding="async"
         src="${escapeHtml(post.file_url)}"
 
         onclick="
@@ -9559,6 +9621,7 @@ const isOwner =
     mediaHTML = `
       <video
         src="${escapeHtml(post.file_url)}"
+        preload="none"
         controls
         playsinline
         muted
@@ -9841,40 +9904,87 @@ const isOwner =
 
   `;
 
-
-  console.log(
-    "RENDERING POST:",
-    post.id
-  );
-
-  console.log(
+console.log(
     "Returning post:",
     post.id
   );
 
-  console.log(
-    "renderPostElement finished",
-    post.id
-  );
-
-
-  return div;
+return div;
 }
 
 function renderFeed(posts) {
   const postsDiv = document.getElementById("posts");
-  if (!postsDiv) return;
+  if (!postsDiv || !Array.isArray(posts)) return;
 
-  postsDiv.replaceChildren();
+  // Capture the exact Home position before changing the feed DOM. This keeps
+  // the reader at the same place when posts are refreshed or updated.
+  const isPostsScroller =
+    postsDiv.scrollHeight > postsDiv.clientHeight;
+  const savedPostsScrollTop = postsDiv.scrollTop;
+  const savedWindowScrollY =
+    window.scrollY ||
+    document.documentElement.scrollTop ||
+    document.body.scrollTop ||
+    0;
 
+  // Reuse unchanged post cards. Rebuilding all 20 cards on every small
+  // feed update forces Android Chrome to recalculate layout and repaint
+  // videos/images, which can make scrolling feel heavy.
+  const existing = new Map();
+  postsDiv.querySelectorAll(".post-card[id]").forEach(el => {
+    existing.set(el.id, el);
+  });
+
+  const fragment = document.createDocumentFragment();
   window.renderedPosts = new Set();
 
   posts.forEach(post => {
-    const el = renderPostElement(post);
-    if (el) {
-      postsDiv.appendChild(el);
+    if (!post?.id) return;
+
+    const id = `post-${post.id}`;
+    const signature = JSON.stringify(post);
+    let el = existing.get(id);
+
+    if (el && el.dataset.renderSignature === signature) {
+      // Nothing changed: keep the exact DOM node, including video position.
+      fragment.appendChild(el);
+      window.renderedPosts.add(String(post.id));
+      return;
     }
+
+    el = renderPostElement(post);
+    if (!el) return;
+
+    el.dataset.renderSignature = signature;
+    fragment.appendChild(el);
+    window.renderedPosts.add(String(post.id));
   });
+
+  // Only replace the container's children once. Existing unchanged nodes
+  // are moved rather than recreated, preserving their media state.
+  postsDiv.replaceChildren(fragment);
+
+  // Restore immediately, then once after layout. The second restore handles
+  // images/video metadata changing the feed height on Android Chrome.
+  if (isPostsScroller || postsDiv.scrollHeight > postsDiv.clientHeight) {
+    postsDiv.scrollTop = savedPostsScrollTop;
+    requestAnimationFrame(() => {
+      postsDiv.scrollTop = savedPostsScrollTop;
+    });
+  } else {
+    window.scrollTo({
+      top: savedWindowScrollY,
+      left: 0,
+      behavior: "auto"
+    });
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: savedWindowScrollY,
+        left: 0,
+        behavior: "auto"
+      });
+    });
+  }
 }
 
 // ✅ 3. DEFINE loadPosts
@@ -9891,6 +10001,20 @@ window.loadPosts = async function () {
     console.log("❌ posts div not found");
     return;
 
+  }
+
+  // Do not reload/re-render a feed simply because the user switched tabs.
+  // The cache is invalidated only when the app actually changes the feed data.
+  const cachedPosts = window.feedCache?.[activeTab];
+  if (Array.isArray(cachedPosts)) {
+    console.log("⚡ Using cached", activeTab, "feed");
+    window.postsState = cachedPosts;
+    if (postsDiv.dataset.renderedTab !== activeTab || !postsDiv.children.length) {
+      renderFeed(window.postsState);
+      postsDiv.dataset.renderedTab = activeTab;
+      observeVideos();
+    }
+    return;
   }
 
   let posts = [];
@@ -9926,24 +10050,36 @@ window.loadPosts = async function () {
     return;
   }
 
-  const { data: follows } = await supabase
+  const { data: follows, error: followsError } = await supabase
     .from("follows")
-    .select("following_id")
-    .eq("follower_id", userId);
+    .select("follower_id, following_id")
+    .or(`follower_id.eq.${userId},following_id.eq.${userId}`);
 
-  const followingIds =
-    follows?.map(f => f.following_id) || [];
-
-  if (followingIds.length === 0) {
-    postsDiv.innerHTML = "You're not following anyone";
+  if (followsError) {
+    console.error("❌ FOLLOW RELATION QUERY ERROR:", followsError);
+    postsDiv.innerHTML = "❌ Error loading following feed";
     return;
   }
+
+  const visibleUserIds = new Set([userId]);
+
+  (follows || []).forEach(follow => {
+    if (String(follow.follower_id) === String(userId)) {
+      visibleUserIds.add(follow.following_id);
+    }
+    if (String(follow.following_id) === String(userId)) {
+      visibleUserIds.add(follow.follower_id);
+    }
+  });
+
+  const visibleIds = [...visibleUserIds].filter(Boolean);
 
   const response = await supabase
     .from("posts")
     .select("*")
-    .in("user_id", followingIds)
-    .order("created_at", { ascending: false });
+    .in("user_id", visibleIds)
+    .order("created_at", { ascending: false })
+    .range(0,19);
 
   posts = response.data;
   error = response.error;
@@ -10029,8 +10165,7 @@ if (userIds.length > 0) {
 }
 
 
-postsDiv.replaceChildren();
-  
+// Keep the existing feed visible while resolving updated posts.
   if (session?.user && posts.length) {
 
   const { data: savedPosts } = await supabase
@@ -10060,10 +10195,15 @@ posts = await Promise.all(posts.map(async post => ({
 
 window.postsState = posts || [];
 
+// Save the fully-resolved feed (including authorized private post media) so
+// changing between Explore and Following does not fetch/rebuild it again.
+window.feedCache[activeTab] = window.postsState;
+
 // Clear previously rendered posts
 window.renderedPosts = new Set();
 
 renderFeed(window.postsState);
+postsDiv.dataset.renderedTab = activeTab;
 
 console.log(
   "POST ELEMENTS AFTER RENDER:",
@@ -10289,25 +10429,48 @@ upsertPost({
 };
 
 function upsertPost(updatedPost) {
-  if (!window.postsState) return;
+  if (!updatedPost || updatedPost.id == null) return;
 
-  const index = window.postsState.findIndex(p => p.id === updatedPost.id);
+  // Like updates only contain id, likes and liked_by. They must never
+  // be inserted as a new post when the liked post is absent from a tab.
+  const updateExisting = posts => {
+    if (!Array.isArray(posts)) return false;
+    const index = posts.findIndex(
+      post => String(post.id) === String(updatedPost.id)
+    );
+    if (index < 0) return false;
+    const previous = posts[index];
+    posts[index] = {
+      ...previous,
+      ...updatedPost,
+      profile: updatedPost.profile || previous.profile || null
+    };
+    return true;
+  };
 
-  if (index >= 0) {
-    window.postsState[index] = {
-  ...window.postsState[index],
-  ...updatedPost,
-
-  profile:
-    updatedPost.profile ||
-    window.postsState[index].profile ||
-    null
-};
-  } else {
-    window.postsState.unshift(updatedPost);
+  const foundInActiveFeed = updateExisting(window.postsState);
+  // Explore and Following can contain the same post; keep both caches
+  // synchronized without fetching or adding a duplicate post.
+  if (window.feedCache) {
+    Object.values(window.feedCache).forEach(posts => {
+      if (posts !== window.postsState) updateExisting(posts);
+    });
   }
 
-  renderFeed(window.postsState);
+  // likePost already updates the visible Like button. Rebuilding the
+  // entire feed here removes and recreates every <video>, which pauses
+  // playback and can leave a blank video while its private URL reloads.
+  // Keep the existing DOM and playing video untouched. Cached post data
+  // above is already synchronized for both Explore and Following.
+  if (foundInActiveFeed) {
+    const card = document.getElementById(`post-${updatedPost.id}`);
+    const button = card?.querySelector('.like-btn');
+    if (button && Array.isArray(updatedPost.liked_by)) {
+      const liked = updatedPost.liked_by.includes(session?.user?.id);
+      button.innerHTML = `${liked ? '❤️ Liked' : '🤍 Like'} (${updatedPost.likes || 0})`;
+      button.style.background = liked ? '#ff4d6d' : '#222';
+    }
+  }
 }
 
 window.deletePost = async (id) => {
@@ -27397,7 +27560,7 @@ window.openProfile = async function (
                 min-width:0;
             ">
 
-                <h2 style="
+                <h2 id="profileNameDisplay" style="
                     display:flex;
                     align-items:center;
                     gap:6px;
@@ -27468,7 +27631,7 @@ window.openProfile = async function (
                 ${
                     profile.username
                         ? `
-                <div style="
+                <div id="profileUsernameDisplay" style="
                     margin-top:8px;
                     color:#1d9bf0;
                     font-size:15px;
@@ -27480,23 +27643,21 @@ window.openProfile = async function (
                         : ""
                 }
 
-
-                ${
-                    profile.bio
-                        ? `
-                <div class="profile-theme-content" style="
-                    margin-top:10px;
-                    color:#ddd;
-                    font-size:15px;
-                    line-height:1.4;
-                    white-space:pre-wrap;
-                ">
-                    ${escapeHtml(profile.bio)}
-                </div>
-                `
-                        : ""
-                }
-
+${
+ profile.bio
+     ? `
+<div id="profileBioDisplay" class="profile-theme-content" style="
+margin-top:10px;
+color:#ddd;
+font-size:15px;
+line-height:1.4;
+white-space:pre-wrap;
+">
+${escapeHtml(profile.bio)}
+</div>
+`
+       : ""
+ }
 
                 ${
                     profile.website
@@ -29315,6 +29476,104 @@ window.loadProfilePhotos = async function (userId) {
                 Error loading photos
             </div>
         `;
+    }
+};
+
+
+// Profile Photos categories. Existing post-photo loading remains unchanged.
+// Avatar and cover uploads have unique paths, so older files stay in storage.
+const loadMainPostPhotos = window.loadProfilePhotos;
+window.profilePhotoCategory = "posts";
+window.loadProfilePhotos = async function(userId, category = "posts") {
+    window.profilePhotoCategory = category;
+    const container = document.getElementById("profilePosts");
+    if (!container) return;
+    const tabs = document.createElement("div");
+    tabs.id = "profilePhotoCategories";
+    tabs.style.cssText = "display:flex;gap:8px;padding:4px 0 14px;overflow-x:auto;";
+    [["posts","Post"],["avatar","Avatar"],["cover","Cover"]].forEach(([key,label]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.style.cssText = "flex:0 0 auto;border:1px solid #444;border-radius:20px;padding:9px 13px;color:white;cursor:pointer;background:" +
+            (category === key ? "#1877f2" : "#292929");
+        button.addEventListener("click", () => window.loadProfilePhotos(userId,key));
+        tabs.appendChild(button);
+    });
+    if (category === "posts") {
+        await loadMainPostPhotos(userId);
+        if (document.getElementById("profilePosts") === container) container.prepend(tabs);
+        return;
+    }
+    container.replaceChildren(tabs);
+    const status = document.createElement("div");
+    status.style.cssText = "padding:20px;text-align:center;color:#aaa;";
+    status.textContent = "Loading photos...";
+    container.appendChild(status);
+    try {
+        const {data: profile, error} = await supabase.from("profiles")
+            .select("id,name,username,avatar_url,cover_url,verified")
+            .eq("id",userId).maybeSingle();
+        if (error) throw error;
+        const current = category === "avatar" ? profile?.avatar_url : profile?.cover_url;
+        const folder = category === "cover" ? "covers" : "";
+        const {data: files, error: listError} = await supabase.storage
+            .from("avatars").list(folder,{limit:1000,sortBy:{column:"created_at",order:"desc"}});
+        // Some storage policies allow reading a known public URL but not listing
+        // another user's files. Always show the current photo in that case.
+        if (listError) console.warn("Photo history listing unavailable:",listError);
+        const urls = [];
+        const seen = new Set();
+        const add = (url) => {
+            if (!url) return;
+            const base = url.split("?")[0];
+            if (seen.has(base)) return;
+            seen.add(base);
+            urls.push(url);
+        };
+        add(current);
+        (files || []).filter(file =>
+            file.name.startsWith(userId + "_") &&
+            /\.(jpe?g|png|webp|gif|avif)$/i.test(file.name)
+        ).forEach(file => {
+            const path = folder ? folder + "/" + file.name : file.name;
+            add(supabase.storage.from("avatars").getPublicUrl(path).data?.publicUrl);
+        });
+        if (window.profilePhotoCategory !== category ||
+            document.getElementById("profilePosts") !== container) return;
+        status.remove();
+        if (!urls.length) {
+            const empty = document.createElement("div");
+            empty.style.cssText = "padding:30px;text-align:center;color:#888;";
+            empty.textContent = category === "avatar" ? "No avatar photos yet" : "No cover photos yet";
+            container.appendChild(empty);
+            window.profileGallery = [];
+            return;
+        }
+        window.profileGallery = urls.map((url,i) => ({
+            id:"profile-"+category+"-"+i, user_id:userId, file_url:url,
+            media_type:"image", name:profile?.name || "User",
+            avatar_url:profile?.avatar_url || "", profiles:profile
+        }));
+        window.profileGalleryIndex = 0;
+        const grid = document.createElement("div");
+        grid.style.cssText = "display:grid;grid-template-columns:repeat(3,1fr);gap:4px;width:100%;";
+        urls.forEach((url,index) => {
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = category === "avatar" ? "Avatar photo" : "Cover photo";
+            img.loading = "lazy";
+            img.style.cssText = "width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;cursor:pointer;background:#222;";
+            img.addEventListener("click", () => {
+                window.profileGalleryIndex = index;
+                window.openPhotoGallery(index,userId);
+            });
+            grid.appendChild(img);
+        });
+        container.appendChild(grid);
+    } catch (error) {
+        console.error("Profile photo category error:",error);
+        status.textContent = "Could not load photos";
     }
 };
 
@@ -33051,7 +33310,7 @@ window.navigateToScreen(
                         .toLowerCase();
 
                 const avatarPath =
-                    `avatars/${currentUserId}_${Date.now()}.${extension}`;
+                    `${currentUserId}_${Date.now()}.${extension}`;
 
                 const {
                     error: avatarUploadError
@@ -33084,11 +33343,15 @@ window.navigateToScreen(
                     return;
                 }
 
-                const avatarSignedUrl =
-                    await window.resolveStorageMediaUrl("avatars", avatarPath, avatarUrl);
+                const { data: avatarPublicData } =
+                    supabase.storage
+                    .from("avatars")
+                    .getPublicUrl(avatarPath);
 
                 avatarUrl =
-                    avatarSignedUrl || avatarUrl;
+                    avatarPublicData?.publicUrl
+                    ? avatarPublicData.publicUrl + "?t=" + Date.now()
+                    : avatarUrl;
 
                 changes.push(
                     "avatar"
@@ -33149,11 +33412,15 @@ window.navigateToScreen(
                     return;
                 }
 
-                const coverSignedUrl =
-                    await window.resolveStorageMediaUrl("avatars", coverPath, coverUrl);
+                const { data: coverPublicData } =
+                    supabase.storage
+                    .from("avatars")
+                    .getPublicUrl(coverPath);
 
                 coverUrl =
-                    coverSignedUrl || coverUrl;
+                    coverPublicData?.publicUrl
+                    ? coverPublicData.publicUrl + "?t=" + Date.now()
+                    : coverUrl;
 
                 changes.push(
                     "cover"
@@ -33344,23 +33611,75 @@ window.navigateToScreen(
             }
 
             // -----------------------------------------
-            // REFRESH MAIN FEED
+            // UPDATE ALREADY-LOADED CONTENT IN MEMORY
             // -----------------------------------------
+            // Do not call loadPosts() here. That would discard the
+            // Explore/Following feed cache and fetch/rebuild the feed.
+            // Instead, update the cached post/profile data in place.
 
-            if (
-                typeof window.loadPosts ===
-                "function"
-            ) {
+            const updatedProfile = {
+                id: currentUserId,
+                name: name || "User",
+                username: username || "",
+                website: website || null,
+                location: location || null,
+                bio: bio || null,
+                avatar_url: avatarUrl || "",
+                cover_url: coverUrl || null,
+                verified: profile.verified || false
+            };
 
+            Object.keys(window.feedCache || {}).forEach(tab => {
+                const cached = window.feedCache?.[tab];
+                if (!Array.isArray(cached)) return;
+
+                cached.forEach(post => {
+                    if (String(post.user_id) !== String(currentUserId)) return;
+
+                    post.profile = {
+                        ...(post.profile || {}),
+                        ...updatedProfile
+                    };
+                    post.name = updatedProfile.name;
+                    post.username = updatedProfile.username;
+                    post.avatar_url = updatedProfile.avatar_url;
+                    post.verified = updatedProfile.verified;
+                });
+            });
+
+            if (Array.isArray(window.postsState)) {
+                window.postsState.forEach(post => {
+                    if (String(post.user_id) !== String(currentUserId)) return;
+
+                    post.profile = {
+                        ...(post.profile || {}),
+                        ...updatedProfile
+                    };
+                    post.name = updatedProfile.name;
+                    post.username = updatedProfile.username;
+                    post.avatar_url = updatedProfile.avatar_url;
+                    post.verified = updatedProfile.verified;
+                });
+            }
+
+            // Refresh the story strip from the database, but resolve the
+            // current profile for each story owner so old stories update too.
+            if (typeof window.loadStories === "function") {
                 try {
-                    await window.loadPosts();
+                    await window.loadStories();
                 } catch (error) {
-
-                    console.warn(
-                        "⚠️ FEED REFRESH ERROR:",
-                        error
-                    );
+                    console.warn("⚠️ STORY PROFILE REFRESH ERROR:", error);
                 }
+            }
+
+            // Re-render the currently visible feed from the updated cache
+            // without querying Supabase again.
+            if (
+                Array.isArray(window.postsState) &&
+                document.getElementById("posts")
+            ) {
+                renderFeed(window.postsState);
+                observeVideos();
             }
 
             // -----------------------------------------
@@ -33370,6 +33689,69 @@ window.navigateToScreen(
             const profileTab =
                 window.currentProfileTab ||
                 "posts";
+
+            // -----------------------------------------
+            // UPDATE THE EXISTING PROFILE SCREEN IN PLACE
+            // -----------------------------------------
+            // history.back() returns to the already-rendered profile DOM.
+            // Update that DOM first so the saved profile is visible
+            // immediately, without reopening/reloading the feed.
+            const activeProfileScreen =
+                document.getElementById("profileScreen");
+
+            if (activeProfileScreen) {
+                const profileNameEl =
+                    activeProfileScreen.querySelector("#profileNameDisplay");
+                if (profileNameEl) {
+                    profileNameEl.innerHTML =
+                        `${escapeHtml(name || "User")} ${profile.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ""}`;
+                }
+
+                const avatarEl =
+                    activeProfileScreen.querySelector("#profileAvatarImage");
+                if (avatarEl && avatarUrl) {
+                    avatarEl.src = avatarUrl;
+                }
+
+                const coverEl =
+                    activeProfileScreen.querySelector("#profileCoverImage");
+                if (coverEl && coverUrl) {
+                    coverEl.src = coverUrl;
+                } else if (!coverEl && coverUrl) {
+                    const coverContainer =
+                        activeProfileScreen.querySelector("#profileScrollContainer > div:first-child");
+                    if (coverContainer) {
+                        const newCover = document.createElement("img");
+                        newCover.id = "profileCoverImage";
+                        newCover.src = coverUrl;
+                        newCover.alt = "Cover Photo";
+                        newCover.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;";
+                        coverContainer.insertBefore(newCover, coverContainer.firstChild);
+                    }
+                }
+
+                const usernameEl =
+                    activeProfileScreen.querySelector("#profileUsernameDisplay");
+                if (usernameEl) {
+                    usernameEl.textContent = username ? `@${username}` : "";
+                    usernameEl.style.display = username ? "block" : "none";
+                }
+
+                const bioEl =
+                    activeProfileScreen.querySelector("#profileBioDisplay");
+                if (bioEl) {
+                    bioEl.textContent = bio || "";
+                    bioEl.style.display = bio ? "block" : "none";
+                }
+
+                const websiteEl =
+                    activeProfileScreen.querySelector("#profileWebsiteLink");
+                if (websiteEl) {
+                    websiteEl.href = website || "";
+                    websiteEl.textContent = website || "";
+                    websiteEl.parentElement.style.display = website ? "block" : "none";
+                }
+            }
 
             // -----------------------------------------
             // REMOVE EDIT SCREEN
@@ -37489,6 +37871,30 @@ window.closePhotoGallery = function (
     }
 };
 
+
+
+/* =====================================================
+   REAL ACCOUNT AUTHENTICATION
+   Isolated from startApp/loadPosts/renderFeed/renderPostElement.
+   ===================================================== */
+window.socialAuthState=window.socialAuthState||{mode:"login",busy:false};
+window.socialAuthMessage=function(msg,type){const b=document.querySelector(type==="success"?"#socialAuthCard .auth-success":"#socialAuthCard .auth-error");if(b){b.textContent=msg;b.style.display="block";}};
+window.socialAuthBusy=function(v){socialAuthState.busy=v;const b=document.getElementById("socialAuthSubmit");if(b){b.disabled=v;b.style.opacity=v?.65:1;}};
+window.openSocialAuth=function(mode="login"){socialAuthState.mode=mode;socialAuthState.busy=false;let o=document.getElementById("socialAuthOverlay");if(!o){o=document.createElement("div");o.id="socialAuthOverlay";o.innerHTML='<div id="socialAuthCard" role="dialog" aria-modal="true"></div>';document.body.appendChild(o);o.addEventListener("click",e=>{if(e.target===o&&!socialAuthState.busy)closeSocialAuth();});}o.classList.add("active");renderSocialAuth();setTimeout(()=>o.querySelector("input")?.focus(),40);};
+window.closeSocialAuth=function(){if(!socialAuthState.busy)document.getElementById("socialAuthOverlay")?.classList.remove("active");};
+window.socialEnsureProfile=async function(user,name,username){if(!user?.id)return;const {data:p}=await supabase.from("profiles").select("id").eq("id",user.id).maybeSingle();if(p)return;let u=String(username||user.user_metadata?.username||user.email?.split("@")[0]||"user").trim().replace(/[^a-zA-Z0-9_.-]/g,"_").slice(0,30)||"user";const {data:du}=await supabase.from("profiles").select("id").eq("username",u).limit(1);if(du?.length)u=u+"_"+String(user.id).slice(0,6);await supabase.from("profiles").insert({id:user.id,name:String(name||user.user_metadata?.name||user.email?.split("@")[0]||"SocialApp User").slice(0,100),username:u,avatar_url:user.user_metadata?.avatar_url||null,verified:false});};
+window.renderSocialAuth=function(msg="",type="error"){const c=document.getElementById("socialAuthCard");if(!c)return;let h='<div class="auth-close-row"><button class="auth-close" type="button" onclick="closeSocialAuth()">×</button></div>';const m=socialAuthState.mode;
+if(m==="register")h+=`<h2>Create your SocialApp account</h2><p class="auth-subtitle">Create a real account with your email and password.</p><form id="socialRegisterForm"><label>Full name</label><input id="authName" autocomplete="name" maxlength="100" required><label>Username</label><input id="authUsername" autocomplete="username" maxlength="30" required><label>Email</label><input id="authEmail" type="email" autocomplete="email" required><label>Password</label><input id="authPassword" type="password" autocomplete="new-password" minlength="6" required><label>Confirm password</label><input id="authPassword2" type="password" autocomplete="new-password" minlength="6" required><div class="auth-error"></div><div class="auth-success"></div><button class="auth-primary" id="socialAuthSubmit" type="submit">Create account</button></form><button class="auth-link" type="button" onclick="openSocialAuth('login')">Already have an account? Log in</button>`;
+else if(m==="forgot")h+=`<h2>Reset your password</h2><p class="auth-subtitle">Enter your SocialApp email and we'll send a password-reset link.</p><form id="socialForgotForm"><label>Email</label><input id="authResetEmail" type="email" autocomplete="email" required><div class="auth-error"></div><div class="auth-success"></div><button class="auth-primary" id="socialAuthSubmit" type="submit">Send reset link</button></form><button class="auth-link" type="button" onclick="openSocialAuth('login')">Back to login</button>`;
+else if(m==="updatePassword")h+=`<h2>Choose a new password</h2><p class="auth-subtitle">Set a new password for your SocialApp account.</p><form id="socialUpdatePasswordForm"><label>New password</label><input id="authNewPassword" type="password" autocomplete="new-password" minlength="6" required><label>Confirm new password</label><input id="authNewPassword2" type="password" autocomplete="new-password" minlength="6" required><div class="auth-error"></div><div class="auth-success"></div><button class="auth-primary" id="socialAuthSubmit" type="submit">Update password</button></form>`;
+else h+=`<h2>Log in to SocialApp</h2><p class="auth-subtitle">Use your SocialApp email and password.</p><form id="socialLoginForm"><label>Email</label><input id="authEmail" type="email" autocomplete="email" required><label>Password</label><input id="authPassword" type="password" autocomplete="current-password" required><div class="auth-error"></div><div class="auth-success"></div><button class="auth-primary" id="socialAuthSubmit" type="submit">Log in</button></form><button class="auth-link" type="button" onclick="openSocialAuth('forgot')">Forgot password?</button><div class="auth-divider">OR</div><button class="auth-secondary" type="button" onclick="socialGoogleLogin()">Continue with Google</button><button class="auth-link" type="button" onclick="openSocialAuth('register')">Create a new account</button>`;
+h+='<div class="auth-contact">Need help? <a href="mailto:mbuguajames16th@gmail.com">mbuguajames16th@gmail.com</a></div>';c.innerHTML=h;const f=c.querySelector("form");if(f?.id==="socialLoginForm")f.addEventListener("submit",socialLoginSubmit);if(f?.id==="socialRegisterForm")f.addEventListener("submit",socialRegisterSubmit);if(f?.id==="socialForgotForm")f.addEventListener("submit",socialForgotSubmit);if(f?.id==="socialUpdatePasswordForm")f.addEventListener("submit",socialUpdatePasswordSubmit);if(msg)socialAuthMessage(msg,type);};
+window.socialLoginSubmit=async e=>{e.preventDefault();try{socialAuthBusy(true);const {data,error}=await supabase.auth.signInWithPassword({email:document.getElementById("authEmail").value.trim(),password:document.getElementById("authPassword").value});if(error)throw error;await socialEnsureProfile(data.user);closeSocialAuth();}catch(err){socialAuthBusy(false);renderSocialAuth(err.message||"Login failed.");}};
+window.socialRegisterSubmit=async e=>{e.preventDefault();const name=authName.value.trim(),username=authUsername.value.trim(),email=authEmail.value.trim(),p1=authPassword.value,p2=authPassword2.value;if(p1.length<6)return renderSocialAuth("Password must be at least 6 characters.");if(p1!==p2)return renderSocialAuth("Passwords do not match.");try{socialAuthBusy(true);const {data,error}=await supabase.auth.signUp({email,password:p1,options:{data:{full_name:name,name,username},emailRedirectTo:location.href.split("#")[0]}});if(error)throw error;if(data.session&&data.user){await socialEnsureProfile(data.user,name,username);closeSocialAuth();}else{socialAuthBusy(false);renderSocialAuth("Account created. Check your email to confirm your account, then log in.","success");}}catch(err){socialAuthBusy(false);renderSocialAuth(err.message||"Could not create the account.");}};
+window.socialForgotSubmit=async e=>{e.preventDefault();try{socialAuthBusy(true);const {error}=await supabase.auth.resetPasswordForEmail(authResetEmail.value.trim(),{redirectTo:location.href.split("#")[0]});if(error)throw error;socialAuthBusy(false);renderSocialAuth("If the email can receive SocialApp mail, a reset link has been sent. Check your inbox and spam folder.","success");}catch(err){socialAuthBusy(false);renderSocialAuth(err.message||"Could not send the reset link.");}};
+window.socialUpdatePasswordSubmit=async e=>{e.preventDefault();const p1=authNewPassword.value,p2=authNewPassword2.value;if(p1.length<6)return renderSocialAuth("Password must be at least 6 characters.");if(p1!==p2)return renderSocialAuth("Passwords do not match.");try{socialAuthBusy(true);const {error}=await supabase.auth.updateUser({password:p1});if(error)throw error;socialAuthBusy(false);renderSocialAuth("Your password has been updated successfully.","success");setTimeout(closeSocialAuth,1200);}catch(err){socialAuthBusy(false);renderSocialAuth(err.message||"Could not update the password.");}};
+window.socialGoogleLogin=async()=>{try{socialAuthBusy(true);const {error}=await supabase.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.href.split("#")[0]}});if(error)throw error;}catch(err){socialAuthBusy(false);renderSocialAuth(err.message||"Google login failed.");}};
+
 function attachEvents() {
 
     if (window.commentEventsAttached) {
@@ -37508,7 +37914,13 @@ function attachEvents() {
       exploreTab.classList.add("active-tab");
       followingTab.classList.remove("active-tab");
 
-      loadPosts();
+      if (Array.isArray(window.feedCache?.explore)) {
+        window.postsState = window.feedCache.explore;
+        renderFeed(window.postsState);
+        observeVideos();
+      } else {
+        loadPosts();
+      }
     };
 
     followingTab.onclick = () => {
@@ -37517,7 +37929,13 @@ function attachEvents() {
       followingTab.classList.add("active-tab");
       exploreTab.classList.remove("active-tab");
 
-      loadPosts();
+      if (Array.isArray(window.feedCache?.following)) {
+        window.postsState = window.feedCache.following;
+        renderFeed(window.postsState);
+        observeVideos();
+      } else {
+        loadPosts();
+      }
     };
   }
 
@@ -37529,22 +37947,7 @@ function attachEvents() {
 const loginBtn = document.getElementById("login");
 
 if (loginBtn) {
-
-  loginBtn.onclick = async () => {
-
-    await supabase.auth.signInWithOAuth({
-
-      provider: "google",
-
-      options: {
-        redirectTo:
-          window.location.origin + "/Social-app-/"
-      }
-
-    });
-
-  };
-
+  loginBtn.onclick = () => window.openSocialAuth("login");
 }
 
   const storyBtn = document.getElementById("storyBtn");
@@ -45170,11 +45573,46 @@ window.openMedia = function (
     options = {}
 ) {
 
-    // Capture Home BEFORE opening Post/Avatar media. The viewer then stores
-    // this exact Home position as its return state.
-    if (history.state?.appScreen === "app" &&
-        typeof window.saveHomeScroll === "function") {
-        window.saveHomeScroll();
+    // Capture Home BEFORE opening Post/Avatar media. Do this from the
+    // actual mounted Home DOM as well as navigation state. On Android/PWA
+    // navigation state can briefly be "mediaViewer" before the click
+    // handler finishes, which previously caused the saved position to be 0.
+    const homeApp = document.getElementById("app");
+    const profileLayer = document.getElementById("profileScreen");
+    const homeIsVisible = !!homeApp &&
+        getComputedStyle(homeApp).display !== "none" &&
+        getComputedStyle(homeApp).visibility !== "hidden" &&
+        getComputedStyle(homeApp).opacity !== "0" &&
+        !(profileLayer && getComputedStyle(profileLayer).display !== "none" &&
+          getComputedStyle(profileLayer).visibility !== "hidden" &&
+          getComputedStyle(profileLayer).opacity !== "0");
+
+    if (homeIsVisible) {
+        if (typeof window.saveHomeScroll === "function") {
+            // Commit the exact Home position to the CURRENT browser history
+            // entry before media creates its own entry. Closing media then
+            // uses history.back() to return to this exact entry.
+            window.saveHomeScroll(true);
+        }
+
+        const homePostsSnapshot = document.getElementById("posts");
+        const homeWindowY = Number(window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0);
+        const homePostsY = homePostsSnapshot ? Number(homePostsSnapshot.scrollTop) || 0 : 0;
+        // The important part is identifying the ACTUAL scrolling container.
+        // #posts can be scrollable even when its scrollTop is 0, while the
+        // document may be the real scroller (and vice versa). Prefer the
+        // container that currently has a non-zero offset.
+        const activeHomeScroller = homePostsY > 0
+            ? "posts"
+            : (homeWindowY > 0 ? "window" :
+                (homePostsSnapshot && homePostsSnapshot.scrollHeight > homePostsSnapshot.clientHeight
+                    ? "posts" : "window"));
+        window.__homeMediaScrollSnapshot = {
+            element: activeHomeScroller,
+            posts: homePostsY,
+            window: homeWindowY,
+            postsElement: homePostsSnapshot || null
+        };
     }
 
     if (
@@ -48993,6 +49431,18 @@ window.setCurrentNavigationState = function (
 // CLOSE HOME MEDIA VIEWER
 // =====================================================
 
+// The app owns scroll restoration. Prevent Android/Chrome history
+// restoration from competing with the exact Home container position.
+try {
+    history.scrollRestoration = "manual";
+} catch (e) {}
+
+// A close operation is a browser-history operation, not a second navigation.
+// These flags prevent double-close calls from X + swipe animation callbacks
+// from consuming two history entries.
+window.__mediaCloseHistoryPending = false;
+window.__mediaHistoryStateBeforeClose = null;
+
 window.closeMedia = function () {
 
     const viewer =
@@ -49061,14 +49511,27 @@ window.closeMedia = function () {
         document.documentElement.style.touchAction = "";
     }
 
-    // Profile avatar is an overlay on top of the already-mounted Profile.
-    // Do NOT use history.back() here: the previous browser entry can be a
-    // different app screen, which could unexpectedly exit the Profile/app.
-    // Replace only the current media entry with the exact Profile state and
-    // reveal the existing Profile DOM without rebuilding/reloading it.
+    // The media entry was pushed on top of the exact source history entry.
+    // Closing must therefore travel BACK to that entry instead of replacing
+    // the media entry. This is what makes X-close and swipe-close behave
+    // identically and repeat safely across every open/close cycle.
     const currentMediaData = history.state?.appScreen === "mediaViewer"
         ? history.state?.data
         : null;
+
+    if (history.state?.appScreen === "mediaViewer") {
+        if (window.__mediaCloseHistoryPending) return;
+        window.__mediaCloseHistoryPending = true;
+        window.__mediaHistoryStateBeforeClose = history.state;
+
+        try {
+            history.back();
+            return;
+        } catch (error) {
+            window.__mediaCloseHistoryPending = false;
+            console.warn("⚠️ MEDIA HISTORY BACK FAILED:", error);
+        }
+    }
 
     if (currentMediaData?.profileAvatarMedia === true &&
         currentMediaData?.sourceScreen === "profileScreen") {
@@ -49123,6 +49586,120 @@ window.closeMedia = function () {
         // return state to affect a later media/profile close operation.
         window._mediaReturnState = null;
 
+        return;
+    }
+
+    // Home avatars and post media are overlays, not page navigation.
+    // Closing them must never traverse past Home and exit the PWA.
+    if (currentMediaData?.sourceScreen === "app" ||
+        (history.state?.appScreen === "mediaViewer" &&
+         window._mediaReturnState?.screen === "app")) {
+        const homeData = currentMediaData || {};
+        const homeSnapshot = window.__homeMediaScrollSnapshot || null;
+
+        // IMPORTANT: media history entries intentionally use scrollY: 0.
+        // The exact Home position lives in the immutable media-open snapshot.
+        // Never let the media entry's zero overwrite that position.
+        const snapshotY = homeSnapshot?.element === "posts"
+            ? Number(homeSnapshot.posts)
+            : Number(homeSnapshot?.window);
+        const hasSnapshot = !!homeSnapshot && Number.isFinite(snapshotY);
+        const homeScroll = hasSnapshot
+            ? snapshotY
+            : (Number.isFinite(Number(window._mediaReturnState?.scrollY))
+                ? Number(window._mediaReturnState.scrollY)
+                : (Number(window.homeScrollPosition) || 0));
+
+        const homeState = {
+            appScreen: "app",
+            data: { ...(homeData.sourceData ||
+                window._mediaReturnState?.data || {}) },
+            scrollY: homeScroll
+        };
+        history.replaceState(homeState, "", location.href);
+        if (window.appNavigation) {
+            window.appNavigation.current = {
+                screen: "app",
+                data: homeState.data,
+                scrollY: homeScroll,
+                timestamp: Date.now()
+            };
+        }
+        if (typeof window.syncNavigationSession === "function") {
+            try { window.syncNavigationSession(homeState); } catch (error) {}
+        }
+        const home = document.getElementById("app");
+        if (home) {
+            home.style.display = "";
+            home.style.visibility = "visible";
+            home.style.opacity = "1";
+            home.style.pointerEvents = "auto";
+        }
+        if (typeof window.restoreTopBar === "function") {
+            window.restoreTopBar();
+        }
+        // Restore the exact scroller that was active before opening the
+        // avatar/post media.  Home can scroll inside #posts rather than the
+        // window, so window.scrollTo() alone is not sufficient.
+        window.homeScrollY = homeScroll;
+        const homePosts = document.getElementById("posts");
+        const exactPostsY = Number(homeSnapshot?.posts);
+        const exactWindowY = Number(homeSnapshot?.window);
+        const exactScroller = homeSnapshot?.element ||
+            (Number.isFinite(exactPostsY) && exactPostsY > 0 ? "posts" : "window");
+
+        window.homeScrollElement = exactScroller;
+
+        window._mediaReturnState = null;
+        // Keep the snapshot alive through the final restoration pass. It is
+        // the authoritative Home position for this media-close operation.
+
+        const restoreExactHomePosition = () => {
+            try {
+                // Restore the exact scroller captured immediately before the
+                // avatar/post was opened. This is more reliable than deriving
+                // the scroller again after the overlay has changed the layout.
+                if (exactScroller === "posts") {
+                    if (homePosts && Number.isFinite(exactPostsY)) {
+                        homePosts.scrollTop = exactPostsY;
+                    }
+                    // Keep the document at its pre-open position too, but do
+                    // not let a stale window value override the #posts offset.
+                    if (Number.isFinite(exactWindowY)) {
+                        window.scrollTo({ top: exactWindowY, left: 0, behavior: "auto" });
+                    }
+                } else if (Number.isFinite(exactWindowY)) {
+                    window.scrollTo({ top: exactWindowY, left: 0, behavior: "auto" });
+                }
+
+                // Re-apply the captured container directly after layout.
+                if (exactScroller === "posts" && homePosts && Number.isFinite(exactPostsY)) {
+                    homePosts.scrollTop = exactPostsY;
+                }
+                if (typeof window.restoreHomeScroll === "function") {
+                    window.restoreHomeScroll();
+                }
+            } catch (error) {
+                try {
+                    if (homePosts && Number.isFinite(exactPostsY)) homePosts.scrollTop = exactPostsY;
+                    window.scrollTo(0, Number.isFinite(exactWindowY) ? exactWindowY : homeScroll);
+                } catch (e) {}
+            }
+        };
+
+        // Restore aggressively after the overlay is removed. Android Chrome/PWA
+        // can apply its own scroll restoration after the click/history work, so
+        // one restoration pass is not enough. Keep the captured Home snapshot
+        // authoritative and re-apply it after the browser has completed layout.
+        restoreExactHomePosition();
+        requestAnimationFrame(restoreExactHomePosition);
+        requestAnimationFrame(() => requestAnimationFrame(restoreExactHomePosition));
+        setTimeout(restoreExactHomePosition, 50);
+        setTimeout(restoreExactHomePosition, 150);
+        setTimeout(restoreExactHomePosition, 350);
+        setTimeout(() => {
+            window.__homeMediaScrollSnapshot = null;
+        }, 400);
         return;
     }
 
@@ -52361,7 +52938,17 @@ window.addEventListener(
                  * restoring the underlying screen.
                  */
                 const wasMediaViewer =
+                    window.__mediaCloseHistoryPending === true ||
+                    window.__mediaHistoryStateBeforeClose?.appScreen === "mediaViewer" ||
                     history.state?.appScreen === "mediaViewer";
+
+                // history.back() has now delivered the destination entry.
+                // Keep the destination authoritative and consume the close
+                // marker so the next open/close cycle gets a fresh one.
+                if (window.__mediaCloseHistoryPending) {
+                    window.__mediaCloseHistoryPending = false;
+                    window.__mediaHistoryStateBeforeClose = null;
+                }
 
                 // Keep the old viewer visible until the destination has been
                 // restored. This prevents a blank transition on Back.
@@ -52428,7 +53015,7 @@ window.addEventListener(
 
 
                 const wasMediaViewerBeforeRestore =
-                    history.state?.appScreen === "mediaViewer";
+                    wasMediaViewer;
 
                 await window.restoreNavigationState(
                     restoreState
@@ -52483,16 +53070,24 @@ window.addEventListener(
                     restoreState.scrollY !=
                     null
                 ) {
-
-                    requestAnimationFrame(
-                        () => {
-
-                            window.scrollTo(
-                                0,
-                                restoreState.scrollY
-                            );
+                    const restoreY = Number(restoreState.scrollY) || 0;
+                    const applyRestoredScroll = () => {
+                        // Home uses #posts as its actual feed scroller. Restore
+                        // that element when it is the active scrolling surface;
+                        // otherwise restore the document scroll position.
+                        const posts = document.getElementById("posts");
+                        if (restoreState.screen === "app" && posts &&
+                            (window.homeScrollElement === "posts" ||
+                             posts.scrollHeight > posts.clientHeight)) {
+                            posts.scrollTop = restoreY;
+                            window.homeScrollY = restoreY;
+                        } else {
+                            window.scrollTo(0, restoreY);
                         }
-                    );
+                    };
+
+                    requestAnimationFrame(applyRestoredScroll);
+                    requestAnimationFrame(() => requestAnimationFrame(applyRestoredScroll));
                 }
 
                 return;
@@ -53104,10 +53699,11 @@ window.saveHomeScroll = function (commitHistory = false) {
 
   const posts = document.getElementById("posts");
 
-  // Keep this handler extremely cheap: scrolling must remain on the
-  // browser compositor thread.  Do not call history.replaceState() on
-  // every scroll event.
-  if (posts && posts.scrollHeight > posts.clientHeight) {
+  // Keep this handler layout-free during normal scrolling. Reading
+  // scrollHeight/clientHeight here can force a synchronous layout on
+  // Android Chrome. #posts is the Home feed scroller, so read scrollTop
+  // directly; only fall back to the document when #posts does not exist.
+  if (posts) {
     window.homeScrollElement = "posts";
     window.homeScrollY = posts.scrollTop;
   } else {
@@ -53148,17 +53744,16 @@ window.saveHomeScroll = function (commitHistory = false) {
 // point records the exact current position before navigation.
 window.__homeScrollTrackQueued = false;
 window.trackHomeScrollLive = function () {
-  if (window.__homeScrollTrackQueued) return;
-  window.__homeScrollTrackQueued = true;
-  requestAnimationFrame(() => {
-    window.__homeScrollTrackQueued = false;
-    try {
-      if (history.state?.appScreen !== "app") return;
-      if (window.appNavigation?.current?.screen &&
-          window.appNavigation.current.screen !== "app") return;
-      window.saveHomeScroll(false);
-    } catch (error) {}
-  });
+  // No requestAnimationFrame and no layout measurement here. This only
+  // records the native scrollTop so the browser remains in control of
+  // touch/momentum scrolling. History is still committed only when a
+  // navigation actually leaves Home.
+  try {
+    if (history.state?.appScreen !== "app") return;
+    if (window.appNavigation?.current?.screen &&
+        window.appNavigation.current.screen !== "app") return;
+    window.saveHomeScroll(false);
+  } catch (error) {}
 };
 
 window.addEventListener("scroll", window.trackHomeScrollLive, {
@@ -53170,21 +53765,12 @@ document.addEventListener("scroll", window.trackHomeScrollLive, {
   capture: true
 });
 
-// #posts may be the actual scrolling element and may be created/replaced
-// after startup, so observe it whenever the feed exists.
+// The document capture listener above also receives scroll events from
+// #posts, so a second #posts listener would do the same work twice. Keep
+// this binder as a compatibility no-op because navigation code calls it.
 window.homePostsScrollHandler = null;
 window.bindHomePostsScrollTracker = function () {
-  const posts = document.getElementById("posts");
-  if (!posts) return;
-  if (window.homePostsScrollHandler &&
-      window.homePostsScrollElement === posts) return;
-  window.homePostsScrollHandler = () => {
-    window.trackHomeScrollLive();
-  };
-  window.homePostsScrollElement = posts;
-  posts.addEventListener("scroll", window.homePostsScrollHandler, {
-    passive: true
-  });
+  return document.getElementById("posts");
 };
 
 window.bindHomePostsScrollTracker();
@@ -53197,66 +53783,37 @@ window.bindHomePostsScrollTracker();
 
 window.restoreHomeScroll = function () {
 
-  const y = window.homeScrollY || 0;
+  // Prefer the immutable media snapshot when returning from a Post/Avatar.
+  // This prevents later navigation state or a temporary scroll reset from
+  // replacing the real Home position with 0.
+  const snapshot = window.__homeMediaScrollSnapshot || null;
+  const element = snapshot?.element || window.homeScrollElement || "window";
+  const postsY = Number.isFinite(Number(snapshot?.posts))
+    ? Number(snapshot.posts)
+    : Number(window.homeScrollY || 0);
+  const windowY = Number.isFinite(Number(snapshot?.window))
+    ? Number(snapshot.window)
+    : Number(window.homeScrollY || 0);
 
-  requestAnimationFrame(() => {
-
-    if (
-      window.homeScrollElement === "posts"
-    ) {
-
-      const posts =
-        document.getElementById("posts");
-
-      if (posts) {
-
-        posts.scrollTop = y;
-
-      }
-
-    } else {
-
-      window.scrollTo({
-        top: y,
-        left: 0,
-        behavior: "instant"
-      });
-
+  const apply = () => {
+    const posts = document.getElementById("posts");
+    if (element === "posts" && posts) {
+      posts.scrollTop = postsY;
     }
+    // Keep the document offset too, but never use it instead of #posts.
+    if (Number.isFinite(windowY)) {
+      window.scrollTo({ top: windowY, left: 0, behavior: "auto" });
+    }
+    if (element === "posts" && posts) {
+      posts.scrollTop = postsY;
+    }
+  };
 
-    requestAnimationFrame(() => {
+  apply();
+  requestAnimationFrame(apply);
+  requestAnimationFrame(() => requestAnimationFrame(apply));
 
-      if (
-        window.homeScrollElement === "posts"
-      ) {
-
-        const posts =
-          document.getElementById("posts");
-
-        if (posts) {
-          posts.scrollTop = y;
-        }
-
-      } else {
-
-        window.scrollTo({
-          top: y,
-          left: 0,
-          behavior: "instant"
-        });
-
-      }
-
-    });
-
-  });
-
-  console.log(
-    "↩️ HOME POSITION RESTORED:",
-    window.homeScrollElement,
-    y
-  );
-
+  console.log("↩️ HOME POSITION RESTORED:", element, postsY, windowY);
 };
 
 // ========================
@@ -53335,95 +53892,120 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
 }
 
-const videoObserver = new IntersectionObserver(
-  (entries) => {
+// HOME FEED: one active video; preload metadata only near the viewport.
+let homeVideoObserver = null;
+let activeHomeVideo = null;
+const homeVideoVisibility = new Map();
 
-    entries.forEach((entry) => {
+function pauseHomeVideo(video) {
+  if (video && !video.paused) video.pause();
+}
 
-      const video =
-        entry.target.querySelector("video");
-
-      if (!video) return;
-
-      if (
-        entry.isIntersecting &&
-        entry.intersectionRatio >= 0.75
-      ) {
-
-        // 🔥 ONLY ONE HOME VIDEO CAN PLAY
-        document
-          .querySelectorAll("#posts .post-card video")
-          .forEach((otherVideo) => {
-
-            if (otherVideo !== video) {
-              otherVideo.pause();
-            }
-
-          });
-
-        video.play().catch(() => {});
-
-      } else {
-
-        video.pause();
-
-      }
-
-    });
-
-  },
-  {
-    threshold: [0.6, 0.75, 0.9]
+function activateHomeVideo(video) {
+  if (activeHomeVideo === video) {
+    if (video && video.paused && document.visibilityState === "visible") {
+      video.play().catch(() => {});
+    }
+    return;
   }
-);
 
+  pauseHomeVideo(activeHomeVideo);
+  activeHomeVideo = video;
 
-// =====================================================
-// HOME FEED VIDEO OBSERVER
-// =====================================================
+  if (video && document.visibilityState === "visible") {
+    video.play().catch(() => {});
+  }
+}
+
+function updateActiveHomeVideo() {
+  const posts = document.getElementById("posts");
+  if (!posts || posts.getClientRects().length === 0 ||
+      document.visibilityState !== "visible") {
+    activateHomeVideo(null);
+    return;
+  }
+
+  let bestVideo = null;
+  let bestRatio = 0;
+  for (const [video, ratio] of homeVideoVisibility) {
+    if (!video.isConnected) {
+      homeVideoVisibility.delete(video);
+      continue;
+    }
+    if (ratio > bestRatio) {
+      bestRatio = ratio;
+      bestVideo = video;
+    }
+  }
+
+  // Require the majority of a video to be visible to start playback.
+  activateHomeVideo(bestRatio >= 0.6 ? bestVideo : null);
+}
 
 function observeVideos() {
+  if (homeVideoObserver) homeVideoObserver.disconnect();
+  homeVideoVisibility.clear();
 
-  console.log("🎬 observeVideos START");
+  const posts = document.getElementById("posts");
+  if (!posts) {
+    activateHomeVideo(null);
+    return;
+  }
 
-  videoObserver.disconnect();
+  const videos = posts.querySelectorAll(".post-card video");
+  if (activeHomeVideo && !posts.contains(activeHomeVideo)) {
+    pauseHomeVideo(activeHomeVideo);
+    activeHomeVideo = null;
+  }
 
-  const posts =
-    document.querySelectorAll("#posts .post-card");
+  let videoUpdateQueued = false;
+  homeVideoObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      const video = entry.target;
+      if (entry.isIntersecting) {
+        // Avoid downloading full videos before playback.
+        if (video.preload === "none") video.preload = "metadata";
+        homeVideoVisibility.set(video, entry.intersectionRatio);
+      } else {
+        homeVideoVisibility.set(video, 0);
+        if (video === activeHomeVideo) pauseHomeVideo(video);
+      }
+    }
 
-  const videos =
-    document.querySelectorAll("#posts .post-card video");
-
-  console.log("🎬 HOME POSTS:", posts.length);
-  console.log("🎬 HOME VIDEOS:", videos.length);
+    // Several observer entries can arrive during one scroll movement.
+    // Resolve the active video once per frame instead of once per entry.
+    if (!videoUpdateQueued) {
+      videoUpdateQueued = true;
+      requestAnimationFrame(() => {
+        videoUpdateQueued = false;
+        updateActiveHomeVideo();
+      });
+    }
+  }, {
+    // #posts is the actual Home scroller. Using it as the observer root
+    // avoids viewport calculations for an unrelated document scroll.
+    root: posts,
+    threshold: [0, 0.6, 1],
+    rootMargin: "120px 0px 120px 0px"
+  });
 
   videos.forEach(video => {
-
-    console.log(
-      "🎬 VIDEO:",
-      video,
-      "paused:",
-      video.paused
-    );
-
-    video.pause();
-
+    // Preserve the current video and playback position when reobserving.
+    if (video !== activeHomeVideo) pauseHomeVideo(video);
+    homeVideoVisibility.set(video, 0);
+    homeVideoObserver.observe(video);
   });
 
-  posts.forEach(post => {
-
-    console.log(
-      "👀 OBSERVING POST:",
-      post.id
-    );
-
-    videoObserver.observe(post);
-
-  });
-
-  console.log("🎬 observeVideos END");
-
+  if (!videos.length) activateHomeVideo(null);
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") {
+    pauseHomeVideo(activeHomeVideo);
+  } else {
+    updateActiveHomeVideo();
+  }
+});
 
 // Debounced inbox refresh used by realtime events. Multiple message/seen
 // events can arrive together; refresh the list once instead of starting
@@ -55058,275 +55640,5 @@ window.reportMessage=id=>window.submitUserReport("message",id);
 window.reportProfile=id=>window.submitUserReport("profile",id);
 window.reportComment=id=>window.submitUserReport("comment",id);
 </script>
-
-
-<!-- =====================================================
-     SOCIALAPP EMAIL AUTHENTICATION
-     Real registration + login + password recovery.
-     Added without changing the existing app shell/navigation.
-     ===================================================== -->
-<style>
-#socialAuthModal{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);padding:18px;box-sizing:border-box;backdrop-filter:blur(5px)}
-#socialAuthModal.active{display:flex}
-#socialAuthCard{width:min(430px,100%);max-height:92vh;overflow:auto;background:#171717;color:#fff;border:1px solid rgba(255,255,255,.12);border-radius:22px;box-shadow:0 20px 70px rgba(0,0,0,.55);padding:22px;box-sizing:border-box}
-#socialAuthCard h2{margin:0 0 6px;font-size:24px}
-#socialAuthCard .auth-subtitle{margin:0 0 18px;color:#aaa;font-size:14px;line-height:1.45}
-.social-auth-field{width:100%;box-sizing:border-box;margin:0 0 11px;padding:13px 14px;border:1px solid #333;border-radius:12px;background:#101010;color:#fff;font:inherit;outline:none}
-.social-auth-field:focus{border-color:#1877f2}
-.social-auth-primary{width:100%;border:0;border-radius:12px;padding:13px;background:#1877f2;color:#fff;font-weight:700;font-size:15px;cursor:pointer}
-.social-auth-secondary{width:100%;border:1px solid #333;border-radius:12px;padding:12px;background:#222;color:#fff;font-weight:600;font-size:14px;cursor:pointer;margin-top:9px}
-.social-auth-link{border:0;background:none;color:#55aaff;padding:9px 0;cursor:pointer;font:inherit}
-.social-auth-close{float:right;border:0;background:none;color:#aaa;font-size:26px;line-height:1;cursor:pointer;padding:0 0 6px 10px}
-.social-auth-divider{display:flex;align-items:center;gap:10px;color:#777;font-size:12px;margin:14px 0}.social-auth-divider:before,.social-auth-divider:after{content:"";height:1px;background:#333;flex:1}
-.social-auth-contact{margin-top:17px;padding-top:14px;border-top:1px solid #2b2b2b;color:#888;font-size:12px;text-align:center;line-height:1.5}.social-auth-contact a{color:#55aaff;text-decoration:none}
-#socialAuthMessage{min-height:18px;margin:4px 0 8px;font-size:13px;color:#ffb4b4;line-height:1.4}
-</style>
-
-<script>
-(function(){
-  if(window.__socialEmailAuthInstalled) return;
-  window.__socialEmailAuthInstalled = true;
-
-  const SUPPORT_EMAIL = "mbuguajames16th@gmail.com";
-
-  function authRedirectUrl(){
-    return window.location.origin + window.location.pathname;
-  }
-
-  function ensureAuthModal(){
-    if(document.getElementById("socialAuthModal")) return;
-    const modal=document.createElement("div");
-    modal.id="socialAuthModal";
-    modal.innerHTML=`
-      <div id="socialAuthCard" role="dialog" aria-modal="true" aria-label="SocialApp account">
-        <button class="social-auth-close" id="socialAuthClose" aria-label="Close">×</button>
-        <h2 id="socialAuthTitle">Log in to SocialApp</h2>
-        <p class="auth-subtitle" id="socialAuthSubtitle">Use your email and password to continue.</p>
-        <div id="socialAuthMessage"></div>
-
-        <form id="socialLoginForm" autocomplete="on">
-          <input class="social-auth-field" id="socialLoginEmail" type="email" autocomplete="email" placeholder="Email" required>
-          <input class="social-auth-field" id="socialLoginPassword" type="password" autocomplete="current-password" placeholder="Password" required>
-          <button class="social-auth-primary" type="submit">Log in</button>
-          <button class="social-auth-link" type="button" id="socialForgotPassword">Forgot password?</button>
-        </form>
-
-        <form id="socialSignupForm" style="display:none" autocomplete="on">
-          <input class="social-auth-field" id="socialSignupName" type="text" autocomplete="name" placeholder="Full name" required maxlength="80">
-          <input class="social-auth-field" id="socialSignupUsername" type="text" autocomplete="username" placeholder="Username" required maxlength="30" pattern="[A-Za-z0-9_.]{3,30}" title="Use 3–30 letters, numbers, underscores or periods">
-          <input class="social-auth-field" id="socialSignupEmail" type="email" autocomplete="email" placeholder="Email" required>
-          <input class="social-auth-field" id="socialSignupPassword" type="password" autocomplete="new-password" placeholder="Password" required minlength="6">
-          <input class="social-auth-field" id="socialSignupConfirm" type="password" autocomplete="new-password" placeholder="Confirm password" required minlength="6">
-          <button class="social-auth-primary" type="submit">Create account</button>
-        </form>
-
-        <form id="socialResetRequestForm" style="display:none">
-          <input class="social-auth-field" id="socialResetEmail" type="email" autocomplete="email" placeholder="Your account email" required>
-          <button class="social-auth-primary" type="submit">Send reset link</button>
-        </form>
-
-        <form id="socialNewPasswordForm" style="display:none">
-          <input class="social-auth-field" id="socialNewPassword" type="password" autocomplete="new-password" placeholder="New password" required minlength="6">
-          <input class="social-auth-field" id="socialNewPasswordConfirm" type="password" autocomplete="new-password" placeholder="Confirm new password" required minlength="6">
-          <button class="social-auth-primary" type="submit">Set new password</button>
-        </form>
-
-        <div class="social-auth-divider" id="socialGoogleDivider">or</div>
-        <button class="social-auth-secondary" id="socialGoogleLogin" type="button">Continue with Google</button>
-
-        <div style="text-align:center;margin-top:8px">
-          <button class="social-auth-link" id="socialSwitchAuth" type="button">Create a new account</button>
-        </div>
-
-        <div class="social-auth-contact">
-          Need help with your account?<br>
-          <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-
-    modal.addEventListener("click",function(e){
-      if(e.target===modal) closeAuthModal();
-    });
-    document.getElementById("socialAuthClose").onclick=closeAuthModal;
-    document.getElementById("socialSwitchAuth").onclick=toggleSignup;
-    document.getElementById("socialForgotPassword").onclick=showResetRequest;
-    document.getElementById("socialLoginForm").onsubmit=loginWithEmail;
-    document.getElementById("socialSignupForm").onsubmit=signupWithEmail;
-    document.getElementById("socialResetRequestForm").onsubmit=requestPasswordReset;
-    document.getElementById("socialNewPasswordForm").onsubmit=setNewPassword;
-    document.getElementById("socialGoogleLogin").onclick=loginWithGoogle;
-  }
-
-  function setMessage(message,isGood){
-    const el=document.getElementById("socialAuthMessage");
-    if(!el) return;
-    el.textContent=message||"";
-    el.style.color=isGood?"#7ee787":"#ffb4b4";
-  }
-
-  function setMode(mode){
-    ensureAuthModal();
-    const login=document.getElementById("socialLoginForm");
-    const signup=document.getElementById("socialSignupForm");
-    const reset=document.getElementById("socialResetRequestForm");
-    const newPass=document.getElementById("socialNewPasswordForm");
-    const google=document.getElementById("socialGoogleLogin");
-    const divider=document.getElementById("socialGoogleDivider");
-    const switchBtn=document.getElementById("socialSwitchAuth");
-    const title=document.getElementById("socialAuthTitle");
-    const subtitle=document.getElementById("socialAuthSubtitle");
-    login.style.display=mode==="login"?"block":"none";
-    signup.style.display=mode==="signup"?"block":"none";
-    reset.style.display=mode==="reset"?"block":"none";
-    newPass.style.display=mode==="newpassword"?"block":"none";
-    const showGoogle=(mode==="login"||mode==="signup");
-    google.style.display=showGoogle?"block":"none";
-    divider.style.display=showGoogle?"flex":"none";
-    switchBtn.style.display=(mode==="login"||mode==="signup")?"inline-block":"none";
-    switchBtn.textContent=mode==="signup"?"Already have an account? Log in":"Create a new account";
-    if(mode==="login"){title.textContent="Log in to SocialApp";subtitle.textContent="Use your email and password to continue.";}
-    if(mode==="signup"){title.textContent="Create your SocialApp account";subtitle.textContent="Create a real account with your email and password.";}
-    if(mode==="reset"){title.textContent="Reset your password";subtitle.textContent="Enter your account email and we'll send you a password reset link.";}
-    if(mode==="newpassword"){title.textContent="Choose a new password";subtitle.textContent="Enter and confirm your new SocialApp password.";}
-    setMessage("");
-  }
-
-  window.openSocialAuth=function(mode){
-    ensureAuthModal();
-    setMode(mode||"login");
-    document.getElementById("socialAuthModal").classList.add("active");
-    setTimeout(()=>{
-      const first=document.querySelector("#socialAuthModal form:not([style*='display: none']) input");
-      first?.focus();
-    },50);
-  };
-
-  window.closeAuthModal=function(){
-    document.getElementById("socialAuthModal")?.classList.remove("active");
-    setMessage("");
-  };
-
-  function toggleSignup(){
-    const signup=document.getElementById("socialSignupForm");
-    openSocialAuth(signup?.style.display==="block"?"login":"signup");
-  }
-
-  function showResetRequest(){
-    setMode("reset");
-    const loginEmail=document.getElementById("socialLoginEmail")?.value.trim();
-    if(loginEmail) document.getElementById("socialResetEmail").value=loginEmail;
-  }
-
-  async function loginWithEmail(e){
-    e.preventDefault();
-    setMessage("Logging in…",true);
-    const email=document.getElementById("socialLoginEmail").value.trim();
-    const password=document.getElementById("socialLoginPassword").value;
-    const {error}=await supabase.auth.signInWithPassword({email,password});
-    if(error){setMessage(error.message||"Login failed.");return;}
-    closeAuthModal();
-  }
-
-  async function signupWithEmail(e){
-    e.preventDefault();
-    const name=document.getElementById("socialSignupName").value.trim();
-    const username=document.getElementById("socialSignupUsername").value.trim().toLowerCase();
-    const email=document.getElementById("socialSignupEmail").value.trim();
-    const password=document.getElementById("socialSignupPassword").value;
-    const confirm=document.getElementById("socialSignupConfirm").value;
-    if(password!==confirm){setMessage("Passwords do not match.");return;}
-    if(!/^[a-z0-9_.]{3,30}$/.test(username)){setMessage("Username must be 3–30 characters using letters, numbers, underscores or periods.");return;}
-    if(password.length<6){setMessage("Password must be at least 6 characters.");return;}
-
-    setMessage("Checking username…",true);
-    const {data:existingUsername,error:usernameError}=await supabase.from("profiles").select("id").eq("username",username).maybeSingle();
-    if(usernameError){setMessage(usernameError.message||"Could not check username.");return;}
-    if(existingUsername){setMessage("That username is already taken.");return;}
-
-    setMessage("Creating your account…",true);
-    const {data,error}=await supabase.auth.signUp({
-      email,
-      password,
-      options:{data:{name,username},emailRedirectTo:authRedirectUrl()}
-    });
-    if(error){setMessage(error.message||"Account creation failed.");return;}
-
-    // Create the profile immediately when Supabase returns a user.
-    // If email confirmation is enabled, the Auth user is created but the
-    // session may be null; the profile insert is still attempted with user.id.
-    const userId=data?.user?.id;
-    if(userId){
-      const {error:profileError}=await supabase.from("profiles").upsert({
-        id:userId,
-        name,
-        username
-      },{onConflict:"id"});
-      if(profileError){
-        console.warn("PROFILE CREATION AFTER SIGNUP:",profileError);
-      }
-    }
-
-    if(data?.session){
-      setMessage("Account created successfully. You are now logged in.",true);
-      setTimeout(closeAuthModal,700);
-    }else{
-      setMessage("Account created. Check your email to confirm your account, then log in.",true);
-      setMode("login");
-      document.getElementById("socialLoginEmail").value=email;
-    }
-  }
-
-  async function requestPasswordReset(e){
-    e.preventDefault();
-    const email=document.getElementById("socialResetEmail").value.trim();
-    if(!email) return;
-    setMessage("Sending reset link…",true);
-    const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:authRedirectUrl()});
-    if(error){setMessage(error.message||"Could not send reset link.");return;}
-    setMessage("If that email has a SocialApp account, a password reset link has been sent. Check your inbox and spam folder.",true);
-  }
-
-  async function setNewPassword(e){
-    e.preventDefault();
-    const password=document.getElementById("socialNewPassword").value;
-    const confirm=document.getElementById("socialNewPasswordConfirm").value;
-    if(password.length<6){setMessage("Password must be at least 6 characters.");return;}
-    if(password!==confirm){setMessage("Passwords do not match.");return;}
-    setMessage("Updating password…",true);
-    const {error}=await supabase.auth.updateUser({password});
-    if(error){setMessage(error.message||"Could not update password.");return;}
-    setMessage("Password changed successfully. You can continue using SocialApp.",true);
-    setTimeout(closeAuthModal,900);
-  }
-
-  async function loginWithGoogle(){
-    setMessage("Opening Google sign-in…",true);
-    const {error}=await supabase.auth.signInWithOAuth({provider:"google",options:{redirectTo:authRedirectUrl()}});
-    if(error) setMessage(error.message||"Google sign-in failed.");
-  }
-
-  // Intercept the existing dynamically-created Login button before the old
-  // Google-only click handler runs. The existing app code remains intact.
-  document.addEventListener("click",function(e){
-    const login=e.target?.closest?.("#login");
-    if(!login) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    openSocialAuth("login");
-  },true);
-
-  // Supabase emits PASSWORD_RECOVERY when a reset link returns to the app.
-  // Show the new-password form without changing the existing app navigation.
-  if(window.supabase?.auth?.onAuthStateChange){
-    supabase.auth.onAuthStateChange((event)=>{
-      if(event==="PASSWORD_RECOVERY"){
-        setTimeout(()=>openSocialAuth("newpassword"),0);
-      }
-    });
-  }
-})();
-</script>
-
 </body>
 </html>
