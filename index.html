@@ -45553,11 +45553,31 @@ window.openMedia = function (
     options = {}
 ) {
 
-    // Capture Home BEFORE opening Post/Avatar media. The viewer then stores
-    // this exact Home position as its return state.
-    if (history.state?.appScreen === "app" &&
-        typeof window.saveHomeScroll === "function") {
-        window.saveHomeScroll();
+    // Capture Home BEFORE opening Post/Avatar media. Do this from the
+    // actual mounted Home DOM as well as navigation state. On Android/PWA
+    // navigation state can briefly be "mediaViewer" before the click
+    // handler finishes, which previously caused the saved position to be 0.
+    const homeApp = document.getElementById("app");
+    const profileLayer = document.getElementById("profileScreen");
+    const homeIsVisible = !!homeApp &&
+        getComputedStyle(homeApp).display !== "none" &&
+        getComputedStyle(homeApp).visibility !== "hidden" &&
+        getComputedStyle(homeApp).opacity !== "0" &&
+        !(profileLayer && getComputedStyle(profileLayer).display !== "none" &&
+          getComputedStyle(profileLayer).visibility !== "hidden" &&
+          getComputedStyle(profileLayer).opacity !== "0");
+
+    if (homeIsVisible) {
+        if (typeof window.saveHomeScroll === "function") {
+            window.saveHomeScroll();
+        }
+
+        const homePostsSnapshot = document.getElementById("posts");
+        window.__homeMediaScrollSnapshot = {
+            posts: homePostsSnapshot ? Number(homePostsSnapshot.scrollTop) || 0 : 0,
+            window: Number(window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0),
+            postsElement: homePostsSnapshot || null
+        };
     }
 
     if (
@@ -49515,8 +49535,10 @@ window.closeMedia = function () {
         (history.state?.appScreen === "mediaViewer" &&
          window._mediaReturnState?.screen === "app")) {
         const homeData = currentMediaData || {};
+        const homeSnapshot = window.__homeMediaScrollSnapshot || null;
         const homeScroll = Number(homeData.sourceScrollY ??
-            window._mediaReturnState?.scrollY ?? window.homeScrollPosition) || 0;
+            window._mediaReturnState?.scrollY ?? window.homeScrollPosition ??
+            homeSnapshot?.posts ?? homeSnapshot?.window) || 0;
         const homeState = {
             appScreen: "app",
             data: { ...(homeData.sourceData ||
@@ -49550,25 +49572,38 @@ window.closeMedia = function () {
         // window, so window.scrollTo() alone is not sufficient.
         window.homeScrollY = homeScroll;
         const homePosts = document.getElementById("posts");
-        if (homePosts && homePosts.scrollHeight > homePosts.clientHeight) {
+        const exactPostsY = Number(homeSnapshot?.posts);
+        const exactWindowY = Number(homeSnapshot?.window);
+
+        if (homeSnapshot && Number.isFinite(exactPostsY) && homePosts) {
             window.homeScrollElement = "posts";
         } else {
             window.homeScrollElement = "window";
         }
 
         window._mediaReturnState = null;
+        window.__homeMediaScrollSnapshot = null;
 
         const restoreExactHomePosition = () => {
             try {
+                // Restore the exact scroller captured immediately before the
+                // avatar/post was opened. This is more reliable than deriving
+                // the scroller again after the overlay has changed the layout.
+                if (homePosts && Number.isFinite(exactPostsY)) {
+                    homePosts.scrollTop = exactPostsY;
+                }
+                if (Number.isFinite(exactWindowY)) {
+                    window.scrollTo({ top: exactWindowY, left: 0, behavior: "auto" });
+                }
+
                 if (typeof window.restoreHomeScroll === "function") {
                     window.restoreHomeScroll();
-                } else if (window.homeScrollElement === "posts" && homePosts) {
-                    homePosts.scrollTop = homeScroll;
-                } else {
-                    window.scrollTo({ top: homeScroll, left: 0, behavior: "auto" });
                 }
             } catch (error) {
-                try { window.scrollTo(0, homeScroll); } catch (e) {}
+                try {
+                    if (homePosts && Number.isFinite(exactPostsY)) homePosts.scrollTop = exactPostsY;
+                    window.scrollTo(0, Number.isFinite(exactWindowY) ? exactWindowY : homeScroll);
+                } catch (e) {}
             }
         };
 
