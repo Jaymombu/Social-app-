@@ -53698,78 +53698,107 @@ function urlBase64ToUint8Array(base64String) {
   return Uint8Array.from([...rawData].map(char => char.charCodeAt(0)));
 }
 
-const videoObserver = new IntersectionObserver(
-  (entries) => {
+// HOME FEED: one active video; preload metadata only near the viewport.
+let homeVideoObserver = null;
+let activeHomeVideo = null;
+const homeVideoVisibility = new Map();
 
-    entries.forEach((entry) => {
+function pauseHomeVideo(video) {
+  if (video && !video.paused) video.pause();
+}
 
-      const video =
-        entry.target.querySelector("video");
-
-      if (!video) return;
-
-      if (
-        entry.isIntersecting &&
-        entry.intersectionRatio >= 0.75
-      ) {
-
-        // 🔥 ONLY ONE HOME VIDEO CAN PLAY
-        document
-          .querySelectorAll("#posts .post-card video")
-          .forEach((otherVideo) => {
-
-            if (otherVideo !== video) {
-              otherVideo.pause();
-            }
-
-          });
-
-        video.play().catch(() => {});
-
-      } else {
-
-        video.pause();
-
-      }
-
-    });
-
-  },
-  {
-    threshold: [0.6, 0.75, 0.9]
+function activateHomeVideo(video) {
+  if (activeHomeVideo === video) {
+    if (video && video.paused && document.visibilityState === "visible") {
+      video.play().catch(() => {});
+    }
+    return;
   }
-);
 
+  pauseHomeVideo(activeHomeVideo);
+  activeHomeVideo = video;
 
-// =====================================================
-// HOME FEED VIDEO OBSERVER
-// =====================================================
+  if (video && document.visibilityState === "visible") {
+    video.play().catch(() => {});
+  }
+}
+
+function updateActiveHomeVideo() {
+  const posts = document.getElementById("posts");
+  if (!posts || posts.getClientRects().length === 0 ||
+      document.visibilityState !== "visible") {
+    activateHomeVideo(null);
+    return;
+  }
+
+  let bestVideo = null;
+  let bestRatio = 0;
+  for (const [video, ratio] of homeVideoVisibility) {
+    if (!video.isConnected) {
+      homeVideoVisibility.delete(video);
+      continue;
+    }
+    if (ratio > bestRatio) {
+      bestRatio = ratio;
+      bestVideo = video;
+    }
+  }
+
+  // Require the majority of a video to be visible to start playback.
+  activateHomeVideo(bestRatio >= 0.6 ? bestVideo : null);
+}
 
 function observeVideos() {
+  if (homeVideoObserver) homeVideoObserver.disconnect();
+  homeVideoVisibility.clear();
 
-videoObserver.disconnect();
+  const posts = document.getElementById("posts");
+  if (!posts) {
+    activateHomeVideo(null);
+    return;
+  }
 
-  const posts =
-    document.querySelectorAll("#posts .post-card");
+  const videos = posts.querySelectorAll(".post-card video");
+  if (activeHomeVideo && !posts.contains(activeHomeVideo)) {
+    pauseHomeVideo(activeHomeVideo);
+    activeHomeVideo = null;
+  }
 
-  const videos =
-    document.querySelectorAll("#posts .post-card video");
-
-console.log("🎬 HOME VIDEOS:", videos.length);
+  homeVideoObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      const video = entry.target;
+      if (entry.isIntersecting) {
+        // Avoid downloading full videos before playback.
+        if (video.preload === "none") video.preload = "metadata";
+        homeVideoVisibility.set(video, entry.intersectionRatio);
+      } else {
+        homeVideoVisibility.set(video, 0);
+        if (video === activeHomeVideo) pauseHomeVideo(video);
+      }
+    }
+    updateActiveHomeVideo();
+  }, {
+    threshold: [0, 0.25, 0.6, 0.8, 1],
+    rootMargin: "200px 0px 200px 0px"
+  });
 
   videos.forEach(video => {
-
-video.pause();
-
+    // Preserve the current video and playback position when reobserving.
+    if (video !== activeHomeVideo) pauseHomeVideo(video);
+    homeVideoVisibility.set(video, 0);
+    homeVideoObserver.observe(video);
   });
 
-  posts.forEach(post => {
-
-videoObserver.observe(post);
-
-  });
-
+  if (!videos.length) activateHomeVideo(null);
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") {
+    pauseHomeVideo(activeHomeVideo);
+  } else {
+    updateActiveHomeVideo();
+  }
+});
 
 // Debounced inbox refresh used by realtime events. Multiple message/seen
 // events can arrive together; refresh the list once instead of starting
