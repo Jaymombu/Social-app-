@@ -45569,13 +45569,28 @@ window.openMedia = function (
 
     if (homeIsVisible) {
         if (typeof window.saveHomeScroll === "function") {
-            window.saveHomeScroll();
+            // Commit the exact Home position to the CURRENT browser history
+            // entry before media creates its own entry. Closing media then
+            // uses history.back() to return to this exact entry.
+            window.saveHomeScroll(true);
         }
 
         const homePostsSnapshot = document.getElementById("posts");
+        const homeWindowY = Number(window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0);
+        const homePostsY = homePostsSnapshot ? Number(homePostsSnapshot.scrollTop) || 0 : 0;
+        // The important part is identifying the ACTUAL scrolling container.
+        // #posts can be scrollable even when its scrollTop is 0, while the
+        // document may be the real scroller (and vice versa). Prefer the
+        // container that currently has a non-zero offset.
+        const activeHomeScroller = homePostsY > 0
+            ? "posts"
+            : (homeWindowY > 0 ? "window" :
+                (homePostsSnapshot && homePostsSnapshot.scrollHeight > homePostsSnapshot.clientHeight
+                    ? "posts" : "window"));
         window.__homeMediaScrollSnapshot = {
-            posts: homePostsSnapshot ? Number(homePostsSnapshot.scrollTop) || 0 : 0,
-            window: Number(window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0),
+            element: activeHomeScroller,
+            posts: homePostsY,
+            window: homeWindowY,
             postsElement: homePostsSnapshot || null
         };
     }
@@ -49396,6 +49411,18 @@ window.setCurrentNavigationState = function (
 // CLOSE HOME MEDIA VIEWER
 // =====================================================
 
+// The app owns scroll restoration. Prevent Android/Chrome history
+// restoration from competing with the exact Home container position.
+try {
+    history.scrollRestoration = "manual";
+} catch (e) {}
+
+// A close operation is a browser-history operation, not a second navigation.
+// These flags prevent double-close calls from X + swipe animation callbacks
+// from consuming two history entries.
+window.__mediaCloseHistoryPending = false;
+window.__mediaHistoryStateBeforeClose = null;
+
 window.closeMedia = function () {
 
     const viewer =
@@ -49464,14 +49491,27 @@ window.closeMedia = function () {
         document.documentElement.style.touchAction = "";
     }
 
-    // Profile avatar is an overlay on top of the already-mounted Profile.
-    // Do NOT use history.back() here: the previous browser entry can be a
-    // different app screen, which could unexpectedly exit the Profile/app.
-    // Replace only the current media entry with the exact Profile state and
-    // reveal the existing Profile DOM without rebuilding/reloading it.
+    // The media entry was pushed on top of the exact source history entry.
+    // Closing must therefore travel BACK to that entry instead of replacing
+    // the media entry. This is what makes X-close and swipe-close behave
+    // identically and repeat safely across every open/close cycle.
     const currentMediaData = history.state?.appScreen === "mediaViewer"
         ? history.state?.data
         : null;
+
+    if (history.state?.appScreen === "mediaViewer") {
+        if (window.__mediaCloseHistoryPending) return;
+        window.__mediaCloseHistoryPending = true;
+        window.__mediaHistoryStateBeforeClose = history.state;
+
+        try {
+            history.back();
+            return;
+        } catch (error) {
+            window.__mediaCloseHistoryPending = false;
+            console.warn("⚠️ MEDIA HISTORY BACK FAILED:", error);
+        }
+    }
 
     if (currentMediaData?.profileAvatarMedia === true &&
         currentMediaData?.sourceScreen === "profileScreen") {
@@ -49536,9 +49576,20 @@ window.closeMedia = function () {
          window._mediaReturnState?.screen === "app")) {
         const homeData = currentMediaData || {};
         const homeSnapshot = window.__homeMediaScrollSnapshot || null;
-        const homeScroll = Number(homeData.sourceScrollY ??
-            window._mediaReturnState?.scrollY ?? window.homeScrollPosition ??
-            homeSnapshot?.posts ?? homeSnapshot?.window) || 0;
+
+        // IMPORTANT: media history entries intentionally use scrollY: 0.
+        // The exact Home position lives in the immutable media-open snapshot.
+        // Never let the media entry's zero overwrite that position.
+        const snapshotY = homeSnapshot?.element === "posts"
+            ? Number(homeSnapshot.posts)
+            : Number(homeSnapshot?.window);
+        const hasSnapshot = !!homeSnapshot && Number.isFinite(snapshotY);
+        const homeScroll = hasSnapshot
+            ? snapshotY
+            : (Number.isFinite(Number(window._mediaReturnState?.scrollY))
+                ? Number(window._mediaReturnState.scrollY)
+                : (Number(window.homeScrollPosition) || 0));
+
         const homeState = {
             appScreen: "app",
             data: { ...(homeData.sourceData ||
@@ -49574,28 +49625,37 @@ window.closeMedia = function () {
         const homePosts = document.getElementById("posts");
         const exactPostsY = Number(homeSnapshot?.posts);
         const exactWindowY = Number(homeSnapshot?.window);
+        const exactScroller = homeSnapshot?.element ||
+            (Number.isFinite(exactPostsY) && exactPostsY > 0 ? "posts" : "window");
 
-        if (homeSnapshot && Number.isFinite(exactPostsY) && homePosts) {
-            window.homeScrollElement = "posts";
-        } else {
-            window.homeScrollElement = "window";
-        }
+        window.homeScrollElement = exactScroller;
 
         window._mediaReturnState = null;
-        window.__homeMediaScrollSnapshot = null;
+        // Keep the snapshot alive through the final restoration pass. It is
+        // the authoritative Home position for this media-close operation.
 
         const restoreExactHomePosition = () => {
             try {
                 // Restore the exact scroller captured immediately before the
                 // avatar/post was opened. This is more reliable than deriving
                 // the scroller again after the overlay has changed the layout.
-                if (homePosts && Number.isFinite(exactPostsY)) {
-                    homePosts.scrollTop = exactPostsY;
-                }
-                if (Number.isFinite(exactWindowY)) {
+                if (exactScroller === "posts") {
+                    if (homePosts && Number.isFinite(exactPostsY)) {
+                        homePosts.scrollTop = exactPostsY;
+                    }
+                    // Keep the document at its pre-open position too, but do
+                    // not let a stale window value override the #posts offset.
+                    if (Number.isFinite(exactWindowY)) {
+                        window.scrollTo({ top: exactWindowY, left: 0, behavior: "auto" });
+                    }
+                } else if (Number.isFinite(exactWindowY)) {
                     window.scrollTo({ top: exactWindowY, left: 0, behavior: "auto" });
                 }
 
+                // Re-apply the captured container directly after layout.
+                if (exactScroller === "posts" && homePosts && Number.isFinite(exactPostsY)) {
+                    homePosts.scrollTop = exactPostsY;
+                }
                 if (typeof window.restoreHomeScroll === "function") {
                     window.restoreHomeScroll();
                 }
@@ -49607,10 +49667,19 @@ window.closeMedia = function () {
             }
         };
 
-        // Restore after the overlay is removed and once more after media/layout
-        // cleanup, so image/video height changes cannot move the user.
+        // Restore aggressively after the overlay is removed. Android Chrome/PWA
+        // can apply its own scroll restoration after the click/history work, so
+        // one restoration pass is not enough. Keep the captured Home snapshot
+        // authoritative and re-apply it after the browser has completed layout.
+        restoreExactHomePosition();
         requestAnimationFrame(restoreExactHomePosition);
+        requestAnimationFrame(() => requestAnimationFrame(restoreExactHomePosition));
         setTimeout(restoreExactHomePosition, 50);
+        setTimeout(restoreExactHomePosition, 150);
+        setTimeout(restoreExactHomePosition, 350);
+        setTimeout(() => {
+            window.__homeMediaScrollSnapshot = null;
+        }, 400);
         return;
     }
 
@@ -52849,7 +52918,17 @@ window.addEventListener(
                  * restoring the underlying screen.
                  */
                 const wasMediaViewer =
+                    window.__mediaCloseHistoryPending === true ||
+                    window.__mediaHistoryStateBeforeClose?.appScreen === "mediaViewer" ||
                     history.state?.appScreen === "mediaViewer";
+
+                // history.back() has now delivered the destination entry.
+                // Keep the destination authoritative and consume the close
+                // marker so the next open/close cycle gets a fresh one.
+                if (window.__mediaCloseHistoryPending) {
+                    window.__mediaCloseHistoryPending = false;
+                    window.__mediaHistoryStateBeforeClose = null;
+                }
 
                 // Keep the old viewer visible until the destination has been
                 // restored. This prevents a blank transition on Back.
@@ -52916,7 +52995,7 @@ window.addEventListener(
 
 
                 const wasMediaViewerBeforeRestore =
-                    history.state?.appScreen === "mediaViewer";
+                    wasMediaViewer;
 
                 await window.restoreNavigationState(
                     restoreState
@@ -52971,16 +53050,24 @@ window.addEventListener(
                     restoreState.scrollY !=
                     null
                 ) {
-
-                    requestAnimationFrame(
-                        () => {
-
-                            window.scrollTo(
-                                0,
-                                restoreState.scrollY
-                            );
+                    const restoreY = Number(restoreState.scrollY) || 0;
+                    const applyRestoredScroll = () => {
+                        // Home uses #posts as its actual feed scroller. Restore
+                        // that element when it is the active scrolling surface;
+                        // otherwise restore the document scroll position.
+                        const posts = document.getElementById("posts");
+                        if (restoreState.screen === "app" && posts &&
+                            (window.homeScrollElement === "posts" ||
+                             posts.scrollHeight > posts.clientHeight)) {
+                            posts.scrollTop = restoreY;
+                            window.homeScrollY = restoreY;
+                        } else {
+                            window.scrollTo(0, restoreY);
                         }
-                    );
+                    };
+
+                    requestAnimationFrame(applyRestoredScroll);
+                    requestAnimationFrame(() => requestAnimationFrame(applyRestoredScroll));
                 }
 
                 return;
@@ -53676,66 +53763,37 @@ window.bindHomePostsScrollTracker();
 
 window.restoreHomeScroll = function () {
 
-  const y = window.homeScrollY || 0;
+  // Prefer the immutable media snapshot when returning from a Post/Avatar.
+  // This prevents later navigation state or a temporary scroll reset from
+  // replacing the real Home position with 0.
+  const snapshot = window.__homeMediaScrollSnapshot || null;
+  const element = snapshot?.element || window.homeScrollElement || "window";
+  const postsY = Number.isFinite(Number(snapshot?.posts))
+    ? Number(snapshot.posts)
+    : Number(window.homeScrollY || 0);
+  const windowY = Number.isFinite(Number(snapshot?.window))
+    ? Number(snapshot.window)
+    : Number(window.homeScrollY || 0);
 
-  requestAnimationFrame(() => {
-
-    if (
-      window.homeScrollElement === "posts"
-    ) {
-
-      const posts =
-        document.getElementById("posts");
-
-      if (posts) {
-
-        posts.scrollTop = y;
-
-      }
-
-    } else {
-
-      window.scrollTo({
-        top: y,
-        left: 0,
-        behavior: "instant"
-      });
-
+  const apply = () => {
+    const posts = document.getElementById("posts");
+    if (element === "posts" && posts) {
+      posts.scrollTop = postsY;
     }
+    // Keep the document offset too, but never use it instead of #posts.
+    if (Number.isFinite(windowY)) {
+      window.scrollTo({ top: windowY, left: 0, behavior: "auto" });
+    }
+    if (element === "posts" && posts) {
+      posts.scrollTop = postsY;
+    }
+  };
 
-    requestAnimationFrame(() => {
+  apply();
+  requestAnimationFrame(apply);
+  requestAnimationFrame(() => requestAnimationFrame(apply));
 
-      if (
-        window.homeScrollElement === "posts"
-      ) {
-
-        const posts =
-          document.getElementById("posts");
-
-        if (posts) {
-          posts.scrollTop = y;
-        }
-
-      } else {
-
-        window.scrollTo({
-          top: y,
-          left: 0,
-          behavior: "instant"
-        });
-
-      }
-
-    });
-
-  });
-
-  console.log(
-    "↩️ HOME POSITION RESTORED:",
-    window.homeScrollElement,
-    y
-  );
-
+  console.log("↩️ HOME POSITION RESTORED:", element, postsY, windowY);
 };
 
 // ========================
