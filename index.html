@@ -53679,10 +53679,11 @@ window.saveHomeScroll = function (commitHistory = false) {
 
   const posts = document.getElementById("posts");
 
-  // Keep this handler extremely cheap: scrolling must remain on the
-  // browser compositor thread.  Do not call history.replaceState() on
-  // every scroll event.
-  if (posts && posts.scrollHeight > posts.clientHeight) {
+  // Keep this handler layout-free during normal scrolling. Reading
+  // scrollHeight/clientHeight here can force a synchronous layout on
+  // Android Chrome. #posts is the Home feed scroller, so read scrollTop
+  // directly; only fall back to the document when #posts does not exist.
+  if (posts) {
     window.homeScrollElement = "posts";
     window.homeScrollY = posts.scrollTop;
   } else {
@@ -53723,17 +53724,16 @@ window.saveHomeScroll = function (commitHistory = false) {
 // point records the exact current position before navigation.
 window.__homeScrollTrackQueued = false;
 window.trackHomeScrollLive = function () {
-  if (window.__homeScrollTrackQueued) return;
-  window.__homeScrollTrackQueued = true;
-  requestAnimationFrame(() => {
-    window.__homeScrollTrackQueued = false;
-    try {
-      if (history.state?.appScreen !== "app") return;
-      if (window.appNavigation?.current?.screen &&
-          window.appNavigation.current.screen !== "app") return;
-      window.saveHomeScroll(false);
-    } catch (error) {}
-  });
+  // No requestAnimationFrame and no layout measurement here. This only
+  // records the native scrollTop so the browser remains in control of
+  // touch/momentum scrolling. History is still committed only when a
+  // navigation actually leaves Home.
+  try {
+    if (history.state?.appScreen !== "app") return;
+    if (window.appNavigation?.current?.screen &&
+        window.appNavigation.current.screen !== "app") return;
+    window.saveHomeScroll(false);
+  } catch (error) {}
 };
 
 window.addEventListener("scroll", window.trackHomeScrollLive, {
@@ -53938,6 +53938,7 @@ function observeVideos() {
     activeHomeVideo = null;
   }
 
+  let videoUpdateQueued = false;
   homeVideoObserver = new IntersectionObserver(entries => {
     for (const entry of entries) {
       const video = entry.target;
@@ -53950,10 +53951,22 @@ function observeVideos() {
         if (video === activeHomeVideo) pauseHomeVideo(video);
       }
     }
-    updateActiveHomeVideo();
+
+    // Several observer entries can arrive during one scroll movement.
+    // Resolve the active video once per frame instead of once per entry.
+    if (!videoUpdateQueued) {
+      videoUpdateQueued = true;
+      requestAnimationFrame(() => {
+        videoUpdateQueued = false;
+        updateActiveHomeVideo();
+      });
+    }
   }, {
-    threshold: [0, 0.25, 0.6, 0.8, 1],
-    rootMargin: "200px 0px 200px 0px"
+    // #posts is the actual Home scroller. Using it as the observer root
+    // avoids viewport calculations for an unrelated document scroll.
+    root: posts,
+    threshold: [0, 0.6, 1],
+    rootMargin: "120px 0px 120px 0px"
   });
 
   videos.forEach(video => {
