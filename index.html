@@ -6551,6 +6551,21 @@ async function initAuth() {
   if (!window.__appStarted) {
     safeStart();
   }
+
+  // If Android/Chrome restores the page by reloading it after the app was
+  // backgrounded, rebuild the saved screen instead of always landing on Home.
+  // The navigation state is already persisted in sessionStorage by the app.
+  setTimeout(async () => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem("appNavigationState") || "null");
+      if (saved?.screen && saved.screen !== "app" &&
+          typeof window.restoreNavigationAfterReload === "function") {
+        await window.restoreNavigationAfterReload();
+      }
+    } catch (restoreError) {
+      console.warn("⚠️ STARTUP NAVIGATION RESTORE FAILED:", restoreError);
+    }
+  }, 0);
 }
 
 initAuth();
@@ -10520,14 +10535,72 @@ function upsertPost(updatedPost) {
 }
 
 window.deletePost = async (id) => {
-  const { error } = await supabase.from("posts").delete().eq("id", id);
+  if (!id) return;
 
-  if (error) {
-    console.log("❌ delete error:", error);
-    return;
+  const postId = String(id);
+  const card = document.getElementById(`post-${postId}`);
+
+  // Optimistically remove the post everywhere it is currently visible.
+  // This makes deletion immediate instead of waiting for a complete feed
+  // reload, while the database operation still remains authoritative.
+  const previousState = Array.isArray(window.postsState)
+    ? [...window.postsState]
+    : [];
+  const previousCache = {};
+  if (window.feedCache) {
+    Object.keys(window.feedCache).forEach(key => {
+      previousCache[key] = Array.isArray(window.feedCache[key])
+        ? [...window.feedCache[key]]
+        : window.feedCache[key];
+      if (Array.isArray(window.feedCache[key])) {
+        window.feedCache[key] = window.feedCache[key].filter(p => String(p?.id) !== postId);
+      }
+    });
   }
 
-  loadPosts();
+  window.postsState = previousState.filter(p => String(p?.id) !== postId);
+
+  if (card) {
+    card.remove();
+  }
+
+  try {
+    const { error } = await supabase.from("posts").delete().eq("id", id);
+
+    if (error) throw error;
+
+    // Keep the visible state/cache synchronized without rebuilding the feed.
+    window.renderedPosts?.delete(postId);
+    if (window.profilePosts) {
+      window.profilePosts = window.profilePosts.filter(p => String(p?.id) !== postId);
+    }
+    if (window.profileVideos) {
+      window.profileVideos = window.profileVideos.filter(p => String(p?.id) !== postId);
+    }
+    if (window.profileGallery) {
+      window.profileGallery = window.profileGallery.filter(p => String(p?.id) !== postId);
+    }
+
+    console.log("✅ POST DELETED IMMEDIATELY:", postId);
+  } catch (error) {
+    console.error("❌ delete error:", error);
+
+    // Restore the UI/cache if the database deletion failed.
+    window.postsState = previousState;
+    if (window.feedCache) {
+      Object.keys(previousCache).forEach(key => {
+        window.feedCache[key] = previousCache[key];
+      });
+    }
+    if (card) {
+      const postsDiv = document.getElementById("posts");
+      if (postsDiv && !document.getElementById(`post-${postId}`)) {
+        const restored = renderPostElement(previousState.find(p => String(p?.id) === postId));
+        if (restored) postsDiv.prepend(restored);
+      }
+    }
+    alert("Could not delete this post. Please try again.");
+  }
 };
 
 let currentPostId = null;
@@ -51144,6 +51217,19 @@ if (
                 window.appNavigation.current
             )
         );
+    }
+
+    // ---------------------------------------------
+    // RESTORE PROFILE TAB CONTENT
+    // ---------------------------------------------
+    // The tab styling alone is not enough after a reload/back restoration;
+    // the selected tab's data must be loaded into #profilePosts as well.
+    if (tab === "videos" && typeof window.loadProfileVideos === "function") {
+        await window.loadProfileVideos(data.userId || window.profileNavigationUserId);
+    } else if (tab === "photos" && typeof window.loadProfilePhotos === "function") {
+        await window.loadProfilePhotos(data.userId || window.profileNavigationUserId);
+    } else if (tab === "posts" && typeof window.loadProfilePosts === "function") {
+        await window.loadProfilePosts(data.userId || window.profileNavigationUserId);
     }
 
     // ---------------------------------------------
