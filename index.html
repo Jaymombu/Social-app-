@@ -9460,6 +9460,72 @@ if (
   input.value = "";
   mediaInput.value = "";
 
+  // -----------------------------------------------------
+  // INSTANTLY ADD A NEW POST TO THE OPEN OWNER PROFILE
+  // -----------------------------------------------------
+  // If the user's own Profile > Posts tab is currently visible, update it
+  // immediately instead of making the user leave/reopen the profile.
+  // Private post media is signed before rendering.
+  try {
+    const visibleProfile = document.getElementById("profileScreen");
+    const profilePostsContainer = document.getElementById("profilePosts");
+    const activeProfileUserId =
+      visibleProfile?.dataset?.userId ||
+      window.profileNavigationUserId ||
+      "";
+
+    const profileIsVisible =
+      visibleProfile &&
+      visibleProfile.style.display !== "none" &&
+      visibleProfile.style.visibility !== "hidden" &&
+      visibleProfile.style.opacity !== "0";
+
+    if (
+      profileIsVisible &&
+      String(activeProfileUserId) === String(session.user.id) &&
+      profilePostsContainer
+    ) {
+      const activePostsTab =
+        document.getElementById("profilePostsTab");
+      const postsTabIsActive =
+        !activePostsTab ||
+        activePostsTab.classList.contains("active") ||
+        activePostsTab.classList.contains("active-tab");
+
+      if (postsTabIsActive) {
+        const profilePost = { ...insertedPost };
+
+        if (profilePost.file_url &&
+            typeof window.getAuthorizedStorageUrl === "function") {
+          profilePost.file_url = await window.getAuthorizedStorageUrl(
+            "posts_media",
+            profilePost.file_url
+          );
+        }
+
+        profilePost.name = profile?.name || profilePost.name || "User";
+        profilePost.username = profile?.username || "";
+        profilePost.avatar_url = profile?.avatar_url || null;
+        profilePost.verified = profile?.verified === true;
+        profilePost.profiles = profile || null;
+
+        window.profilePosts = Array.isArray(window.profilePosts)
+          ? [profilePost, ...window.profilePosts.filter(p => String(p.id) !== String(profilePost.id))]
+          : [profilePost];
+
+        const rendered = renderPostElement(profilePost);
+        if (rendered) {
+          profilePostsContainer.insertBefore(
+            rendered,
+            profilePostsContainer.firstElementChild || null
+          );
+        }
+      }
+    }
+  } catch (profilePostError) {
+    console.warn("⚠️ INSTANT PROFILE POST UPDATE FAILED:", profilePostError);
+  }
+
   loadPosts();
 }
 
@@ -31328,6 +31394,26 @@ window.openProfileVideo = async function (index) {
 
     const selectedPost =
         videos[index] || {};
+
+    // posts_media is private. The profile grid already signs its media URLs,
+    // but the full-screen viewer can also be opened from restored/cached data.
+    // Always obtain a fresh authorized URL before creating the viewer history.
+    if (selectedPost?.file_url &&
+        typeof window.getAuthorizedStorageUrl === "function") {
+        try {
+            selectedPost.file_url = await window.getAuthorizedStorageUrl(
+                "posts_media",
+                selectedPost.file_url
+            );
+        } catch (error) {
+            console.warn("⚠️ PROFILE VIDEO URL AUTHORIZATION FAILED:", error);
+        }
+    }
+
+    if (!selectedPost?.file_url) {
+        console.error("❌ PROFILE VIDEO HAS NO AUTHORIZED URL:", selectedPost?.id);
+        return;
+    }
 
 const mediaData = {
     source: "profile",
