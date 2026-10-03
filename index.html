@@ -6613,29 +6613,48 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
   }
 
   // A successful login can happen after the app has already been started
-  // in logged-out mode. In that case safeStart() intentionally does nothing
-  // because __appStarted is already true. Rebuild the existing app shell once
-  // so the logged-in UI appears immediately without a page refresh.
+  // in logged-out mode. Re-read the confirmed session, invalidate the feed
+  // cache created while logged out, then rebuild the existing home shell.
+  // This keeps the existing feed renderer/startApp implementation untouched.
   if (event === "SIGNED_IN" && currentUser) {
-    if (window.__appStarted) {
-      const restoreScrollY = window.scrollY || 0;
+    const restoreScrollY = window.scrollY || 0;
 
-      try {
-        window.__appStarted = false;
-        window.__authAppRefreshInProgress = true;
-        await startApp();
-      } catch (refreshError) {
-        console.error("POST-LOGIN APP REFRESH FAILED:", refreshError);
-      } finally {
-        window.__appStarted = true;
-        window.__authAppRefreshInProgress = false;
-        requestAnimationFrame(() => {
-          window.scrollTo(0, restoreScrollY);
-        });
+    try {
+      const { data: freshSessionData, error: freshSessionError } =
+        await supabase.auth.getSession();
+
+      if (freshSessionError || !freshSessionData?.session?.user) {
+        console.error("POST-LOGIN SESSION REFRESH FAILED:", freshSessionError);
+        return;
       }
-    } else {
-      safeStart();
+
+      session = freshSessionData.session;
+      currentUser = freshSessionData.session.user;
+
+      // Never reuse a feed that was built before authentication.
+      window.feedCache = { explore: null, following: null };
+      window.postsState = [];
+      window.renderedPosts = new Set();
+
+      window.__appStarted = false;
+      window.__authAppRefreshInProgress = true;
+
+      await startApp();
+    } catch (refreshError) {
+      console.error("POST-LOGIN APP REFRESH FAILED:", refreshError);
+    } finally {
+      window.__appStarted = true;
+      window.__authAppRefreshInProgress = false;
+
+      requestAnimationFrame(() => {
+        window.scrollTo({
+          top: restoreScrollY,
+          left: 0,
+          behavior: "auto"
+        });
+      });
     }
+
     return;
   }
 
