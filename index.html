@@ -6612,6 +6612,33 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
     updateNotifBadge();
   }
 
+  // A successful login can happen after the app has already been started
+  // in logged-out mode. In that case safeStart() intentionally does nothing
+  // because __appStarted is already true. Rebuild the existing app shell once
+  // so the logged-in UI appears immediately without a page refresh.
+  if (event === "SIGNED_IN" && currentUser) {
+    if (window.__appStarted) {
+      const restoreScrollY = window.scrollY || 0;
+
+      try {
+        window.__appStarted = false;
+        window.__authAppRefreshInProgress = true;
+        await startApp();
+      } catch (refreshError) {
+        console.error("POST-LOGIN APP REFRESH FAILED:", refreshError);
+      } finally {
+        window.__appStarted = true;
+        window.__authAppRefreshInProgress = false;
+        requestAnimationFrame(() => {
+          window.scrollTo(0, restoreScrollY);
+        });
+      }
+    } else {
+      safeStart();
+    }
+    return;
+  }
+
   safeStart();
 });
 
@@ -40107,7 +40134,7 @@ if (
         `
           : `
         <div class="home-login">
-          <button id="login">Log in / Create account</button>
+          <button id="login">Login</button>
         </div>
         `
       }
