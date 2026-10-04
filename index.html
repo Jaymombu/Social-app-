@@ -6653,9 +6653,63 @@ async function initAuth() {
 
     const saved = savedNavigation;
 
-    if (saved?.screen && saved.screen !== "app" &&
+    // =====================================================
+    // KEEP THE SAVED SCREEN AS THE ONLY VISIBLE SCREEN
+    // DURING A REAL PAGE RELOAD
+    // =====================================================
+    // startApp() intentionally builds Home and restores the main top bar.
+    // We must not let that temporary Home shell become visible while a
+    // secondary screen (Profile, Comments, Chat, etc.) is being restored.
+    // Do this outside startApp() so the existing startApp() remains untouched.
+    const restoringSecondaryScreen =
+      !!saved?.screen && saved.screen !== "app";
+
+    if (restoringSecondaryScreen) {
+      const startupHome = document.getElementById("app");
+      if (startupHome) {
+        startupHome.style.setProperty("display", "none", "important");
+        startupHome.style.setProperty("visibility", "hidden", "important");
+        startupHome.style.setProperty("opacity", "0", "important");
+        startupHome.style.setProperty("pointer-events", "none", "important");
+      }
+
+      const startupTopBar = document.getElementById("topBar");
+      if (startupTopBar) {
+        startupTopBar.style.setProperty("display", "none", "important");
+        startupTopBar.style.setProperty("visibility", "hidden", "important");
+        startupTopBar.style.setProperty("opacity", "0", "important");
+        startupTopBar.style.setProperty("pointer-events", "none", "important");
+      }
+    }
+
+    if (restoringSecondaryScreen &&
         typeof window.restoreNavigationAfterReload === "function") {
       await window.restoreNavigationAfterReload();
+
+      // Final guard: secondary screens must be visible WITHOUT Home or the
+      // main top bar underneath/above them. This also prevents Explore and
+      // Following from appearing during the first rendered frame.
+      const restoredHome = document.getElementById("app");
+      if (restoredHome) {
+        restoredHome.style.setProperty("display", "none", "important");
+        restoredHome.style.setProperty("visibility", "hidden", "important");
+        restoredHome.style.setProperty("opacity", "0", "important");
+        restoredHome.style.setProperty("pointer-events", "none", "important");
+      }
+
+      const restoredTopBar = document.getElementById("topBar");
+      if (restoredTopBar) {
+        restoredTopBar.style.setProperty("display", "none", "important");
+        restoredTopBar.style.setProperty("visibility", "hidden", "important");
+        restoredTopBar.style.setProperty("opacity", "0", "important");
+        restoredTopBar.style.setProperty("pointer-events", "none", "important");
+      }
+
+      // Let the restored screen's own fixed layout settle before the first
+      // visible frame.
+      await new Promise(resolve => requestAnimationFrame(() =>
+        requestAnimationFrame(resolve)
+      ));
     }
   } catch (restoreError) {
     console.warn("⚠️ STARTUP NAVIGATION RESTORE FAILED:", restoreError);
