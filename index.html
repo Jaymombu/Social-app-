@@ -6804,6 +6804,12 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
   
   console.log("AUTH EVENT:", event);
 
+  // Remember the user that was already active BEFORE applying this auth
+  // event.  Supabase can emit SIGNED_IN again around a browser/Android
+  // resume.  That is a session update, not a request to rebuild Home.
+  const previousUserId =
+    currentUser?.id || session?.user?.id || null;
+
   session = newSession;
   currentUser = newSession?.user || null;
 
@@ -6834,6 +6840,21 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
   // cache created while logged out, then rebuild the existing home shell.
   // This keeps the existing feed renderer/startApp implementation untouched.
   if (event === "SIGNED_IN" && currentUser) {
+    const sameActiveUser =
+      previousUserId &&
+      String(previousUserId) === String(currentUser.id) &&
+      window.__appStarted === true &&
+      window.__authAppRefreshInProgress !== true;
+
+    // IMPORTANT: Returning to Chrome/Android can produce another SIGNED_IN
+    // event for the same session. Do NOT call startApp() in that case.
+    // Home, Explore/Following, the Post/Add section and the existing top bar
+    // must remain mounted exactly as they are.
+    if (sameActiveUser) {
+      console.log("♻️ SAME SESSION RESUMED → NO APP REBUILD");
+      return;
+    }
+
     const restoreScrollY = window.scrollY || 0;
 
     try {
