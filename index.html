@@ -11,6 +11,50 @@
 <link rel="apple-touch-icon" href="icon-192.png">
   
   <title>Social App</title>
+
+<!-- Prevent a Home/Profile flash before Android/Chrome restores the saved screen.
+     This runs in <head> before the first page paint. -->
+<style id="socialAppEarlyRestoreStyle">
+  html.socialapp-restoring body { visibility: hidden !important; }
+</style>
+<script>
+(function () {
+  try {
+    let raw = sessionStorage.getItem("appNavigationState");
+    if (!raw) raw = localStorage.getItem("socialAppLastScreenState");
+    if (!raw) raw = localStorage.getItem("socialAppNavigationState");
+
+    let saved = null;
+    try { saved = raw ? JSON.parse(raw) : null; } catch (e) {}
+
+    const hashScreen = (location.hash || "").replace(/^#/, "");
+    const knownScreens = new Set([
+      "profileScreen", "chatScreen", "inboxScreen",
+      "notificationsScreen", "searchScreen", "storyViewer",
+      "commentsScreen", "mediaViewer", "photoGallery",
+      "adminPanelScreen"
+    ]);
+
+    const screen = saved?.screen ||
+      (knownScreens.has(hashScreen) ? hashScreen : "app");
+
+    const navigationType =
+      (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]?.type) ||
+      "";
+
+    // Hide the first paint when Chrome/Android reconstructed or reloaded the
+    // document. This applies to Home as well as secondary screens, so the
+    // transient startup shell cannot flash before the saved state is ready.
+    if (
+      (screen && screen !== "app") ||
+      document.wasDiscarded === true ||
+      navigationType === "reload"
+    ) {
+      document.documentElement.classList.add("socialapp-restoring");
+    }
+  } catch (e) {}
+})();
+</script>
 <style>
   /* RESET */
 body {
@@ -6574,33 +6618,38 @@ async function initAuth() {
     } catch (e) {}
   }
 
+  let startupPromise = null;
+
   if (!window.__appStarted) {
-    // We still initialize the normal app shell, but when a non-Home screen
-    // was saved we suppress the visible Home flash while the exact screen is
-    // being reconstructed. This does not change startApp().
-    if (savedNavigation?.screen && savedNavigation.screen !== "app") {
-      document.documentElement.classList.add("socialapp-restoring");
+    // If Chrome/Android reconstructed the document, keep the entire first
+    // paint hidden until startApp() has finished. This prevents a Home flash
+    // even when the saved destination itself is Home. This does not change
+    // startApp().
+    if (document.documentElement.classList.contains("socialapp-restoring")) {
       window.__navigationRestorePending = true;
     }
-    safeStart();
+    startupPromise = safeStart();
+  } else {
+    startupPromise = window.__appStartPromise || Promise.resolve();
   }
 
-  // Restore after the complete script has defined restoreNavigationAfterReload.
-  setTimeout(async () => {
-    try {
-      const saved = savedNavigation;
+  // Wait for the normal app shell to finish before revealing the page.
+  // Then restore a secondary screen, if one was saved.
+  try {
+    await startupPromise;
 
-      if (saved?.screen && saved.screen !== "app" &&
-          typeof window.restoreNavigationAfterReload === "function") {
-        await window.restoreNavigationAfterReload();
-      }
-    } catch (restoreError) {
-      console.warn("⚠️ STARTUP NAVIGATION RESTORE FAILED:", restoreError);
-    } finally {
-      document.documentElement.classList.remove("socialapp-restoring");
-      window.__navigationRestorePending = false;
+    const saved = savedNavigation;
+
+    if (saved?.screen && saved.screen !== "app" &&
+        typeof window.restoreNavigationAfterReload === "function") {
+      await window.restoreNavigationAfterReload();
     }
-  }, 0);
+  } catch (restoreError) {
+    console.warn("⚠️ STARTUP NAVIGATION RESTORE FAILED:", restoreError);
+  } finally {
+    document.documentElement.classList.remove("socialapp-restoring");
+    window.__navigationRestorePending = false;
+  }
 }
 
 initAuth();
@@ -6623,11 +6672,18 @@ let storyPausedByUI = false;
 
 function safeStart() {
 
-  if (window.__appStarted) return;
+  if (window.__appStarted) {
+    return window.__appStartPromise || Promise.resolve();
+  }
 
   window.__appStarted = true;
 
-  startApp();
+  // Keep the exact startApp() implementation untouched, but expose its
+  // completion promise so startup restoration can wait before revealing the
+  // page.
+  window.__appStartPromise = Promise.resolve().then(() => startApp());
+
+  return window.__appStartPromise;
 
 }
 // 🔁 keep session always updated
