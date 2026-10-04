@@ -69,6 +69,8 @@ body {
 #posts{
     min-height:100vh;
     overflow-y:auto;
+    /* Let downward overscroll chain to Android Chrome's native refresh. */
+    overscroll-behavior-y:auto;
     padding-top:20px;
     padding-bottom:20px;
     box-sizing:border-box;
@@ -3251,13 +3253,18 @@ body:not(.dark) .edit-discard-btn{
 
 html,
 body {
-  overscroll-behavior: none;
+  /* Allow Android Chrome native pull-to-refresh. */
+  overscroll-behavior-y: auto;
+  overscroll-behavior-x: auto;
 }
 
 #chatScreen,
 #inboxScreen {
-  overscroll-behavior: contain;
-  touch-action: none;
+  /* Keep vertical scrolling available so Android Chrome can reach
+     the viewport edge and perform its native pull-to-refresh. */
+  overscroll-behavior-y: auto;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 #chatMessages,
