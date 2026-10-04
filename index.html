@@ -44,6 +44,13 @@
     const screen = saved?.screen ||
       (knownScreens.has(hashScreen) ? hashScreen : "app");
 
+    // Preserve the exact secondary screen before any later script can
+    // initialize the navigation controller to Home. This snapshot is the
+    // authoritative destination for a real browser refresh.
+    if (saved?.screen && saved.screen !== "app") {
+      window.__socialAppSavedNavigation = saved;
+    }
+
     const navigationType =
       (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]?.type) ||
       "";
@@ -6608,11 +6615,15 @@ async function initAuth() {
   // Read the saved destination before starting Home. If Android/Chrome
   // reconstructed the document while another screen was open, mark the
   // restore as pending so startup can restore that screen immediately.
-  let savedNavigation = null;
+  // Use the head-level snapshot first. It was captured before any startup
+  // code had a chance to replace the saved destination with Home.
+  let savedNavigation = window.__socialAppSavedNavigation || null;
   try {
-    savedNavigation = JSON.parse(
-      sessionStorage.getItem("appNavigationState") || "null"
-    );
+    if (!savedNavigation) {
+      savedNavigation = JSON.parse(
+        sessionStorage.getItem("appNavigationState") || "null"
+      );
+    }
   } catch (e) {}
 
   if (!savedNavigation?.screen || savedNavigation.screen === "app") {
@@ -6697,12 +6708,31 @@ async function initAuth() {
         restoredHome.style.setProperty("pointer-events", "none", "important");
       }
 
+      // The main top bar is screen-specific. Search and Inbox normally show
+      // it; Profile, Comments, Chat, Notifications and full-screen viewers
+      // normally hide it. Do not blanket-hide it after restoration.
       const restoredTopBar = document.getElementById("topBar");
+      const screensWithVisibleTopBar = new Set([
+        "searchScreen",
+        "inboxScreen"
+      ]);
+
       if (restoredTopBar) {
-        restoredTopBar.style.setProperty("display", "none", "important");
-        restoredTopBar.style.setProperty("visibility", "hidden", "important");
-        restoredTopBar.style.setProperty("opacity", "0", "important");
-        restoredTopBar.style.setProperty("pointer-events", "none", "important");
+        if (screensWithVisibleTopBar.has(saved.screen)) {
+          restoredTopBar.style.removeProperty("display");
+          restoredTopBar.style.removeProperty("visibility");
+          restoredTopBar.style.removeProperty("opacity");
+          restoredTopBar.style.removeProperty("pointer-events");
+          restoredTopBar.style.removeProperty("z-index");
+          if (typeof window.restoreTopBar === "function") {
+            window.restoreTopBar();
+          }
+        } else {
+          restoredTopBar.style.setProperty("display", "none", "important");
+          restoredTopBar.style.setProperty("visibility", "hidden", "important");
+          restoredTopBar.style.setProperty("opacity", "0", "important");
+          restoredTopBar.style.setProperty("pointer-events", "none", "important");
+        }
       }
 
       // Let the restored screen's own fixed layout settle before the first
@@ -50518,6 +50548,40 @@ window.initializeAppNavigation = function () {
 
     window.appNavigation.initialized =
         true;
+
+    // During a real refresh the head script captured the screen before this
+    // controller was initialized. Never replace that saved destination with
+    // the Home root. This is what prevents the Home/Explore/Following shell
+    // from becoming the navigation state during startup.
+    const preservedRefreshState =
+        window.__socialAppSavedNavigation;
+
+    if (preservedRefreshState?.screen &&
+        preservedRefreshState.screen !== "app") {
+
+        window.setCurrentNavigationState(
+            preservedRefreshState.screen,
+            preservedRefreshState.data || {},
+            Number(preservedRefreshState.scrollY) || 0
+        );
+
+        history.replaceState(
+            {
+                appScreen: preservedRefreshState.screen,
+                data: preservedRefreshState.data || {},
+                scrollY: Number(preservedRefreshState.scrollY) || 0
+            },
+            "",
+            "#" + preservedRefreshState.screen
+        );
+
+        console.log(
+            "🧭 NAVIGATION INITIALIZED FROM REFRESH SNAPSHOT →",
+            preservedRefreshState.screen
+        );
+
+        return;
+    }
 
     const state =
         history.state;
