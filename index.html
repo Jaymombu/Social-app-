@@ -6548,35 +6548,44 @@ async function initAuth() {
     console.log("No logged-in user yet");
   }
 
+  // Read the saved destination before starting Home. If Android/Chrome
+  // reconstructed the document while another screen was open, mark the
+  // restore as pending so startup can restore that screen immediately.
+  let savedNavigation = null;
+  try {
+    savedNavigation = JSON.parse(
+      sessionStorage.getItem("appNavigationState") || "null"
+    );
+  } catch (e) {}
+
+  if (!savedNavigation?.screen) {
+    try {
+      const durable = JSON.parse(
+        localStorage.getItem("socialAppNavigationState") || "null"
+      );
+      if (durable?.screen &&
+          (!durable.userId || String(durable.userId) === String(currentUser?.id || ""))) {
+        savedNavigation = durable;
+        sessionStorage.setItem("appNavigationState", JSON.stringify(durable));
+      }
+    } catch (e) {}
+  }
+
   if (!window.__appStarted) {
+    // We still initialize the normal app shell, but when a non-Home screen
+    // was saved we suppress the visible Home flash while the exact screen is
+    // being reconstructed. This does not change startApp().
+    if (savedNavigation?.screen && savedNavigation.screen !== "app") {
+      document.documentElement.classList.add("socialapp-restoring");
+      window.__navigationRestorePending = true;
+    }
     safeStart();
   }
 
-  // If Android/Chrome restores the page by reloading it after the app was
-  // backgrounded, rebuild the saved screen instead of always landing on Home.
-  // The navigation state is already persisted in sessionStorage by the app.
+  // Restore after the complete script has defined restoreNavigationAfterReload.
   setTimeout(async () => {
     try {
-      let saved = null;
-      try {
-        saved = JSON.parse(sessionStorage.getItem("appNavigationState") || "null");
-      } catch (e) {}
-
-      // If Android/Chrome reconstructed the document and the tab-scoped copy
-      // is unavailable, use the durable backup only when it belongs to the
-      // currently authenticated user.
-      if (!saved?.screen) {
-        try {
-          const durable = JSON.parse(
-            localStorage.getItem("socialAppNavigationState") || "null"
-          );
-          if (durable?.screen && durable.screen !== "app" &&
-              (!durable.userId || String(durable.userId) === String(currentUser?.id || ""))) {
-            saved = durable;
-            sessionStorage.setItem("appNavigationState", JSON.stringify(durable));
-          }
-        } catch (e) {}
-      }
+      const saved = savedNavigation;
 
       if (saved?.screen && saved.screen !== "app" &&
           typeof window.restoreNavigationAfterReload === "function") {
@@ -6584,6 +6593,9 @@ async function initAuth() {
       }
     } catch (restoreError) {
       console.warn("⚠️ STARTUP NAVIGATION RESTORE FAILED:", restoreError);
+    } finally {
+      document.documentElement.classList.remove("socialapp-restoring");
+      window.__navigationRestorePending = false;
     }
   }, 0);
 }
@@ -9512,10 +9524,17 @@ if (
     ) {
       const activePostsTab =
         document.getElementById("profilePostsTab");
+
+      // Profile tabs use inline color/font-weight rather than an
+      // "active" CSS class. The previous check therefore returned false
+      // even when Profile > Posts was actually selected.
       const postsTabIsActive =
+        window.currentProfileTab === "posts" ||
         !activePostsTab ||
         activePostsTab.classList.contains("active") ||
-        activePostsTab.classList.contains("active-tab");
+        activePostsTab.classList.contains("active-tab") ||
+        activePostsTab.style.fontWeight === "bold" ||
+        activePostsTab.style.color === "white";
 
       if (postsTabIsActive) {
         const profilePost = { ...insertedPost };
@@ -49591,6 +49610,17 @@ window.showScreen = function (id, display = "flex") {
 
 
 // =====================================================
+// During Android/Chrome reconstruction, hide the transient Home shell
+// until the saved destination has been restored. The actual page reload
+// may still be performed by Android when it kills a background tab; this
+// prevents the user from seeing a Home -> Profile flash.
+if (!document.getElementById("socialAppRestoreStyle")) {
+  const style = document.createElement("style");
+  style.id = "socialAppRestoreStyle";
+  style.textContent = `html.socialapp-restoring body { visibility: hidden !important; }`;
+  document.head.appendChild(style);
+}
+
 // CENTRAL APP NAVIGATION CONTROLLER
 // SINGLE SOURCE OF TRUTH
 // =====================================================
