@@ -10392,9 +10392,9 @@ function renderFeed(posts) {
 }
 
 // ✅ 3. DEFINE loadPosts
-window.loadPosts = async function () {
+window.loadPosts = async function (forceRefresh = false) {
 
-  console.log("🔥 loadPosts running...");
+  console.log("🔥 loadPosts running...", { forceRefresh, activeTab });
 
   const postsDiv =
     document.getElementById("posts");
@@ -10407,10 +10407,15 @@ window.loadPosts = async function () {
 
   }
 
-  // Do not reload/re-render a feed simply because the user switched tabs.
-  // The cache is invalidated only when the app actually changes the feed data.
+  // Tab switches use the existing cache. A pull-to-refresh explicitly
+  // invalidates ONLY the currently selected feed, so Explore/Following
+  // themselves are not rebuilt or recreated.
+  if (forceRefresh && window.feedCache) {
+    window.feedCache[activeTab] = null;
+  }
+
   const cachedPosts = window.feedCache?.[activeTab];
-  if (Array.isArray(cachedPosts)) {
+  if (!forceRefresh && Array.isArray(cachedPosts)) {
     console.log("⚡ Using cached", activeTab, "feed");
     window.postsState = cachedPosts;
     if (postsDiv.dataset.renderedTab !== activeTab || !postsDiv.children.length) {
@@ -10616,6 +10621,50 @@ console.log(
 
   observeVideos();
 
+};
+
+// =====================================================
+// HOME CONTENT-ONLY REFRESH
+// =====================================================
+// Pull-to-refresh on Home must refresh the data, not rebuild the Home shell.
+// This preserves the Explore/Following tabs, the selected tab, and the user's
+// current feed position.
+window.refreshHomeContents = async function () {
+  const postsDiv = document.getElementById("posts");
+  const storiesBar = document.getElementById("storiesBar");
+  if (!postsDiv) return;
+
+  const selectedTab = activeTab === "following" ? "following" : "explore";
+  const previousScrollTop = Number(postsDiv.scrollTop || 0);
+  const previousTab = selectedTab;
+
+  try {
+    // Keep the tab selection authoritative while the data is refreshed.
+    activeTab = previousTab;
+
+    await window.loadPosts(true);
+
+    // Stories are content too, but the Stories/Add Story shell stays in place.
+    if (storiesBar && typeof window.loadStories === "function") {
+      await window.loadStories();
+    }
+
+    // Re-apply the existing tab state without recreating the tabs.
+    const exploreTab = document.getElementById("tab-explore");
+    const followingTab = document.getElementById("tab-following");
+    exploreTab?.classList.toggle("active-tab", previousTab === "explore");
+    followingTab?.classList.toggle("active-tab", previousTab === "following");
+
+    requestAnimationFrame(() => {
+      postsDiv.scrollTop = previousScrollTop;
+      if (typeof window.bindHomePostsScrollTracker === "function") {
+        window.bindHomePostsScrollTracker();
+      }
+      observeVideos?.();
+    });
+  } catch (error) {
+    console.error("❌ HOME CONTENT REFRESH FAILED:", error);
+  }
 };
 
 window.toggleSavePost = async function(postId){
@@ -38395,6 +38444,7 @@ function attachEvents() {
 
     exploreTab.onclick = () => {
       activeTab = "explore";
+      try { localStorage.setItem("socialAppActiveHomeTab", "explore"); } catch (e) {}
 
       exploreTab.classList.add("active-tab");
       followingTab.classList.remove("active-tab");
@@ -38410,6 +38460,7 @@ function attachEvents() {
 
     followingTab.onclick = () => {
       activeTab = "following";
+      try { localStorage.setItem("socialAppActiveHomeTab", "following"); } catch (e) {}
 
       followingTab.classList.add("active-tab");
       exploreTab.classList.remove("active-tab");
@@ -40560,6 +40611,19 @@ if (
   }
 
   // =====================================================
+  // PRESERVE THE CURRENT HOME TAB
+  // =====================================================
+  // startApp may still be needed during a genuine app/bootstrap rebuild.
+  // Remember the selected feed tab so such a rebuild never silently jumps
+  // from Following back to Explore.
+  try {
+    const savedHomeTab = localStorage.getItem("socialAppActiveHomeTab");
+    if (savedHomeTab === "following" || savedHomeTab === "explore") {
+      activeTab = savedHomeTab;
+    }
+  } catch (e) {}
+
+  // =====================================================
   // APP CONTENT
   // =====================================================
 
@@ -40604,6 +40668,15 @@ if (
 
     </div>
      `; 
+
+  // Restore the selected tab after rebuilding the shell.
+  const rebuiltExploreTab = document.getElementById("tab-explore");
+  const rebuiltFollowingTab = document.getElementById("tab-following");
+  rebuiltExploreTab?.classList.toggle("active-tab", activeTab === "explore");
+  rebuiltFollowingTab?.classList.toggle("active-tab", activeTab === "following");
+  try {
+    localStorage.setItem("socialAppActiveHomeTab", activeTab);
+  } catch (e) {}
     
 
 
@@ -50080,12 +50153,8 @@ window.addEventListener("pageshow", event => {
             return;
         }
 
-        // Home is left to Android Chrome's real/native pull-to-refresh.
-        if (screen.id === 'app') {
-            eligible = false;
-            return;
-        }
-
+        // Home uses the same content-only refresh as the internal screens.
+        // Do not let Android Chrome perform a full document reload.
         const scroller = getScrollableAncestor(event.target, screen);
         const atTop = !scroller || scroller === document.documentElement ||
             scroller === document.body || Number(scroller.scrollTop || 0) <= 0;
@@ -50114,8 +50183,8 @@ window.addEventListener("pageshow", event => {
 
         currentDistance = dy;
 
-        // Once the gesture is clearly a pull-down, stop the internal page
-        // from consuming it so the refresh gesture remains consistent.
+        // Once the gesture is clearly a pull-down, take ownership of it so
+        // Chrome's native document reload cannot rebuild the Home tabs.
         if (dy >= 18) event.preventDefault();
     }, { passive: false, capture: true });
 
@@ -50133,10 +50202,123 @@ window.addEventListener("pageshow", event => {
             window.persistNavigationBeforeBackground?.();
         } catch (e) {}
 
-        // Give storage/history writes a moment to complete before the real
-        // browser reload. This is intentionally a real reload, not a screen
-        // rebuild.
-        setTimeout(() => window.location.reload(), 20);
+        // Refresh only the currently visible content. No location.reload(),
+        // no startApp(), and no recreation of Explore/Following.
+        if (typeof window.refreshHomeContents === "function" &&
+            getActiveScreen()?.id === "app") {
+            await window.refreshHomeContents();
+            refreshing = false;
+            return;
+        }
+
+        // ---------------------------------------------------------
+        // SECONDARY SCREENS: CONTENT-ONLY REFRESH
+        // ---------------------------------------------------------
+        // Never reload the document here. Each screen refreshes only
+        // its own data/DOM and then restores the exact inner scroll
+        // position. The navigation shell, topbar state, selected tab
+        // and current screen therefore remain untouched.
+        try {
+            const screen = getActiveScreen();
+            const screenId = screen?.id || window.appNavigation?.current?.screen;
+
+            const getScroll = (el) => el ? Number(el.scrollTop || 0) : 0;
+            const restoreScroll = (el, y) => {
+                if (!el) return;
+                requestAnimationFrame(() => {
+                    el.scrollTop = Number(y) || 0;
+                    requestAnimationFrame(() => {
+                        el.scrollTop = Number(y) || 0;
+                    });
+                });
+            };
+
+            if (screenId === "profileScreen") {
+                const scroller = document.getElementById("profileScrollContainer") ||
+                    document.getElementById("profileScroll");
+                const y = getScroll(scroller);
+                const userId = window.profileNavigationUserId ||
+                    window.currentProfileId || currentProfileId;
+                const tab = window.currentProfileTab || "posts";
+
+                if (userId) {
+                    if (tab === "videos" && typeof window.loadProfileVideos === "function") {
+                        await window.loadProfileVideos(userId);
+                    } else if (tab === "photos" && typeof window.loadProfilePhotos === "function") {
+                        await window.loadProfilePhotos(userId);
+                    } else if (typeof window.loadProfilePosts === "function") {
+                        await window.loadProfilePosts(userId);
+                    }
+                }
+                restoreScroll(scroller, y);
+
+            } else if (screenId === "commentsScreen") {
+                const scroller = document.getElementById("commentsBody");
+                const y = getScroll(scroller);
+                const postId = window.currentPostId || currentPostId;
+
+                if (postId && typeof window.loadComments === "function") {
+                    // Refresh the complete first page instead of appending to
+                    // the currently displayed comments.
+                    commentsPage = 0;
+                    hasMoreComments = true;
+                    if (scroller) scroller.innerHTML = "";
+                    await window.loadComments(postId);
+                }
+                restoreScroll(scroller, y);
+
+            } else if (screenId === "chatScreen") {
+                const scroller = document.getElementById("chatMessages");
+                const y = getScroll(scroller);
+                const userId = currentChatUser;
+
+                if (userId && typeof window.refreshOpenChatMessages === "function") {
+                    await window.refreshOpenChatMessages(userId);
+                } else if (userId && typeof window.loadMessages === "function") {
+                    await window.loadMessages(userId, window.__chatOpenToken);
+                }
+                restoreScroll(scroller, y);
+
+            } else if (screenId === "inboxScreen") {
+                const scroller = document.getElementById("inboxList") ||
+                    document.getElementById("inboxScreen");
+                const y = getScroll(scroller);
+
+                if (typeof window.openInbox === "function") {
+                    // openInbox(false) already has a silent-refresh path:
+                    // it swaps the inbox contents without adding history.
+                    await window.openInbox(false);
+                }
+                restoreScroll(scroller, y);
+
+            } else if (screenId === "notificationsScreen") {
+                const scroller = document.getElementById("notificationsScreen");
+                const y = getScroll(scroller);
+
+                if (typeof window.loadNotifications === "function") {
+                    await window.loadNotifications();
+                }
+                restoreScroll(scroller, y);
+
+            } else if (screenId === "searchScreen") {
+                const scroller = document.getElementById("searchScreen");
+                const y = getScroll(scroller);
+
+                if (typeof window.searchUsers === "function") {
+                    // Re-run the existing search using the text already in
+                    // the search box; do not reopen Search or touch history.
+                    await window.searchUsers();
+                }
+                restoreScroll(scroller, y);
+
+            } else {
+                console.log("↻ No content-only refresh handler for:", screenId);
+            }
+        } catch (error) {
+            console.warn("⚠️ CONTENT-ONLY SCREEN REFRESH FAILED:", error);
+        } finally {
+            refreshing = false;
+        }
     }, { passive: true, capture: true });
 })();
 
