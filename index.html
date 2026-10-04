@@ -49914,7 +49914,136 @@ window.addEventListener("pageshow", event => {
 // DEFAULT BROWSER PULL-TO-REFRESH
 // =====================================================
 // No custom pull-to-refresh handler is installed here.
-// The browser's native/default pull-to-refresh remains enabled.
+// The browser's native/default pull-to-refresh remains enabled on Home.
+// Other app pages use fixed/internal scroll containers, so Android Chrome
+// cannot reach the viewport edge there. The handler below gives those pages
+// the same simple swipe-down-to-refresh behavior while preserving the current
+// navigation state before the real browser reload.
+(function enableAllScreenPullRefresh() {
+    let startX = 0;
+    let startY = 0;
+    let currentDistance = 0;
+    let eligible = false;
+    let refreshing = false;
+
+    const ignored = (el) => {
+        return !!el?.closest?.(
+            'input, textarea, select, button, a, video, audio, [contenteditable="true"], #mediaViewer, #storyViewer'
+        );
+    };
+
+    function getActiveScreen() {
+        const navScreen = window.appNavigation?.current?.screen;
+        if (navScreen && navScreen !== 'app') {
+            const navEl = document.getElementById(navScreen);
+            if (navEl && getComputedStyle(navEl).display !== 'none' &&
+                getComputedStyle(navEl).visibility !== 'hidden') {
+                return navEl;
+            }
+        }
+
+        const ids = [
+            'profileScreen', 'commentsScreen', 'notificationsScreen',
+            'searchScreen', 'chatScreen', 'inboxScreen',
+            'storyViewersPanel', 'storyViewer', 'mediaViewer'
+        ];
+
+        for (const id of ids) {
+            const el = document.getElementById(id);
+            if (!el) continue;
+            const cs = getComputedStyle(el);
+            if (cs.display !== 'none' && cs.visibility !== 'hidden' &&
+                cs.opacity !== '0') return el;
+        }
+        return null;
+    }
+
+    function getScrollableAncestor(node, screen) {
+        let el = node;
+        while (el && el !== document.body && el !== document.documentElement) {
+            const cs = getComputedStyle(el);
+            const canScroll = /(auto|scroll|overlay)/.test(cs.overflowY) &&
+                el.scrollHeight > el.clientHeight + 1;
+            if (canScroll) return el;
+            if (el === screen) break;
+            el = el.parentElement;
+        }
+
+        if (screen) {
+            const cs = getComputedStyle(screen);
+            if (/(auto|scroll|overlay)/.test(cs.overflowY) &&
+                screen.scrollHeight > screen.clientHeight + 1) return screen;
+        }
+        return document.scrollingElement || document.documentElement;
+    }
+
+    document.addEventListener('touchstart', (event) => {
+        if (refreshing || !event.touches?.length) return;
+        const screen = getActiveScreen();
+        if (!screen || ignored(event.target)) {
+            eligible = false;
+            return;
+        }
+
+        // Home is left to Android Chrome's real/native pull-to-refresh.
+        if (screen.id === 'app') {
+            eligible = false;
+            return;
+        }
+
+        const scroller = getScrollableAncestor(event.target, screen);
+        const atTop = !scroller || scroller === document.documentElement ||
+            scroller === document.body || Number(scroller.scrollTop || 0) <= 0;
+
+        if (!atTop) {
+            eligible = false;
+            return;
+        }
+
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+        currentDistance = 0;
+        eligible = true;
+    }, { passive: true, capture: true });
+
+    document.addEventListener('touchmove', (event) => {
+        if (!eligible || refreshing || !event.touches?.length) return;
+
+        const dx = event.touches[0].clientX - startX;
+        const dy = event.touches[0].clientY - startY;
+
+        if (Math.abs(dx) > Math.abs(dy) || dy <= 0) {
+            eligible = false;
+            return;
+        }
+
+        currentDistance = dy;
+
+        // Once the gesture is clearly a pull-down, stop the internal page
+        // from consuming it so the refresh gesture remains consistent.
+        if (dy >= 18) event.preventDefault();
+    }, { passive: false, capture: true });
+
+    document.addEventListener('touchend', async () => {
+        if (!eligible) return;
+
+        const shouldRefresh = currentDistance >= 70;
+        eligible = false;
+        currentDistance = 0;
+
+        if (!shouldRefresh || refreshing) return;
+        refreshing = true;
+
+        try {
+            window.persistNavigationBeforeBackground?.();
+        } catch (e) {}
+
+        // Give storage/history writes a moment to complete before the real
+        // browser reload. This is intentionally a real reload, not a screen
+        // rebuild.
+        setTimeout(() => window.location.reload(), 20);
+    }, { passive: true, capture: true });
+})();
 
 window.setCurrentNavigationState = function (
     screen,
