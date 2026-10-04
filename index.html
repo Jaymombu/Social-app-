@@ -6558,12 +6558,15 @@ async function initAuth() {
     );
   } catch (e) {}
 
-  if (!savedNavigation?.screen) {
+  if (!savedNavigation?.screen || savedNavigation.screen === "app") {
     try {
       const durable = JSON.parse(
-        localStorage.getItem("socialAppNavigationState") || "null"
+        localStorage.getItem("socialAppLastScreenState") ||
+        localStorage.getItem("socialAppNavigationState") ||
+        "null"
       );
       if (durable?.screen &&
+          durable.screen !== "app" &&
           (!durable.userId || String(durable.userId) === String(currentUser?.id || ""))) {
         savedNavigation = durable;
         sessionStorage.setItem("appNavigationState", JSON.stringify(durable));
@@ -6722,6 +6725,7 @@ window.logout = async function () {
   try {
     sessionStorage.removeItem("appNavigationState");
     localStorage.removeItem("socialAppNavigationState");
+    localStorage.removeItem("socialAppLastScreenState");
   } catch (e) {}
 
   alert("Logged out");
@@ -9466,44 +9470,81 @@ if (error) {
 
 }
 
-const userLanguage = await getPreferredLanguage();
+  // -----------------------------------------------------
+  // INSTANTLY PAINT THE NEW POST
+  // -----------------------------------------------------
+  // Do this immediately after the database insert. Do NOT wait for
+  // translation or another network request before showing the post.
+  // The Home feed uses a cache, so simply calling loadPosts() here would
+  // otherwise reuse the old feed and hide the newly-created post.
+  try {
+    const displayPost = { ...insertedPost };
 
-if (
-    content &&
-    detectedLanguage !== "unknown" &&
-    detectedLanguage !== userLanguage
-) {
+    displayPost.profile = profile || null;
+    displayPost.username = profile?.username || "";
+    displayPost.name = profile?.name || displayPost.name || session.user.email;
+    displayPost.avatar_url = profile?.avatar_url || displayPost.avatar_url || null;
+    displayPost.verified = profile?.verified === true;
+    displayPost.saved = false;
 
-    const translated = await translateText(
-        content,
-        detectedLanguage,
-        userLanguage
-    );
-
-    if (translated) {
-
-        await supabase
-        .from("posts")
-        .update({
-            translated_text: translated,
-            translation_status: "completed"
-        })
-        .eq("id", insertedPost.id);
-
+    // posts_media is private. Resolve the URL only for the rendered copy;
+    // never replace the database value.
+    if (displayPost.file_url &&
+        typeof window.getAuthorizedStorageUrl === "function") {
+      displayPost.file_url = await window.getAuthorizedStorageUrl(
+        "posts_media",
+        displayPost.file_url
+      );
     }
 
-}
+    // Update the Home cache(s) first so a later tab switch cannot restore
+    // the stale pre-post feed. The new post belongs to both Explore and
+    // Following because it was created by the current user.
+    if (window.feedCache) {
+      ["explore", "following"].forEach(tab => {
+        if (Array.isArray(window.feedCache[tab])) {
+          window.feedCache[tab] = [
+            displayPost,
+            ...window.feedCache[tab].filter(
+              p => String(p?.id) !== String(displayPost.id)
+            )
+          ].slice(0, 20);
+        }
+      });
+    }
 
-  input.value = "";
-  mediaInput.value = "";
+    // If Home is currently visible, insert directly into #posts without
+    // rebuilding the feed or changing the user's scroll position.
+    const postsContainer = document.getElementById("posts");
+    const appScreen = document.getElementById("app");
+    const homeVisible =
+      appScreen &&
+      appScreen.style.display !== "none" &&
+      appScreen.style.visibility !== "hidden" &&
+      appScreen.style.opacity !== "0" &&
+      postsContainer;
 
-  // -----------------------------------------------------
-  // INSTANTLY ADD A NEW POST TO THE OPEN OWNER PROFILE
-  // -----------------------------------------------------
-  // If the user's own Profile > Posts tab is currently visible, update it
-  // immediately instead of making the user leave/reopen the profile.
-  // Private post media is signed before rendering.
-  try {
+    if (homeVisible) {
+      const existing = document.getElementById(`post-${displayPost.id}`);
+      if (!existing) {
+        const renderedHomePost = renderPostElement(displayPost);
+        if (renderedHomePost) {
+          postsContainer.insertBefore(
+            renderedHomePost,
+            postsContainer.firstElementChild || null
+          );
+        }
+      }
+      postsContainer.dataset.renderedTab = activeTab;
+      window.postsState = Array.isArray(window.feedCache?.[activeTab])
+        ? window.feedCache[activeTab]
+        : [displayPost];
+      observeVideos();
+    }
+
+    // -----------------------------------------------------
+    // INSTANTLY ADD THE NEW POST TO THE OPEN OWNER PROFILE
+    // -----------------------------------------------------
     const visibleProfile = document.getElementById("profileScreen");
     const profilePostsContainer = document.getElementById("profilePosts");
     const activeProfileUserId =
@@ -9522,12 +9563,7 @@ if (
       String(activeProfileUserId) === String(session.user.id) &&
       profilePostsContainer
     ) {
-      const activePostsTab =
-        document.getElementById("profilePostsTab");
-
-      // Profile tabs use inline color/font-weight rather than an
-      // "active" CSS class. The previous check therefore returned false
-      // even when Profile > Posts was actually selected.
+      const activePostsTab = document.getElementById("profilePostsTab");
       const postsTabIsActive =
         window.currentProfileTab === "posts" ||
         !activePostsTab ||
@@ -9537,37 +9573,81 @@ if (
         activePostsTab.style.color === "white";
 
       if (postsTabIsActive) {
-        const profilePost = { ...insertedPost };
-
-        if (profilePost.file_url &&
-            typeof window.getAuthorizedStorageUrl === "function") {
-          profilePost.file_url = await window.getAuthorizedStorageUrl(
-            "posts_media",
-            profilePost.file_url
-          );
-        }
-
-        profilePost.name = profile?.name || profilePost.name || "User";
-        profilePost.username = profile?.username || "";
-        profilePost.avatar_url = profile?.avatar_url || null;
-        profilePost.verified = profile?.verified === true;
-        profilePost.profiles = profile || null;
-
         window.profilePosts = Array.isArray(window.profilePosts)
-          ? [profilePost, ...window.profilePosts.filter(p => String(p.id) !== String(profilePost.id))]
-          : [profilePost];
+          ? [displayPost, ...window.profilePosts.filter(
+              p => String(p?.id) !== String(displayPost.id)
+            )]
+          : [displayPost];
 
-        const rendered = renderPostElement(profilePost);
-        if (rendered) {
-          profilePostsContainer.insertBefore(
-            rendered,
-            profilePostsContainer.firstElementChild || null
-          );
+        const existingProfilePost =
+          document.getElementById(`post-${displayPost.id}`);
+
+        if (!existingProfilePost) {
+          const renderedProfilePost = renderPostElement(displayPost);
+          if (renderedProfilePost) {
+            profilePostsContainer.insertBefore(
+              renderedProfilePost,
+              profilePostsContainer.firstElementChild || null
+            );
+          }
         }
       }
     }
-  } catch (profilePostError) {
-    console.warn("⚠️ INSTANT PROFILE POST UPDATE FAILED:", profilePostError);
+  } catch (instantPostError) {
+    console.warn("⚠️ INSTANT NEW POST DISPLAY FAILED:", instantPostError);
+  }
+
+  input.value = "";
+  mediaInput.value = "";
+
+  // -----------------------------------------------------
+  // TRANSLATION RUNS AFTER THE POST IS ALREADY VISIBLE
+  // -----------------------------------------------------
+  // Translation is intentionally kept in the background so it cannot delay
+  // the visible new-post update.
+  try {
+    const userLanguage = await getPreferredLanguage();
+
+    if (
+      content &&
+      detectedLanguage !== "unknown" &&
+      detectedLanguage !== userLanguage
+    ) {
+      const translated = await translateText(
+        content,
+        detectedLanguage,
+        userLanguage
+      );
+
+      if (translated) {
+        await supabase
+          .from("posts")
+          .update({
+            translated_text: translated,
+            translation_status: "completed"
+          })
+          .eq("id", insertedPost.id);
+
+        // Update only the in-memory copies. Do not rebuild the Home/Profile
+        // DOM just because translation completed.
+        const updateTranslation = (list) => {
+          if (!Array.isArray(list)) return;
+          const item = list.find(
+            p => String(p?.id) === String(insertedPost.id)
+          );
+          if (item) {
+            item.translated_text = translated;
+            item.translation_status = "completed";
+          }
+        };
+        updateTranslation(window.postsState);
+        updateTranslation(window.profilePosts);
+        updateTranslation(window.feedCache?.explore);
+        updateTranslation(window.feedCache?.following);
+      }
+    }
+  } catch (translationError) {
+    console.warn("⚠️ POST TRANSLATION FAILED:", translationError);
   }
 
   loadPosts();
@@ -49666,6 +49746,12 @@ window.syncNavigationSession = function (state) {
             "socialAppNavigationState",
             serialized
         );
+        // Durable last destination used if Android destroys the Chrome
+        // document and the per-tab session copy is stale or unavailable.
+        localStorage.setItem(
+            "socialAppLastScreenState",
+            serialized
+        );
     } catch (error) {
         console.warn(
             "⚠️ NAVIGATION SESSION SAVE FAILED:",
@@ -49709,6 +49795,7 @@ window.persistNavigationBeforeBackground = function () {
         const serialized = JSON.stringify(snapshot);
         sessionStorage.setItem("appNavigationState", serialized);
         localStorage.setItem("socialAppNavigationState", serialized);
+        localStorage.setItem("socialAppLastScreenState", serialized);
 
         // Keep the current browser entry synchronized as well.
         if (history.state?.appScreen) {
