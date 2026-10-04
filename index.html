@@ -5632,6 +5632,7 @@ padding:8px;
     style="
       flex:1;
       overflow-y:auto;
+      overscroll-behavior-y:contain;
     "
   ></div>
 
@@ -6217,6 +6218,7 @@ Stories
   style="
     flex:1;
     overflow:auto;
+    overscroll-behavior-y:contain;
   "
 ></div>
 
@@ -6228,14 +6230,20 @@ top:60px;
 left:0;
 right:0;
 bottom:0;
+height:calc(100dvh - 60px);
+max-height:calc(100dvh - 60px);
 background:#0f0f0f;
 display:none;
 flex-direction:column;
+overflow:hidden;
+overscroll-behavior:none;
+touch-action:none;
 z-index:9000;
 ">
 
 <div style="
 display:flex;
+flex:0 0 auto;
 align-items:center;
 padding:15px;
 border-bottom:1px solid #333;
@@ -6295,8 +6303,14 @@ cursor:pointer;
 <div
 id="searchResults"
 style="
-flex:1;
-overflow:auto;
+flex:1 1 auto;
+min-height:0;
+height:0;
+overflow-y:auto;
+overflow-x:hidden;
+-webkit-overflow-scrolling:touch;
+overscroll-behavior-y:contain;
+touch-action:pan-y;
 ">
 </div>
 
@@ -39526,6 +39540,10 @@ padding:12px;
 color:white;
 font-weight:bold;
 border-bottom:1px solid #222;
+position:sticky;
+top:0;
+z-index:20;
+background:#0f0f0f;
 ">
 Recent Searches
 
@@ -50081,6 +50099,55 @@ window.addEventListener("pageshow", event => {
 // =====================================================
 // DEFAULT BROWSER PULL-TO-REFRESH
 // =====================================================
+// =====================================================
+// CONTENT-ONLY REFRESH HELPERS
+// =====================================================
+window.refreshSearchContents = async function () {
+    const input = document.getElementById("userSearchInput");
+    const text = (input?.value || "").trim();
+    if (!text) {
+        let recent = [];
+        try { recent = JSON.parse(localStorage.getItem("recentSearches") || "[]"); } catch (e) {}
+        const ids = recent.map(x => String(x.id || "")).filter(Boolean);
+        if (ids.length) {
+            const { data, error } = await supabase
+                .from("profiles")
+                .select("id,name,avatar_url,online,last_seen,verified")
+                .in("id", ids);
+            if (!error && Array.isArray(data)) {
+                const byId = new Map(data.map(p => [String(p.id), p]));
+                recent = recent.map(item => {
+                    const p = byId.get(String(item.id));
+                    return p ? {...item, name:p.name || item.name || "User", avatar:p.avatar_url || item.avatar || "", online:p.online === true, last_seen:p.last_seen || "", verified:p.verified === true} : item;
+                });
+                localStorage.setItem("recentSearches", JSON.stringify(recent));
+            }
+        }
+    }
+    if (typeof window.searchUsers === "function") await window.searchUsers();
+};
+window.refreshNotificationsContents = async function () {
+    notificationCache = [];
+    await loadNotifications();
+};
+window.refreshInboxContents = async function () {
+    if (typeof window.openInbox === "function") await window.openInbox(false);
+};
+
+<style id="socialapp-content-refresh-indicator-style">
+#socialAppContentRefreshIndicator{position:fixed;left:50%;top:68px;width:34px;height:34px;margin-left:-17px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(20,20,20,.94);color:#fff;font-size:21px;line-height:1;z-index:2147483646;opacity:0;transform:translateY(-18px) scale(.85);pointer-events:none;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+#socialAppContentRefreshIndicator.refreshing{opacity:1!important;animation:socialAppRefreshSpin .75s linear infinite}
+@keyframes socialAppRefreshSpin{from{transform:translateY(0) scale(1) rotate(0deg)}to{transform:translateY(0) scale(1) rotate(360deg)}}
+</style>
+<script>
+(function(){
+function e(){let x=document.getElementById("socialAppContentRefreshIndicator");if(!x){x=document.createElement("div");x.id="socialAppContentRefreshIndicator";x.textContent="↻";x.setAttribute("aria-hidden","true");document.body.appendChild(x)}return x}
+window.__showContentRefreshIndicator=p=>{const x=e(),n=Math.max(0,Math.min(1,Number(p)||0));x.classList.remove("refreshing");x.style.opacity=String(Math.min(1,n*1.35));x.style.transform=`translateY(${-18+18*n}px) scale(${.85+.15*n})`};
+window.__startContentRefreshIndicator=()=>{const x=e();x.style.opacity="1";x.style.transform="translateY(0) scale(1)";x.classList.add("refreshing")};
+window.__stopContentRefreshIndicator=()=>{const x=document.getElementById("socialAppContentRefreshIndicator");if(!x)return;x.classList.remove("refreshing");x.style.opacity="0";x.style.transform="translateY(-18px) scale(.85)"};
+})();
+</script>
+
 // No custom pull-to-refresh handler is installed here.
 // The browser's native/default pull-to-refresh remains enabled on Home.
 // Other app pages use fixed/internal scroll containers, so Android Chrome
@@ -50182,6 +50249,7 @@ window.addEventListener("pageshow", event => {
         }
 
         currentDistance = dy;
+        window.__showContentRefreshIndicator?.(Math.min(1, dy / 90));
 
         // Once the gesture is clearly a pull-down, take ownership of it so
         // Chrome's native document reload cannot rebuild the Home tabs.
@@ -50195,7 +50263,11 @@ window.addEventListener("pageshow", event => {
         eligible = false;
         currentDistance = 0;
 
-        if (!shouldRefresh || refreshing) return;
+        if (!shouldRefresh || refreshing) {
+            window.__stopContentRefreshIndicator?.();
+            return;
+        }
+        window.__startContentRefreshIndicator?.();
         refreshing = true;
 
         try {
@@ -50284,10 +50356,8 @@ window.addEventListener("pageshow", event => {
                     document.getElementById("inboxScreen");
                 const y = getScroll(scroller);
 
-                if (typeof window.openInbox === "function") {
-                    // openInbox(false) already has a silent-refresh path:
-                    // it swaps the inbox contents without adding history.
-                    await window.openInbox(false);
+                if (typeof window.refreshInboxContents === "function") {
+                    await window.refreshInboxContents();
                 }
                 restoreScroll(scroller, y);
 
@@ -50295,19 +50365,17 @@ window.addEventListener("pageshow", event => {
                 const scroller = document.getElementById("notificationsScreen");
                 const y = getScroll(scroller);
 
-                if (typeof window.loadNotifications === "function") {
-                    await window.loadNotifications();
+                if (typeof window.refreshNotificationsContents === "function") {
+                    await window.refreshNotificationsContents();
                 }
                 restoreScroll(scroller, y);
 
             } else if (screenId === "searchScreen") {
-                const scroller = document.getElementById("searchScreen");
+                const scroller = document.getElementById("searchResults");
                 const y = getScroll(scroller);
 
-                if (typeof window.searchUsers === "function") {
-                    // Re-run the existing search using the text already in
-                    // the search box; do not reopen Search or touch history.
-                    await window.searchUsers();
+                if (typeof window.refreshSearchContents === "function") {
+                    await window.refreshSearchContents();
                 }
                 restoreScroll(scroller, y);
 
@@ -50317,6 +50385,7 @@ window.addEventListener("pageshow", event => {
         } catch (error) {
             console.warn("⚠️ CONTENT-ONLY SCREEN REFRESH FAILED:", error);
         } finally {
+            window.__stopContentRefreshIndicator?.();
             refreshing = false;
         }
     }, { passive: true, capture: true });
