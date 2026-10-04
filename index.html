@@ -15,7 +15,13 @@
 <!-- Prevent a Home/Profile flash before Android/Chrome restores the saved screen.
      This runs in <head> before the first page paint. -->
 <style id="socialAppEarlyRestoreStyle">
-  html.socialapp-restoring body { visibility: hidden !important; }
+  /* Keep the entire document invisible during a real browser refresh.
+     This prevents the normal Home shell from being painted before the
+     saved Profile/Chat/Comments/etc. screen has been restored. */
+  html.socialapp-restoring,
+  html.socialapp-restoring body {
+    visibility: hidden !important;
+  }
 </style>
 <script>
 (function () {
@@ -49760,7 +49766,12 @@ window.showScreen = function (id, display = "flex") {
 if (!document.getElementById("socialAppRestoreStyle")) {
   const style = document.createElement("style");
   style.id = "socialAppRestoreStyle";
-  style.textContent = `html.socialapp-restoring body { visibility: hidden !important; }`;
+  style.textContent = `
+    html.socialapp-restoring,
+    html.socialapp-restoring body {
+      visibility: hidden !important;
+    }
+  `;
   document.head.appendChild(style);
 }
 
