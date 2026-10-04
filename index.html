@@ -49902,6 +49902,227 @@ window.addEventListener("pageshow", event => {
     }, 100);
 }, { passive: true });
 
+
+// =====================================================
+// PULL TO REFRESH — SOFT RELOAD CURRENT SCREEN
+// =====================================================
+// A downward swipe from the top refreshes the data on the CURRENT screen.
+// It deliberately does NOT call location.reload(), rebuild startApp(),
+// navigate Home, or destroy the current screen/scroll position.
+(function initSocialPullToRefresh() {
+    let startY = 0;
+    let startX = 0;
+    let pulling = false;
+    let refreshing = false;
+    let indicator = null;
+
+    function getCurrentScrollTop() {
+        const posts = document.getElementById('posts');
+        const profilePosts = document.getElementById('profilePosts');
+        return Math.max(
+            Number(window.scrollY) || 0,
+            Number(document.documentElement.scrollTop) || 0,
+            Number(document.body.scrollTop) || 0,
+            Number(posts?.scrollTop) || 0,
+            Number(profilePosts?.scrollTop) || 0
+        );
+    }
+
+    function blockedTarget(target) {
+        return !!target?.closest?.(
+            'input, textarea, select, button, a, video, audio, ' +
+            '[contenteditable="true"], #commentsScreen, #storyViewer, ' +
+            '#mediaViewer, #photoGallery, .commentItem, .replyCard'
+        );
+    }
+
+    function ensureIndicator() {
+        if (indicator) return indicator;
+        indicator = document.createElement('div');
+        indicator.id = 'socialPullRefreshIndicator';
+        indicator.style.cssText = `
+            position:fixed;
+            top:0;
+            left:50%;
+            transform:translate(-50%,-100%);
+            z-index:2147483647;
+            padding:7px 13px;
+            border-radius:0 0 14px 14px;
+            background:rgba(20,20,20,.94);
+            color:#fff;
+            font-size:13px;
+            font-weight:600;
+            pointer-events:none;
+            opacity:0;
+            transition:transform .16s ease,opacity .16s ease;
+        `;
+        indicator.textContent = '↓ Pull to refresh';
+        document.body.appendChild(indicator);
+        return indicator;
+    }
+
+    function showPull(distance) {
+        const el = ensureIndicator();
+        const progress = Math.min(1, distance / 90);
+        el.style.transform = `translate(-50%, ${Math.round(progress * 52 - 100)}%)`;
+        el.style.opacity = String(.35 + progress * .65);
+        el.textContent = distance >= 90 ? '↻ Release to refresh' : '↓ Pull to refresh';
+    }
+
+    function hideIndicator() {
+        if (!indicator) return;
+        indicator.style.transform = 'translate(-50%,-100%)';
+        indicator.style.opacity = '0';
+    }
+
+    async function refreshCurrentScreen() {
+        if (refreshing) return;
+        refreshing = true;
+
+        const savedState = window.appNavigation?.current
+            ? { ...window.appNavigation.current, data: { ...(window.appNavigation.current.data || {}) } }
+            : { screen: 'app', data: {}, scrollY: Number(window.scrollY) || 0 };
+        const savedScroll = Number(savedState.scrollY) || getCurrentScrollTop();
+
+        const el = ensureIndicator();
+        el.style.transform = 'translate(-50%,0)';
+        el.style.opacity = '1';
+        el.textContent = '↻ Refreshing…';
+
+        try {
+            const screen = savedState.screen || 'app';
+
+            if (screen === 'app') {
+                // Clear only feed caches so the current Home screen gets fresh data.
+                if (window.feedCache) {
+                    window.feedCache.explore = null;
+                    window.feedCache.following = null;
+                }
+                window.postsState = [];
+                window.renderedPosts = new Set();
+                await loadPosts();
+            } else if (screen === 'profile') {
+                const userId =
+                    savedState.data?.userId ||
+                    window.profileNavigationUserId ||
+                    document.getElementById('profileScreen')?.dataset?.userId;
+                const tab =
+                    window.currentProfileTab ||
+                    savedState.data?.tab ||
+                    'posts';
+                if (userId) {
+                    if (tab === 'photos' && typeof window.loadProfilePhotos === 'function') {
+                        await window.loadProfilePhotos(userId);
+                    } else if (tab === 'videos' && typeof window.loadProfileVideos === 'function') {
+                        await window.loadProfileVideos(userId);
+                    } else if (typeof window.loadProfilePosts === 'function') {
+                        await window.loadProfilePosts(userId);
+                    }
+                }
+            } else if (screen === 'notificationsScreen' && typeof loadNotifications === 'function') {
+                await loadNotifications();
+            } else if (screen === 'searchScreen' && typeof window.openSearch === 'function') {
+                // Search UI is intentionally left intact; refresh only if a dedicated loader exists.
+                if (typeof window.loadSearchResults === 'function') {
+                    await window.loadSearchResults();
+                }
+            } else if (screen === 'commentsScreen' && typeof loadComments === 'function' && currentPostId) {
+                await loadComments(currentPostId);
+            } else if (screen === 'chatScreen') {
+                if (typeof window.loadChatMessages === 'function' && currentChatUser?.id) {
+                    await window.loadChatMessages(currentChatUser.id);
+                } else if (typeof window.refreshChat === 'function') {
+                    await window.refreshChat();
+                }
+            }
+
+            // Keep the same screen and restore its previous position.
+            if (typeof window.setCurrentNavigationState === 'function') {
+                window.setCurrentNavigationState(screen, savedState.data || {}, savedScroll);
+            }
+
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const posts = document.getElementById('posts');
+                    const profilePosts = document.getElementById('profilePosts');
+                    if (screen === 'app' && posts && posts.scrollHeight > posts.clientHeight) {
+                        posts.scrollTop = savedScroll;
+                    } else if (screen === 'profile' && profilePosts && profilePosts.scrollHeight > profilePosts.clientHeight) {
+                        profilePosts.scrollTop = savedScroll;
+                    } else {
+                        window.scrollTo(0, savedScroll);
+                    }
+                });
+            });
+
+            el.textContent = '✓ Updated';
+            setTimeout(hideIndicator, 500);
+        } catch (error) {
+            console.warn('⚠️ PULL TO REFRESH FAILED:', error);
+            el.textContent = 'Refresh failed';
+            setTimeout(hideIndicator, 700);
+        } finally {
+            refreshing = false;
+        }
+    }
+
+    document.addEventListener('touchstart', event => {
+        if (refreshing || blockedTarget(event.target)) return;
+        if (getCurrentScrollTop() > 2) return;
+
+        const touch = event.touches?.[0];
+        if (!touch) return;
+        startY = touch.clientY;
+        startX = touch.clientX;
+        pulling = true;
+    }, { passive: true, capture: true });
+
+    document.addEventListener('touchmove', event => {
+        if (!pulling || refreshing) return;
+        const touch = event.touches?.[0];
+        if (!touch) return;
+
+        const dy = touch.clientY - startY;
+        const dx = Math.abs(touch.clientX - startX);
+        if (dy <= 0 || dy < dx * 1.15) {
+            if (dy < -10) pulling = false;
+            return;
+        }
+
+        const distance = Math.min(130, dy * .65);
+        showPull(distance);
+
+        if (distance >= 58) {
+            // Prevent the browser's native pull-to-refresh only once the
+            // gesture is clearly our vertical pull gesture.
+            event.preventDefault();
+        }
+    }, { passive: false, capture: true });
+
+    document.addEventListener('touchend', () => {
+        if (!pulling || refreshing) return;
+        pulling = false;
+
+        const el = indicator;
+        const currentTransform = el?.style?.transform || '';
+        const match = currentTransform.match(/,\s*([\d.-]+)%\)/);
+        const progress = match ? parseFloat(match[1]) : -100;
+
+        if (progress >= -42) {
+            refreshCurrentScreen();
+        } else {
+            hideIndicator();
+        }
+    }, { passive: true, capture: true });
+
+    document.addEventListener('touchcancel', () => {
+        pulling = false;
+        hideIndicator();
+    }, { passive: true, capture: true });
+
+    window.socialPullToRefresh = { refresh: refreshCurrentScreen };
+})();
+
 window.setCurrentNavigationState = function (
     screen,
     data = {},
