@@ -11,63 +11,6 @@
 <link rel="apple-touch-icon" href="icon-192.png">
   
   <title>Social App</title>
-
-<!-- Prevent a Home/Profile flash before Android/Chrome restores the saved screen.
-     This runs in <head> before the first page paint. -->
-<style id="socialAppEarlyRestoreStyle">
-  /* Keep the entire document invisible during a real browser refresh.
-     This prevents the normal Home shell from being painted before the
-     saved Profile/Chat/Comments/etc. screen has been restored. */
-  html.socialapp-restoring,
-  html.socialapp-restoring body {
-    visibility: hidden !important;
-  }
-</style>
-<script>
-(function () {
-  try {
-    let raw = sessionStorage.getItem("appNavigationState");
-    if (!raw) raw = localStorage.getItem("socialAppLastScreenState");
-    if (!raw) raw = localStorage.getItem("socialAppNavigationState");
-
-    let saved = null;
-    try { saved = raw ? JSON.parse(raw) : null; } catch (e) {}
-
-    const hashScreen = (location.hash || "").replace(/^#/, "");
-    const knownScreens = new Set([
-      "profileScreen", "chatScreen", "inboxScreen",
-      "notificationsScreen", "searchScreen", "storyViewer",
-      "commentsScreen", "mediaViewer", "photoGallery",
-      "adminPanelScreen"
-    ]);
-
-    const screen = saved?.screen ||
-      (knownScreens.has(hashScreen) ? hashScreen : "app");
-
-    // Preserve the exact secondary screen before any later script can
-    // initialize the navigation controller to Home. This snapshot is the
-    // authoritative destination for a real browser refresh.
-    if (saved?.screen && saved.screen !== "app") {
-      window.__socialAppSavedNavigation = saved;
-    }
-
-    const navigationType =
-      (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]?.type) ||
-      "";
-
-    // Hide the first paint when Chrome/Android reconstructed or reloaded the
-    // document. This applies to Home as well as secondary screens, so the
-    // transient startup shell cannot flash before the saved state is ready.
-    if (
-      (screen && screen !== "app") ||
-      document.wasDiscarded === true ||
-      navigationType === "reload"
-    ) {
-      document.documentElement.classList.add("socialapp-restoring");
-    }
-  } catch (e) {}
-})();
-</script>
 <style>
   /* RESET */
 body {
@@ -82,8 +25,6 @@ body {
 #posts{
     min-height:100vh;
     overflow-y:auto;
-    /* Let downward overscroll chain to Android Chrome's native refresh. */
-    overscroll-behavior-y:auto;
     padding-top:20px;
     padding-bottom:20px;
     box-sizing:border-box;
@@ -648,7 +589,6 @@ body:not(.dark) .add-story-card::after{
 .post-card .like-btn,
 .post-card button[onclick*="openComments"],
 .post-card button[onclick*="toggleSavePost"],
-.post-card button[onclick*="report"],
 .post-card button[onclick*="deletePost"]{
   display:inline-flex;
   align-items:center;
@@ -3267,18 +3207,13 @@ body:not(.dark) .edit-discard-btn{
 
 html,
 body {
-  /* Allow Android Chrome native pull-to-refresh. */
-  overscroll-behavior-y: auto;
-  overscroll-behavior-x: auto;
+  overscroll-behavior: none;
 }
 
 #chatScreen,
 #inboxScreen {
-  /* Keep vertical scrolling available so Android Chrome can reach
-     the viewport edge and perform its native pull-to-refresh. */
-  overscroll-behavior-y: auto;
-  overscroll-behavior-x: none;
-  touch-action: pan-y;
+  overscroll-behavior: contain;
+  touch-action: none;
 }
 
 #chatMessages,
@@ -3357,13 +3292,6 @@ body {
   100% { box-shadow:0 0 0 0 rgba(24,119,242,0); }
 }
 
-
-/* ===== SocialApp account authentication UI ===== */
-#socialAuthOverlay{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;background:rgba(0,0,0,.84);backdrop-filter:blur(8px)}
-#socialAuthOverlay.active{display:flex}
-#socialAuthCard{width:min(430px,100%);max-height:92vh;overflow:auto;padding:22px;box-sizing:border-box;border-radius:22px;background:#171717;color:#fff;border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 60px rgba(0,0,0,.55)}
-#socialAuthCard h2{margin:0 0 7px;font-size:24px} #socialAuthCard .auth-subtitle{margin:0 0 18px;color:#aaa;font-size:14px;line-height:1.45} #socialAuthCard label{display:block;margin:12px 0 6px;font-size:13px;color:#bbb} #socialAuthCard input{width:100%;box-sizing:border-box;padding:12px 13px;border-radius:12px;border:1px solid #333;background:#0e0e0e;color:#fff;outline:none;font:inherit} #socialAuthCard input:focus{border-color:#1877f2}
-.auth-primary,.auth-secondary,.auth-link{width:100%;box-sizing:border-box;border:0;cursor:pointer;font:inherit}.auth-primary{margin-top:16px;padding:12px;border-radius:12px;background:#1877f2;color:#fff;font-weight:700}.auth-secondary{margin-top:10px;padding:11px;border-radius:12px;background:#292929;color:#fff;font-weight:600}.auth-link{margin-top:12px;padding:4px;background:transparent;color:#58a6ff;font-size:14px}.auth-divider{display:flex;align-items:center;gap:10px;margin:16px 0;color:#777;font-size:12px}.auth-divider:before,.auth-divider:after{content:"";height:1px;flex:1;background:#333}.auth-close-row{display:flex;justify-content:flex-end}.auth-close{border:0;background:transparent;color:#aaa;font-size:24px;cursor:pointer}.auth-error,.auth-success{display:none;margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px;line-height:1.4}.auth-error{background:rgba(220,50,50,.12);color:#ff8e8e}.auth-success{background:rgba(30,180,100,.12);color:#8ff0b7}.auth-contact{margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);color:#888;font-size:12px;text-align:center}.auth-contact a{color:#58a6ff}
 </style>
 
 <style id="story-navigation-final-fix">
@@ -5633,7 +5561,6 @@ padding:8px;
     style="
       flex:1;
       overflow-y:auto;
-      overscroll-behavior-y:contain;
     "
   ></div>
 
@@ -6219,7 +6146,6 @@ Stories
   style="
     flex:1;
     overflow:auto;
-    overscroll-behavior-y:contain;
   "
 ></div>
 
@@ -6231,20 +6157,14 @@ top:60px;
 left:0;
 right:0;
 bottom:0;
-height:calc(100dvh - 60px);
-max-height:calc(100dvh - 60px);
 background:#0f0f0f;
 display:none;
 flex-direction:column;
-overflow:hidden;
-overscroll-behavior:none;
-touch-action:none;
 z-index:9000;
 ">
 
 <div style="
 display:flex;
-flex:0 0 auto;
 align-items:center;
 padding:15px;
 border-bottom:1px solid #333;
@@ -6304,14 +6224,8 @@ cursor:pointer;
 <div
 id="searchResults"
 style="
-flex:1 1 auto;
-min-height:0;
-height:0;
-overflow-y:auto;
-overflow-x:hidden;
--webkit-overflow-scrolling:touch;
-overscroll-behavior-y:contain;
-touch-action:pan-y;
+flex:1;
+overflow:auto;
 ">
 </div>
 
@@ -6402,16 +6316,6 @@ window.getAuthorizedStorageUrl = async function(bucket, value, expiresIn = 3600)
     return "";
   }
 
-  // Cache signed URLs in memory. A Home refresh can therefore reuse the
-  // same authorized URL instead of asking Storage to sign the same object
-  // again. Keep a safety margin so URLs are never reused right at expiry.
-  window.__socialAppSignedUrlCache = window.__socialAppSignedUrlCache || new Map();
-  const signedCacheKey = `${bucket}|${raw}`;
-  const cachedSigned = window.__socialAppSignedUrlCache.get(signedCacheKey);
-  if (cachedSigned && cachedSigned.expiresAt > Date.now() + 60000) {
-    return cachedSigned.url;
-  }
-
   const { data, error } = await supabase
     .storage
     .from(bucket)
@@ -6422,13 +6326,7 @@ window.getAuthorizedStorageUrl = async function(bucket, value, expiresIn = 3600)
     return "";
   }
 
-  const signedUrl = data.signedUrl;
-  window.__socialAppSignedUrlCache.set(signedCacheKey, {
-    url: signedUrl,
-    expiresAt: Date.now() + Math.max(60000, (Number(expiresIn) || 3600) * 1000)
-  });
-
-  return signedUrl;
+  return data.signedUrl;
 };
 
 // Resolve a DB URL/path before placing it in an <img>, <video>, <audio>,
@@ -6643,140 +6541,8 @@ async function initAuth() {
     console.log("No logged-in user yet");
   }
 
-  // Read the saved destination before starting Home. If Android/Chrome
-  // reconstructed the document while another screen was open, mark the
-  // restore as pending so startup can restore that screen immediately.
-  // Use the head-level snapshot first. It was captured before any startup
-  // code had a chance to replace the saved destination with Home.
-  let savedNavigation = window.__socialAppSavedNavigation || null;
-  try {
-    if (!savedNavigation) {
-      savedNavigation = JSON.parse(
-        sessionStorage.getItem("appNavigationState") || "null"
-      );
-    }
-  } catch (e) {}
-
-  if (!savedNavigation?.screen || savedNavigation.screen === "app") {
-    try {
-      const durable = JSON.parse(
-        localStorage.getItem("socialAppLastScreenState") ||
-        localStorage.getItem("socialAppNavigationState") ||
-        "null"
-      );
-      if (durable?.screen &&
-          durable.screen !== "app" &&
-          (!durable.userId || String(durable.userId) === String(currentUser?.id || ""))) {
-        savedNavigation = durable;
-        sessionStorage.setItem("appNavigationState", JSON.stringify(durable));
-      }
-    } catch (e) {}
-  }
-
-  let startupPromise = null;
-
   if (!window.__appStarted) {
-    // If Chrome/Android reconstructed the document, keep the entire first
-    // paint hidden until startApp() has finished. This prevents a Home flash
-    // even when the saved destination itself is Home. This does not change
-    // startApp().
-    if (document.documentElement.classList.contains("socialapp-restoring")) {
-      window.__navigationRestorePending = true;
-    }
-    startupPromise = safeStart();
-  } else {
-    startupPromise = window.__appStartPromise || Promise.resolve();
-  }
-
-  // Wait for the normal app shell to finish before revealing the page.
-  // Then restore a secondary screen, if one was saved.
-  try {
-    await startupPromise;
-
-    const saved = savedNavigation;
-
-    // =====================================================
-    // KEEP THE SAVED SCREEN AS THE ONLY VISIBLE SCREEN
-    // DURING A REAL PAGE RELOAD
-    // =====================================================
-    // startApp() intentionally builds Home and restores the main top bar.
-    // We must not let that temporary Home shell become visible while a
-    // secondary screen (Profile, Comments, Chat, etc.) is being restored.
-    // Do this outside startApp() so the existing startApp() remains untouched.
-    const restoringSecondaryScreen =
-      !!saved?.screen && saved.screen !== "app";
-
-    if (restoringSecondaryScreen) {
-      const startupHome = document.getElementById("app");
-      if (startupHome) {
-        startupHome.style.setProperty("display", "none", "important");
-        startupHome.style.setProperty("visibility", "hidden", "important");
-        startupHome.style.setProperty("opacity", "0", "important");
-        startupHome.style.setProperty("pointer-events", "none", "important");
-      }
-
-      const startupTopBar = document.getElementById("topBar");
-      if (startupTopBar) {
-        startupTopBar.style.setProperty("display", "none", "important");
-        startupTopBar.style.setProperty("visibility", "hidden", "important");
-        startupTopBar.style.setProperty("opacity", "0", "important");
-        startupTopBar.style.setProperty("pointer-events", "none", "important");
-      }
-    }
-
-    if (restoringSecondaryScreen &&
-        typeof window.restoreNavigationAfterReload === "function") {
-      await window.restoreNavigationAfterReload();
-
-      // Final guard: secondary screens must be visible WITHOUT Home or the
-      // main top bar underneath/above them. This also prevents Explore and
-      // Following from appearing during the first rendered frame.
-      const restoredHome = document.getElementById("app");
-      if (restoredHome) {
-        restoredHome.style.setProperty("display", "none", "important");
-        restoredHome.style.setProperty("visibility", "hidden", "important");
-        restoredHome.style.setProperty("opacity", "0", "important");
-        restoredHome.style.setProperty("pointer-events", "none", "important");
-      }
-
-      // The main top bar is screen-specific. Search and Inbox normally show
-      // it; Profile, Comments, Chat, Notifications and full-screen viewers
-      // normally hide it. Do not blanket-hide it after restoration.
-      const restoredTopBar = document.getElementById("topBar");
-      const screensWithVisibleTopBar = new Set([
-        "searchScreen",
-        "inboxScreen"
-      ]);
-
-      if (restoredTopBar) {
-        if (screensWithVisibleTopBar.has(saved.screen)) {
-          restoredTopBar.style.removeProperty("display");
-          restoredTopBar.style.removeProperty("visibility");
-          restoredTopBar.style.removeProperty("opacity");
-          restoredTopBar.style.removeProperty("pointer-events");
-          restoredTopBar.style.removeProperty("z-index");
-          if (typeof window.restoreTopBar === "function") {
-            window.restoreTopBar();
-          }
-        } else {
-          restoredTopBar.style.setProperty("display", "none", "important");
-          restoredTopBar.style.setProperty("visibility", "hidden", "important");
-          restoredTopBar.style.setProperty("opacity", "0", "important");
-          restoredTopBar.style.setProperty("pointer-events", "none", "important");
-        }
-      }
-
-      // Let the restored screen's own fixed layout settle before the first
-      // visible frame.
-      await new Promise(resolve => requestAnimationFrame(() =>
-        requestAnimationFrame(resolve)
-      ));
-    }
-  } catch (restoreError) {
-    console.warn("⚠️ STARTUP NAVIGATION RESTORE FAILED:", restoreError);
-  } finally {
-    document.documentElement.classList.remove("socialapp-restoring");
-    window.__navigationRestorePending = false;
+    safeStart();
   }
 }
 
@@ -6800,18 +6566,11 @@ let storyPausedByUI = false;
 
 function safeStart() {
 
-  if (window.__appStarted) {
-    return window.__appStartPromise || Promise.resolve();
-  }
+  if (window.__appStarted) return;
 
   window.__appStarted = true;
 
-  // Keep the exact startApp() implementation untouched, but expose its
-  // completion promise so startup restoration can wait before revealing the
-  // page.
-  window.__appStartPromise = Promise.resolve().then(() => startApp());
-
-  return window.__appStartPromise;
+  startApp();
 
 }
 // 🔁 keep session always updated
@@ -6821,18 +6580,8 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
   
   console.log("AUTH EVENT:", event);
 
-  // Remember the user that was already active BEFORE applying this auth
-  // event.  Supabase can emit SIGNED_IN again around a browser/Android
-  // resume.  That is a session update, not a request to rebuild Home.
-  const previousUserId =
-    currentUser?.id || session?.user?.id || null;
-
   session = newSession;
   currentUser = newSession?.user || null;
-
-  if (event === "PASSWORD_RECOVERY") {
-    setTimeout(() => window.openSocialAuth("updatePassword"), 0);
-  }
 
   if (currentUser) {
     console.log("SIGNED IN:", currentUser.id);
@@ -6852,67 +6601,6 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
     updateNotifBadge();
   }
 
-  // A successful login can happen after the app has already been started
-  // in logged-out mode. Re-read the confirmed session, invalidate the feed
-  // cache created while logged out, then rebuild the existing home shell.
-  // This keeps the existing feed renderer/startApp implementation untouched.
-  if (event === "SIGNED_IN" && currentUser) {
-    const sameActiveUser =
-      previousUserId &&
-      String(previousUserId) === String(currentUser.id) &&
-      window.__appStarted === true &&
-      window.__authAppRefreshInProgress !== true;
-
-    // IMPORTANT: Returning to Chrome/Android can produce another SIGNED_IN
-    // event for the same session. Do NOT call startApp() in that case.
-    // Home, Explore/Following, the Post/Add section and the existing top bar
-    // must remain mounted exactly as they are.
-    if (sameActiveUser) {
-      console.log("♻️ SAME SESSION RESUMED → NO APP REBUILD");
-      return;
-    }
-
-    const restoreScrollY = window.scrollY || 0;
-
-    try {
-      const { data: freshSessionData, error: freshSessionError } =
-        await supabase.auth.getSession();
-
-      if (freshSessionError || !freshSessionData?.session?.user) {
-        console.error("POST-LOGIN SESSION REFRESH FAILED:", freshSessionError);
-        return;
-      }
-
-      session = freshSessionData.session;
-      currentUser = freshSessionData.session.user;
-
-      // Never reuse a feed that was built before authentication.
-      window.feedCache = { explore: null, following: null };
-      window.postsState = [];
-      window.renderedPosts = new Set();
-
-      window.__appStarted = false;
-      window.__authAppRefreshInProgress = true;
-
-      await startApp();
-    } catch (refreshError) {
-      console.error("POST-LOGIN APP REFRESH FAILED:", refreshError);
-    } finally {
-      window.__appStarted = true;
-      window.__authAppRefreshInProgress = false;
-
-      requestAnimationFrame(() => {
-        window.scrollTo({
-          top: restoreScrollY,
-          left: 0,
-          behavior: "auto"
-        });
-      });
-    }
-
-    return;
-  }
-
   safeStart();
 });
 
@@ -6926,12 +6614,6 @@ window.logout = async function () {
 
   currentUser = null;
   session = null;
-
-  try {
-    sessionStorage.removeItem("appNavigationState");
-    localStorage.removeItem("socialAppNavigationState");
-    localStorage.removeItem("socialAppLastScreenState");
-  } catch (e) {}
 
   alert("Logged out");
 
@@ -9675,185 +9357,36 @@ if (error) {
 
 }
 
-  // -----------------------------------------------------
-  // INSTANTLY PAINT THE NEW POST
-  // -----------------------------------------------------
-  // Do this immediately after the database insert. Do NOT wait for
-  // translation or another network request before showing the post.
-  // The Home feed uses a cache, so simply calling loadPosts() here would
-  // otherwise reuse the old feed and hide the newly-created post.
-  try {
-    const displayPost = { ...insertedPost };
+const userLanguage = await getPreferredLanguage();
 
-    displayPost.profile = profile || null;
-    displayPost.username = profile?.username || "";
-    displayPost.name = profile?.name || displayPost.name || session.user.email;
-    displayPost.avatar_url = profile?.avatar_url || displayPost.avatar_url || null;
-    displayPost.verified = profile?.verified === true;
-    displayPost.saved = false;
+if (
+    content &&
+    detectedLanguage !== "unknown" &&
+    detectedLanguage !== userLanguage
+) {
 
-    // posts_media is private. Resolve the URL only for the rendered copy;
-    // never replace the database value.
-    if (displayPost.file_url &&
-        typeof window.getAuthorizedStorageUrl === "function") {
-      displayPost.file_url = await window.getAuthorizedStorageUrl(
-        "posts_media",
-        displayPost.file_url
-      );
-    }
-
-    // Update the Home cache(s) first so a later tab switch cannot restore
-    // the stale pre-post feed. The new post belongs to both Explore and
-    // Following because it was created by the current user.
-    if (window.feedCache) {
-      ["explore", "following"].forEach(tab => {
-        if (Array.isArray(window.feedCache[tab])) {
-          window.feedCache[tab] = [
-            displayPost,
-            ...window.feedCache[tab].filter(
-              p => String(p?.id) !== String(displayPost.id)
-            )
-          ].slice(0, 20);
-        }
-      });
-    }
-
-    // If Home is currently visible, insert directly into #posts without
-    // rebuilding the feed or changing the user's scroll position.
-    const postsContainer = document.getElementById("posts");
-    const appScreen = document.getElementById("app");
-    const homeVisible =
-      appScreen &&
-      appScreen.style.display !== "none" &&
-      appScreen.style.visibility !== "hidden" &&
-      appScreen.style.opacity !== "0" &&
-      postsContainer;
-
-    if (homeVisible) {
-      const existing = document.getElementById(`post-${displayPost.id}`);
-      if (!existing) {
-        const renderedHomePost = renderPostElement(displayPost);
-        if (renderedHomePost) {
-          postsContainer.insertBefore(
-            renderedHomePost,
-            postsContainer.firstElementChild || null
-          );
-        }
-      }
-      postsContainer.dataset.renderedTab = activeTab;
-      window.postsState = Array.isArray(window.feedCache?.[activeTab])
-        ? window.feedCache[activeTab]
-        : [displayPost];
-      observeVideos();
-    }
-
-    // -----------------------------------------------------
-    // INSTANTLY ADD THE NEW POST TO THE OPEN OWNER PROFILE
-    // -----------------------------------------------------
-    const visibleProfile = document.getElementById("profileScreen");
-    const profilePostsContainer = document.getElementById("profilePosts");
-    const activeProfileUserId =
-      visibleProfile?.dataset?.userId ||
-      window.profileNavigationUserId ||
-      "";
-
-    const profileIsVisible =
-      visibleProfile &&
-      visibleProfile.style.display !== "none" &&
-      visibleProfile.style.visibility !== "hidden" &&
-      visibleProfile.style.opacity !== "0";
-
-    if (
-      profileIsVisible &&
-      String(activeProfileUserId) === String(session.user.id) &&
-      profilePostsContainer
-    ) {
-      const activePostsTab = document.getElementById("profilePostsTab");
-      const postsTabIsActive =
-        window.currentProfileTab === "posts" ||
-        !activePostsTab ||
-        activePostsTab.classList.contains("active") ||
-        activePostsTab.classList.contains("active-tab") ||
-        activePostsTab.style.fontWeight === "bold" ||
-        activePostsTab.style.color === "white";
-
-      if (postsTabIsActive) {
-        window.profilePosts = Array.isArray(window.profilePosts)
-          ? [displayPost, ...window.profilePosts.filter(
-              p => String(p?.id) !== String(displayPost.id)
-            )]
-          : [displayPost];
-
-        const existingProfilePost =
-          document.getElementById(`post-${displayPost.id}`);
-
-        if (!existingProfilePost) {
-          const renderedProfilePost = renderPostElement(displayPost);
-          if (renderedProfilePost) {
-            profilePostsContainer.insertBefore(
-              renderedProfilePost,
-              profilePostsContainer.firstElementChild || null
-            );
-          }
-        }
-      }
-    }
-  } catch (instantPostError) {
-    console.warn("⚠️ INSTANT NEW POST DISPLAY FAILED:", instantPostError);
-  }
-
-  input.value = "";
-  mediaInput.value = "";
-
-  // -----------------------------------------------------
-  // TRANSLATION RUNS AFTER THE POST IS ALREADY VISIBLE
-  // -----------------------------------------------------
-  // Translation is intentionally kept in the background so it cannot delay
-  // the visible new-post update.
-  try {
-    const userLanguage = await getPreferredLanguage();
-
-    if (
-      content &&
-      detectedLanguage !== "unknown" &&
-      detectedLanguage !== userLanguage
-    ) {
-      const translated = await translateText(
+    const translated = await translateText(
         content,
         detectedLanguage,
         userLanguage
-      );
+    );
 
-      if (translated) {
+    if (translated) {
+
         await supabase
-          .from("posts")
-          .update({
+        .from("posts")
+        .update({
             translated_text: translated,
             translation_status: "completed"
-          })
-          .eq("id", insertedPost.id);
+        })
+        .eq("id", insertedPost.id);
 
-        // Update only the in-memory copies. Do not rebuild the Home/Profile
-        // DOM just because translation completed.
-        const updateTranslation = (list) => {
-          if (!Array.isArray(list)) return;
-          const item = list.find(
-            p => String(p?.id) === String(insertedPost.id)
-          );
-          if (item) {
-            item.translated_text = translated;
-            item.translation_status = "completed";
-          }
-        };
-        updateTranslation(window.postsState);
-        updateTranslation(window.profilePosts);
-        updateTranslation(window.feedCache?.explore);
-        updateTranslation(window.feedCache?.following);
-      }
     }
-  } catch (translationError) {
-    console.warn("⚠️ POST TRANSLATION FAILED:", translationError);
-  }
+
+}
+
+  input.value = "";
+  mediaInput.value = "";
 
   loadPosts();
 }
@@ -10077,7 +9610,7 @@ const isOwner =
     mediaHTML = `
       <video
         src="${escapeHtml(post.file_url)}"
-        preload="auto"
+        preload="none"
         controls
         playsinline
         muted
@@ -10262,7 +9795,7 @@ const isOwner =
         };
         color:white;
         border:none;
-        padding:5px 9px;
+        padding:5px 10px;
         border-radius:5px;
       "
     >
@@ -10286,7 +9819,7 @@ const isOwner =
         background:#333;
         color:white;
         border:none;
-        padding:5px 9px;
+        padding:5px 10px;
         border-radius:5px;
       "
     >
@@ -10301,7 +9834,7 @@ const isOwner =
       type="button"
       onclick="event.stopPropagation(); reportPost('${post.id}')"
       style="
-        margin-top:5px;
+        margin-top:8px;
         margin-left:6px;
         background:transparent;
         color:#ff9800;
@@ -10325,7 +9858,7 @@ const isOwner =
         background:#444;
         color:white;
         border:none;
-        padding:5px 9px;
+        padding:5px 10px;
         border-radius:5px;
       "
     >
@@ -10344,11 +9877,11 @@ const isOwner =
             onclick="deletePost('${post.id}')"
 
             style="
-              margin-top:5px;
+              margin-top:8px;
               background:#ff4d4d;
               border:none;
               color:white;
-              padding:5px 9px;
+              padding:5px 8px;
               border-radius:5px;
             "
           >
@@ -10444,9 +9977,9 @@ function renderFeed(posts) {
 }
 
 // ✅ 3. DEFINE loadPosts
-window.loadPosts = async function (forceRefresh = false) {
+window.loadPosts = async function () {
 
-  console.log("🔥 loadPosts running...", { forceRefresh, activeTab });
+  console.log("🔥 loadPosts running...");
 
   const postsDiv =
     document.getElementById("posts");
@@ -10459,185 +9992,10 @@ window.loadPosts = async function (forceRefresh = false) {
 
   }
 
-  // Tab switches use the existing cache. A pull-to-refresh now performs
-  // an incremental sync instead of throwing away the whole feed. This is
-  // important on mobile data: unchanged posts, profiles and signed media
-  // URLs stay in memory.
+  // Do not reload/re-render a feed simply because the user switched tabs.
+  // The cache is invalidated only when the app actually changes the feed data.
   const cachedPosts = window.feedCache?.[activeTab];
-
-  if (forceRefresh && Array.isArray(cachedPosts) && cachedPosts.length) {
-    console.log("♻️ INCREMENTAL FEED REFRESH:", activeTab);
-
-    const cachedById = new Map(
-      cachedPosts
-        .filter(post => post?.id)
-        .map(post => [String(post.id), post])
-    );
-
-    const cachedIds = [...cachedById.keys()];
-    const oldestCachedCreatedAt = cachedPosts.reduce((oldest, post) => {
-      const value = post?.created_at ? new Date(post.created_at).getTime() : NaN;
-      if (!Number.isFinite(value)) return oldest;
-      return oldest === null || value < oldest ? value : oldest;
-    }, null);
-
-    try {
-      // ---------------------------------------------------------
-      // 1. FETCH ONLY POSTS NEWER THAN THE OLDEST CACHED POST
-      // ---------------------------------------------------------
-      // The normal feed already contains the latest 20 records. On refresh
-      // we only need records that could not already be in that cache.
-      let newPosts = [];
-
-      if (oldestCachedCreatedAt !== null) {
-        const oldestIso = new Date(oldestCachedCreatedAt).toISOString();
-        let newQuery = supabase
-          .from("posts")
-          .select("*")
-          .gt("created_at", oldestIso)
-          .order("created_at", { ascending: false })
-          .range(0, 19);
-
-        if (activeTab === "following") {
-          const cachedUserIds = [...new Set(
-            cachedPosts.map(post => post?.user_id).filter(Boolean)
-          )];
-
-          if (cachedUserIds.length) {
-            newQuery = newQuery.in("user_id", cachedUserIds);
-          } else {
-            newQuery = null;
-          }
-        }
-
-        if (newQuery) {
-          const { data, error: newPostsError } = await newQuery;
-          if (newPostsError) throw newPostsError;
-          newPosts = Array.isArray(data) ? data : [];
-        }
-      }
-
-      // ---------------------------------------------------------
-      // 2. UPDATE ONLY SMALL, CHANGEABLE POST FIELDS
-      // ---------------------------------------------------------
-      // Likes/reactions/translation state can change without the post
-      // itself changing. Fetch only those fields for cached post IDs.
-      let changedRows = [];
-      if (cachedIds.length) {
-        const { data, error: changedError } = await supabase
-          .from("posts")
-          .select("id,likes,liked_by,translated_text,translation_status")
-          .in("id", cachedIds);
-
-        if (changedError) throw changedError;
-        changedRows = Array.isArray(data) ? data : [];
-      }
-
-      const changedMap = new Map(
-        changedRows.map(row => [String(row.id), row])
-      );
-
-      cachedPosts.forEach(post => {
-        const changed = changedMap.get(String(post.id));
-        if (changed) Object.assign(post, changed);
-      });
-
-      // ---------------------------------------------------------
-      // 3. FETCH PROFILES ONLY FOR BRAND-NEW POSTS
-      // ---------------------------------------------------------
-      if (newPosts.length) {
-        const newUserIds = [...new Set(
-          newPosts.map(post => post?.user_id).filter(Boolean)
-        )];
-
-        if (newUserIds.length) {
-          const { data: profiles, error: profilesError } = await supabase
-            .from("profiles")
-            .select("id,name,username,avatar_url,cover_url,verified,online,last_seen")
-            .in("id", newUserIds);
-
-          if (profilesError) {
-            console.warn("⚠️ INCREMENTAL PROFILE FETCH ERROR:", profilesError);
-          } else {
-            const profileMap = new Map(
-              (profiles || []).map(profile => [String(profile.id), profile])
-            );
-
-            newPosts = newPosts.map(post => ({
-              ...post,
-              profile: profileMap.get(String(post.user_id)) || null
-            }));
-          }
-        }
-
-        // Sign only media belonging to genuinely new posts. Existing signed
-        // URLs remain untouched, avoiding repeated Storage signing requests.
-        newPosts = await Promise.all(newPosts.map(async post => ({
-          ...post,
-          file_url: post.file_url
-            ? await window.getAuthorizedStorageUrl("posts_media", post.file_url)
-            : ""
-        })));
-      }
-
-      // ---------------------------------------------------------
-      // 4. UPDATE SAVED STATE FOR THE CURRENT USER
-      // ---------------------------------------------------------
-      if (session?.user && cachedIds.length) {
-        const { data: savedPosts, error: savedError } = await supabase
-          .from("saved_posts")
-          .select("post_id")
-          .eq("user_id", session.user.id)
-          .in("post_id", [...new Set([...cachedIds, ...newPosts.map(p => String(p.id))])]);
-
-        if (savedError) {
-          console.warn("⚠️ INCREMENTAL SAVED-POST FETCH ERROR:", savedError);
-        } else {
-          const savedIds = new Set((savedPosts || []).map(row => String(row.post_id)));
-          cachedPosts.forEach(post => {
-            post.saved = savedIds.has(String(post.id));
-          });
-          newPosts.forEach(post => {
-            post.saved = savedIds.has(String(post.id));
-          });
-        }
-      }
-
-      // Newest posts first, capped to the same 20-post Home window.
-      const merged = [...newPosts, ...cachedPosts]
-        .filter((post, index, array) => {
-          const id = String(post?.id || "");
-          return id && array.findIndex(item => String(item?.id || "") === id) === index;
-        })
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 20);
-
-      window.postsState = merged;
-      window.feedCache[activeTab] = merged;
-
-      renderFeed(merged);
-      postsDiv.dataset.renderedTab = activeTab;
-      observeVideos();
-
-      console.log("✅ INCREMENTAL FEED REFRESH COMPLETE:", {
-        newPosts: newPosts.length,
-        cachedPosts: cachedPosts.length,
-        finalPosts: merged.length
-      });
-
-      return;
-    } catch (incrementalError) {
-      console.warn("⚠️ Incremental feed refresh failed; keeping existing feed:", incrementalError);
-      window.postsState = cachedPosts;
-      window.feedCache[activeTab] = cachedPosts;
-      renderFeed(cachedPosts);
-      postsDiv.dataset.renderedTab = activeTab;
-      observeVideos();
-      return;
-    }
-  }
-
-  if (!forceRefresh && Array.isArray(cachedPosts)) {
+  if (Array.isArray(cachedPosts)) {
     console.log("⚡ Using cached", activeTab, "feed");
     window.postsState = cachedPosts;
     if (postsDiv.dataset.renderedTab !== activeTab || !postsDiv.children.length) {
@@ -10843,62 +10201,6 @@ console.log(
 
   observeVideos();
 
-};
-
-// =====================================================
-// HOME CONTENT-ONLY REFRESH
-// =====================================================
-// Pull-to-refresh on Home must refresh the data, not rebuild the Home shell.
-// This preserves the Explore/Following tabs, the selected tab, and the user's
-// current feed position.
-window.refreshHomeContents = async function () {
-  const postsDiv = document.getElementById("posts");
-  const storiesBar = document.getElementById("storiesBar");
-  if (!postsDiv) return;
-
-  const selectedTab = activeTab === "following" ? "following" : "explore";
-
-  // Ignore accidental repeated pull gestures for a few seconds. This avoids
-  // sending duplicate queries when Android Chrome fires more than one
-  // gesture/refresh event close together.
-  const now = Date.now();
-  const lastRefresh = Number(window.__socialAppLastHomeRefreshAt || 0);
-  if (lastRefresh && now - lastRefresh < 5000) {
-    console.log("⏱️ HOME REFRESH SKIPPED: refreshed too recently");
-    return;
-  }
-  window.__socialAppLastHomeRefreshAt = now;
-
-  const previousScrollTop = Number(postsDiv.scrollTop || 0);
-  const previousTab = selectedTab;
-
-  try {
-    // Keep the tab selection authoritative while the data is refreshed.
-    activeTab = previousTab;
-
-    await window.loadPosts(true);
-
-    // Stories are content too, but the Stories/Add Story shell stays in place.
-    if (storiesBar && typeof window.loadStories === "function") {
-      await window.loadStories();
-    }
-
-    // Re-apply the existing tab state without recreating the tabs.
-    const exploreTab = document.getElementById("tab-explore");
-    const followingTab = document.getElementById("tab-following");
-    exploreTab?.classList.toggle("active-tab", previousTab === "explore");
-    followingTab?.classList.toggle("active-tab", previousTab === "following");
-
-    requestAnimationFrame(() => {
-      postsDiv.scrollTop = previousScrollTop;
-      if (typeof window.bindHomePostsScrollTracker === "function") {
-        window.bindHomePostsScrollTracker();
-      }
-      observeVideos?.();
-    });
-  } catch (error) {
-    console.error("❌ HOME CONTENT REFRESH FAILED:", error);
-  }
 };
 
 window.toggleSavePost = async function(postId){
@@ -11161,72 +10463,14 @@ function upsertPost(updatedPost) {
 }
 
 window.deletePost = async (id) => {
-  if (!id) return;
+  const { error } = await supabase.from("posts").delete().eq("id", id);
 
-  const postId = String(id);
-  const card = document.getElementById(`post-${postId}`);
-
-  // Optimistically remove the post everywhere it is currently visible.
-  // This makes deletion immediate instead of waiting for a complete feed
-  // reload, while the database operation still remains authoritative.
-  const previousState = Array.isArray(window.postsState)
-    ? [...window.postsState]
-    : [];
-  const previousCache = {};
-  if (window.feedCache) {
-    Object.keys(window.feedCache).forEach(key => {
-      previousCache[key] = Array.isArray(window.feedCache[key])
-        ? [...window.feedCache[key]]
-        : window.feedCache[key];
-      if (Array.isArray(window.feedCache[key])) {
-        window.feedCache[key] = window.feedCache[key].filter(p => String(p?.id) !== postId);
-      }
-    });
+  if (error) {
+    console.log("❌ delete error:", error);
+    return;
   }
 
-  window.postsState = previousState.filter(p => String(p?.id) !== postId);
-
-  if (card) {
-    card.remove();
-  }
-
-  try {
-    const { error } = await supabase.from("posts").delete().eq("id", id);
-
-    if (error) throw error;
-
-    // Keep the visible state/cache synchronized without rebuilding the feed.
-    window.renderedPosts?.delete(postId);
-    if (window.profilePosts) {
-      window.profilePosts = window.profilePosts.filter(p => String(p?.id) !== postId);
-    }
-    if (window.profileVideos) {
-      window.profileVideos = window.profileVideos.filter(p => String(p?.id) !== postId);
-    }
-    if (window.profileGallery) {
-      window.profileGallery = window.profileGallery.filter(p => String(p?.id) !== postId);
-    }
-
-    console.log("✅ POST DELETED IMMEDIATELY:", postId);
-  } catch (error) {
-    console.error("❌ delete error:", error);
-
-    // Restore the UI/cache if the database deletion failed.
-    window.postsState = previousState;
-    if (window.feedCache) {
-      Object.keys(previousCache).forEach(key => {
-        window.feedCache[key] = previousCache[key];
-      });
-    }
-    if (card) {
-      const postsDiv = document.getElementById("posts");
-      if (postsDiv && !document.getElementById(`post-${postId}`)) {
-        const restored = renderPostElement(previousState.find(p => String(p?.id) === postId));
-        if (restored) postsDiv.prepend(restored);
-      }
-    }
-    alert("Could not delete this post. Please try again.");
-  }
+  loadPosts();
 };
 
 let currentPostId = null;
@@ -28491,7 +27735,7 @@ ${escapeHtml(profile.bio)}
                         onclick="event.preventDefault();event.stopPropagation();reportProfile('${userId}')"
                         style="
                             padding:8px 16px;
-                            border:none;
+                            border:1px solid rgba(255,152,0,.5);
                             border-radius:8px;
                             background:transparent;
                             color:#ff9800;
@@ -31954,26 +31198,6 @@ window.openProfileVideo = async function (index) {
 
     const selectedPost =
         videos[index] || {};
-
-    // posts_media is private. The profile grid already signs its media URLs,
-    // but the full-screen viewer can also be opened from restored/cached data.
-    // Always obtain a fresh authorized URL before creating the viewer history.
-    if (selectedPost?.file_url &&
-        typeof window.getAuthorizedStorageUrl === "function") {
-        try {
-            selectedPost.file_url = await window.getAuthorizedStorageUrl(
-                "posts_media",
-                selectedPost.file_url
-            );
-        } catch (error) {
-            console.warn("⚠️ PROFILE VIDEO URL AUTHORIZATION FAILED:", error);
-        }
-    }
-
-    if (!selectedPost?.file_url) {
-        console.error("❌ PROFILE VIDEO HAS NO AUTHORIZED URL:", selectedPost?.id);
-        return;
-    }
 
 const mediaData = {
     source: "profile",
@@ -38636,33 +37860,6 @@ window.closePhotoGallery = function (
     }
 };
 
-
-
-/* =====================================================
-   REAL ACCOUNT AUTHENTICATION
-   Isolated from startApp/loadPosts/renderFeed/renderPostElement.
-   ===================================================== */
-window.socialAuthState=window.socialAuthState||{mode:"login",busy:false};
-window.socialAuthMessage=function(msg,type){const b=document.querySelector(type==="success"?"#socialAuthCard .auth-success":"#socialAuthCard .auth-error");if(b){b.textContent=msg;b.style.display="block";}};
-window.socialAuthBusy=function(v){socialAuthState.busy=v;const b=document.getElementById("socialAuthSubmit");if(b){b.disabled=v;b.style.opacity=v?.65:1;}};
-window.openSocialAuth=function(mode="login"){socialAuthState.mode=mode;socialAuthState.busy=false;let o=document.getElementById("socialAuthOverlay");if(!o){o=document.createElement("div");o.id="socialAuthOverlay";o.innerHTML='<div id="socialAuthCard" role="dialog" aria-modal="true"></div>';document.body.appendChild(o);o.addEventListener("click",e=>{if(e.target===o&&!socialAuthState.busy)closeSocialAuth();});}o.classList.add("active");renderSocialAuth();setTimeout(()=>o.querySelector("input")?.focus(),40);};
-window.closeSocialAuth=function(force=false){if(!force&&socialAuthState.busy)return;socialAuthState.busy=false;const overlay=document.getElementById("socialAuthOverlay");if(overlay){overlay.classList.remove("active");overlay.style.display="none";}};
-window.socialNormalizeUsername=function(value){return String(value||"").trim().replace(/^@+/,"").replace(/\s+/g,"_").toLowerCase();};
-window.socialCheckUsername=async function(username,excludeUserId=null){const u=socialNormalizeUsername(username);if(!/^[a-z0-9_.-]{3,30}$/.test(u))return {ok:false,message:"Username must be 3–30 characters and use only letters, numbers, underscores, dots or hyphens."};let q=supabase.from("profiles").select("id").eq("username",u).limit(1);if(excludeUserId)q=q.neq("id",excludeUserId);const {data,error}=await q;if(error)return {ok:false,message:"We could not check that username. Please try again."};if(data?.length)return {ok:false,message:`The username @${u} is already in use. Please choose another username.`};return {ok:true,username:u};};
-window.socialEnsureProfile=async function(user,name,username){if(!user?.id)return;const {data:p}=await supabase.from("profiles").select("id").eq("id",user.id).maybeSingle();if(p)return;const checked=await socialCheckUsername(username||user.user_metadata?.username||user.email?.split("@")[0]||"user");if(!checked.ok)return;const {error}=await supabase.from("profiles").insert({id:user.id,name:String(name||user.user_metadata?.name||user.email?.split("@")[0]||"SocialApp User").slice(0,100),username:checked.username,avatar_url:user.user_metadata?.avatar_url||null,verified:false});if(error&&String(error.code)!=="23505")throw error;};
-window.renderSocialAuth=function(msg="",type="error"){const c=document.getElementById("socialAuthCard");if(!c)return;let h='<div class="auth-close-row"><button class="auth-close" type="button" onclick="closeSocialAuth()">×</button></div>';const m=socialAuthState.mode;
-if(m==="register")h+=`<h2>Create your SocialApp account</h2><p class="auth-subtitle">Create a real account with your email and password.</p><form id="socialRegisterForm"><label>Full name</label><input id="authName" autocomplete="name" maxlength="100" required><label>Username</label><input id="authUsername" autocomplete="username" maxlength="30" required><label>Email</label><input id="authEmail" type="email" autocomplete="email" required><label>Password</label><input id="authPassword" type="password" autocomplete="new-password" minlength="6" required><label>Confirm password</label><input id="authPassword2" type="password" autocomplete="new-password" minlength="6" required><div class="auth-error"></div><div class="auth-success"></div><button class="auth-primary" id="socialAuthSubmit" type="submit">Create account</button></form><button class="auth-link" type="button" onclick="openSocialAuth('login')">Already have an account? Log in</button>`;
-else if(m==="forgot")h+=`<h2>Reset your password</h2><p class="auth-subtitle">Enter your SocialApp email and we'll send a password-reset link.</p><form id="socialForgotForm"><label>Email</label><input id="authResetEmail" type="email" autocomplete="email" required><div class="auth-error"></div><div class="auth-success"></div><button class="auth-primary" id="socialAuthSubmit" type="submit">Send reset link</button></form><button class="auth-link" type="button" onclick="openSocialAuth('login')">Back to login</button>`;
-else if(m==="updatePassword")h+=`<h2>Choose a new password</h2><p class="auth-subtitle">Set a new password for your SocialApp account.</p><form id="socialUpdatePasswordForm"><label>New password</label><input id="authNewPassword" type="password" autocomplete="new-password" minlength="6" required><label>Confirm new password</label><input id="authNewPassword2" type="password" autocomplete="new-password" minlength="6" required><div class="auth-error"></div><div class="auth-success"></div><button class="auth-primary" id="socialAuthSubmit" type="submit">Update password</button></form>`;
-else h+=`<h2>Log in to SocialApp</h2><p class="auth-subtitle">Use your name or email and password.</p><form id="socialLoginForm"><label>Name or email</label><input id="authEmail" type="text" autocomplete="username" required placeholder="Name or email"><label>Password</label><input id="authPassword" type="password" autocomplete="current-password" required><div class="auth-error"></div><div class="auth-success"></div><button class="auth-primary" id="socialAuthSubmit" type="submit">Log in</button></form><button class="auth-link" type="button" onclick="openSocialAuth('forgot')">Forgot password?</button><div class="auth-divider">OR</div><button class="auth-secondary" type="button" onclick="socialGoogleLogin()">Continue with Google</button><button class="auth-link" type="button" onclick="openSocialAuth('register')">Create a new account</button>`;
-h+='<div class="auth-contact">Need help? <a href="mailto:mbuguajames16th@gmail.com">mbuguajames16th@gmail.com</a></div>';c.innerHTML=h;const f=c.querySelector("form");if(f?.id==="socialLoginForm")f.addEventListener("submit",socialLoginSubmit);if(f?.id==="socialRegisterForm")f.addEventListener("submit",socialRegisterSubmit);if(f?.id==="socialForgotForm")f.addEventListener("submit",socialForgotSubmit);if(f?.id==="socialUpdatePasswordForm")f.addEventListener("submit",socialUpdatePasswordSubmit);if(msg)socialAuthMessage(msg,type);};
-window.socialLoginSubmit=async e=>{e.preventDefault();try{socialAuthBusy(true);const identifier=String(document.getElementById("authEmail")?.value||"").trim();const password=document.getElementById("authPassword")?.value||"";if(!identifier)return renderSocialAuth("Enter your name or email.");if(!password)return renderSocialAuth("Enter your password.");let email=identifier;if(!identifier.includes("@")){const {data:resolvedEmail,error:lookupError}=await supabase.rpc("get_auth_email_by_name",{p_name:identifier});console.log("SOCIALAPP NAME LOGIN LOOKUP",{name:identifier,resolvedEmail,lookupError});if(lookupError){console.error("NAME LOOKUP FAILED:",lookupError);throw new Error("Name lookup failed. Please run the latest SocialApp name SQL in Supabase, then try again.");}if(!resolvedEmail){throw new Error("Name or email was not found. Check the name and try again.");}email=String(resolvedEmail).trim();}const {data,error}=await supabase.auth.signInWithPassword({email,password});if(error)throw error;if(data?.user){await socialEnsureProfile(data.user);}socialAuthBusy(false);closeSocialAuth(true);}catch(err){socialAuthBusy(false);renderSocialAuth(err.message||"Login failed.");}};
-window.socialCheckName=async function(name,excludeUserId=null){const n=String(name||"").trim();if(n.length<2||n.length>100)return {ok:false,message:"Name must be 2–100 characters."};let q=supabase.from("profiles").select("id").ilike("name",n).limit(1);if(excludeUserId)q=q.neq("id",excludeUserId);const {data,error}=await q;if(error)return {ok:false,message:"We could not check that name. Please try again."};if(data?.length)return {ok:false,message:`The name "${n}" is already in use. Please choose another name.`};return {ok:true,name:n};};
-window.socialRegisterSubmit=async e=>{e.preventDefault();const name=authName.value.trim(),username=socialNormalizeUsername(authUsername.value),email=authEmail.value.trim(),p1=authPassword.value,p2=authPassword2.value;if(p1.length<6)return renderSocialAuth("Password must be at least 6 characters.");if(p1!==p2)return renderSocialAuth("Passwords do not match.");const nameCheck=await socialCheckName(name);if(!nameCheck.ok)return renderSocialAuth(nameCheck.message);const usernameCheck=await socialCheckUsername(username);if(!usernameCheck.ok)return renderSocialAuth(usernameCheck.message);try{socialAuthBusy(true);const {data,error}=await supabase.auth.signUp({email,password:p1,options:{data:{full_name:nameCheck.name,name:nameCheck.name,username:usernameCheck.username},emailRedirectTo:location.href.split("#")[0]}});if(error)throw error;if(data.session&&data.user){await socialEnsureProfile(data.user,nameCheck.name,usernameCheck.username);closeSocialAuth();}else{socialAuthBusy(false);renderSocialAuth("Account created. Check your email to confirm your account, then log in.","success");}}catch(err){socialAuthBusy(false);const msg=String(err?.message||"");renderSocialAuth(msg.includes("duplicate")||msg.includes("unique")?`The name or username is already in use. Please choose another.`:msg||"Could not create the account.");}};
-window.socialForgotSubmit=async e=>{e.preventDefault();try{socialAuthBusy(true);const {error}=await supabase.auth.resetPasswordForEmail(authResetEmail.value.trim(),{redirectTo:location.href.split("#")[0]});if(error)throw error;socialAuthBusy(false);renderSocialAuth("If the email can receive SocialApp mail, a reset link has been sent. Check your inbox and spam folder.","success");}catch(err){socialAuthBusy(false);renderSocialAuth(err.message||"Could not send the reset link.");}};
-window.socialUpdatePasswordSubmit=async e=>{e.preventDefault();const p1=authNewPassword.value,p2=authNewPassword2.value;if(p1.length<6)return renderSocialAuth("Password must be at least 6 characters.");if(p1!==p2)return renderSocialAuth("Passwords do not match.");try{socialAuthBusy(true);const {error}=await supabase.auth.updateUser({password:p1});if(error)throw error;socialAuthBusy(false);renderSocialAuth("Your password has been updated successfully.","success");setTimeout(closeSocialAuth,1200);}catch(err){socialAuthBusy(false);renderSocialAuth(err.message||"Could not update the password.");}};
-window.socialGoogleLogin=async()=>{try{socialAuthBusy(true);const {error}=await supabase.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.href.split("#")[0]}});if(error)throw error;}catch(err){socialAuthBusy(false);renderSocialAuth(err.message||"Google login failed.");}};
-
 function attachEvents() {
 
     if (window.commentEventsAttached) {
@@ -38678,7 +37875,6 @@ function attachEvents() {
 
     exploreTab.onclick = () => {
       activeTab = "explore";
-      try { localStorage.setItem("socialAppActiveHomeTab", "explore"); } catch (e) {}
 
       exploreTab.classList.add("active-tab");
       followingTab.classList.remove("active-tab");
@@ -38694,7 +37890,6 @@ function attachEvents() {
 
     followingTab.onclick = () => {
       activeTab = "following";
-      try { localStorage.setItem("socialAppActiveHomeTab", "following"); } catch (e) {}
 
       followingTab.classList.add("active-tab");
       exploreTab.classList.remove("active-tab");
@@ -38717,7 +37912,22 @@ function attachEvents() {
 const loginBtn = document.getElementById("login");
 
 if (loginBtn) {
-  loginBtn.onclick = () => window.openSocialAuth("login");
+
+  loginBtn.onclick = async () => {
+
+    await supabase.auth.signInWithOAuth({
+
+      provider: "google",
+
+      options: {
+        redirectTo:
+          window.location.origin + "/Social-app-/"
+      }
+
+    });
+
+  };
+
 }
 
   const storyBtn = document.getElementById("storyBtn");
@@ -39760,10 +38970,6 @@ padding:12px;
 color:white;
 font-weight:bold;
 border-bottom:1px solid #222;
-position:sticky;
-top:0;
-z-index:20;
-background:#0f0f0f;
 ">
 Recent Searches
 
@@ -40849,19 +40055,6 @@ if (
   }
 
   // =====================================================
-  // PRESERVE THE CURRENT HOME TAB
-  // =====================================================
-  // startApp may still be needed during a genuine app/bootstrap rebuild.
-  // Remember the selected feed tab so such a rebuild never silently jumps
-  // from Following back to Explore.
-  try {
-    const savedHomeTab = localStorage.getItem("socialAppActiveHomeTab");
-    if (savedHomeTab === "following" || savedHomeTab === "explore") {
-      activeTab = savedHomeTab;
-    }
-  } catch (e) {}
-
-  // =====================================================
   // APP CONTENT
   // =====================================================
 
@@ -40906,15 +40099,6 @@ if (
 
     </div>
      `; 
-
-  // Restore the selected tab after rebuilding the shell.
-  const rebuiltExploreTab = document.getElementById("tab-explore");
-  const rebuiltFollowingTab = document.getElementById("tab-following");
-  rebuiltExploreTab?.classList.toggle("active-tab", activeTab === "explore");
-  rebuiltFollowingTab?.classList.toggle("active-tab", activeTab === "following");
-  try {
-    localStorage.setItem("socialAppActiveHomeTab", activeTab);
-  } catch (e) {}
     
 
 
@@ -45627,6 +44811,21 @@ window.restoreTopBar = function () {
 
   void topBar.offsetHeight;
 
+  // Keep the selected top-bar button aligned with the real navigation state.
+  try {
+    if (typeof window.updateDefaultNavigation === "function") {
+      var currentScreen = "app";
+      if (window.appNavigation && window.appNavigation.current && window.appNavigation.current.screen) {
+        currentScreen = window.appNavigation.current.screen;
+      } else if (history.state && history.state.appScreen) {
+        currentScreen = history.state.appScreen;
+      }
+      window.updateDefaultNavigation(currentScreen);
+    }
+  } catch (e) {
+    console.warn("Top-bar indicator sync skipped:", e);
+  }
+
   console.log("TOP BAR RESTORED");
 
 };
@@ -50154,22 +49353,6 @@ window.showScreen = function (id, display = "flex") {
 
 
 // =====================================================
-// During Android/Chrome reconstruction, hide the transient Home shell
-// until the saved destination has been restored. The actual page reload
-// may still be performed by Android when it kills a background tab; this
-// prevents the user from seeing a Home -> Profile flash.
-if (!document.getElementById("socialAppRestoreStyle")) {
-  const style = document.createElement("style");
-  style.id = "socialAppRestoreStyle";
-  style.textContent = `
-    html.socialapp-restoring,
-    html.socialapp-restoring body {
-      visibility: hidden !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
-
 // CENTRAL APP NAVIGATION CONTROLLER
 // SINGLE SOURCE OF TRUTH
 // =====================================================
@@ -50200,26 +49383,9 @@ window.syncNavigationSession = function (state) {
     if (!state?.screen) return;
 
     try {
-        const serialized = JSON.stringify(state);
-
-        // sessionStorage is the primary per-tab navigation store.
         sessionStorage.setItem(
             "appNavigationState",
-            serialized
-        );
-
-        // Android/Chrome can discard the page while it is in the background.
-        // Keep a second copy so a reconstructed document can restore the
-        // exact screen instead of starting from Home again.
-        localStorage.setItem(
-            "socialAppNavigationState",
-            serialized
-        );
-        // Durable last destination used if Android destroys the Chrome
-        // document and the per-tab session copy is stale or unavailable.
-        localStorage.setItem(
-            "socialAppLastScreenState",
-            serialized
+            JSON.stringify(state)
         );
     } catch (error) {
         console.warn(
@@ -50229,418 +49395,6 @@ window.syncNavigationSession = function (state) {
     }
 };
 
-
-// =====================================================
-// BACKGROUND / TAB LIFECYCLE STATE PRESERVATION
-// =====================================================
-// Android may discard a background Chrome page to reclaim memory. We cannot
-// prevent the OS from doing that, but we can persist the exact app screen and
-// scroll position so the reconstructed page returns to where the user left it.
-window.persistNavigationBeforeBackground = function () {
-    try {
-        const current = window.appNavigation?.current;
-        if (!current?.screen) return;
-
-        let scrollY = Number(current.scrollY) || 0;
-        try {
-            const scrollState =
-                typeof window.getNavigationScrollState === "function"
-                    ? window.getNavigationScrollState(current.screen)
-                    : null;
-            if (scrollState && Number.isFinite(Number(scrollState.scrollY))) {
-                scrollY = Number(scrollState.scrollY) || 0;
-            }
-        } catch (e) {}
-
-        const snapshot = {
-            ...current,
-            data: { ...(current.data || {}) },
-            scrollY,
-            timestamp: Date.now(),
-            userId: session?.user?.id || currentUser?.id || null
-        };
-
-        window.appNavigation.current = snapshot;
-        const serialized = JSON.stringify(snapshot);
-        sessionStorage.setItem("appNavigationState", serialized);
-        localStorage.setItem("socialAppNavigationState", serialized);
-        localStorage.setItem("socialAppLastScreenState", serialized);
-
-        // Keep the current browser entry synchronized as well.
-        if (history.state?.appScreen) {
-            history.replaceState(
-                {
-                    ...history.state,
-                    scrollY
-                },
-                "",
-                location.href
-            );
-        }
-    } catch (error) {
-        console.warn("⚠️ BACKGROUND NAVIGATION SAVE FAILED:", error);
-    }
-};
-
-document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") {
-        window.persistNavigationBeforeBackground?.();
-    }
-});
-
-window.addEventListener("pagehide", () => {
-    window.persistNavigationBeforeBackground?.();
-});
-
-window.addEventListener("pageshow", event => {
-    // A persisted pageshow means the browser restored a previously frozen
-    // document. Refresh the exact saved navigation state without rebuilding
-    // the app when the page was merely shown again.
-    if (!event.persisted) return;
-
-    setTimeout(async () => {
-        try {
-            if (!currentUser && !session?.user) return;
-            const raw =
-                sessionStorage.getItem("appNavigationState") ||
-                localStorage.getItem("socialAppNavigationState");
-            const saved = raw ? JSON.parse(raw) : null;
-            if (saved?.screen && saved.screen !== "app" &&
-                typeof window.restoreNavigationAfterReload === "function") {
-                await window.restoreNavigationAfterReload();
-            }
-        } catch (error) {
-            console.warn("⚠️ PAGESHOW NAVIGATION RESTORE FAILED:", error);
-        }
-    }, 100);
-}, { passive: true });
-
-
-// =====================================================
-// DEFAULT BROWSER PULL-TO-REFRESH
-// =====================================================
-// =====================================================
-// CONTENT-ONLY REFRESH HELPERS
-// =====================================================
-window.refreshSearchContents = async function () {
-    const input = document.getElementById("userSearchInput");
-    const text = (input?.value || "").trim();
-    if (!text) {
-        let recent = [];
-        try { recent = JSON.parse(localStorage.getItem("recentSearches") || "[]"); } catch (e) {}
-        const ids = recent.map(x => String(x.id || "")).filter(Boolean);
-        if (ids.length) {
-            const { data, error } = await supabase
-                .from("profiles")
-                .select("id,name,avatar_url,online,last_seen,verified")
-                .in("id", ids);
-            if (!error && Array.isArray(data)) {
-                const byId = new Map(data.map(p => [String(p.id), p]));
-                recent = recent.map(item => {
-                    const p = byId.get(String(item.id));
-                    return p ? {...item, name:p.name || item.name || "User", avatar:p.avatar_url || item.avatar || "", online:p.online === true, last_seen:p.last_seen || "", verified:p.verified === true} : item;
-                });
-                localStorage.setItem("recentSearches", JSON.stringify(recent));
-            }
-        }
-    }
-    if (typeof window.searchUsers === "function") await window.searchUsers();
-};
-window.refreshNotificationsContents = async function () {
-    notificationCache = [];
-    await loadNotifications();
-};
-window.refreshInboxContents = async function () {
-    if (typeof window.openInbox === "function") await window.openInbox(false);
-};
-
-// Refresh indicator is created from JavaScript so this remains inside the
-// existing module script. Do not nest script or style tags here.
-(function(){
-    if (!document.getElementById("socialapp-content-refresh-indicator-style")) {
-        const style = document.createElement("style");
-        style.id = "socialapp-content-refresh-indicator-style";
-        style.textContent = `
-#socialAppContentRefreshIndicator{position:fixed;left:50%;top:68px;width:34px;height:34px;margin-left:-17px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(20,20,20,.94);color:#fff;font-size:21px;line-height:1;z-index:2147483646;opacity:0;transform:translateY(-18px) scale(.85);pointer-events:none;box-shadow:0 2px 10px rgba(0,0,0,.35)}
-#socialAppContentRefreshIndicator.refreshing{opacity:1!important;animation:socialAppRefreshSpin .75s linear infinite}
-@keyframes socialAppRefreshSpin{from{transform:translateY(0) scale(1) rotate(0deg)}to{transform:translateY(0) scale(1) rotate(360deg)}}
-        `;
-        document.head.appendChild(style);
-    }
-    function e(){
-        let x=document.getElementById("socialAppContentRefreshIndicator");
-        if(!x){
-            x=document.createElement("div");
-            x.id="socialAppContentRefreshIndicator";
-            x.textContent="↻";
-            x.setAttribute("aria-hidden","true");
-            document.body.appendChild(x);
-        }
-        return x;
-    }
-    window.__showContentRefreshIndicator=p=>{
-        const x=e(),n=Math.max(0,Math.min(1,Number(p)||0));
-        x.classList.remove("refreshing");
-        x.style.opacity=String(Math.min(1,n*1.35));
-        x.style.transform=`translateY(${-18+18*n}px) scale(${.85+.15*n})`;
-    };
-    window.__startContentRefreshIndicator=()=>{
-        const x=e();
-        x.style.opacity="1";
-        x.style.transform="translateY(0) scale(1)";
-        x.classList.add("refreshing");
-    };
-    window.__stopContentRefreshIndicator=()=>{
-        const x=document.getElementById("socialAppContentRefreshIndicator");
-        if(!x)return;
-        x.classList.remove("refreshing");
-        x.style.opacity="0";
-        x.style.transform="translateY(-18px) scale(.85)";
-    };
-})();
-
-// No custom pull-to-refresh handler is installed here.
-// The browser's native/default pull-to-refresh remains enabled on Home.
-// Other app pages use fixed/internal scroll containers, so Android Chrome
-// cannot reach the viewport edge there. The handler below gives those pages
-// the same simple swipe-down-to-refresh behavior while preserving the current
-// navigation state before the real browser reload.
-(function enableAllScreenPullRefresh() {
-    let startX = 0;
-    let startY = 0;
-    let currentDistance = 0;
-    let eligible = false;
-    let refreshing = false;
-
-    const ignored = (el) => {
-        return !!el?.closest?.(
-            'input, textarea, select, button, a, video, audio, [contenteditable="true"], #mediaViewer, #storyViewer'
-        );
-    };
-
-    function getActiveScreen() {
-        const navScreen = window.appNavigation?.current?.screen;
-        if (navScreen && navScreen !== 'app') {
-            const navEl = document.getElementById(navScreen);
-            if (navEl && getComputedStyle(navEl).display !== 'none' &&
-                getComputedStyle(navEl).visibility !== 'hidden') {
-                return navEl;
-            }
-        }
-
-        const ids = [
-            'profileScreen', 'commentsScreen', 'notificationsScreen',
-            'searchScreen', 'chatScreen', 'inboxScreen',
-            'storyViewersPanel', 'storyViewer', 'mediaViewer'
-        ];
-
-        for (const id of ids) {
-            const el = document.getElementById(id);
-            if (!el) continue;
-            const cs = getComputedStyle(el);
-            if (cs.display !== 'none' && cs.visibility !== 'hidden' &&
-                cs.opacity !== '0') return el;
-        }
-        return null;
-    }
-
-    function getScrollableAncestor(node, screen) {
-        let el = node;
-        while (el && el !== document.body && el !== document.documentElement) {
-            const cs = getComputedStyle(el);
-            const canScroll = /(auto|scroll|overlay)/.test(cs.overflowY) &&
-                el.scrollHeight > el.clientHeight + 1;
-            if (canScroll) return el;
-            if (el === screen) break;
-            el = el.parentElement;
-        }
-
-        if (screen) {
-            const cs = getComputedStyle(screen);
-            if (/(auto|scroll|overlay)/.test(cs.overflowY) &&
-                screen.scrollHeight > screen.clientHeight + 1) return screen;
-        }
-        return document.scrollingElement || document.documentElement;
-    }
-
-    document.addEventListener('touchstart', (event) => {
-        if (refreshing || !event.touches?.length) return;
-        const screen = getActiveScreen();
-        if (!screen || ignored(event.target)) {
-            eligible = false;
-            return;
-        }
-
-        // Home uses the same content-only refresh as the internal screens.
-        // Do not let Android Chrome perform a full document reload.
-        const scroller = getScrollableAncestor(event.target, screen);
-        const atTop = !scroller || scroller === document.documentElement ||
-            scroller === document.body || Number(scroller.scrollTop || 0) <= 0;
-
-        if (!atTop) {
-            eligible = false;
-            return;
-        }
-
-        startX = event.touches[0].clientX;
-        startY = event.touches[0].clientY;
-        currentDistance = 0;
-        eligible = true;
-    }, { passive: true, capture: true });
-
-    document.addEventListener('touchmove', (event) => {
-        if (!eligible || refreshing || !event.touches?.length) return;
-
-        const dx = event.touches[0].clientX - startX;
-        const dy = event.touches[0].clientY - startY;
-
-        if (Math.abs(dx) > Math.abs(dy) || dy <= 0) {
-            eligible = false;
-            return;
-        }
-
-        currentDistance = dy;
-        window.__showContentRefreshIndicator?.(Math.min(1, dy / 90));
-
-        // Once the gesture is clearly a pull-down, take ownership of it so
-        // Chrome's native document reload cannot rebuild the Home tabs.
-        if (dy >= 18) event.preventDefault();
-    }, { passive: false, capture: true });
-
-    document.addEventListener('touchend', async () => {
-        if (!eligible) return;
-
-        const shouldRefresh = currentDistance >= 70;
-        eligible = false;
-        currentDistance = 0;
-
-        if (!shouldRefresh || refreshing) {
-            window.__stopContentRefreshIndicator?.();
-            return;
-        }
-        window.__startContentRefreshIndicator?.();
-        refreshing = true;
-
-        try {
-            window.persistNavigationBeforeBackground?.();
-        } catch (e) {}
-
-        // Refresh only the currently visible content. No location.reload(),
-        // no startApp(), and no recreation of Explore/Following.
-        if (typeof window.refreshHomeContents === "function" &&
-            getActiveScreen()?.id === "app") {
-            await window.refreshHomeContents();
-            refreshing = false;
-            return;
-        }
-
-        // ---------------------------------------------------------
-        // SECONDARY SCREENS: CONTENT-ONLY REFRESH
-        // ---------------------------------------------------------
-        // Never reload the document here. Each screen refreshes only
-        // its own data/DOM and then restores the exact inner scroll
-        // position. The navigation shell, topbar state, selected tab
-        // and current screen therefore remain untouched.
-        try {
-            const screen = getActiveScreen();
-            const screenId = screen?.id || window.appNavigation?.current?.screen;
-
-            const getScroll = (el) => el ? Number(el.scrollTop || 0) : 0;
-            const restoreScroll = (el, y) => {
-                if (!el) return;
-                requestAnimationFrame(() => {
-                    el.scrollTop = Number(y) || 0;
-                    requestAnimationFrame(() => {
-                        el.scrollTop = Number(y) || 0;
-                    });
-                });
-            };
-
-            if (screenId === "profileScreen") {
-                const scroller = document.getElementById("profileScrollContainer") ||
-                    document.getElementById("profileScroll");
-                const y = getScroll(scroller);
-                const userId = window.profileNavigationUserId ||
-                    window.currentProfileId || currentProfileId;
-                const tab = window.currentProfileTab || "posts";
-
-                if (userId) {
-                    if (tab === "videos" && typeof window.loadProfileVideos === "function") {
-                        await window.loadProfileVideos(userId);
-                    } else if (tab === "photos" && typeof window.loadProfilePhotos === "function") {
-                        await window.loadProfilePhotos(userId);
-                    } else if (typeof window.loadProfilePosts === "function") {
-                        await window.loadProfilePosts(userId);
-                    }
-                }
-                restoreScroll(scroller, y);
-
-            } else if (screenId === "commentsScreen") {
-                const scroller = document.getElementById("commentsBody");
-                const y = getScroll(scroller);
-                const postId = window.currentPostId || currentPostId;
-
-                if (postId && typeof window.loadComments === "function") {
-                    // Refresh the complete first page instead of appending to
-                    // the currently displayed comments.
-                    commentsPage = 0;
-                    hasMoreComments = true;
-                    if (scroller) scroller.innerHTML = "";
-                    await window.loadComments(postId);
-                }
-                restoreScroll(scroller, y);
-
-            } else if (screenId === "chatScreen") {
-                const scroller = document.getElementById("chatMessages");
-                const y = getScroll(scroller);
-                const userId = currentChatUser;
-
-                if (userId && typeof window.refreshOpenChatMessages === "function") {
-                    await window.refreshOpenChatMessages(userId);
-                } else if (userId && typeof window.loadMessages === "function") {
-                    await window.loadMessages(userId, window.__chatOpenToken);
-                }
-                restoreScroll(scroller, y);
-
-            } else if (screenId === "inboxScreen") {
-                const scroller = document.getElementById("inboxList") ||
-                    document.getElementById("inboxScreen");
-                const y = getScroll(scroller);
-
-                if (typeof window.refreshInboxContents === "function") {
-                    await window.refreshInboxContents();
-                }
-                restoreScroll(scroller, y);
-
-            } else if (screenId === "notificationsScreen") {
-                const scroller = document.getElementById("notificationsScreen");
-                const y = getScroll(scroller);
-
-                if (typeof window.refreshNotificationsContents === "function") {
-                    await window.refreshNotificationsContents();
-                }
-                restoreScroll(scroller, y);
-
-            } else if (screenId === "searchScreen") {
-                const scroller = document.getElementById("searchResults");
-                const y = getScroll(scroller);
-
-                if (typeof window.refreshSearchContents === "function") {
-                    await window.refreshSearchContents();
-                }
-                restoreScroll(scroller, y);
-
-            } else {
-                console.log("↻ No content-only refresh handler for:", screenId);
-            }
-        } catch (error) {
-            console.warn("⚠️ CONTENT-ONLY SCREEN REFRESH FAILED:", error);
-        } finally {
-            window.__stopContentRefreshIndicator?.();
-            refreshing = false;
-        }
-    }, { passive: true, capture: true });
-})();
 
 window.setCurrentNavigationState = function (
     screen,
@@ -51050,40 +49804,6 @@ window.initializeAppNavigation = function () {
 
     window.appNavigation.initialized =
         true;
-
-    // During a real refresh the head script captured the screen before this
-    // controller was initialized. Never replace that saved destination with
-    // the Home root. This is what prevents the Home/Explore/Following shell
-    // from becoming the navigation state during startup.
-    const preservedRefreshState =
-        window.__socialAppSavedNavigation;
-
-    if (preservedRefreshState?.screen &&
-        preservedRefreshState.screen !== "app") {
-
-        window.setCurrentNavigationState(
-            preservedRefreshState.screen,
-            preservedRefreshState.data || {},
-            Number(preservedRefreshState.scrollY) || 0
-        );
-
-        history.replaceState(
-            {
-                appScreen: preservedRefreshState.screen,
-                data: preservedRefreshState.data || {},
-                scrollY: Number(preservedRefreshState.scrollY) || 0
-            },
-            "",
-            "#" + preservedRefreshState.screen
-        );
-
-        console.log(
-            "🧭 NAVIGATION INITIALIZED FROM REFRESH SNAPSHOT →",
-            preservedRefreshState.screen
-        );
-
-        return;
-    }
 
     const state =
         history.state;
@@ -51687,6 +50407,11 @@ window.restoreNavigationState =
 
     const data =
         state.data || {};
+
+    // Restore the top-bar indicator before the destination screen is rendered.
+    if (typeof window.updateDefaultNavigation === "function") {
+        window.updateDefaultNavigation(screen);
+    }
 
     const scrollY =
         Number.isFinite(
@@ -52370,19 +51095,6 @@ if (
                 window.appNavigation.current
             )
         );
-    }
-
-    // ---------------------------------------------
-    // RESTORE PROFILE TAB CONTENT
-    // ---------------------------------------------
-    // The tab styling alone is not enough after a reload/back restoration;
-    // the selected tab's data must be loaded into #profilePosts as well.
-    if (tab === "videos" && typeof window.loadProfileVideos === "function") {
-        await window.loadProfileVideos(data.userId || window.profileNavigationUserId);
-    } else if (tab === "photos" && typeof window.loadProfilePhotos === "function") {
-        await window.loadProfilePhotos(data.userId || window.profileNavigationUserId);
-    } else if (tab === "posts" && typeof window.loadProfilePosts === "function") {
-        await window.loadProfilePosts(data.userId || window.profileNavigationUserId);
     }
 
     // ---------------------------------------------
@@ -54439,9 +53151,6 @@ window.restoreNavigationAfterReload =
                 JSON.parse(
                     sessionStorage.getItem(
                         "appNavigationState"
-                    ) ||
-                    localStorage.getItem(
-                        "socialAppNavigationState"
                     )
                 );
 
