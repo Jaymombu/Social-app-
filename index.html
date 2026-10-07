@@ -648,6 +648,7 @@ body:not(.dark) .add-story-card::after{
 .post-card .like-btn,
 .post-card button[onclick*="openComments"],
 .post-card button[onclick*="toggleSavePost"],
+.post-card button[onclick*="report"],
 .post-card button[onclick*="deletePost"]{
   display:inline-flex;
   align-items:center;
@@ -6401,6 +6402,16 @@ window.getAuthorizedStorageUrl = async function(bucket, value, expiresIn = 3600)
     return "";
   }
 
+  // Cache signed URLs in memory. A Home refresh can therefore reuse the
+  // same authorized URL instead of asking Storage to sign the same object
+  // again. Keep a safety margin so URLs are never reused right at expiry.
+  window.__socialAppSignedUrlCache = window.__socialAppSignedUrlCache || new Map();
+  const signedCacheKey = `${bucket}|${raw}`;
+  const cachedSigned = window.__socialAppSignedUrlCache.get(signedCacheKey);
+  if (cachedSigned && cachedSigned.expiresAt > Date.now() + 60000) {
+    return cachedSigned.url;
+  }
+
   const { data, error } = await supabase
     .storage
     .from(bucket)
@@ -6411,7 +6422,13 @@ window.getAuthorizedStorageUrl = async function(bucket, value, expiresIn = 3600)
     return "";
   }
 
-  return data.signedUrl;
+  const signedUrl = data.signedUrl;
+  window.__socialAppSignedUrlCache.set(signedCacheKey, {
+    url: signedUrl,
+    expiresAt: Date.now() + Math.max(60000, (Number(expiresIn) || 3600) * 1000)
+  });
+
+  return signedUrl;
 };
 
 // Resolve a DB URL/path before placing it in an <img>, <video>, <audio>,
@@ -10245,7 +10262,7 @@ const isOwner =
         };
         color:white;
         border:none;
-        padding:5px 10px;
+        padding:5px 9px;
         border-radius:5px;
       "
     >
@@ -10269,7 +10286,7 @@ const isOwner =
         background:#333;
         color:white;
         border:none;
-        padding:5px 10px;
+        padding:5px 9px;
         border-radius:5px;
       "
     >
@@ -10284,7 +10301,7 @@ const isOwner =
       type="button"
       onclick="event.stopPropagation(); reportPost('${post.id}')"
       style="
-        margin-top:8px;
+        margin-top:5px;
         margin-left:6px;
         background:transparent;
         color:#ff9800;
@@ -10308,7 +10325,7 @@ const isOwner =
         background:#444;
         color:white;
         border:none;
-        padding:5px 10px;
+        padding:5px 9px;
         border-radius:5px;
       "
     >
@@ -10327,11 +10344,11 @@ const isOwner =
             onclick="deletePost('${post.id}')"
 
             style="
-              margin-top:8px;
+              margin-top:5px;
               background:#ff4d4d;
               border:none;
               color:white;
-              padding:5px 8px;
+              padding:5px 9px;
               border-radius:5px;
             "
           >
@@ -10442,14 +10459,184 @@ window.loadPosts = async function (forceRefresh = false) {
 
   }
 
-  // Tab switches use the existing cache. A pull-to-refresh explicitly
-  // invalidates ONLY the currently selected feed, so Explore/Following
-  // themselves are not rebuilt or recreated.
-  if (forceRefresh && window.feedCache) {
-    window.feedCache[activeTab] = null;
+  // Tab switches use the existing cache. A pull-to-refresh now performs
+  // an incremental sync instead of throwing away the whole feed. This is
+  // important on mobile data: unchanged posts, profiles and signed media
+  // URLs stay in memory.
+  const cachedPosts = window.feedCache?.[activeTab];
+
+  if (forceRefresh && Array.isArray(cachedPosts) && cachedPosts.length) {
+    console.log("♻️ INCREMENTAL FEED REFRESH:", activeTab);
+
+    const cachedById = new Map(
+      cachedPosts
+        .filter(post => post?.id)
+        .map(post => [String(post.id), post])
+    );
+
+    const cachedIds = [...cachedById.keys()];
+    const oldestCachedCreatedAt = cachedPosts.reduce((oldest, post) => {
+      const value = post?.created_at ? new Date(post.created_at).getTime() : NaN;
+      if (!Number.isFinite(value)) return oldest;
+      return oldest === null || value < oldest ? value : oldest;
+    }, null);
+
+    try {
+      // ---------------------------------------------------------
+      // 1. FETCH ONLY POSTS NEWER THAN THE OLDEST CACHED POST
+      // ---------------------------------------------------------
+      // The normal feed already contains the latest 20 records. On refresh
+      // we only need records that could not already be in that cache.
+      let newPosts = [];
+
+      if (oldestCachedCreatedAt !== null) {
+        const oldestIso = new Date(oldestCachedCreatedAt).toISOString();
+        let newQuery = supabase
+          .from("posts")
+          .select("*")
+          .gt("created_at", oldestIso)
+          .order("created_at", { ascending: false })
+          .range(0, 19);
+
+        if (activeTab === "following") {
+          const cachedUserIds = [...new Set(
+            cachedPosts.map(post => post?.user_id).filter(Boolean)
+          )];
+
+          if (cachedUserIds.length) {
+            newQuery = newQuery.in("user_id", cachedUserIds);
+          } else {
+            newQuery = null;
+          }
+        }
+
+        if (newQuery) {
+          const { data, error: newPostsError } = await newQuery;
+          if (newPostsError) throw newPostsError;
+          newPosts = Array.isArray(data) ? data : [];
+        }
+      }
+
+      // ---------------------------------------------------------
+      // 2. UPDATE ONLY SMALL, CHANGEABLE POST FIELDS
+      // ---------------------------------------------------------
+      // Likes/reactions/translation state can change without the post
+      // itself changing. Fetch only those fields for cached post IDs.
+      let changedRows = [];
+      if (cachedIds.length) {
+        const { data, error: changedError } = await supabase
+          .from("posts")
+          .select("id,likes,liked_by,translated_text,translation_status")
+          .in("id", cachedIds);
+
+        if (changedError) throw changedError;
+        changedRows = Array.isArray(data) ? data : [];
+      }
+
+      const changedMap = new Map(
+        changedRows.map(row => [String(row.id), row])
+      );
+
+      cachedPosts.forEach(post => {
+        const changed = changedMap.get(String(post.id));
+        if (changed) Object.assign(post, changed);
+      });
+
+      // ---------------------------------------------------------
+      // 3. FETCH PROFILES ONLY FOR BRAND-NEW POSTS
+      // ---------------------------------------------------------
+      if (newPosts.length) {
+        const newUserIds = [...new Set(
+          newPosts.map(post => post?.user_id).filter(Boolean)
+        )];
+
+        if (newUserIds.length) {
+          const { data: profiles, error: profilesError } = await supabase
+            .from("profiles")
+            .select("id,name,username,avatar_url,cover_url,verified,online,last_seen")
+            .in("id", newUserIds);
+
+          if (profilesError) {
+            console.warn("⚠️ INCREMENTAL PROFILE FETCH ERROR:", profilesError);
+          } else {
+            const profileMap = new Map(
+              (profiles || []).map(profile => [String(profile.id), profile])
+            );
+
+            newPosts = newPosts.map(post => ({
+              ...post,
+              profile: profileMap.get(String(post.user_id)) || null
+            }));
+          }
+        }
+
+        // Sign only media belonging to genuinely new posts. Existing signed
+        // URLs remain untouched, avoiding repeated Storage signing requests.
+        newPosts = await Promise.all(newPosts.map(async post => ({
+          ...post,
+          file_url: post.file_url
+            ? await window.getAuthorizedStorageUrl("posts_media", post.file_url)
+            : ""
+        })));
+      }
+
+      // ---------------------------------------------------------
+      // 4. UPDATE SAVED STATE FOR THE CURRENT USER
+      // ---------------------------------------------------------
+      if (session?.user && cachedIds.length) {
+        const { data: savedPosts, error: savedError } = await supabase
+          .from("saved_posts")
+          .select("post_id")
+          .eq("user_id", session.user.id)
+          .in("post_id", [...new Set([...cachedIds, ...newPosts.map(p => String(p.id))])]);
+
+        if (savedError) {
+          console.warn("⚠️ INCREMENTAL SAVED-POST FETCH ERROR:", savedError);
+        } else {
+          const savedIds = new Set((savedPosts || []).map(row => String(row.post_id)));
+          cachedPosts.forEach(post => {
+            post.saved = savedIds.has(String(post.id));
+          });
+          newPosts.forEach(post => {
+            post.saved = savedIds.has(String(post.id));
+          });
+        }
+      }
+
+      // Newest posts first, capped to the same 20-post Home window.
+      const merged = [...newPosts, ...cachedPosts]
+        .filter((post, index, array) => {
+          const id = String(post?.id || "");
+          return id && array.findIndex(item => String(item?.id || "") === id) === index;
+        })
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 20);
+
+      window.postsState = merged;
+      window.feedCache[activeTab] = merged;
+
+      renderFeed(merged);
+      postsDiv.dataset.renderedTab = activeTab;
+      observeVideos();
+
+      console.log("✅ INCREMENTAL FEED REFRESH COMPLETE:", {
+        newPosts: newPosts.length,
+        cachedPosts: cachedPosts.length,
+        finalPosts: merged.length
+      });
+
+      return;
+    } catch (incrementalError) {
+      console.warn("⚠️ Incremental feed refresh failed; keeping existing feed:", incrementalError);
+      window.postsState = cachedPosts;
+      window.feedCache[activeTab] = cachedPosts;
+      renderFeed(cachedPosts);
+      postsDiv.dataset.renderedTab = activeTab;
+      observeVideos();
+      return;
+    }
   }
 
-  const cachedPosts = window.feedCache?.[activeTab];
   if (!forceRefresh && Array.isArray(cachedPosts)) {
     console.log("⚡ Using cached", activeTab, "feed");
     window.postsState = cachedPosts;
@@ -10670,6 +10857,18 @@ window.refreshHomeContents = async function () {
   if (!postsDiv) return;
 
   const selectedTab = activeTab === "following" ? "following" : "explore";
+
+  // Ignore accidental repeated pull gestures for a few seconds. This avoids
+  // sending duplicate queries when Android Chrome fires more than one
+  // gesture/refresh event close together.
+  const now = Date.now();
+  const lastRefresh = Number(window.__socialAppLastHomeRefreshAt || 0);
+  if (lastRefresh && now - lastRefresh < 5000) {
+    console.log("⏱️ HOME REFRESH SKIPPED: refreshed too recently");
+    return;
+  }
+  window.__socialAppLastHomeRefreshAt = now;
+
   const previousScrollTop = Number(postsDiv.scrollTop || 0);
   const previousTab = selectedTab;
 
@@ -28292,7 +28491,7 @@ ${escapeHtml(profile.bio)}
                         onclick="event.preventDefault();event.stopPropagation();reportProfile('${userId}')"
                         style="
                             padding:8px 16px;
-                            border:1px solid rgba(255,152,0,.5);
+                            border:none;
                             border-radius:8px;
                             background:transparent;
                             color:#ff9800;
@@ -50156,7 +50355,7 @@ window.refreshInboxContents = async function () {
 };
 
 // Refresh indicator is created from JavaScript so this remains inside the
-// existing module script. Do not nest <script> or <style> tags here.
+// existing module script. Do not nest script or style tags here.
 (function(){
     if (!document.getElementById("socialapp-content-refresh-indicator-style")) {
         const style = document.createElement("style");
