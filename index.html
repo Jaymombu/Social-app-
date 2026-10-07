@@ -648,7 +648,6 @@ body:not(.dark) .add-story-card::after{
 .post-card .like-btn,
 .post-card button[onclick*="openComments"],
 .post-card button[onclick*="toggleSavePost"],
-.post-card button[onclick*="report"],
 .post-card button[onclick*="deletePost"]{
   display:inline-flex;
   align-items:center;
@@ -10262,7 +10261,7 @@ const isOwner =
         };
         color:white;
         border:none;
-        padding:5px 9px;
+        padding:5px 10px;
         border-radius:5px;
       "
     >
@@ -10286,7 +10285,7 @@ const isOwner =
         background:#333;
         color:white;
         border:none;
-        padding:5px 9px;
+        padding:5px 10px;
         border-radius:5px;
       "
     >
@@ -10301,7 +10300,7 @@ const isOwner =
       type="button"
       onclick="event.stopPropagation(); reportPost('${post.id}')"
       style="
-        margin-top:5px;
+        margin-top:8px;
         margin-left:6px;
         background:transparent;
         color:#ff9800;
@@ -10325,7 +10324,7 @@ const isOwner =
         background:#444;
         color:white;
         border:none;
-        padding:5px 9px;
+        padding:5px 10px;
         border-radius:5px;
       "
     >
@@ -10344,11 +10343,11 @@ const isOwner =
             onclick="deletePost('${post.id}')"
 
             style="
-              margin-top:5px;
+              margin-top:8px;
               background:#ff4d4d;
               border:none;
               color:white;
-              padding:5px 9px;
+              padding:5px 8px;
               border-radius:5px;
             "
           >
@@ -28491,7 +28490,7 @@ ${escapeHtml(profile.bio)}
                         onclick="event.preventDefault();event.stopPropagation();reportProfile('${userId}')"
                         style="
                             padding:8px 16px;
-                            border:none;
+                            border:1px solid rgba(255,152,0,.5);
                             border-radius:8px;
                             background:transparent;
                             color:#ff9800;
