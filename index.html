@@ -4083,6 +4083,23 @@ body.dark{
   color:var(--screen-text) !important;
   border-color:var(--screen-border) !important;
 }
+
+/* Keep the comment voice icon perfectly centered inside its circular button. */
+#commentsScreen #voiceBtn{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:0 !important;
+  margin:0 !important;
+  box-sizing:border-box !important;
+  line-height:1 !important;
+  text-align:center !important;
+  vertical-align:middle !important;
+}
+#commentsScreen #voiceBtn > *{
+  margin:0 !important;
+  line-height:1 !important;
+}
 #commentsScreen #panelInput::placeholder{ color:var(--screen-muted) !important; }
 #commentsScreen #commentMenu{
   background:var(--screen-surface) !important;
@@ -5165,6 +5182,32 @@ body:not(.dark) .chat-view-once-bubble .vo-icon{background:rgba(0,0,0,.08);}
 }
 </style>
 
+
+<style id="reply-size-and-view-replies-visibility-fix">
+/* Slightly enlarge reply cards while keeping every reply in the same column. */
+#commentsScreen #panelComments .replyCard {
+  padding: 13px 14px !important;
+  min-height: 58px !important;
+  box-sizing: border-box !important;
+}
+#commentsScreen .replyCard [data-comment] {
+  font-size: 15px !important;
+  line-height: 1.5 !important;
+}
+/* Move View/Hide replies slightly inward from the left edge. */
+#commentsScreen button[id^="threadBtn-"] {
+  font-size: 14px !important;
+  line-height: 1.4 !important;
+  padding: 7px 4px !important;
+  margin-left: 12px !important;
+  min-height: 32px !important;
+  font-weight: 500 !important;
+  color: #a9a9a9 !important;
+}
+body:not(.dark) #commentsScreen button[id^="threadBtn-"] {
+  color: #626262 !important;
+}
+</style>
 </head>
 <body class="dark">
   
@@ -13887,14 +13930,22 @@ window.ensureCommentInDOM = async function(commentId) {
 
         parentReplies.style.cssText = `
             display:block;
-            margin-left:8px;
-            margin-top:3px;
-            border-left:1px solid #292929;
-            padding-left:8px;
+            position:relative;
+            width:100%;
+            max-width:100%;
+            margin:3px 0;
+            padding:0;
+            box-sizing:border-box;
         `;
 
-        parentElement.appendChild(
-            parentReplies
+        parentReplies.insertAdjacentHTML(
+            "afterbegin",
+            `<div class="nestedReplyConnector" aria-hidden="true" style="position:absolute;left:31px;top:0;bottom:0;width:2px;background:#292929;pointer-events:none;z-index:0;"></div>`
+        );
+
+        parentElement.parentNode.insertBefore(
+            parentReplies,
+            parentElement.nextSibling
         );
     }
 
@@ -14735,8 +14786,28 @@ window.renderReply = function (comment) {
         escapeHtml(name);
 
 
+    // Replies already show the target in "Replying to @name".
+    // Remove a duplicate leading @name from the reply body.
+    let displayContent = content;
+
+    if (
+        comment.parent_id &&
+        comment.reply_to_user &&
+        comment.reply_to_user.name
+    ) {
+        const targetName = String(comment.reply_to_user.name).trim();
+        if (targetName) {
+            const escapedTargetName = targetName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            const duplicateMention = new RegExp(
+                "^\\s*@" + escapedTargetName + "(?:[\\s,:;.!?]+|$)",
+                "i"
+            );
+            displayContent = String(content).replace(duplicateMention, "").trimStart();
+        }
+    }
+
     const safeContent =
-        escapeHtml(content);
+        escapeHtml(displayContent);
 
 
     const safeReplyName =
@@ -15381,8 +15452,9 @@ ondblclick="
             display:flex;
             gap:9px;
             padding:9px 0;
-            width:100%;
-            max-width:100%;
+            margin:12px 14px;
+            width:calc(100% - 28px);
+            max-width:calc(100% - 28px);
             box-sizing:border-box;
             transition:transform .2s ease;
         "
@@ -15678,22 +15750,6 @@ ondblclick="
                 </button>
 
             </div>
-
-<div
-    id="replies-${comment.id}"
-
-    class="nestedReplies"
-
-    style="
-        display:none;
-        width:100%;
-        max-width:100%;
-        margin:3px 0 0 0;
-        padding-left:12px;
-        border-left:1px solid #292929;
-        box-sizing:border-box;
-    "
-      ></div>
 
      </div>
 
@@ -16354,13 +16410,18 @@ window.loadNestedReplyButton = async function(parentId) {
 
 repliesContainer.style.cssText = `
     display:none;
+    position:relative;
     width:100%;
     max-width:100%;
-    margin:3px 0 0 0;
-    padding-left:12px;
+    margin:3px 0;
+    padding:0;
     box-sizing:border-box;
-    border-left:1px solid #292929;
 `;
+
+repliesContainer.insertAdjacentHTML(
+    "afterbegin",
+    `<div class="nestedReplyConnector" aria-hidden="true" style="position:absolute;left:31px;top:0;bottom:0;width:2px;background:#292929;pointer-events:none;z-index:0;"></div>`
+);
 
         /*
          * Replies are placed AFTER the
@@ -16372,6 +16433,16 @@ repliesContainer.style.cssText = `
             parentCard.nextSibling
         );
 
+    }
+
+    // If an older DOM path created this container inside the card,
+    // move only the container itself out beside the card.
+    // This prevents any horizontal reply indentation.
+    if (repliesContainer.parentElement === parentCard) {
+        parentCard.parentNode.insertBefore(
+            repliesContainer,
+            parentCard.nextSibling
+        );
     }
 
 // =====================================================
@@ -16466,7 +16537,7 @@ button.style.cssText = `
     color:#8e8e8e;
     font-size:12px;
     padding:5px 0;
-    margin-left:42px;
+    margin-left:0;
     margin-top:2px;
     margin-bottom:3px;
     cursor:pointer;
@@ -16737,18 +16808,35 @@ async function insertComment(commentId) {
 
         parentReplies.style.cssText = `
             display:block;
-            margin-left:8px;
-            margin-top:3px;
-            border-left:1px solid #292929;
-            padding-left:8px;
+            position:relative;
+            width:100%;
+            max-width:100%;
+            margin:3px 0;
+            padding:0;
+            box-sizing:border-box;
         `;
 
-        parentCard.appendChild(
-            parentReplies
+        parentReplies.insertAdjacentHTML(
+            "afterbegin",
+            `<div class="nestedReplyConnector" aria-hidden="true" style="position:absolute;left:31px;top:0;bottom:0;width:2px;background:#292929;pointer-events:none;z-index:0;"></div>`
+        );
+
+        parentCard.parentNode.insertBefore(
+            parentReplies,
+            parentCard.nextSibling
         );
 
     }
 
+
+    // Ensure an existing reply container also has the connector line.
+    if (parentReplies && !parentReplies.querySelector(".nestedReplyConnector")) {
+        parentReplies.style.position = "relative";
+        parentReplies.insertAdjacentHTML(
+            "afterbegin",
+            `<div class="nestedReplyConnector" aria-hidden="true" style="position:absolute;left:31px;top:0;bottom:0;width:2px;background:#292929;pointer-events:none;z-index:0;"></div>`
+        );
+    }
 
     // =====================================================
     // INSERT REPLY
@@ -55273,6 +55361,12 @@ function updateActiveHomeVideo() {
   }
 
   // Require the majority of a video to be visible to start playback.
+  // Also force every other Home-feed video to pause so only one video can
+  // ever continue playing while the user scrolls.
+  const videos = posts.querySelectorAll(".post-card video");
+  videos.forEach(video => {
+    if (video !== bestVideo || bestRatio < 0.6) pauseHomeVideo(video);
+  });
   activateHomeVideo(bestRatio >= 0.6 ? bestVideo : null);
 }
 
@@ -55301,8 +55395,11 @@ function observeVideos() {
         if (video.preload === "none") video.preload = "metadata";
         homeVideoVisibility.set(video, entry.intersectionRatio);
       } else {
+        // Anything outside the actual viewport must stop immediately.
+        // Do not leave off-screen videos playing just because they remain
+        // inside a preload/observer margin.
         homeVideoVisibility.set(video, 0);
-        if (video === activeHomeVideo) pauseHomeVideo(video);
+        pauseHomeVideo(video);
       }
     }
 
@@ -55316,11 +55413,12 @@ function observeVideos() {
       });
     }
   }, {
-    // #posts is the actual Home scroller. Using it as the observer root
-    // avoids viewport calculations for an unrelated document scroll.
-    root: posts,
+    // Use the real browser viewport as the visibility boundary. This works
+    // whether Home scrolls the document or #posts internally, and ensures
+    // a video is paused as soon as it leaves the visible screen.
+    root: null,
     threshold: [0, 0.6, 1],
-    rootMargin: "120px 0px 120px 0px"
+    rootMargin: "0px"
   });
 
   videos.forEach(video => {
