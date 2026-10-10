@@ -37104,7 +37104,7 @@ window.openPrivacySettings = async function (addHistory = true) {
     const { data: profile, error } = await supabase
         .from("profiles")
         .select(`
-            private_account,
+            private_profile,
             show_online,
             show_last_seen,
             allow_messages,
@@ -37300,7 +37300,7 @@ window.openPrivacySettings = async function (addHistory = true) {
                         <input
                             type="checkbox"
                             id="privateAccount"
-                            ${profile?.private_account ? "checked" : ""}
+                            ${profile?.private_profile ? "checked" : ""}
                             style="
                                 width:20px;
                                 height:20px;
@@ -37496,6 +37496,13 @@ window.openPrivacySettings = async function (addHistory = true) {
 
                 </div>
 
+                <!-- SOCIALAPP PREMIUM -->
+                <div style="margin-top:20px;padding:16px;border:1px solid #49316a;border-radius:14px;background:linear-gradient(135deg,#211337,#111018);">
+                    <div style="font-size:16px;font-weight:800;margin-bottom:6px;">SocialApp Premium</div>
+                    <div style="font-size:13px;line-height:1.5;color:#c8c0d6;margin-bottom:12px;">Private account mode requires an active Premium subscription. Monthly KSh 200 · Yearly KSh 2,000.</div>
+                    <button type="button" id="openSocialAppPremiumFromPrivacy" style="width:100%;padding:12px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:800;">View Premium plans</button>
+                </div>
+
                 <!-- SAVE -->
 
                 <button
@@ -37557,6 +37564,13 @@ window.openPrivacySettings = async function (addHistory = true) {
             ) {
                 window.openProfileSettings(false);
             }
+        };
+    }
+
+    const premiumEntryButton = document.getElementById("openSocialAppPremiumFromPrivacy");
+    if (premiumEntryButton) {
+        premiumEntryButton.onclick = function () {
+            if (typeof window.openPremiumScreen === "function") window.openPremiumScreen();
         };
     }
 
@@ -37628,6 +37642,32 @@ window.savePrivacySettings = async function () {
     }
 
     // =================================================
+    // PREMIUM GATE — PRIVATE ACCOUNT MODE
+    // The database migration adds the same server-side entitlement RPC.
+    // Never trust a client-side flag or cached subscription status.
+    // =================================================
+
+    if (privateAccount.checked) {
+        let hasPremium = false;
+        try {
+            const { data, error: premiumError } = await supabase.rpc("has_active_premium_subscription");
+            if (!premiumError) {
+                hasPremium = data === true || data?.has_active_premium_subscription === true;
+            }
+        } catch (premiumCheckError) {
+            console.warn("Premium entitlement check failed.", premiumCheckError);
+        }
+
+        if (!hasPremium) {
+            alert("Private Account is a SocialApp Premium feature. Subscribe for KSh 200 monthly or KSh 2,000 yearly to enable it.");
+            if (typeof window.openPremiumScreen === "function") {
+                window.openPremiumScreen();
+            }
+            return;
+        }
+    }
+
+    // =================================================
     // UPDATE DATABASE
     // =================================================
 
@@ -37635,7 +37675,7 @@ window.savePrivacySettings = async function () {
         .from("profiles")
         .update({
 
-            private_account:
+            private_profile:
                 privateAccount.checked,
 
             show_online:
@@ -37698,6 +37738,99 @@ window.savePrivacySettings = async function () {
     ) {
         window.openProfileSettings(false);
     }
+};
+
+// =====================================================
+// SOCIALAPP PREMIUM — SUBSCRIPTION UI (OUTSIDE startApp)
+// Payments remain pending until a trusted server verifies them.
+// =====================================================
+window.openPremiumScreen = async function () {
+  if (!session?.user) {
+    alert("Please log in to manage SocialApp Premium.");
+    return;
+  }
+
+  const existing = document.getElementById("socialAppPremiumScreen");
+  if (existing) existing.remove();
+
+  let active = false;
+  try {
+    const { data, error } = await supabase.rpc("has_active_premium_subscription");
+    if (!error) active = data === true || data?.has_active_premium_subscription === true;
+  } catch (e) {
+    console.warn("Premium status could not be checked yet.", e);
+  }
+
+  const screen = document.createElement("div");
+  screen.id = "socialAppPremiumScreen";
+  screen.style.cssText = "position:fixed;inset:0;z-index:2147483646;display:flex;align-items:stretch;justify-content:center;background:rgba(0,0,0,.72);padding:0;box-sizing:border-box;color:#fff;font-family:Arial,sans-serif;";
+  screen.innerHTML = `
+    <section style="width:100%;max-width:560px;height:100%;overflow:auto;background:#09090d;color:#fff;padding:20px;box-sizing:border-box;">
+      <header style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
+        <button id="socialPremiumClose" aria-label="Close" style="border:0;border-radius:50%;width:42px;height:42px;background:#222;color:#fff;font-size:23px;">‹</button>
+        <div><div style="font-size:24px;font-weight:800;">SocialApp Premium</div><div style="color:#aaa;font-size:13px;margin-top:4px;">More features, starting with private accounts</div></div>
+      </header>
+      <div style="padding:18px;border:1px solid #343044;border-radius:18px;background:linear-gradient(135deg,#211337,#101019);margin-bottom:18px;">
+        <div style="font-size:14px;color:#c8a8ff;font-weight:800;">PREMIUM BENEFIT</div>
+        <div style="font-size:21px;font-weight:800;margin:10px 0;">Subscriber-only private account mode</div>
+        <div style="font-size:14px;line-height:1.6;color:#ddd;">Choose who can see your posts and profile media. Approved followers can access protected content; other users cannot.</div>
+      </div>
+      <div style="font-size:15px;font-weight:800;margin:18px 0 10px;">Choose a plan</div>
+      <label style="display:flex;align-items:center;gap:12px;padding:15px;border:1px solid #454050;border-radius:14px;margin-bottom:10px;cursor:pointer;">
+        <input type="radio" name="socialPremiumPlan" value="monthly" checked>
+        <span style="flex:1"><b>Monthly</b><div style="font-size:13px;color:#aaa;margin-top:4px;">Billed every month</div></span><strong>KSh 200</strong>
+      </label>
+      <label style="display:flex;align-items:center;gap:12px;padding:15px;border:1px solid #454050;border-radius:14px;margin-bottom:18px;cursor:pointer;">
+        <input type="radio" name="socialPremiumPlan" value="yearly">
+        <span style="flex:1"><b>Yearly</b><div style="font-size:13px;color:#aaa;margin-top:4px;">Billed annually</div></span><strong>KSh 2,000</strong>
+      </label>
+      <div style="font-size:15px;font-weight:800;margin:18px 0 10px;">Payment method</div>
+      <div style="display:flex;gap:10px;margin-bottom:18px;">
+        <label style="flex:1;border:1px solid #454050;border-radius:12px;padding:13px;display:flex;align-items:center;gap:8px;"><input type="radio" name="socialPremiumPayment" value="mpesa" checked> M-Pesa</label>
+        <label style="flex:1;border:1px solid #454050;border-radius:12px;padding:13px;display:flex;align-items:center;gap:8px;"><input type="radio" name="socialPremiumPayment" value="card"> Bank card</label>
+      </div>
+      <div style="font-size:12px;color:#aaa;line-height:1.6;margin-bottom:18px;">Your Premium access activates only after the payment provider confirms payment to SocialApp's server. Never share your M-Pesa PIN or card security code in chat.</div>
+      <div id="socialPremiumStatus" role="status" style="display:${active ? 'block' : 'none'};padding:12px;border-radius:10px;background:#12301e;color:#a7f3c0;margin-bottom:14px;">Your Premium subscription is active.</div>
+      <button id="socialPremiumContinue" style="width:100%;padding:15px;border:0;border-radius:12px;background:#8a2be2;color:#fff;font-weight:800;font-size:16px;">${active ? 'Manage subscription' : 'Continue to payment'}</button>
+      <div style="font-size:11px;color:#777;text-align:center;margin-top:12px;">Payment checkout requires the SocialApp payment Edge Function and provider credentials to be configured.</div>
+    </section>`;
+  document.body.appendChild(screen);
+
+  const close = () => screen.remove();
+  screen.querySelector("#socialPremiumClose")?.addEventListener("click", close);
+  screen.addEventListener("click", e => { if (e.target === screen) close(); });
+  screen.querySelector("#socialPremiumContinue")?.addEventListener("click", async () => {
+    const status = screen.querySelector("#socialPremiumStatus");
+    const plan_code = screen.querySelector('input[name="socialPremiumPlan"]:checked')?.value;
+    const payment_method = screen.querySelector('input[name="socialPremiumPayment"]:checked')?.value;
+    const button = screen.querySelector("#socialPremiumContinue");
+    if (!plan_code || !payment_method) return;
+    button.disabled = true;
+    button.textContent = "Connecting securely…";
+    try {
+      const { data, error } = await supabase.functions.invoke("create-premium-payment", {
+        body: { plan_code, payment_method }
+      });
+      if (error) throw error;
+      if (data?.checkout_url && /^https:\/\//i.test(data.checkout_url)) {
+        window.location.assign(data.checkout_url);
+        return;
+      }
+      if (data?.message) {
+        if (status) { status.style.display = "block"; status.textContent = data.message; status.style.background = "#302610"; status.style.color = "#ffe0a3"; }
+      } else {
+        throw new Error("The payment service did not return a checkout URL. Configure the payment Edge Function and provider credentials first.");
+      }
+    } catch (e) {
+      console.warn("Premium checkout is not configured or failed.", e);
+      alert("Secure checkout is not ready yet. Deploy the create-premium-payment Edge Function and configure the M-Pesa/card provider credentials before accepting payments.");
+    } finally {
+      if (button.isConnected) {
+        button.disabled = false;
+        button.textContent = active ? "Manage subscription" : "Continue to payment";
+      }
+    }
+  });
 };
 
 window.openPhotoGallery = function (index, userId) {
