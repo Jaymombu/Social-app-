@@ -37643,27 +37643,41 @@ window.savePrivacySettings = async function () {
 
     // =================================================
     // PREMIUM GATE — PRIVATE ACCOUNT MODE
-    // The database migration adds the same server-side entitlement RPC.
-    // Never trust a client-side flag or cached subscription status.
+    // The verified administrator can use private mode without Premium.
+    // Admin status is checked through the server-backed admin_api/whoami
+    // RPC; do not trust a profile flag or a client-only role value.
+    // Ordinary users must still have an active Premium subscription.
     // =================================================
 
     if (privateAccount.checked) {
-        let hasPremium = false;
+        let isAdministrator = false;
+
         try {
-            const { data, error: premiumError } = await supabase.rpc("has_active_premium_subscription");
-            if (!premiumError) {
-                hasPremium = data === true || data?.has_active_premium_subscription === true;
+            if (typeof window.isAdmin === "function") {
+                isAdministrator = await window.isAdmin(true);
             }
-        } catch (premiumCheckError) {
-            console.warn("Premium entitlement check failed.", premiumCheckError);
+        } catch (adminCheckError) {
+            console.warn("Administrator verification failed.", adminCheckError);
         }
 
-        if (!hasPremium) {
-            alert("Private Account is a SocialApp Premium feature. Subscribe for KSh 200 monthly or KSh 2,000 yearly to enable it.");
-            if (typeof window.openPremiumScreen === "function") {
-                window.openPremiumScreen();
+        if (!isAdministrator) {
+            let hasPremium = false;
+            try {
+                const { data, error: premiumError } = await supabase.rpc("has_active_premium_subscription");
+                if (!premiumError) {
+                    hasPremium = data === true || data?.has_active_premium_subscription === true;
+                }
+            } catch (premiumCheckError) {
+                console.warn("Premium entitlement check failed.", premiumCheckError);
             }
-            return;
+
+            if (!hasPremium) {
+                alert("Private Account is a SocialApp Premium feature. Choose an available Premium plan to enable it.");
+                if (typeof window.openPremiumScreen === "function") {
+                    window.openPremiumScreen();
+                }
+                return;
+            }
         }
     }
 
@@ -37761,6 +37775,25 @@ window.openPremiumScreen = async function () {
     console.warn("Premium status could not be checked yet.", e);
   }
 
+  // Display the same editable prices/durations that the server uses for checkout.
+  let monthlyPlan = { amount_kes: 200, duration_days: 30, active: true };
+  let yearlyPlan = { amount_kes: 2000, duration_days: 365, active: true };
+  try {
+    const { data: planRows, error: planError } = await supabase.rpc("get_premium_plans");
+    if (planError) throw planError;
+    if (Array.isArray(planRows)) {
+      monthlyPlan = planRows.find(p => p.plan_code === "monthly") || monthlyPlan;
+      yearlyPlan = planRows.find(p => p.plan_code === "yearly") || yearlyPlan;
+    }
+  } catch (e) {
+    console.warn("Premium plan display could not be loaded; using default labels.", e);
+  }
+  const money = amount => `KSh ${Number(amount || 0).toLocaleString("en-KE")}`;
+  const monthlyPriceLabel = money(monthlyPlan.amount_kes);
+  const yearlyPriceLabel = money(yearlyPlan.amount_kes);
+  const monthlyDurationLabel = `${Number(monthlyPlan.duration_days || 30)} days of access`;
+  const yearlyDurationLabel = `${Number(yearlyPlan.duration_days || 365)} days of access`;
+
   const screen = document.createElement("div");
   screen.id = "socialAppPremiumScreen";
   screen.style.cssText = "position:fixed;inset:0;z-index:2147483646;display:flex;align-items:stretch;justify-content:center;background:rgba(0,0,0,.72);padding:0;box-sizing:border-box;color:#fff;font-family:Arial,sans-serif;";
@@ -37778,11 +37811,11 @@ window.openPremiumScreen = async function () {
       <div style="font-size:15px;font-weight:800;margin:18px 0 10px;">Choose a plan</div>
       <label style="display:flex;align-items:center;gap:12px;padding:15px;border:1px solid #454050;border-radius:14px;margin-bottom:10px;cursor:pointer;">
         <input type="radio" name="socialPremiumPlan" value="monthly" checked>
-        <span style="flex:1"><b>Monthly</b><div style="font-size:13px;color:#aaa;margin-top:4px;">Billed every month</div></span><strong>KSh 200</strong>
+        <span style="flex:1"><b>Monthly plan</b><div style="font-size:13px;color:#aaa;margin-top:4px;">${monthlyDurationLabel}</div></span><strong>${monthlyPriceLabel}</strong>
       </label>
       <label style="display:flex;align-items:center;gap:12px;padding:15px;border:1px solid #454050;border-radius:14px;margin-bottom:18px;cursor:pointer;">
         <input type="radio" name="socialPremiumPlan" value="yearly">
-        <span style="flex:1"><b>Yearly</b><div style="font-size:13px;color:#aaa;margin-top:4px;">Billed annually</div></span><strong>KSh 2,000</strong>
+        <span style="flex:1"><b>Yearly plan</b><div style="font-size:13px;color:#aaa;margin-top:4px;">${yearlyDurationLabel}</div></span><strong>${yearlyPriceLabel}</strong>
       </label>
       
 <div style="font-size:15px;font-weight:800;margin:18px 0 10px;">M-Pesa phone number</div>
@@ -37811,6 +37844,30 @@ window.openPremiumScreen = async function () {
     </section>`;
   document.body.appendChild(screen);
 
+  // Reuse the subscriber's saved M-Pesa number when available. If they have
+  // never saved one, fall back to phone data already attached to their Auth user.
+  const premiumPhoneInput = screen.querySelector("#socialPremiumPhone");
+  if (premiumPhoneInput) {
+    try {
+      const { data: savedPreference, error: preferenceError } = await supabase
+        .from("premium_payment_preferences")
+        .select("mpesa_phone")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      if (!preferenceError && savedPreference?.mpesa_phone) {
+        premiumPhoneInput.value = savedPreference.mpesa_phone;
+      } else if (!premiumPhoneInput.value) {
+        const metadata = session.user.user_metadata || {};
+        premiumPhoneInput.value = String(
+          session.user.phone || metadata.mpesa_phone || metadata.phone_number ||
+          metadata.phone || metadata.mobile || ""
+        );
+      }
+    } catch (phoneLoadError) {
+      console.warn("Saved M-Pesa phone could not be loaded.", phoneLoadError);
+    }
+  }
+
   const close = () => screen.remove();
   screen.querySelector("#socialPremiumClose")?.addEventListener("click", close);
   screen.addEventListener("click", e => { if (e.target === screen) close(); });
@@ -37823,17 +37880,25 @@ screen.querySelector("#socialPremiumContinue")?.addEventListener("click", async 
   const payment_method = screen.querySelector(
     'input[name="socialPremiumPayment"]:checked'
   )?.value;
-  const phone_number = screen.querySelector(
+  let phone_number = screen.querySelector(
   "#socialPremiumPhone"
 )?.value.trim();
   const button = screen.querySelector("#socialPremiumContinue");
 
   if (!plan_code || !payment_method || !button || !status) return;
 
-if (
-  payment_method === "mpesa" &&
-  !/^(\+?254|0)[71]\d{8}$/.test(phone_number || "")
-) {
+if (payment_method === "mpesa") {
+  const phoneDigits = String(phone_number || "").replace(/[\s+()-]/g, "");
+  if (/^0[71]\d{8}$/.test(phoneDigits)) {
+    phone_number = `254${phoneDigits.slice(1)}`;
+  } else if (/^254[71]\d{8}$/.test(phoneDigits)) {
+    phone_number = phoneDigits;
+  } else {
+    phone_number = "";
+  }
+}
+
+if (payment_method === "mpesa" && !phone_number) {
   status.style.display = "block";
   status.style.background = "#302610";
   status.style.color = "#ffe0a3";
@@ -37861,6 +37926,19 @@ if (
   status.textContent = "Connecting to the M-Pesa payment service…";
 
   try {
+    // Save the selected number for next time; RLS limits this row to its owner.
+    const { error: savePhoneError } = await supabase
+      .from("premium_payment_preferences")
+      .upsert({
+        user_id: session.user.id,
+        mpesa_phone: phone_number,
+        updated_at: new Date().toISOString()
+      }, { onConflict: "user_id" });
+    if (savePhoneError) {
+      console.error("Could not save M-Pesa phone preference:", savePhoneError);
+      throw new Error("Could not save your M-Pesa number. Please try again.");
+    }
+
     const { data, error } = await supabase.functions.invoke(
       "create-premium-payment",
       {
@@ -56154,10 +56232,11 @@ function initAdminSystem(){
       users:"👥 Users",
       posts:"📝 Posts",
       comments:"💬 Comments",
-      reports:"🚩 Reports"
+      reports:"🚩 Reports",
+      premium:"💳 Premium & Payments"
     };
 
-    return ["dashboard","users","posts","comments","reports"]
+    return ["dashboard","users","posts","comments","reports","premium"]
       .map(x=>`<button data-admin-tab="${x}" style="flex:1;min-width:85px;border:0;border-radius:10px;padding:10px 6px;background:${tab===x?"#1877f2":"transparent"};color:#fff;font-weight:700;">${x==="reports" ? `🚩 Reports <span data-admin-report-count style="display:inline-flex;min-width:18px;height:18px;padding:0 5px;align-items:center;justify-content:center;margin-left:4px;border-radius:999px;background:#ff3040;color:#fff;font-size:11px;">0</span>` : labels[x]}</button>`)
       .join("");
   }
@@ -56356,6 +56435,10 @@ function initAdminSystem(){
         await posts();
       }else if(tab==="comments"){
         await comments();
+      }else if(tab==="premium"){
+        await premiumSettings();
+      }else if(tab==="reports"){
+        await window.adminReports();
       }else{
         await window.adminReports();
       }
@@ -56516,6 +56599,86 @@ function initAdminSystem(){
       alert(e.message||"Unable to manage user.");
     }
   };
+
+  // -----------------------------------------------------------
+  // PREMIUM PRICING + PAYMENT RECEIVER SETTINGS
+  // The dedicated RPC re-checks the single admin owner server-side.
+  // -----------------------------------------------------------
+  async function premiumSettings(){
+    const c=document.getElementById("adminContent");
+    const t=theme();
+    c.innerHTML=loading();
+    const {data,error}=await sb.rpc("admin_premium_settings_api",{
+      p_action:"get",
+      p_payload:{}
+    });
+    if(error) throw error;
+    const plans=Array.isArray(data?.plans)?data.plans:[];
+    const monthly=plans.find(x=>x.plan_code==="monthly")||{};
+    const yearly=plans.find(x=>x.plan_code==="yearly")||{};
+    const receiver=String(data?.receiving_number||"");
+    const field=(id,label,value,type="number",hint="")=>`<label style="display:block;font-size:13px;font-weight:700;margin-bottom:12px;">${label}<input id="${id}" type="${type}" value="${esc(value)}" inputmode="${type==="number"?"numeric":"text"}" style="display:block;width:100%;box-sizing:border-box;padding:13px 14px;margin-top:6px;border-radius:11px;border:1px solid ${t.border};background:${t.input};color:${t.text};font-size:16px;outline:none;"><span style="display:block;font-size:11px;color:${t.muted};font-weight:400;margin-top:4px;">${hint}</span></label>`;
+    c.innerHTML=`
+      <div style="font-size:19px;font-weight:800;margin:2px 2px 6px;">Premium subscription settings</div>
+      <div style="font-size:13px;line-height:1.55;color:${t.muted};margin:0 2px 16px;">Changes apply to new payment requests. Existing verified subscriptions keep their already-granted expiry unless your subscription policy explicitly renews them.</div>
+      <form id="adminPremiumSettingsForm" style="background:${t.card};border:1px solid ${t.border};border-radius:15px;padding:15px;">
+        <div style="font-weight:800;font-size:15px;margin-bottom:12px;">Monthly plan</div>
+        ${field("adminPremiumMonthlyPrice","Monthly charge (KSh)",monthly.amount_kes??200,"number","Amount charged for one monthly subscription.")}
+        ${field("adminPremiumMonthlyDays","Monthly duration (days)",monthly.duration_days??30,"number","For example, 30 days. This is the entitlement duration stored by the backend.")}
+        <div style="height:1px;background:${t.border};margin:18px 0;"></div>
+        <div style="font-weight:800;font-size:15px;margin-bottom:12px;">Yearly plan</div>
+        ${field("adminPremiumYearlyPrice","Yearly charge (KSh)",yearly.amount_kes??2000,"number","Amount charged for one yearly subscription.")}
+        ${field("adminPremiumYearlyDays","Yearly duration (days)",yearly.duration_days??365,"number","For example, 365 days.")}
+        <div style="height:1px;background:${t.border};margin:18px 0;"></div>
+        <div style="font-weight:800;font-size:15px;margin-bottom:10px;">M-Pesa receiving account</div>
+        ${field("adminPremiumReceiver","Paybill / Till shortcode",receiver,"text","The business shortcode that receives STK Push payments. It must match the shortcode/passkey configuration used by the payment Edge Function.")}
+        <div style="font-size:12px;line-height:1.55;color:${t.muted};padding:11px;border-radius:10px;background:${t.input};margin:0 0 14px;">Security note: this setting is not your customer's phone number. Never enter your M-Pesa PIN, Daraja consumer secret, or passkey here. In Daraja Sandbox, use the test shortcode that matches the configured sandbox passkey.</div>
+        <div id="adminPremiumSettingsStatus" role="status" style="display:none;padding:11px;border-radius:10px;font-size:13px;line-height:1.5;margin-bottom:12px;"></div>
+        <button id="adminPremiumSettingsSave" type="submit" style="width:100%;padding:14px;border:0;border-radius:11px;background:#8a2be2;color:#fff;font-weight:800;font-size:15px;">Save subscription settings</button>
+      </form>`;
+    const form=document.getElementById("adminPremiumSettingsForm");
+    const status=document.getElementById("adminPremiumSettingsStatus");
+    const save=document.getElementById("adminPremiumSettingsSave");
+    form.onsubmit=async ev=>{
+      ev.preventDefault();
+      const monthlyPrice=Number(document.getElementById("adminPremiumMonthlyPrice").value);
+      const monthlyDays=Number(document.getElementById("adminPremiumMonthlyDays").value);
+      const yearlyPrice=Number(document.getElementById("adminPremiumYearlyPrice").value);
+      const yearlyDays=Number(document.getElementById("adminPremiumYearlyDays").value);
+      const receivingNumber=document.getElementById("adminPremiumReceiver").value.trim();
+      const validAmount=n=>Number.isSafeInteger(n)&&n>0&&n<=1000000;
+      const validDays=n=>Number.isSafeInteger(n)&&n>=1&&n<=3650;
+      if(!validAmount(monthlyPrice)||!validAmount(yearlyPrice)||!validDays(monthlyDays)||!validDays(yearlyDays)){
+        status.style.display="block";status.style.background="rgba(255,77,77,.12)";status.style.color="#ff7777";
+        status.textContent="Enter whole-number charges above zero (up to KSh 1,000,000) and durations from 1 to 3,650 days.";return;
+      }
+      if(!/^\d{5,10}$/.test(receivingNumber)){
+        status.style.display="block";status.style.background="rgba(255,77,77,.12)";status.style.color="#ff7777";
+        status.textContent="Enter a valid 5–10 digit M-Pesa Paybill/Till shortcode.";return;
+      }
+      save.disabled=true;save.textContent="Saving…";
+      status.style.display="block";status.style.background="rgba(24,119,242,.12)";status.style.color=t.text;status.textContent="Saving settings securely…";
+      try{
+        const {data:result,error:saveError}=await sb.rpc("admin_premium_settings_api",{
+          p_action:"save",
+          p_payload:{
+            monthly_amount_kes:monthlyPrice,
+            monthly_duration_days:monthlyDays,
+            yearly_amount_kes:yearlyPrice,
+            yearly_duration_days:yearlyDays,
+            receiving_number:receivingNumber
+          }
+        });
+        if(saveError)throw saveError;
+        if(result?.success!==true)throw new Error(result?.message||"Settings were not saved.");
+        status.style.background="rgba(34,160,107,.14)";status.style.color="#22c878";
+        status.textContent="Settings saved. New payment requests will use these prices, durations and receiving shortcode. The shortcode must match the Daraja credentials and passkey configured for the Edge Functions.";
+      }catch(e){
+        status.style.background="rgba(255,77,77,.12)";status.style.color="#ff7777";
+        status.textContent="Could not save settings: "+(e?.message||String(e));
+      }finally{save.disabled=false;save.textContent="Save subscription settings";}
+    };
+  }
 
   function postRow(p){
     const t=theme();
