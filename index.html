@@ -37799,38 +37799,94 @@ window.openPremiumScreen = async function () {
   const close = () => screen.remove();
   screen.querySelector("#socialPremiumClose")?.addEventListener("click", close);
   screen.addEventListener("click", e => { if (e.target === screen) close(); });
-  screen.querySelector("#socialPremiumContinue")?.addEventListener("click", async () => {
-    const status = screen.querySelector("#socialPremiumStatus");
-    const plan_code = screen.querySelector('input[name="socialPremiumPlan"]:checked')?.value;
-    const payment_method = screen.querySelector('input[name="socialPremiumPayment"]:checked')?.value;
-    const button = screen.querySelector("#socialPremiumContinue");
-    if (!plan_code || !payment_method) return;
-    button.disabled = true;
-    button.textContent = "Connecting securely…";
-    try {
-      const { data, error } = await supabase.functions.invoke("create-premium-payment", {
-        body: { plan_code, payment_method }
-      });
-      if (error) throw error;
-      if (data?.checkout_url && /^https:\/\//i.test(data.checkout_url)) {
-        window.location.assign(data.checkout_url);
-        return;
+
+screen.querySelector("#socialPremiumContinue")?.addEventListener("click", async () => {
+  const status = screen.querySelector("#socialPremiumStatus");
+  const plan_code = screen.querySelector(
+    'input[name="socialPremiumPlan"]:checked'
+  )?.value;
+  const payment_method = screen.querySelector(
+    'input[name="socialPremiumPayment"]:checked'
+  )?.value;
+  const button = screen.querySelector("#socialPremiumContinue");
+
+  if (!plan_code || !payment_method || !button || !status) return;
+
+  // Card payments are not implemented by the current M-Pesa function.
+  if (payment_method === "card") {
+    status.style.display = "block";
+    status.style.background = "#302610";
+    status.style.color = "#ffe0a3";
+    status.textContent =
+      "Card payments are not available yet. Please select M-Pesa.";
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Connecting securely…";
+
+  status.style.display = "block";
+  status.style.background = "#182033";
+  status.style.color = "#dbeafe";
+  status.textContent = "Connecting to the M-Pesa payment service…";
+
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      "create-premium-payment",
+      {
+        body: {
+          plan_code,
+          payment_method: "mpesa"
+        }
       }
-      if (data?.message) {
-        if (status) { status.style.display = "block"; status.textContent = data.message; status.style.background = "#302610"; status.style.color = "#ffe0a3"; }
-      } else {
-        throw new Error("The payment service did not return a checkout URL. Configure the payment Edge Function and provider credentials first.");
-      }
-    } catch (e) {
-      console.warn("Premium checkout is not configured or failed.", e);
-      alert("Secure checkout is not ready yet. Deploy the create-premium-payment Edge Function and configure the M-Pesa/card provider credentials before accepting payments.");
-    } finally {
-      if (button.isConnected) {
-        button.disabled = false;
-        button.textContent = active ? "Manage subscription" : "Continue to payment";
-      }
+    );
+
+    if (error) {
+      console.error("Premium payment function error:", error);
+      throw new Error(
+        error.message || "Could not contact the payment service."
+      );
     }
-  });
+
+    if (!data || data.success !== true) {
+      throw new Error(
+        data?.message || "The payment service did not confirm the request."
+      );
+    }
+
+    // Browser checkout redirects are not used for M-Pesa STK Push.
+    status.style.background = "#12301e";
+    status.style.color = "#a7f3c0";
+    status.textContent =
+      data.customerMessage ||
+      "M-Pesa payment request sent. Check your phone and follow the payment instructions. Premium activates only after payment is verified.";
+
+    console.log("Premium payment initiated:", {
+      plan: data.plan,
+      amount: data.amount,
+      paymentAttemptId: data.paymentAttemptId,
+      checkoutRequestId: data.checkoutRequestId
+    });
+
+  } catch (e) {
+    console.error("Premium checkout failed:", e);
+
+    status.style.display = "block";
+    status.style.background = "#302610";
+    status.style.color = "#ffe0a3";
+    status.textContent =
+      "Payment could not start: " +
+      (e?.message || "Unknown error") +
+      " Check the create-premium-payment Edge Function logs.";
+  } finally {
+    if (button.isConnected) {
+      button.disabled = false;
+      button.textContent = active
+        ? "Manage subscription"
+        : "Continue to payment";
+    }
+  }
+});
 };
 
 window.openPhotoGallery = function (index, userId) {
