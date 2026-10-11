@@ -37784,6 +37784,21 @@ window.openPremiumScreen = async function () {
         <input type="radio" name="socialPremiumPlan" value="yearly">
         <span style="flex:1"><b>Yearly</b><div style="font-size:13px;color:#aaa;margin-top:4px;">Billed annually</div></span><strong>KSh 2,000</strong>
       </label>
+      
+<div style="font-size:15px;font-weight:800;margin:18px 0 10px;">M-Pesa phone number</div>
+<input
+  id="socialPremiumPhone"
+  type="tel"
+  inputmode="tel"
+  autocomplete="tel"
+  placeholder="e.g. 0712345678"
+  aria-label="M-Pesa phone number"
+  style="width:100%;box-sizing:border-box;padding:14px;border:1px solid #454050;border-radius:12px;background:#17171f;color:#fff;font-size:16px;margin-bottom:18px;"
+>
+<div style="font-size:12px;color:#aaa;margin-top:-10px;margin-bottom:18px;">
+  Enter the number that should receive the M-Pesa payment prompt.
+</div>
+
       <div style="font-size:15px;font-weight:800;margin:18px 0 10px;">Payment method</div>
       <div style="display:flex;gap:10px;margin-bottom:18px;">
         <label style="flex:1;border:1px solid #454050;border-radius:12px;padding:13px;display:flex;align-items:center;gap:8px;"><input type="radio" name="socialPremiumPayment" value="mpesa" checked> M-Pesa</label>
@@ -37808,9 +37823,24 @@ screen.querySelector("#socialPremiumContinue")?.addEventListener("click", async 
   const payment_method = screen.querySelector(
     'input[name="socialPremiumPayment"]:checked'
   )?.value;
+  const phone_number = screen.querySelector(
+  "#socialPremiumPhone"
+)?.value.trim();
   const button = screen.querySelector("#socialPremiumContinue");
 
   if (!plan_code || !payment_method || !button || !status) return;
+
+if (
+  payment_method === "mpesa" &&
+  !/^(\+?254|0)[71]\d{8}$/.test(phone_number || "")
+) {
+  status.style.display = "block";
+  status.style.background = "#302610";
+  status.style.color = "#ffe0a3";
+  status.textContent =
+    "Enter a valid Kenyan M-Pesa number, such as 0712345678 or 254712345678.";
+  return;
+}
 
   // Card payments are not implemented by the current M-Pesa function.
   if (payment_method === "card") {
@@ -37834,10 +37864,11 @@ screen.querySelector("#socialPremiumContinue")?.addEventListener("click", async 
     const { data, error } = await supabase.functions.invoke(
       "create-premium-payment",
       {
-        body: {
-          plan_code,
-          payment_method: "mpesa"
-        }
+       body: {
+  plan_code,
+  payment_method: "mpesa",
+  phone_number
+}
       }
     );
 
