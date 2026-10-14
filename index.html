@@ -37970,6 +37970,51 @@ if (payment_method === "mpesa" && !phone_number) {
       data.customerMessage ||
       "M-Pesa payment request sent. Check your phone and follow the payment instructions. Premium activates only after payment is verified.";
 
+    // The STK Push response means only that a prompt was sent. Poll the
+    // server-backed entitlement RPC until the callback verifies and activates
+    // Premium. Only then return to Profile Settings.
+    const checkoutSessionUserId = session?.user?.id;
+    const checkoutAttemptId = data.paymentAttemptId;
+    const checkoutStartedAt = Date.now();
+    let premiumConfirmed = false;
+    status.textContent += " Waiting for verified payment confirmation…";
+    while (Date.now() - checkoutStartedAt < 240000) {
+      await new Promise(resolve => setTimeout(resolve, 4000));
+      if (!screen.isConnected) break;
+      const { data: freshSessionData, error: freshSessionError } = await supabase.auth.getSession();
+      if (freshSessionError || !freshSessionData?.session?.user ||
+          freshSessionData.session.user.id !== checkoutSessionUserId) {
+        status.style.background = "#302610";
+        status.style.color = "#ffe0a3";
+        status.textContent = "Payment may still be processing. Sign in again and check Premium status before retrying.";
+        break;
+      }
+      const { data: premiumNow, error: premiumCheckError } = await supabase.rpc("has_active_premium_subscription");
+      if (!premiumCheckError && (premiumNow === true || premiumNow?.has_active_premium_subscription === true)) {
+        premiumConfirmed = true;
+        break;
+      }
+      status.textContent = "Payment prompt sent. Waiting for SocialApp to verify payment… Do not pay again while this request is pending.";
+    }
+
+    if (premiumConfirmed) {
+      status.style.background = "#12301e";
+      status.style.color = "#a7f3c0";
+      status.textContent = "Payment verified and Premium activated. Returning to Settings…";
+      active = true;
+      await new Promise(resolve => setTimeout(resolve, 900));
+      screen.remove();
+      if (typeof window.openProfileSettings === "function") {
+        await window.openProfileSettings(false);
+      } else {
+        alert("Premium is active. Open Settings to finish updating your privacy preference.");
+      }
+    } else if (screen.isConnected) {
+      status.style.background = "#302610";
+      status.style.color = "#ffe0a3";
+      status.textContent = "We have not received verified payment confirmation yet. Your Premium status has not been assumed. Check again in a moment before starting another payment.";
+    }
+
     console.log("Premium payment initiated:", {
       plan: data.plan,
       amount: data.amount,
@@ -41085,9 +41130,24 @@ if (!topBar) {
 // =====================================================
 window.openMyTopProfile = async function(){
   try{
-    const uid = session?.user?.id;
+    // Refresh the authoritative Supabase session at click time. After logout or
+    // a browser reload, a stale in-memory session must never be used to open
+    // the previous account's profile.
+    const { data: sessionResult, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    const freshSession = sessionResult?.session || null;
+    session = freshSession;
+    currentUser = freshSession?.user || null;
+    const uid = freshSession?.user?.id;
     if(!uid){
-      alert("Please log in first.");
+      // The top-bar profile button is the signed-in user's own profile.
+      // Route logged-out users to the existing auth UI instead of leaving a
+      // profile screen with a missing account.
+      if (typeof window.openSocialAuth === "function") {
+        window.openSocialAuth("login");
+      } else {
+        alert("Please log in to open your profile.");
+      }
       return false;
     }
     window.profileNavigationSource = "topBar";
