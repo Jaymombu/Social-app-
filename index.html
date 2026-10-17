@@ -9683,8 +9683,29 @@ async function createPost() {
   const content =
     input.value.trim();
 
-  const visibility =
-    document.getElementById("postVisibility")?.value || "public";
+  // Use the saved account privacy mode as the default; Premium is an explicit per-post choice.
+  const postAsPremium = document.getElementById("postAsPremium")?.checked === true;
+  if (!session?.user) {
+    alert("Please log in first");
+    return;
+  }
+  let accountPostMode = "public";
+  try {
+    const { data: privacyProfile, error: privacyError } = await supabase
+      .from("profiles")
+      .select("post_privacy_mode, private_profile, private_account")
+      .eq("id", session.user.id).maybeSingle();
+    if (privacyError) throw privacyError;
+    accountPostMode = privacyProfile?.post_privacy_mode ||
+      ((privacyProfile?.private_profile || privacyProfile?.private_account) ? "private" : "public");
+  } catch (privacyError) {
+    console.error("Could not load post privacy mode", privacyError);
+    alert("Could not check your post privacy settings. Please try again.");
+    return;
+  }
+  const visibility = accountPostMode === "premium_only"
+    ? "premium"
+    : (postAsPremium ? "premium" : (accountPostMode === "private" ? "followers" : "public"));
 
   if (!session?.user) {
     alert("Please log in first");
@@ -37153,6 +37174,7 @@ window.openPrivacySettings = async function (addHistory = true) {
         .from("profiles")
         .select(`
             private_profile,
+            post_privacy_mode,
             show_online,
             show_last_seen,
             allow_messages,
@@ -37544,6 +37566,26 @@ window.openPrivacySettings = async function (addHistory = true) {
 
                 </div>
 
+                <!-- POST AUDIENCE DEFAULT -->
+                <div style="margin-top:22px;">
+                    <div style="font-size:13px;color:#888;font-weight:700;margin:8px 4px 10px;text-transform:uppercase;">Post privacy</div>
+                    <div style="font-size:13px;line-height:1.5;color:#aaa;margin:0 4px 12px;">Choose the default audience for ordinary posts. You can mark an individual post as Premium when composing it. Viewers must subscribe to your creator account; SocialApp Premium only grants permission to publish Premium posts.</div>
+                    <div style="display:grid;gap:9px;">
+                        <label style="display:flex;align-items:flex-start;gap:11px;padding:13px;border:1px solid #333;border-radius:12px;background:#111;">
+                            <input type="radio" name="postPrivacyMode" value="public" ${(profile?.post_privacy_mode || (profile?.private_profile ? "private" : "public")) === "public" ? "checked" : ""} style="margin-top:3px;width:18px;height:18px;accent-color:#8a2be2;">
+                            <span><strong>Public + Premium</strong><br><span style="font-size:13px;color:#aaa;">Ordinary posts are public; choose Premium for individual posts when you want.</span></span>
+                        </label>
+                        <label style="display:flex;align-items:flex-start;gap:11px;padding:13px;border:1px solid #333;border-radius:12px;background:#111;">
+                            <input type="radio" name="postPrivacyMode" value="private" ${(profile?.post_privacy_mode || (profile?.private_profile ? "private" : "public")) === "private" ? "checked" : ""} style="margin-top:3px;width:18px;height:18px;accent-color:#8a2be2;">
+                            <span><strong>Private + Premium</strong><br><span style="font-size:13px;color:#aaa;">Ordinary posts are for followers; choose Premium for individual posts.</span></span>
+                        </label>
+                        <label style="display:flex;align-items:flex-start;gap:11px;padding:13px;border:1px solid #49316a;border-radius:12px;background:#171020;">
+                            <input type="radio" name="postPrivacyMode" value="premium_only" ${profile?.post_privacy_mode === "premium_only" ? "checked" : ""} style="margin-top:3px;width:18px;height:18px;accent-color:#8a2be2;">
+                            <span><strong>Premium only</strong><br><span style="font-size:13px;color:#c8b7df;">All new posts are Premium and visible only to active subscribers of your creator account.</span></span>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- SOCIALAPP PREMIUM -->
                 <div style="margin-top:20px;padding:16px;border:1px solid #49316a;border-radius:14px;background:linear-gradient(135deg,#211337,#111018);">
                     <div style="font-size:16px;font-weight:800;margin-bottom:6px;">SocialApp Premium</div>
@@ -37675,6 +37717,13 @@ window.savePrivacySettings = async function () {
     const allowFollowers =
         document.getElementById("allowFollowers");
 
+    const selectedPostPrivacy = document.querySelector('input[name="postPrivacyMode"]:checked');
+    const postPrivacyMode = selectedPostPrivacy?.value || "public";
+    if (!["public", "private", "premium_only"].includes(postPrivacyMode)) {
+        alert("Choose a valid post privacy setting.");
+        return;
+    }
+
     if (
         !privateAccount ||
         !showOnline ||
@@ -37739,6 +37788,8 @@ window.savePrivacySettings = async function () {
 
             private_profile:
                 privateAccount.checked,
+
+            post_privacy_mode: postPrivacyMode,
 
             show_online:
                 showOnline.checked,
@@ -39234,6 +39285,38 @@ function attachEvents() {
   const postBtn = document.getElementById("postBtn");
   if (postBtn) {
     postBtn.onclick = createPost;
+  }
+
+  // Set the composer hint/toggle from the saved account privacy mode.
+  if (session?.user) {
+    (async () => {
+      const premiumToggle = document.getElementById("postAsPremium");
+      const premiumRow = document.getElementById("postPremiumToggleRow");
+      const audienceHint = document.getElementById("postAudienceHint");
+      if (!premiumToggle || !premiumRow || !audienceHint) return;
+      let mode = "public";
+      try {
+        const { data, error } = await supabase.from("profiles")
+          .select("post_privacy_mode,private_profile,private_account")
+          .eq("id", session.user.id).maybeSingle();
+        if (error) throw error;
+        mode = data?.post_privacy_mode || ((data?.private_profile || data?.private_account) ? "private" : "public");
+      } catch (e) {
+        console.warn("Could not load composer privacy mode", e);
+      }
+      if (mode === "premium_only") {
+        premiumToggle.checked = true;
+        premiumToggle.disabled = true;
+        premiumRow.style.opacity = "0.75";
+        audienceHint.textContent = "Your account is set to Premium only. This post will be visible only to active subscribers of your creator account.";
+      } else {
+        premiumToggle.checked = false;
+        premiumToggle.disabled = false;
+        audienceHint.textContent = mode === "private"
+          ? "Default audience: followers. Turn on Premium below to restrict this post to subscribers of your creator account."
+          : "Default audience: public. Turn on Premium below to restrict this post to subscribers of your creator account.";
+      }
+    })();
   }
 
 const loginBtn = document.getElementById("login");
@@ -41425,12 +41508,11 @@ if (
             <input type="file" id="mediaInput" accept="image/*,video/*" />
             <button id="postBtn">Post</button>
           </div>
-          <label for="postVisibility" style="display:block;margin-top:8px;font-size:13px;color:var(--text-color,#ddd)">Who can view this post?</label>
-          <select id="postVisibility" style="width:100%;margin-top:5px;padding:10px;border-radius:10px;background:#202020;color:#fff;border:1px solid #444">
-            <option value="public">Public</option>
-            <option value="followers">Followers only</option>
-            <option value="premium">Premium subscribers only</option>
-          </select>
+          <label id="postAudienceHint" style="display:block;margin-top:8px;font-size:13px;line-height:1.45;color:var(--text-color,#ddd)">This post will use your account privacy setting.</label>
+          <label id="postPremiumToggleRow" style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:12px;border:1px solid #49316a;border-radius:10px;background:#171020;">
+            <input type="checkbox" id="postAsPremium" style="width:19px;height:19px;accent-color:#8a2be2;">
+            <span><strong>Post as Premium</strong><br><span style="font-size:12px;color:#bcaed0">Only users subscribed to your creator account can view it.</span></span>
+          </label>
           <input type="file" id="storyInput" accept="image/*,video/*" style="display:none;" />
           <input type="file" id="storyAudioInput" accept="audio/*" style="display:none;" />
         </div>
