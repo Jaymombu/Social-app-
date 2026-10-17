@@ -9682,7 +9682,37 @@ async function createPost() {
 
   const content =
     input.value.trim();
-    
+
+  const visibility =
+    document.getElementById("postVisibility")?.value || "public";
+
+  if (!session?.user) {
+    alert("Please log in first");
+    return;
+  }
+
+  if (!["public", "followers", "premium"].includes(visibility)) {
+    alert("Choose a valid post visibility setting.");
+    return;
+  }
+
+  if (visibility === "premium") {
+    let hasPremium = false;
+    try {
+      const { data, error: premiumError } = await supabase.rpc("has_active_premium_subscription");
+      if (!premiumError) {
+        hasPremium = data === true || data?.has_active_premium_subscription === true;
+      }
+    } catch (e) {
+      console.warn("Premium eligibility check failed", e);
+    }
+    if (!hasPremium) {
+      alert("An active, verified SocialApp Premium subscription is required to publish Premium posts.");
+      if (typeof window.openPremiumScreen === "function") window.openPremiumScreen();
+      return;
+    }
+  }
+
     const detectedLanguage = content
   ? await detectLanguage(content)
   : "unknown";
@@ -9741,6 +9771,7 @@ await supabase
     file_url: mediaUrl,
     media_type: mediaType,
     user_id: session.user.id,
+    visibility,
     name: profile?.name || session.user.email,
     avatar_url: profile?.avatar_url || null,
     verified: profile?.verified || false,
@@ -10541,6 +10572,23 @@ window.loadPosts = async function (forceRefresh = false) {
     console.log("❌ posts div not found");
     return;
 
+  }
+
+  // SECURITY: never render cached or remotely fetched posts for a signed-out viewer.
+  // RLS also enforces this server-side; this guard prevents stale feed cache leakage.
+  if (!session?.user) {
+    try {
+      window.feedCache = { explore: [], following: [] };
+      window.postsState = [];
+      postsDiv.innerHTML = `
+        <div class="home-login" style="padding:28px 16px;text-align:center;color:var(--text-color,#fff)">
+          <p>Please log in to view posts.</p>
+          <button type="button" onclick="document.getElementById('login')?.click()">Login</button>
+        </div>`;
+    } catch (e) {
+      postsDiv.textContent = "Please log in to view posts.";
+    }
+    return;
   }
 
   // Tab switches use the existing cache. A pull-to-refresh now performs
@@ -41377,6 +41425,12 @@ if (
             <input type="file" id="mediaInput" accept="image/*,video/*" />
             <button id="postBtn">Post</button>
           </div>
+          <label for="postVisibility" style="display:block;margin-top:8px;font-size:13px;color:var(--text-color,#ddd)">Who can view this post?</label>
+          <select id="postVisibility" style="width:100%;margin-top:5px;padding:10px;border-radius:10px;background:#202020;color:#fff;border:1px solid #444">
+            <option value="public">Public</option>
+            <option value="followers">Followers only</option>
+            <option value="premium">Premium subscribers only</option>
+          </select>
           <input type="file" id="storyInput" accept="image/*,video/*" style="display:none;" />
           <input type="file" id="storyAudioInput" accept="audio/*" style="display:none;" />
         </div>
