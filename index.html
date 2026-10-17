@@ -28660,6 +28660,24 @@ ${escapeHtml(profile.bio)}
 
                     ${
                         session?.user?.id &&
+                        String(session.user.id) !== String(userId) &&
+                        Number(profile.creator_subscription_price_kes) > 0 &&
+                        Number(profile.creator_subscription_duration_days) > 0
+                            ? `
+                    <button
+                        id="profileCreatorSubscribeButton"
+                        type="button"
+                        onclick="event.preventDefault();event.stopPropagation();window.subscribeToCreator('${String(userId)}')"
+                        style="padding:9px 14px;border:0;border-radius:9px;background:#8a2be2;color:#fff;font-weight:800;cursor:pointer;"
+                    >
+                        Subscribe · KSh ${Number(profile.creator_subscription_price_kes)} / ${Number(profile.creator_subscription_duration_days)} days
+                    </button>
+                    `
+                            : ""
+                    }
+
+                    ${
+                        session?.user?.id &&
                         String(session.user.id) !==
                         String(userId)
                             ? `
@@ -37178,7 +37196,10 @@ window.openPrivacySettings = async function (addHistory = true) {
             show_online,
             show_last_seen,
             allow_messages,
-            allow_followers
+            allow_followers,
+            creator_subscription_price_kes,
+            creator_subscription_duration_days,
+            creator_subscription_payout_phone
         `)
         .eq("id", userId)
         .single();
@@ -37586,6 +37607,20 @@ window.openPrivacySettings = async function (addHistory = true) {
                     </div>
                 </div>
 
+                <!-- CREATOR SUBSCRIPTION OFFER -->
+                <div style="margin-top:20px;padding:16px;border:1px solid #3b3150;border-radius:14px;background:#111;">
+                    <div style="font-size:16px;font-weight:800;margin-bottom:6px;">Creator subscriptions</div>
+                    <div style="font-size:13px;line-height:1.55;color:#aaa;margin-bottom:14px;">Set the price and length of a subscription to your creator account. This is separate from your own SocialApp Premium plan. Viewers still need an active, verified subscription to you to open your Premium posts.</div>
+                    <label for="creatorSubscriptionPrice" style="display:block;font-size:13px;font-weight:700;margin-bottom:6px;">Your subscription price (KSh)</label>
+                    <input id="creatorSubscriptionPrice" type="number" min="1" max="1000000" step="1" inputmode="numeric" value="${profile?.creator_subscription_price_kes ?? ""}" placeholder="e.g. 100" style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #444;background:#222;color:#fff;margin-bottom:12px;">
+                    <label for="creatorSubscriptionDuration" style="display:block;font-size:13px;font-weight:700;margin-bottom:6px;">Subscription duration (days)</label>
+                    <input id="creatorSubscriptionDuration" type="number" min="1" max="3650" step="1" inputmode="numeric" value="${profile?.creator_subscription_duration_days ?? ""}" placeholder="e.g. 30" style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #444;background:#222;color:#fff;margin-bottom:12px;">
+                    <label for="creatorSubscriptionPayoutPhone" style="display:block;font-size:13px;font-weight:700;margin-bottom:6px;">Creator payout M-Pesa number (optional)</label>
+                    <input id="creatorSubscriptionPayoutPhone" type="tel" inputmode="tel" autocomplete="tel" value="${profile?.creator_subscription_payout_phone ?? ""}" placeholder="07XXXXXXXX or 2547XXXXXXXX" maxlength="16" style="width:100%;box-sizing:border-box;padding:12px;border-radius:10px;border:1px solid #444;background:#222;color:#fff;margin-bottom:10px;">
+                    <div style="font-size:12px;line-height:1.5;color:#c5b7d7;">Important: this is your preferred payout number, not the Daraja merchant receiving shortcode. Subscriber checkout still uses the administrator-configured merchant account; this field does not automatically transfer earnings or change SocialApp Premium payments.</div>
+                    <button type="button" id="clearCreatorSubscriptionOffer" style="margin-top:12px;padding:9px 12px;border:1px solid #555;border-radius:9px;background:#191919;color:#ddd;font-weight:700;">Clear creator offer</button>
+                </div>
+
                 <!-- SOCIALAPP PREMIUM -->
                 <div style="margin-top:20px;padding:16px;border:1px solid #49316a;border-radius:14px;background:linear-gradient(135deg,#211337,#111018);">
                     <div style="font-size:16px;font-weight:800;margin-bottom:6px;">SocialApp Premium</div>
@@ -37664,6 +37699,19 @@ window.openPrivacySettings = async function (addHistory = true) {
         };
     }
 
+    // Clear the creator subscription offer without changing other privacy settings.
+    const clearCreatorOfferBtn = document.getElementById("clearCreatorSubscriptionOffer");
+    if (clearCreatorOfferBtn) {
+        clearCreatorOfferBtn.onclick = function () {
+            const price = document.getElementById("creatorSubscriptionPrice");
+            const duration = document.getElementById("creatorSubscriptionDuration");
+            const phone = document.getElementById("creatorSubscriptionPayoutPhone");
+            if (price) price.value = "";
+            if (duration) duration.value = "";
+            if (phone) phone.value = "";
+        };
+    }
+
     // =================================================
     // SAVE BUTTON
     // =================================================
@@ -37722,6 +37770,37 @@ window.savePrivacySettings = async function () {
     if (!["public", "private", "premium_only"].includes(postPrivacyMode)) {
         alert("Choose a valid post privacy setting.");
         return;
+    }
+
+    const creatorPriceRaw = String(document.getElementById("creatorSubscriptionPrice")?.value ?? "").trim();
+    const creatorDurationRaw = String(document.getElementById("creatorSubscriptionDuration")?.value ?? "").trim();
+    const creatorPayoutPhoneRaw = String(document.getElementById("creatorSubscriptionPayoutPhone")?.value ?? "").trim();
+    let creatorSubscriptionPrice = null;
+    let creatorSubscriptionDuration = null;
+    let creatorPayoutPhone = null;
+
+    if ((creatorPriceRaw && !creatorDurationRaw) || (!creatorPriceRaw && creatorDurationRaw)) {
+        alert("Enter both a creator subscription price and duration, or clear both fields to disable your creator subscription offer.");
+        return;
+    }
+    if (creatorPriceRaw || creatorDurationRaw) {
+        creatorSubscriptionPrice = Number(creatorPriceRaw);
+        creatorSubscriptionDuration = Number(creatorDurationRaw);
+        if (!Number.isInteger(creatorSubscriptionPrice) || creatorSubscriptionPrice < 1 || creatorSubscriptionPrice > 1000000 ||
+            !Number.isInteger(creatorSubscriptionDuration) || creatorSubscriptionDuration < 1 || creatorSubscriptionDuration > 3650) {
+            alert("Creator subscription price must be KSh 1–1,000,000 and duration must be 1–3650 whole days.");
+            return;
+        }
+    }
+    if (creatorPayoutPhoneRaw) {
+        let digits = creatorPayoutPhoneRaw.replace(/[\s()+-]/g, "");
+        if (digits.startsWith("0")) digits = "254" + digits.slice(1);
+        if (digits.startsWith("+")) digits = digits.slice(1);
+        if (!/^254[17]\d{8}$/.test(digits)) {
+            alert("Enter a valid Kenyan M-Pesa number, for example 0712345678 or 254712345678.");
+            return;
+        }
+        creatorPayoutPhone = digits;
     }
 
     if (
@@ -37801,7 +37880,11 @@ window.savePrivacySettings = async function () {
                 allowMessages.value,
 
             allow_followers:
-                allowFollowers.value
+                allowFollowers.value,
+
+            creator_subscription_price_kes: creatorSubscriptionPrice,
+            creator_subscription_duration_days: creatorSubscriptionDuration,
+            creator_subscription_payout_phone: creatorPayoutPhone
 
         })
         .eq("id", session.user.id);
@@ -37851,6 +37934,65 @@ window.savePrivacySettings = async function () {
     ) {
         window.openProfileSettings(false);
     }
+};
+
+// =====================================================
+// CREATOR SUBSCRIPTIONS — separate from administrator Premium
+// The server loads the creator's saved price/duration and the trusted
+// administrator Daraja merchant receiver. The client never activates access.
+// =====================================================
+window.subscribeToCreator = async function (creatorId) {
+  if (!session?.user?.id) {
+    alert("Please log in before subscribing to a creator.");
+    return;
+  }
+  if (!creatorId || String(creatorId) === String(session.user.id)) {
+    alert("You cannot subscribe to your own creator account.");
+    return;
+  }
+
+  let offer;
+  try {
+    const { data, error } = await supabase.from("profiles")
+      .select("creator_subscription_price_kes,creator_subscription_duration_days")
+      .eq("id", creatorId).maybeSingle();
+    if (error) throw error;
+    if (!data || !(Number(data.creator_subscription_price_kes) > 0) || !(Number(data.creator_subscription_duration_days) > 0)) {
+      alert("This creator has not configured a subscription offer yet.");
+      return;
+    }
+    offer = data;
+  } catch (e) {
+    console.error("Could not load creator subscription offer", e);
+    alert("Could not load this creator's subscription offer. Please try again.");
+    return;
+  }
+
+  const phoneInput = prompt(`Subscribe for KSh ${Number(offer.creator_subscription_price_kes)} for ${Number(offer.creator_subscription_duration_days)} days.
+Enter the M-Pesa number that should receive the payment prompt:`);
+  if (phoneInput === null) return;
+  const phone = String(phoneInput).trim();
+  if (!phone) {
+    alert("Enter the M-Pesa phone number for the payment prompt.");
+    return;
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke("create-creator-subscription-payment", {
+      body: { creator_id: creatorId, phone }
+    });
+    if (error) throw error;
+    if (data?.status === "initiated" || data?.status === "pending") {
+      alert(`${data.message || "M-Pesa request submitted."}
+
+Your creator subscription will activate only after the server verifies the payment. Do not pay again while this request is pending.`);
+      return;
+    }
+    throw new Error(data?.message || data?.error || "Could not start creator subscription payment.");
+  } catch (e) {
+    console.error("Creator subscription checkout failed", e);
+    alert(e?.message || "Could not start the creator subscription payment. Please try again.");
+  }
 };
 
 // =====================================================
