@@ -9683,47 +9683,38 @@ async function createPost() {
   const content =
     input.value.trim();
 
-  // Use the saved account privacy mode as the default; Premium is an explicit per-post choice.
-  const postAsPremium = document.getElementById("postAsPremium")?.checked === true;
+  // Each post chooses its own audience. Account privacy mode never silently
+  // rewrites the visibility of a new or existing post.
   if (!session?.user) {
-    alert("Please log in first");
+    alert("Please log in or register to create posts.");
     return;
   }
-  let accountPostMode = "public";
-  try {
-    const { data: privacyProfile, error: privacyError } = await supabase
-      .from("profiles")
-      .select("post_privacy_mode, private_profile, private_account")
-      .eq("id", session.user.id).maybeSingle();
-    if (privacyError) throw privacyError;
-    accountPostMode = privacyProfile?.post_privacy_mode ||
-      ((privacyProfile?.private_profile || privacyProfile?.private_account) ? "private" : "public");
-  } catch (privacyError) {
-    console.error("Could not load post privacy mode", privacyError);
-    alert("Could not check your post privacy settings. Please try again.");
-    return;
-  }
-  const visibility = accountPostMode === "premium_only"
-    ? "premium"
-    : (postAsPremium ? "premium" : (accountPostMode === "private" ? "followers" : "public"));
 
-  if (!session?.user) {
-    alert("Please log in first");
-    return;
+  let isAdministrator = false;
+  try {
+    isAdministrator = typeof window.isAdmin === "function"
+      ? (await window.isAdmin(true)) === true
+      : false;
+  } catch (e) {
+    console.warn("Administrator status check failed", e);
   }
+
+  const selectedVisibility = document.querySelector('input[name="postVisibilityChoice"]:checked')?.value || "public";
+  const visibility = selectedVisibility === "private" ? "followers" : selectedVisibility;
 
   if (!["public", "followers", "premium"].includes(visibility)) {
-    alert("Choose a valid post visibility setting.");
+    alert("Choose Public, Private, or Premium for this post.");
     return;
   }
 
-  if (visibility === "premium") {
+  // Only active, verified SocialApp Premium users may publish Premium posts.
+  // The single administrator is exempt from subscription gating.
+  if (visibility === "premium" && !isAdministrator) {
     let hasPremium = false;
     try {
       const { data, error: premiumError } = await supabase.rpc("has_active_premium_subscription");
-      if (!premiumError) {
-        hasPremium = data === true || data?.has_active_premium_subscription === true;
-      }
+      if (premiumError) throw premiumError;
+      hasPremium = data === true || data?.has_active_premium_subscription === true;
     } catch (e) {
       console.warn("Premium eligibility check failed", e);
     }
@@ -10603,8 +10594,7 @@ window.loadPosts = async function (forceRefresh = false) {
       window.postsState = [];
       postsDiv.innerHTML = `
         <div class="home-login" style="padding:28px 16px;text-align:center;color:var(--text-color,#fff)">
-          <p>Please log in to view posts.</p>
-          <button type="button" onclick="document.getElementById('login')?.click()">Login</button>
+          <p>Please log in or register to view posts.</p>
         </div>`;
     } catch (e) {
       postsDiv.textContent = "Please log in to view posts.";
@@ -39429,35 +39419,45 @@ function attachEvents() {
     postBtn.onclick = createPost;
   }
 
-  // Set the composer hint/toggle from the saved account privacy mode.
+  // Configure independent per-post audience controls. Premium is disabled for
+  // ordinary users without active SocialApp Premium; the administrator is exempt.
   if (session?.user) {
     (async () => {
-      const premiumToggle = document.getElementById("postAsPremium");
-      const premiumRow = document.getElementById("postPremiumToggleRow");
       const audienceHint = document.getElementById("postAudienceHint");
-      if (!premiumToggle || !premiumRow || !audienceHint) return;
-      let mode = "public";
+      const premiumChoice = document.getElementById("postVisibilityPremium");
+      const premiumLabel = document.getElementById("postVisibilityPremiumLabel");
+      if (!audienceHint || !premiumChoice) return;
+
+      let isAdministrator = false;
       try {
-        const { data, error } = await supabase.from("profiles")
-          .select("post_privacy_mode,private_profile,private_account")
-          .eq("id", session.user.id).maybeSingle();
-        if (error) throw error;
-        mode = data?.post_privacy_mode || ((data?.private_profile || data?.private_account) ? "private" : "public");
-      } catch (e) {
-        console.warn("Could not load composer privacy mode", e);
-      }
-      if (mode === "premium_only") {
-        premiumToggle.checked = true;
-        premiumToggle.disabled = true;
-        premiumRow.style.opacity = "0.75";
-        audienceHint.textContent = "Your account is set to Premium only. This post will be visible only to active subscribers of your creator account.";
+        isAdministrator = typeof window.isAdmin === "function"
+          ? (await window.isAdmin(true)) === true
+          : false;
+      } catch (e) {}
+
+      let hasPremium = false;
+      if (isAdministrator) {
+        hasPremium = true;
       } else {
-        premiumToggle.checked = false;
-        premiumToggle.disabled = false;
-        audienceHint.textContent = mode === "private"
-          ? "Default audience: followers. Turn on Premium below to restrict this post to subscribers of your creator account."
-          : "Default audience: public. Turn on Premium below to restrict this post to subscribers of your creator account.";
+        try {
+          const { data, error } = await supabase.rpc("has_active_premium_subscription");
+          if (!error) hasPremium = data === true || data?.has_active_premium_subscription === true;
+        } catch (e) {}
       }
+
+      premiumChoice.disabled = !hasPremium;
+      if (premiumLabel) {
+        premiumLabel.style.opacity = hasPremium ? "1" : "0.45";
+        premiumLabel.title = hasPremium ? "" : "Requires active SocialApp Premium";
+      }
+      if (!hasPremium && premiumChoice.checked) {
+        document.getElementById("postVisibilityPublic").checked = true;
+      }
+      audienceHint.textContent = isAdministrator
+        ? "Choose the audience for this post. Administrator posting is not restricted by a subscription."
+        : hasPremium
+          ? "Choose the audience for this post. Your account privacy mode will not change this choice."
+          : "Choose Public or Private. Premium posting requires an active, verified SocialApp Premium subscription.";
     })();
   }
 
@@ -41650,18 +41650,28 @@ if (
             <input type="file" id="mediaInput" accept="image/*,video/*" />
             <button id="postBtn">Post</button>
           </div>
-          <label id="postAudienceHint" style="display:block;margin-top:8px;font-size:13px;line-height:1.45;color:var(--text-color,#ddd)">This post will use your account privacy setting.</label>
-          <label id="postPremiumToggleRow" style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:12px;border:1px solid #49316a;border-radius:10px;background:#171020;">
-            <input type="checkbox" id="postAsPremium" style="width:19px;height:19px;accent-color:#8a2be2;">
-            <span><strong>Post as Premium</strong><br><span style="font-size:12px;color:#bcaed0">Only users subscribed to your creator account can view it.</span></span>
-          </label>
+          <label id="postAudienceHint" style="display:block;margin-top:8px;font-size:13px;line-height:1.45;color:var(--text-color,#ddd)">Choose the audience for this post.</label>
+          <div id="postVisibilityChoices" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+            <label style="display:flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid #444;border-radius:10px;cursor:pointer;">
+              <input type="radio" id="postVisibilityPublic" name="postVisibilityChoice" value="public" checked style="accent-color:#1877f2;">
+              <span>Public</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid #444;border-radius:10px;cursor:pointer;">
+              <input type="radio" id="postVisibilityPrivate" name="postVisibilityChoice" value="private" style="accent-color:#1877f2;">
+              <span>Private</span>
+            </label>
+            <label id="postVisibilityPremiumLabel" style="display:flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid #49316a;border-radius:10px;background:#171020;cursor:pointer;">
+              <input type="radio" id="postVisibilityPremium" name="postVisibilityChoice" value="premium" style="accent-color:#8a2be2;">
+              <span>Premium</span>
+            </label>
+          </div>
           <input type="file" id="storyInput" accept="image/*,video/*" style="display:none;" />
           <input type="file" id="storyAudioInput" accept="audio/*" style="display:none;" />
         </div>
         `
           : `
-        <div class="home-login">
-          <button id="login">Login</button>
+        <div class="home-login" style="text-align:center;color:var(--text-color,#ddd);padding:14px 12px;">
+          <button id="login" type="button">Log in / Register</button>
         </div>
         `
       }
