@@ -37369,30 +37369,20 @@ window.openPrivacySettings = async function (addHistory = true) {
                     border:1px solid #1d1d1d;
                 ">
 
-                    <label style="
-                        display:flex;
-                        align-items:center;
-                        gap:12px;
-                        padding:17px 16px;
-                        border-bottom:1px solid #222;
-                        font-size:16px;
-                    ">
-
-                        <input
-                            type="checkbox"
-                            id="privateAccount"
-                            ${profile?.private_profile ? "checked" : ""}
-                            style="
-                                width:20px;
-                                height:20px;
-                            "
-                        >
-
-                        <span>
-                            Private Account
-                        </span>
-
-                    </label>
+                    <div style="padding:16px;border-bottom:1px solid #222;">
+                        <div style="font-size:15px;font-weight:700;margin-bottom:10px;">Account visibility</div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                            <label style="display:flex;align-items:center;gap:8px;padding:11px 14px;border:1px solid #333;border-radius:10px;cursor:pointer;">
+                                <input type="radio" name="profileVisibilityChoice" value="public" ${(profile?.private_profile ? "private" : "public") === "public" ? "checked" : ""} style="accent-color:#1877f2;width:18px;height:18px;">
+                                <span>Public</span>
+                            </label>
+                            <label style="display:flex;align-items:center;gap:8px;padding:11px 14px;border:1px solid #333;border-radius:10px;cursor:pointer;">
+                                <input type="radio" name="profileVisibilityChoice" value="private" ${profile?.private_profile ? "checked" : ""} style="accent-color:#1877f2;width:18px;height:18px;">
+                                <span>Private</span>
+                            </label>
+                        </div>
+                        <div style="font-size:12px;color:#999;line-height:1.5;margin-top:10px;">This choice is saved to your account. Changing it updates all your ordinary posts to match. Posts marked Premium stay Premium.</div>
+                    </div>
 
                     <label style="
                         display:flex;
@@ -37578,23 +37568,10 @@ window.openPrivacySettings = async function (addHistory = true) {
                 </div>
 
                 <!-- POST AUDIENCE DEFAULT -->
-                <div style="margin-top:22px;">
-                    <div style="font-size:13px;color:#888;font-weight:700;margin:8px 4px 10px;text-transform:uppercase;">Post privacy</div>
-                    <div style="font-size:13px;line-height:1.5;color:#aaa;margin:0 4px 12px;">Choose the default audience for ordinary posts. You can mark an individual post as Premium when composing it. Viewers must subscribe to your creator account; SocialApp Premium only grants permission to publish Premium posts.</div>
-                    <div style="display:grid;gap:9px;">
-                        <label style="display:flex;align-items:flex-start;gap:11px;padding:13px;border:1px solid #333;border-radius:12px;background:#111;">
-                            <input type="radio" name="postPrivacyMode" value="public" ${(profile?.post_privacy_mode || (profile?.private_profile ? "private" : "public")) === "public" ? "checked" : ""} style="margin-top:3px;width:18px;height:18px;accent-color:#8a2be2;">
-                            <span><strong>Public + Premium</strong><br><span style="font-size:13px;color:#aaa;">Ordinary posts are public; choose Premium for individual posts when you want.</span></span>
-                        </label>
-                        <label style="display:flex;align-items:flex-start;gap:11px;padding:13px;border:1px solid #333;border-radius:12px;background:#111;">
-                            <input type="radio" name="postPrivacyMode" value="private" ${(profile?.post_privacy_mode || (profile?.private_profile ? "private" : "public")) === "private" ? "checked" : ""} style="margin-top:3px;width:18px;height:18px;accent-color:#8a2be2;">
-                            <span><strong>Private + Premium</strong><br><span style="font-size:13px;color:#aaa;">Ordinary posts are for followers; choose Premium for individual posts.</span></span>
-                        </label>
-                        <label style="display:flex;align-items:flex-start;gap:11px;padding:13px;border:1px solid #49316a;border-radius:12px;background:#171020;">
-                            <input type="radio" name="postPrivacyMode" value="premium_only" ${profile?.post_privacy_mode === "premium_only" ? "checked" : ""} style="margin-top:3px;width:18px;height:18px;accent-color:#8a2be2;">
-                            <span><strong>Premium only</strong><br><span style="font-size:13px;color:#c8b7df;">All new posts are Premium and visible only to active subscribers of your creator account.</span></span>
-                        </label>
-                    </div>
+                <!-- POST PRIVACY follows account visibility -->
+                <div style="margin-top:22px;padding:15px;border:1px solid #292929;border-radius:12px;background:#101010;">
+                    <div style="font-size:13px;color:#888;font-weight:700;margin:0 4px 8px;text-transform:uppercase;">Post visibility</div>
+                    <div style="font-size:13px;line-height:1.55;color:#aaa;">New ordinary posts and existing ordinary posts follow your Public or Private account setting. Premium posts are kept separate and will not be changed when you switch account visibility. The Premium posting option is available only while your SocialApp Premium subscription is active (the administrator is exempt).</div>
                 </div>
 
                 <!-- CREATOR SUBSCRIPTION OFFER -->
@@ -37740,8 +37717,8 @@ window.savePrivacySettings = async function () {
     // GET CURRENT VALUES
     // =================================================
 
-    const privateAccount =
-        document.getElementById("privateAccount");
+    const selectedProfileVisibility = document.querySelector('input[name="profileVisibilityChoice"]:checked');
+    const privateAccount = { checked: selectedProfileVisibility?.value === "private" };
 
     const showOnline =
         document.getElementById("showOnline");
@@ -37755,12 +37732,7 @@ window.savePrivacySettings = async function () {
     const allowFollowers =
         document.getElementById("allowFollowers");
 
-    const selectedPostPrivacy = document.querySelector('input[name="postPrivacyMode"]:checked');
-    const postPrivacyMode = selectedPostPrivacy?.value || "public";
-    if (!["public", "private", "premium_only"].includes(postPrivacyMode)) {
-        alert("Choose a valid post privacy setting.");
-        return;
-    }
+    const postPrivacyMode = privateAccount.checked ? "private" : "public";
 
     const creatorPriceRaw = String(document.getElementById("creatorSubscriptionPrice")?.value ?? "").trim();
     const creatorDurationRaw = String(document.getElementById("creatorSubscriptionDuration")?.value ?? "").trim();
@@ -37794,6 +37766,7 @@ window.savePrivacySettings = async function () {
     }
 
     if (
+        !selectedProfileVisibility ||
         !privateAccount ||
         !showOnline ||
         !showLastSeen ||
@@ -37807,45 +37780,8 @@ window.savePrivacySettings = async function () {
         return;
     }
 
-    // =================================================
-    // PREMIUM GATE — PRIVATE ACCOUNT MODE
-    // The verified administrator can use private mode without Premium.
-    // Admin status is checked through the server-backed admin_api/whoami
-    // RPC; do not trust a profile flag or a client-only role value.
-    // Ordinary users must still have an active Premium subscription.
-    // =================================================
-
-    if (privateAccount.checked) {
-        let isAdministrator = false;
-
-        try {
-            if (typeof window.isAdmin === "function") {
-                isAdministrator = await window.isAdmin(true);
-            }
-        } catch (adminCheckError) {
-            console.warn("Administrator verification failed.", adminCheckError);
-        }
-
-        if (!isAdministrator) {
-            let hasPremium = false;
-            try {
-                const { data, error: premiumError } = await supabase.rpc("has_active_premium_subscription");
-                if (!premiumError) {
-                    hasPremium = data === true || data?.has_active_premium_subscription === true;
-                }
-            } catch (premiumCheckError) {
-                console.warn("Premium entitlement check failed.", premiumCheckError);
-            }
-
-            if (!hasPremium) {
-                alert("Private Account is a SocialApp Premium feature. Choose an available Premium plan to enable it.");
-                if (typeof window.openPremiumScreen === "function") {
-                    window.openPremiumScreen();
-                }
-                return;
-            }
-        }
-    }
+    // Public and Private account visibility are available to all signed-in users.
+    // Premium eligibility is checked separately when the user chooses Premium for a post.
 
     // =================================================
     // UPDATE DATABASE
@@ -37890,9 +37826,24 @@ window.savePrivacySettings = async function () {
         return;
     }
 
-    console.log("✅ PRIVACY SETTINGS SAVED");
+    // Keep every ordinary post aligned with the current account visibility.
+    // Never rewrite Premium posts; their visibility remains Premium.
+    const ordinaryPostVisibility = privateAccount.checked ? "followers" : "public";
+    const { error: syncPostsError } = await supabase
+        .from("posts")
+        .update({ visibility: ordinaryPostVisibility })
+        .eq("user_id", session.user.id)
+        .neq("visibility", "premium");
 
-    alert("Privacy settings saved.");
+    if (syncPostsError) {
+        console.error("Ordinary post visibility sync failed:", syncPostsError);
+        alert("Your profile setting was saved, but some existing posts could not be updated. Please check your post update permissions.");
+        return;
+    }
+
+    console.log("✅ PRIVACY SETTINGS AND ORDINARY POSTS SAVED");
+
+    alert("Privacy settings saved. Your ordinary posts now follow your account visibility; Premium posts were left unchanged.");
 
     // =================================================
     // PRIVACY → PROFILE SETTINGS
@@ -41694,6 +41645,35 @@ if (
   } catch (e) {}
     
 
+
+  // Show the Premium post option only for active SocialApp Premium users or the administrator.
+  try {
+    const premiumLabel = document.getElementById("postVisibilityPremiumLabel");
+    if (premiumLabel && session?.user) {
+      let canPublishPremium = false;
+      try {
+        canPublishPremium = typeof window.isAdmin === "function" && (await window.isAdmin(true)) === true;
+      } catch (e) {}
+      if (!canPublishPremium) {
+        try {
+          const { data, error } = await supabase.rpc("has_active_premium_subscription");
+          canPublishPremium = !error && (data === true || data?.has_active_premium_subscription === true);
+        } catch (e) {}
+      }
+      premiumLabel.style.display = canPublishPremium ? "flex" : "none";
+      const premiumRadio = document.getElementById("postVisibilityPremium");
+      if (!canPublishPremium && premiumRadio?.checked) {
+        const publicRadio = document.getElementById("postVisibilityPublic");
+        if (publicRadio) publicRadio.checked = true;
+      }
+      const hint = document.getElementById("postAudienceHint");
+      if (hint) hint.textContent = canPublishPremium
+        ? "Choose Public, Private, or Premium for this post."
+        : "Choose Public or Private. Premium posting appears when your SocialApp Premium subscription is active.";
+    }
+  } catch (premiumVisibilityUiError) {
+    console.warn("Could not refresh Premium post option visibility:", premiumVisibilityUiError);
+  }
 
   // ===================================================
   // GET POSTS ELEMENT
