@@ -37231,12 +37231,19 @@ window.openPrivacySettings = async function (addHistory = true) {
         .eq("id", userId)
         .single();
 
-    if (error) {
+    if (error || !profile) {
         console.error(
             "❌ PRIVACY PROFILE LOAD FAILED:",
-            error
+            error || "No profile row was returned"
         );
+        alert("Could not load your saved privacy settings. Please refresh and try again.");
+        return false;
     }
+
+    // post_privacy_mode is the canonical account-visibility setting. Read the
+    // legacy private_profile flag as a compatibility fallback for older rows.
+    const savedProfileIsPrivate =
+        profile.post_privacy_mode === "private" || profile.private_profile === true;
 
     let privacyHasPremium = false;
     let privacyIsAdministrator = false;
@@ -37423,11 +37430,11 @@ window.openPrivacySettings = async function (addHistory = true) {
                         <div style="font-size:15px;font-weight:700;margin-bottom:10px;">Account visibility</div>
                         <div style="display:flex;gap:10px;flex-wrap:wrap;">
                             <label style="display:flex;align-items:center;gap:8px;padding:11px 14px;border:1px solid #333;border-radius:10px;cursor:pointer;">
-                                <input type="radio" name="profileVisibilityChoice" value="public" ${(profile?.private_profile ? "private" : "public") === "public" ? "checked" : ""} style="accent-color:#1877f2;width:18px;height:18px;">
+                                <input type="radio" name="profileVisibilityChoice" value="public" ${!savedProfileIsPrivate ? "checked" : ""} style="accent-color:#1877f2;width:18px;height:18px;">
                                 <span>Public</span>
                             </label>
                             <label style="display:flex;align-items:center;gap:8px;padding:11px 14px;border:1px solid #333;border-radius:10px;cursor:pointer;">
-                                <input type="radio" name="profileVisibilityChoice" value="private" ${profile?.private_profile ? "checked" : ""} style="accent-color:#1877f2;width:18px;height:18px;">
+                                <input type="radio" name="profileVisibilityChoice" value="private" ${savedProfileIsPrivate ? "checked" : ""} style="accent-color:#1877f2;width:18px;height:18px;">
                                 <span>Private</span>
                             </label>
                         </div>
@@ -37844,57 +37851,56 @@ window.savePrivacySettings = async function () {
     // UPDATE DATABASE
     // =================================================
 
-    const { error } = await supabase
+    const { data: savedPrivacy, error } = await supabase
         .from("profiles")
         .update({
-
-            private_profile:
-                privateAccount.checked,
-
+            private_profile: privateAccount.checked,
             post_privacy_mode: postPrivacyMode,
-
-            show_online:
-                showOnline.checked,
-
-            show_last_seen:
-                showLastSeen.checked,
-
-            allow_messages:
-                allowMessages.value,
-
-            allow_followers:
-                allowFollowers.value,
-
+            show_online: showOnline.checked,
+            show_last_seen: showLastSeen.checked,
+            allow_messages: allowMessages.value,
+            allow_followers: allowFollowers.value,
             creator_subscription_price_kes: creatorSubscriptionPrice,
             creator_subscription_duration_days: creatorSubscriptionDuration,
             creator_subscription_payout_phone: creatorPayoutPhone
-
         })
-        .eq("id", session.user.id);
+        .eq("id", session.user.id)
+        .select("id, private_profile, post_privacy_mode")
+        .maybeSingle();
 
-    if (error) {
+    if (error || !savedPrivacy) {
+        console.error("❌ PRIVACY SAVE FAILED OR NO PROFILE ROW WAS UPDATED:", error);
+        alert("Your privacy settings were not saved. Check your Supabase profiles UPDATE policy, then try again.");
+        return;
+    }
 
-        console.error(
-            "❌ PRIVACY SAVE FAILED:",
-            error
-        );
-
-        alert("Failed saving settings");
+    // Do not tell the user the change was saved unless the database returned
+    // the exact account-visibility values that were requested.
+    if (savedPrivacy.post_privacy_mode !== postPrivacyMode ||
+        savedPrivacy.private_profile !== privateAccount.checked) {
+        console.error("Privacy settings read-back mismatch:", { requested: postPrivacyMode, savedPrivacy });
+        alert("Supabase did not confirm the selected account visibility. Please check the profiles UPDATE policy.");
         return;
     }
 
     // Keep every ordinary post aligned with the current account visibility.
     // Never rewrite Premium posts; their visibility remains Premium.
     const ordinaryPostVisibility = privateAccount.checked ? "followers" : "public";
-    const { error: syncPostsError } = await supabase
+    const { data: syncedPosts, error: syncPostsError } = await supabase
         .from("posts")
         .update({ visibility: ordinaryPostVisibility })
         .eq("user_id", session.user.id)
-        .neq("visibility", "premium");
+        .neq("visibility", "premium")
+        .select("id");
 
     if (syncPostsError) {
         console.error("Ordinary post visibility sync failed:", syncPostsError);
-        alert("Your profile setting was saved, but some existing posts could not be updated. Please check your post update permissions.");
+        alert("Your account visibility was saved, but existing posts could not be updated. Check the posts UPDATE policy or database privacy trigger.");
+        return;
+    }
+    if (!Array.isArray(syncedPosts)) {
+        console.error("Post visibility update returned no confirmation.", syncedPosts);
+        alert("Your account visibility was saved, but Supabase did not confirm the post visibility updates. Check the posts UPDATE policy or database privacy trigger.");
         return;
     }
 
