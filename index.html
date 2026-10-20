@@ -6978,7 +6978,12 @@ window.logout = async function () {
 
   alert("Logged out");
 
-  location.reload();
+  // Return to the public app shell after clearing the authenticated session.
+  // Do not leave the browser on a profile/settings route that expects a user row.
+  try {
+    history.replaceState({ appScreen: "app", data: {}, scrollY: 0 }, "", "#app");
+  } catch (e) {}
+  location.replace(location.pathname + location.search + "#app");
 };
 
 // =====================================================
@@ -9683,9 +9688,8 @@ async function createPost() {
   const content =
     input.value.trim();
 
-  // Ordinary posts automatically inherit the saved account visibility.
-  // Premium is the only optional per-post override and is shown only to
-  // active, verified SocialApp Premium subscribers (administrator exempt).
+  // Each post chooses its own audience. Account privacy mode never silently
+  // rewrites the visibility of a new or existing post.
   if (!session?.user) {
     alert("Please log in or register to create posts.");
     return;
@@ -9700,34 +9704,37 @@ async function createPost() {
     console.warn("Administrator status check failed", e);
   }
 
-  let accountPostMode = "public";
+  // Ordinary posts inherit the saved account visibility. Premium is the only
+  // per-post override. Fail closed if the saved privacy setting cannot be read.
+  let accountIsPrivate = false;
   try {
-    const { data: privacyProfile, error: privacyError } = await supabase
+    const { data: accountPrivacy, error: privacyReadError } = await supabase
       .from("profiles")
       .select("post_privacy_mode, private_profile, private_account")
       .eq("id", session.user.id)
       .maybeSingle();
-    if (privacyError) throw privacyError;
-    if (!privacyProfile) throw new Error("Profile privacy settings were not found.");
 
-    accountPostMode = privacyProfile.post_privacy_mode === "private"
-      || privacyProfile.private_profile === true
-      || privacyProfile.private_account === true
-      ? "private"
-      : "public";
-  } catch (privacyError) {
-    console.error("Could not load saved account visibility:", privacyError);
-    alert("Could not check your saved account visibility. Please try again.");
+    if (privacyReadError) throw privacyReadError;
+    if (!accountPrivacy) throw new Error("The account privacy settings were not found.");
+
+    accountIsPrivate =
+      accountPrivacy.post_privacy_mode === "private" ||
+      accountPrivacy.private_profile === true ||
+      accountPrivacy.private_account === true;
+  } catch (privacyReadError) {
+    console.error("Could not read saved account visibility:", privacyReadError);
+    alert("Could not verify your saved account visibility. Please try again.");
     return;
   }
 
-  const premiumOverride = document.getElementById("postVisibilityPremium")?.checked === true;
-  const visibility = premiumOverride
+  const premiumChoice = document.getElementById("postVisibilityPremium");
+  const selectedVisibility = premiumChoice?.checked === true
     ? "premium"
-    : (accountPostMode === "private" ? "followers" : "public");
+    : (accountIsPrivate ? "followers" : "public");
+  const visibility = selectedVisibility;
 
   if (!["public", "followers", "premium"].includes(visibility)) {
-    alert("Your saved account visibility is invalid. Please check Privacy settings.");
+    alert("Choose Public, Private, or Premium for this post.");
     return;
   }
 
@@ -9955,6 +9962,12 @@ if (error) {
 
   input.value = "";
   mediaInput.value = "";
+
+  // Premium is an explicit one-post override. Reset it only after the post
+  // has been inserted successfully so the next ordinary post follows account
+  // visibility unless the user deliberately selects Premium again.
+  const premiumChoiceAfterPublish = document.getElementById("postVisibilityPremium");
+  if (premiumChoiceAfterPublish) premiumChoiceAfterPublish.checked = false;
 
   // -----------------------------------------------------
   // TRANSLATION RUNS AFTER THE POST IS ALREADY VISIBLE
@@ -37225,6 +37238,19 @@ window.openPrivacySettings = async function (addHistory = true) {
         );
     }
 
+    let privacyHasPremium = false;
+    let privacyIsAdministrator = false;
+    try {
+        privacyIsAdministrator = typeof window.isAdmin === "function" && (await window.isAdmin(true)) === true;
+    } catch (e) {}
+    if (!privacyIsAdministrator) {
+        try {
+            const { data: activePremium, error: activePremiumError } = await supabase.rpc("has_active_premium_subscription");
+            privacyHasPremium = !activePremiumError && (activePremium === true || activePremium?.has_active_premium_subscription === true);
+        } catch (e) {}
+    }
+    const showCreatorSubscriptionEditor = privacyHasPremium && !privacyIsAdministrator;
+
     // =================================================
     // CREATE / REUSE DEDICATED SCREEN
     // =================================================
@@ -37405,7 +37431,12 @@ window.openPrivacySettings = async function (addHistory = true) {
                                 <span>Private</span>
                             </label>
                         </div>
-                        <div style="font-size:12px;color:#999;line-height:1.5;margin-top:10px;">This choice is saved to your account. Changing it updates all your ordinary posts to match. Posts marked Premium stay Premium.</div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                            <span style="display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border-radius:9px;border:1px solid ${privacyHasPremium ? "#8a2be2" : "#333"};background:${privacyHasPremium ? "#211337" : "#151515"};color:${privacyHasPremium ? "#d8b8ff" : "#888"};font-size:13px;font-weight:800;">
+                                ${privacyHasPremium ? "✓ SocialApp Premium active" : "SocialApp Premium inactive"}
+                            </span>
+                        </div>
+                        <div style="font-size:12px;color:#999;line-height:1.5;margin-top:10px;">Your Public or Private choice is saved to your account and survives logout/login. Existing ordinary posts follow this setting; Premium posts stay Premium. The Premium indicator is automatic and cannot be manually enabled.</div>
                     </div>
 
                     <label style="
@@ -37598,7 +37629,8 @@ window.openPrivacySettings = async function (addHistory = true) {
                     <div style="font-size:13px;line-height:1.55;color:#aaa;">New ordinary posts and existing ordinary posts follow your Public or Private account setting. Premium posts are kept separate and will not be changed when you switch account visibility. The Premium posting option is available only while your SocialApp Premium subscription is active (the administrator is exempt).</div>
                 </div>
 
-                <!-- CREATOR SUBSCRIPTION OFFER -->
+                <!-- CREATOR SUBSCRIPTION OFFER: only active Premium members; administrator uses admin settings -->
+                ${showCreatorSubscriptionEditor ? `
                 <div style="margin-top:20px;padding:16px;border:1px solid #3b3150;border-radius:14px;background:#111;">
                     <div style="font-size:16px;font-weight:800;margin-bottom:6px;">Creator subscriptions</div>
                     <div style="font-size:13px;line-height:1.55;color:#aaa;margin-bottom:14px;">Set the price and length of a subscription to your creator account. This is separate from your own SocialApp Premium plan. Viewers still need an active, verified subscription to you to open your Premium posts.</div>
@@ -37611,6 +37643,7 @@ window.openPrivacySettings = async function (addHistory = true) {
                     <div style="font-size:12px;line-height:1.5;color:#c5b7d7;">Important: this is your preferred payout number, not the Daraja merchant receiving shortcode. Subscriber checkout still uses the administrator-configured merchant account; this field does not automatically transfer earnings or change SocialApp Premium payments.</div>
                     <button type="button" id="clearCreatorSubscriptionOffer" style="margin-top:12px;padding:9px 12px;border:1px solid #555;border-radius:9px;background:#191919;color:#ddd;font-weight:700;">Clear creator offer</button>
                 </div>
+                ` : ""}
 
                 <!-- SOCIALAPP PREMIUM -->
                 <div style="margin-top:20px;padding:16px;border:1px solid #49316a;border-radius:14px;background:linear-gradient(135deg,#211337,#111018);">
@@ -39422,16 +39455,17 @@ function attachEvents() {
 
       premiumChoice.disabled = !hasPremium;
       if (premiumLabel) {
-        premiumLabel.style.display = hasPremium ? "flex" : "none";
-        premiumLabel.style.opacity = "1";
+        premiumLabel.style.opacity = hasPremium ? "1" : "0.45";
         premiumLabel.title = hasPremium ? "" : "Requires active SocialApp Premium";
       }
-      if (!hasPremium) premiumChoice.checked = false;
+      if (!hasPremium && premiumChoice.checked) {
+        document.getElementById("postVisibilityPublic").checked = true;
+      }
       audienceHint.textContent = isAdministrator
-        ? "New posts follow your account visibility. Select Post as Premium to publish a Premium post."
+        ? "Choose the audience for this post. Administrator posting is not restricted by a subscription."
         : hasPremium
-          ? "New posts follow your saved Public or Private account setting. Select Post as Premium to override it."
-          : "New posts automatically follow your saved Public or Private account setting.";
+          ? "Choose the audience for this post. Your account privacy mode will not change this choice."
+          : "Choose Public or Private. Premium posting requires an active, verified SocialApp Premium subscription.";
     })();
   }
 
@@ -41625,10 +41659,13 @@ if (
             <button id="postBtn">Post</button>
           </div>
           <label id="postAudienceHint" style="display:block;margin-top:8px;font-size:13px;line-height:1.45;color:var(--text-color,#ddd)">New posts follow your saved account visibility.</label>
-          <div id="postVisibilityChoices" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+          <div id="postVisibilityChoices" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center;">
+            <span id="postAccountVisibilityBadge" style="display:inline-flex;align-items:center;gap:7px;padding:9px 12px;border:1px solid #444;border-radius:10px;background:#151515;font-weight:700;">
+              Account: <span id="postAccountVisibilityValue">Loading…</span>
+            </span>
             <label id="postVisibilityPremiumLabel" style="display:none;align-items:center;gap:7px;padding:9px 12px;border:1px solid #49316a;border-radius:10px;background:#171020;cursor:pointer;">
-              <input type="checkbox" id="postVisibilityPremium" style="accent-color:#8a2be2;width:17px;height:17px;">
-              <span>Post as Premium</span>
+              <input type="checkbox" id="postVisibilityPremium" style="accent-color:#8a2be2;">
+              <span>Premium</span>
             </label>
           </div>
           <input type="file" id="storyInput" accept="image/*,video/*" style="display:none;" />
@@ -41676,14 +41713,20 @@ if (
         } catch (e) {}
       }
       premiumLabel.style.display = canPublishPremium ? "flex" : "none";
-      const premiumRadio = document.getElementById("postVisibilityPremium");
-      if (!canPublishPremium && premiumRadio?.checked) {
-        premiumRadio.checked = false;
+      const premiumChoice = document.getElementById("postVisibilityPremium");
+      if (!canPublishPremium && premiumChoice?.checked) premiumChoice.checked = false;
+      const accountBadge = document.getElementById("postAccountVisibilityValue");
+      if (accountBadge) {
+        try {
+          const { data: accountPrivacy } = await supabase.from("profiles")
+            .select("private_profile, private_account").eq("id", session.user.id).maybeSingle();
+          accountBadge.textContent = (accountPrivacy?.private_profile || accountPrivacy?.private_account) ? "Private" : "Public";
+        } catch (e) { accountBadge.textContent = "Public"; }
       }
       const hint = document.getElementById("postAudienceHint");
       if (hint) hint.textContent = canPublishPremium
-        ? "New posts follow your saved Public or Private account setting. Select Post as Premium to override it."
-        : "New posts automatically follow your saved Public or Private account setting.";
+        ? "New posts follow your account visibility. Select Premium only for a Premium post."
+        : "New posts automatically follow your saved Public/Private account visibility.";
     }
   } catch (premiumVisibilityUiError) {
     console.warn("Could not refresh Premium post option visibility:", premiumVisibilityUiError);
