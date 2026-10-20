@@ -37243,7 +37243,8 @@ window.openPrivacySettings = async function (addHistory = true) {
     // post_privacy_mode is the canonical account-visibility setting. Read the
     // legacy private_profile flag as a compatibility fallback for older rows.
     const savedProfileIsPrivate =
-        profile.post_privacy_mode === "private" || profile.private_profile === true;
+        profile.post_privacy_mode === "private" ||
+        (profile.post_privacy_mode !== "public" && profile.private_profile === true);
 
     let privacyHasPremium = false;
     let privacyIsAdministrator = false;
@@ -41721,13 +41722,31 @@ if (
       premiumLabel.style.display = canPublishPremium ? "flex" : "none";
       const premiumChoice = document.getElementById("postVisibilityPremium");
       if (!canPublishPremium && premiumChoice?.checked) premiumChoice.checked = false;
+      // Keep the Home composer indicator aligned with the canonical saved
+      // account-visibility setting used by Privacy settings and createPost().
+      // Never silently display Public if the profile read fails.
       const accountBadge = document.getElementById("postAccountVisibilityValue");
       if (accountBadge) {
+        accountBadge.textContent = "Loading…";
         try {
-          const { data: accountPrivacy } = await supabase.from("profiles")
-            .select("private_profile, private_account").eq("id", session.user.id).maybeSingle();
-          accountBadge.textContent = (accountPrivacy?.private_profile || accountPrivacy?.private_account) ? "Private" : "Public";
-        } catch (e) { accountBadge.textContent = "Public"; }
+          const { data: accountPrivacy, error: accountPrivacyError } = await supabase
+            .from("profiles")
+            .select("post_privacy_mode, private_profile, private_account")
+            .eq("id", session.user.id)
+            .maybeSingle();
+          if (accountPrivacyError) throw accountPrivacyError;
+          if (!accountPrivacy) throw new Error("No saved profile privacy row was returned.");
+
+          const accountIsPrivate = accountPrivacy.post_privacy_mode === "private"
+            || accountPrivacy.private_profile === true
+            || accountPrivacy.private_account === true;
+          accountBadge.textContent = accountIsPrivate ? "Private" : "Public";
+          accountBadge.dataset.visibility = accountIsPrivate ? "private" : "public";
+        } catch (e) {
+          console.error("Could not load saved account visibility for the Home composer:", e);
+          accountBadge.textContent = "Unavailable";
+          accountBadge.dataset.visibility = "unavailable";
+        }
       }
       const hint = document.getElementById("postAudienceHint");
       if (hint) hint.textContent = canPublishPremium
