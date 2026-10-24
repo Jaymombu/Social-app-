@@ -6982,6 +6982,21 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
         const loginWrap = document.createElement('div');
         loginWrap.className = 'home-login';
         loginWrap.innerHTML = '<button id="login" type="button">Log in / Register</button>';
+        // This button is created after startApp() has already bound the original
+        // Home controls, so bind its click handler explicitly.
+        const loginAction = loginWrap.querySelector('#login');
+        if (loginAction) {
+          loginAction.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof window.openSocialAuth === 'function') {
+              window.openSocialAuth('login');
+            } else {
+              console.error('Login screen function is unavailable.');
+              alert('The login screen could not be opened. Please refresh and try again.');
+            }
+          });
+        }
         const posts = document.getElementById('posts');
         homeShell.insertBefore(loginWrap, posts || null);
       }
@@ -7048,6 +7063,32 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
       window.__authAppRefreshInProgress = true;
 
       await startApp();
+
+      // Reconnect the composer after the authenticated Home has been rebuilt.
+      // The DOM node from the signed-out shell may have been removed, so bind
+      // the current button rather than relying on a stale element reference.
+      const refreshedPostButton = document.getElementById("postBtn");
+      if (refreshedPostButton) {
+        refreshedPostButton.type = "button";
+        refreshedPostButton.onclick = createPost;
+        refreshedPostButton.disabled = false;
+        refreshedPostButton.removeAttribute("aria-disabled");
+      }
+      const refreshedPostInput = document.getElementById("postInput");
+      if (refreshedPostInput) {
+        refreshedPostInput.disabled = false;
+        refreshedPostInput.removeAttribute("aria-disabled");
+      }
+      const refreshedMediaInput = document.getElementById("mediaInput");
+      if (refreshedMediaInput) {
+        refreshedMediaInput.disabled = false;
+        refreshedMediaInput.removeAttribute("aria-disabled");
+      }
+      console.log("POST-LOGIN COMPOSER READY:", {
+        userId: currentUser?.id || null,
+        postButtonFound: !!refreshedPostButton,
+        postInputFound: !!refreshedPostInput
+      });
     } catch (refreshError) {
       console.error("POST-LOGIN APP REFRESH FAILED:", refreshError);
     } finally {
