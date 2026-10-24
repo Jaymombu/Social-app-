@@ -4815,6 +4815,19 @@ body.dark #chatMessages .chat-reply-media-preview > div[style*="background:rgba(
   text-indent:0 !important;
 }
 .verified-badge::before{content:"✓" !important;}
+/* Premium accounts reuse the verified-badge position, transforming it into a crown. */
+.verified-badge.socialapp-premium-account-mark{
+  width:19px !important;height:19px !important;min-width:19px !important;
+  border-radius:0 !important;background:transparent !important;color:#a855f7 !important;
+  font-size:0 !important;line-height:0 !important;
+  filter:drop-shadow(0 1px 2px rgba(138,43,226,.32)) !important;
+}
+.verified-badge.socialapp-premium-account-mark::before{
+  content:"" !important;display:block !important;width:19px !important;height:19px !important;
+  background-color:currentColor !important;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 7.5 7.1 11l4.9-7 4.9 7L21 7.5l-2 11H5l-2-11Z' fill='%23000' stroke='%23000' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M5.5 21h13' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat !important;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 7.5 7.1 11l4.9-7 4.9 7L21 7.5l-2 11H5l-2-11Z' fill='%23000' stroke='%23000' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M5.5 21h13' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat !important;
+}
 .avatar-wrap,.story-avatar-wrap,.chat-avatar-wrap,.profile-avatar-wrap{
   position:relative !important;
   display:inline-block !important;
@@ -6360,6 +6373,33 @@ touch-action:pan-y;
 
 </div>
 
+
+<script id="socialapp-global-premium-account-badge-hydrator">
+(function(){
+  window.socialAppPremiumAccountCache = window.socialAppPremiumAccountCache || new Map();
+  window.socialAppHydratePremiumAccountBadge = async function(badge, userId){
+    if(!badge || !userId || !window.supabase) return;
+    const id = String(userId);
+    const apply = active => {
+      badge.classList.toggle("socialapp-premium-account-mark", !!active);
+      badge.setAttribute("aria-label", active ? "Active SocialApp Premium subscription" : "Verified");
+      if(active) badge.setAttribute("title", "Active SocialApp Premium subscription"); else badge.removeAttribute("title");
+    };
+    const cache = window.socialAppPremiumAccountCache;
+    const cached = cache.get(id);
+    if(cached && cached.expiresAt > Date.now()){ apply(cached.active === true); return; }
+    let active = false;
+    try {
+      const {data,error} = await window.supabase.rpc("is_user_premium_account", {target_user_id:id});
+      if(error) throw error;
+      const v = Array.isArray(data) ? data[0] : data;
+      active = v === true || v === "true" || v?.is_user_premium_account === true || v?.is_user_premium_account === "true";
+    } catch(e) { console.warn("Could not verify Premium account badge:", e); }
+    cache.set(id,{active,expiresAt:Date.now()+60000}); apply(active);
+  };
+})();
+</script>
+
 <script type="module">
 
   console.log("SCRIPT START");
@@ -6889,10 +6929,95 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
   }
 
   if (event === "SIGNED_OUT") {
+    // Immediately remove account-owned content from the screen and memory.
+    // Do not wait for navigation/reload: signOut can be triggered elsewhere.
     window.hideAccountRestrictedScreen();
     notificationCache = [];
+    window.notificationCache = [];
+    window.seenNotifications = new Set();
     unreadCount = 0;
+    window.feedCache = { explore: [], following: [] };
+    window.postsState = [];
+    window.renderedPosts = new Set();
+    window.currentProfile = null;
+    window.viewedProfile = null;
+    window.activeChatUser = null;
+    try {
+      const postsDiv = document.getElementById("posts");
+      if (postsDiv) {
+        postsDiv.innerHTML = '<div class="home-login" style="padding:28px 16px;text-align:center;color:var(--text-color,#fff)"><p>Please log in or register to view posts.</p></div>';
+      }
+      const stories = document.getElementById("stories");
+      if (stories) stories.innerHTML = "";
+      const notifications = document.getElementById("notificationsList");
+      if (notifications) notifications.innerHTML = "";
+      const chatBadge = document.getElementById("chatBadge");
+      if (chatBadge) chatBadge.textContent = "";
+    } catch (clearError) {
+      console.warn("Could not fully clear signed-out UI:", clearError);
+    }
     updateNotifBadge();
+
+    // Rebuild the Home shell using the now-confirmed signed-out session.
+    // Clearing only #posts leaves the previous account's composer and Add Story
+    // controls mounted because safeStart() intentionally skips an already-started app.
+    try {
+      window.__appStarted = false;
+      window.__appStartPromise = null;
+      await startApp();
+
+      // A signed-out visitor must not see account-only posting or story controls.
+      document.querySelectorAll('#app .home-composer').forEach(el => el.remove());
+      const storyHeading = document.querySelector('#app .home-section-label');
+      if (storyHeading) storyHeading.style.display = 'none';
+      const storiesBar = document.getElementById('storiesBar');
+      if (storiesBar) {
+        storiesBar.innerHTML = '';
+        storiesBar.style.display = 'none';
+      }
+
+      // Ensure a visible login/register action remains on Home.
+      const homeShell = document.querySelector('#app .home-shell');
+      if (homeShell && !document.getElementById('login')) {
+        const loginWrap = document.createElement('div');
+        loginWrap.className = 'home-login';
+        loginWrap.innerHTML = '<button id="login" type="button">Log in / Register</button>';
+        // This button is created after startApp() has already bound the original
+        // Home controls, so bind its click handler explicitly.
+        const loginAction = loginWrap.querySelector('#login');
+        if (loginAction) {
+          loginAction.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof window.openSocialAuth === 'function') {
+              window.openSocialAuth('login');
+            } else {
+              console.error('Login screen function is unavailable.');
+              alert('The login screen could not be opened. Please refresh and try again.');
+            }
+          });
+        }
+        const posts = document.getElementById('posts');
+        homeShell.insertBefore(loginWrap, posts || null);
+      }
+    } catch (rebuildError) {
+      console.warn('Could not rebuild signed-out Home:', rebuildError);
+    }
+  }
+
+  // If a different account signs in without a full page reload, discard the
+  // previous account's feed and rendered DOM before restoring the new session.
+  if (event === "SIGNED_IN" && currentUser && previousUserId &&
+      String(previousUserId) !== String(currentUser.id)) {
+    window.feedCache = { explore: null, following: null };
+    window.postsState = [];
+    window.renderedPosts = new Set();
+    try {
+      const postsDiv = document.getElementById("posts");
+      if (postsDiv) postsDiv.innerHTML = "";
+    } catch (clearError) {
+      console.warn("Could not clear previous account feed:", clearError);
+    }
   }
 
   // A successful login can happen after the app has already been started
@@ -6938,6 +7063,32 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
       window.__authAppRefreshInProgress = true;
 
       await startApp();
+
+      // Reconnect the composer after the authenticated Home has been rebuilt.
+      // The DOM node from the signed-out shell may have been removed, so bind
+      // the current button rather than relying on a stale element reference.
+      const refreshedPostButton = document.getElementById("postBtn");
+      if (refreshedPostButton) {
+        refreshedPostButton.type = "button";
+        refreshedPostButton.onclick = createPost;
+        refreshedPostButton.disabled = false;
+        refreshedPostButton.removeAttribute("aria-disabled");
+      }
+      const refreshedPostInput = document.getElementById("postInput");
+      if (refreshedPostInput) {
+        refreshedPostInput.disabled = false;
+        refreshedPostInput.removeAttribute("aria-disabled");
+      }
+      const refreshedMediaInput = document.getElementById("mediaInput");
+      if (refreshedMediaInput) {
+        refreshedMediaInput.disabled = false;
+        refreshedMediaInput.removeAttribute("aria-disabled");
+      }
+      console.log("POST-LOGIN COMPOSER READY:", {
+        userId: currentUser?.id || null,
+        postButtonFound: !!refreshedPostButton,
+        postInputFound: !!refreshedPostInput
+      });
     } catch (refreshError) {
       console.error("POST-LOGIN APP REFRESH FAILED:", refreshError);
     } finally {
@@ -6969,6 +7120,20 @@ window.logout = async function () {
 
   currentUser = null;
   session = null;
+  window.feedCache = { explore: [], following: [] };
+  window.postsState = [];
+  window.renderedPosts = new Set();
+  notificationCache = [];
+  window.notificationCache = [];
+  window.seenNotifications = new Set();
+  try {
+    const postsDiv = document.getElementById("posts");
+    if (postsDiv) postsDiv.innerHTML = '<div class="home-login" style="padding:28px 16px;text-align:center;color:var(--text-color,#fff)"><p>Please log in or register to view posts.</p></div>';
+    const stories = document.getElementById("stories");
+    if (stories) stories.innerHTML = "";
+  } catch (clearError) {
+    console.warn("Could not clear UI during logout:", clearError);
+  }
 
   try {
     sessionStorage.removeItem("appNavigationState");
@@ -9677,7 +9842,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-async function createPost() {
+async function createPostInternal() {
 
   const input =
     document.getElementById("postInput");
@@ -10024,6 +10189,63 @@ if (error) {
   loadPosts();
 }
 
+
+// Public click handler: surface unexpected post-creation errors instead of
+// silently leaving the Post button unresponsive for affected accounts.
+async function createPost() {
+  try {
+    await createPostInternal();
+  } catch (postCreationError) {
+    console.error("SocialApp post creation crashed:", postCreationError);
+    const message = postCreationError?.message || String(postCreationError || "Unknown error");
+    alert("Could not publish this post. Details: " + message);
+  }
+}
+
+// Robust delegated Post-button handler. The Home screen is rebuilt after login,
+// so direct onclick handlers can be lost or attached to a stale button node.
+// Capture clicks on the current #postBtn regardless of when it was created.
+if (!window.__socialAppDelegatedPostHandlerInstalled) {
+  window.__socialAppDelegatedPostHandlerInstalled = true;
+  document.addEventListener("click", function (event) {
+    const button = event.target && event.target.closest
+      ? event.target.closest("#postBtn")
+      : null;
+    if (!button) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (window.__socialAppPostClickInFlight) return;
+    window.__socialAppPostClickInFlight = true;
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+
+    Promise.resolve()
+      .then(() => {
+        // Read the latest session at click time, not a session captured during
+        // the previous render/login.
+        if (!session?.user) {
+          alert("Your session is not ready. Please log in again and retry.");
+          return;
+        }
+        return createPost();
+      })
+      .catch(error => {
+        console.error("Delegated post click failed:", error);
+        alert("Could not publish this post: " + (error?.message || String(error)));
+      })
+      .finally(() => {
+        window.__socialAppPostClickInFlight = false;
+        const currentButton = document.getElementById("postBtn");
+        if (currentButton) {
+          currentButton.disabled = false;
+          currentButton.removeAttribute("aria-busy");
+        }
+      });
+  }, true);
+}
+
 // =====================================================
 // 🆕 NEW POSTS → HOME BADGE
 // =====================================================
@@ -10349,9 +10571,7 @@ const isOwner =
               `
               : ""
           }
-          <span class="socialapp-account-premium-badge" data-premium-account-user="${escapeHtml(String(post.user_id || ""))}" aria-label="Active SocialApp Premium subscription" title="Active SocialApp Premium subscription" style="display:none;align-items:center;gap:4px;margin-left:5px;padding:3px 7px;border-radius:999px;background:linear-gradient(135deg,#8a2be2,#5b16a8);border:1px solid rgba(210,170,255,.7);color:#fff;font-size:10px;font-weight:800;letter-spacing:.2px;vertical-align:middle;white-space:nowrap;"><span aria-hidden="true">👑</span> PREMIUM</span>
-
-        </div>
+</div>
 
 
         ${
@@ -10535,44 +10755,80 @@ const isOwner =
 
   `;
 
-// Hydrate the account Premium badge from the server-verified subscription.
-// Cache results briefly to avoid repeating the same query for every post.
+// Hydrate the existing account badge from the server-verified subscription.
+// Premium transforms the verified badge into a crown; it never adds a second badge.
 try {
   const accountUserId = String(post.user_id || "");
   if (accountUserId && typeof supabase !== "undefined") {
     window.socialAppPremiumAccountCache = window.socialAppPremiumAccountCache || new Map();
     const cached = window.socialAppPremiumAccountCache.get(accountUserId);
-    const badge = div.querySelector(".socialapp-account-premium-badge");
-    const applyPremiumBadge = (isActive) => {
-      if (badge && isActive) badge.style.display = "inline-flex";
+    const applyPremiumMark = (isActive) => {
+      const nameContainer = div.querySelector(".verified-badge")?.parentElement ||
+        div.querySelector(".post-author-name, .post-username, .post-header-name") || null;
+      let mark = div.querySelector(".verified-badge");
+      if (isActive) {
+        if (!mark && nameContainer) {
+          mark = document.createElement("span");
+          mark.className = "verified-badge";
+          nameContainer.appendChild(mark);
+        }
+        if (mark) {
+          mark.classList.add("socialapp-premium-account-mark");
+          mark.setAttribute("aria-label", "Active SocialApp Premium subscription");
+          mark.setAttribute("title", "Active SocialApp Premium subscription");
+        }
+      } else if (mark) {
+        mark.classList.remove("socialapp-premium-account-mark");
+        mark.setAttribute("aria-label", "Verified");
+        mark.removeAttribute("title");
+      }
     };
     if (cached && cached.expiresAt > Date.now()) {
-      applyPremiumBadge(cached.active === true);
+      applyPremiumMark(cached.active === true);
     } else {
       (async () => {
         let active = false;
         try {
-          // Use a server-side SECURITY DEFINER RPC so RLS on
-          // premium_subscriptions does not hide other users' valid status.
           const { data, error } = await supabase.rpc(
             "is_user_premium_account",
             { target_user_id: accountUserId }
           );
           if (error) throw error;
-          active = data === true || data?.is_user_premium_account === true;
+          const premiumValue = Array.isArray(data) ? data[0] : data;
+          active = premiumValue === true || premiumValue === "true" ||
+            premiumValue?.is_user_premium_account === true ||
+            premiumValue?.is_user_premium_account === "true";
         } catch (e) {
-          console.warn("Could not verify account Premium badge:", e);
+          console.warn("Could not verify account Premium mark:", e);
+        }
+        // For the signed-in account, use the authoritative admin_api whoami
+        // check as the automatic Premium entitlement for the single admin.
+        // This only affects presentation; server-side authorization must enforce it too.
+        if (!active) {
+          try {
+            const { data: authResult } = await supabase.auth.getUser();
+            if (authResult?.user && String(authResult.user.id) === accountUserId) {
+              if (typeof window.isAdmin === "function" && await window.isAdmin(true) === true) {
+                active = true;
+              } else {
+                const { data: ownStatus, error: ownError } = await supabase.rpc("has_active_premium_subscription");
+                if (!ownError) active = ownStatus === true || ownStatus?.has_active_premium_subscription === true;
+              }
+            }
+          } catch (ownError) {
+            console.warn("Could not verify own account Premium mark:", ownError);
+          }
         }
         window.socialAppPremiumAccountCache.set(accountUserId, {
           active,
           expiresAt: Date.now() + 60000
         });
-        applyPremiumBadge(active);
+        applyPremiumMark(active);
       })();
     }
   }
 } catch (e) {
-  console.warn("Could not initialize account Premium badge:", e);
+  console.warn("Could not initialize account Premium mark:", e);
 }
 
 console.log(
@@ -14506,7 +14762,7 @@ touch-action:pan-y;
 
             ${
                 profile.verified
-                    ? '<span class="verified-badge" aria-label="Verified"></span>'
+                    ? `<span class="verified-badge" data-premium-account-user-id="${c.user_id || c.sender_id || profile.id || ''}" aria-label="Verified"></span>`
                     : ""
             }
 
@@ -28342,10 +28598,35 @@ window.openProfile = async function (
         );
 
         if (profilePremiumError) throw profilePremiumError;
-        profileHasActivePremium = premiumStatus === true || premiumStatus?.is_user_premium_account === true;
+        const premiumValue = Array.isArray(premiumStatus) ? premiumStatus[0] : premiumStatus;
+        profileHasActivePremium = premiumValue === true || premiumValue === "true" ||
+            premiumValue?.is_user_premium_account === true ||
+            premiumValue?.is_user_premium_account === "true";
     } catch (profilePremiumError) {
         console.warn("Could not verify this profile's SocialApp Premium status:", profilePremiumError);
         profileHasActivePremium = false;
+    }
+
+    // The owner can also verify their own active subscription through the
+    // session-scoped RPC. This fallback covers the administrator account if
+    // is_user_premium_account excludes or fails to resolve the owner profile.
+    // It does not grant Premium based on administrator status.
+    if (!profileHasActivePremium) {
+        try {
+            const { data: authResult } = await supabase.auth.getUser();
+            const signedInUser = authResult?.user;
+            if (signedInUser && String(signedInUser.id) === String(userId)) {
+                const { data: ownPremiumStatus, error: ownPremiumError } = await supabase.rpc(
+                    "has_active_premium_subscription"
+                );
+                if (!ownPremiumError) {
+                    profileHasActivePremium = ownPremiumStatus === true ||
+                        ownPremiumStatus?.has_active_premium_subscription === true;
+                }
+            }
+        } catch (ownPremiumCheckError) {
+            console.warn("Could not verify the signed-in owner's Premium status:", ownPremiumCheckError);
+        }
     }
 
     // =================================================
@@ -28615,16 +28896,9 @@ window.openProfile = async function (
                     ${escapeHtml(profileName)}
 
                     ${
-                        profile.verified
+                        (profileHasActivePremium || profile.verified)
                             ? `
-                    <span class="verified-badge" aria-label="Verified"></span>
-                    `
-                            : ""
-                    }
-                    ${
-                        profileHasActivePremium
-                            ? `
-                    <span class="socialapp-profile-premium-badge" role="status" aria-label="Active SocialApp Premium subscription" title="Active SocialApp Premium subscription" style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;background:linear-gradient(135deg,#8a2be2,#5b16a8);border:1px solid rgba(210,170,255,.7);color:#fff;font-size:11px;font-weight:800;letter-spacing:.2px;vertical-align:middle;box-shadow:0 2px 8px rgba(138,43,226,.25);"><span aria-hidden="true">👑</span> PREMIUM</span>
+                    <span class="verified-badge${profileHasActivePremium ? ' socialapp-premium-account-mark' : ''}" aria-label="${profileHasActivePremium ? 'Active SocialApp Premium subscription' : 'Verified'}"${profileHasActivePremium ? ' title="Active SocialApp Premium subscription"' : ''}></span>
                     `
                             : ""
                     }
@@ -34794,7 +35068,7 @@ window.navigateToScreen(
                     activeProfileScreen.querySelector("#profileNameDisplay");
                 if (profileNameEl) {
                     profileNameEl.innerHTML =
-                        `${escapeHtml(name || "User")} ${profile.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ""}`;
+                        `${escapeHtml(name || "User")} ${profile.verified ? `<span class="verified-badge" data-premium-account-user-id="${profile.id || currentProfile?.id || ''}" aria-label="Verified"></span>` : ""}`;
                 }
 
                 const avatarEl =
@@ -37328,18 +37602,47 @@ window.openPrivacySettings = async function (addHistory = true) {
 
     let privacyHasPremium = false;
     let privacyIsAdministrator = false;
+
+    // Privacy-screen-only status check. Keep account/profile badges and the
+    // post badge/rendering logic untouched. Accept the common Supabase RPC
+    // return shapes without trusting profile fields or client-stored roles.
+    const parseAdminWhoami = (value) => {
+        const row = Array.isArray(value) ? value[0] : value;
+        const flag = row?.is_admin ?? row?.isAdmin ?? row?.whoami?.is_admin;
+        return flag === true || flag === "true";
+    };
     try {
-        privacyIsAdministrator = typeof window.isAdmin === "function" && (await window.isAdmin(true)) === true;
+        if (typeof window.isAdmin === "function") {
+            privacyIsAdministrator = (await window.isAdmin(true)) === true;
+        }
     } catch (e) {}
 
-    // The single authorized administrator is exempt from subscription payment.
-    // Reflect that exemption in the Privacy screen's Premium indicator as well
-    // as in posting controls. Ordinary accounts must pass the verified server check.
-    privacyHasPremium = privacyIsAdministrator;
+    // If the shared helper returned false because the RPC response was wrapped
+    // differently, independently normalize the same server-authoritative API.
+    // This does not grant admin access: admin_api.whoami remains the authority.
     if (!privacyIsAdministrator) {
         try {
+            const { data: adminWhoami, error: adminWhoamiError } = await supabase.rpc("admin_api", {
+                p_action: "whoami",
+                p_payload: {}
+            });
+            if (!adminWhoamiError) privacyIsAdministrator = parseAdminWhoami(adminWhoami);
+        } catch (e) {}
+    }
+
+    if (privacyIsAdministrator) {
+        // Administrator Premium eligibility is automatic and does not require
+        // a paid subscription. This affects only the Privacy status indicator.
+        privacyHasPremium = true;
+    } else {
+        try {
             const { data: activePremium, error: activePremiumError } = await supabase.rpc("has_active_premium_subscription");
-            privacyHasPremium = !activePremiumError && (activePremium === true || activePremium?.has_active_premium_subscription === true);
+            privacyHasPremium = !activePremiumError && (
+                activePremium === true ||
+                activePremium === "true" ||
+                activePremium?.has_active_premium_subscription === true ||
+                activePremium?.has_active_premium_subscription === "true"
+            );
         } catch (e) {}
     }
     const showCreatorSubscriptionEditor = privacyHasPremium && !privacyIsAdministrator;
@@ -38172,8 +38475,13 @@ window.openPremiumScreen = async function () {
 
   let active = false;
   try {
-    const { data, error } = await supabase.rpc("has_active_premium_subscription");
-    if (!error) active = data === true || data?.has_active_premium_subscription === true;
+    const adminEligible = typeof window.isAdmin === "function" && await window.isAdmin(true) === true;
+    if (adminEligible) {
+      active = true;
+    } else {
+      const { data, error } = await supabase.rpc("has_active_premium_subscription");
+      if (!error) active = data === true || data?.has_active_premium_subscription === true;
+    }
   } catch (e) {
     console.warn("Premium status could not be checked yet.", e);
   }
@@ -39522,7 +39830,7 @@ window.closePhotoGallery = function (
 window.socialAuthState=window.socialAuthState||{mode:"login",busy:false};
 window.socialAuthMessage=function(msg,type){const b=document.querySelector(type==="success"?"#socialAuthCard .auth-success":"#socialAuthCard .auth-error");if(b){b.textContent=msg;b.style.display="block";}};
 window.socialAuthBusy=function(v){socialAuthState.busy=v;const b=document.getElementById("socialAuthSubmit");if(b){b.disabled=v;b.style.opacity=v?.65:1;}};
-window.openSocialAuth=function(mode="login"){socialAuthState.mode=mode;socialAuthState.busy=false;let o=document.getElementById("socialAuthOverlay");if(!o){o=document.createElement("div");o.id="socialAuthOverlay";o.innerHTML='<div id="socialAuthCard" role="dialog" aria-modal="true"></div>';document.body.appendChild(o);o.addEventListener("click",e=>{if(e.target===o&&!socialAuthState.busy)closeSocialAuth();});}o.classList.add("active");renderSocialAuth();setTimeout(()=>o.querySelector("input")?.focus(),40);};
+window.openSocialAuth=function(mode="login"){socialAuthState.mode=mode;socialAuthState.busy=false;let o=document.getElementById("socialAuthOverlay");if(!o){o=document.createElement("div");o.id="socialAuthOverlay";o.innerHTML='<div id="socialAuthCard" role="dialog" aria-modal="true"></div>';document.body.appendChild(o);o.addEventListener("click",e=>{if(e.target===o&&!socialAuthState.busy)closeSocialAuth();});}o.style.removeProperty("display");o.classList.remove("active");void o.offsetWidth;o.classList.add("active");renderSocialAuth();setTimeout(()=>o.querySelector("input")?.focus(),40);};
 window.closeSocialAuth=function(force=false){if(!force&&socialAuthState.busy)return;socialAuthState.busy=false;const overlay=document.getElementById("socialAuthOverlay");if(overlay){overlay.classList.remove("active");overlay.style.display="none";}};
 window.socialNormalizeUsername=function(value){return String(value||"").trim().replace(/^@+/,"").replace(/\s+/g,"_").toLowerCase();};
 window.socialCheckUsername=async function(username,excludeUserId=null){const u=socialNormalizeUsername(username);if(!/^[a-z0-9_.-]{3,30}$/.test(u))return {ok:false,message:"Username must be 3–30 characters and use only letters, numbers, underscores, dots or hyphens."};let q=supabase.from("profiles").select("id").eq("username",u).limit(1);if(excludeUserId)q=q.neq("id",excludeUserId);const {data,error}=await q;if(error)return {ok:false,message:"We could not check that username. Please try again."};if(data?.length)return {ok:false,message:`The username @${u} is already in use. Please choose another username.`};return {ok:true,username:u};};
@@ -40757,7 +41065,7 @@ font-weight:bold;
 
 ${user.name}
 
-${user.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ""}
+${user.verified ? `<span class="verified-badge" data-premium-account-user-id="${user.id || ''}" aria-label="Verified"></span>` : ""}
 
 </div>
 
@@ -50347,7 +50655,7 @@ const bg =
             ">
 
               <b>
-                ${icon} ${username}${currentProfile.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ''}
+                ${icon} ${username}${currentProfile.verified ? `<span class="verified-badge" data-premium-account-user-id="${currentProfile.id || ''}" aria-label="Verified"></span>` : ''}
               </b>
 
               ${text}
@@ -58024,5 +58332,49 @@ window.reportMessage=id=>window.submitUserReport("message",id);
 window.reportProfile=id=>window.submitUserReport("profile",id);
 window.reportComment=id=>window.submitUserReport("comment",id);
 </script>
+
+<script id="socialapp-global-premium-badge-observer">
+(function(){
+  function scan(root){
+    if(!root || root.nodeType !== 1) return;
+    const nodes=[]; if(root.matches && root.matches('.verified-badge[data-premium-account-user-id]')) nodes.push(root);
+    if(root.querySelectorAll) nodes.push(...root.querySelectorAll('.verified-badge[data-premium-account-user-id]'));
+    nodes.forEach(el=>{ if(el.dataset.premiumBadgeHydrationStarted) return; el.dataset.premiumBadgeHydrationStarted='1'; window.socialAppHydratePremiumAccountBadge?.(el,el.dataset.premiumAccountUserId); });
+  }
+  document.addEventListener('DOMContentLoaded',()=>{scan(document.documentElement); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>scan(n)))).observe(document.documentElement,{childList:true,subtree:true});});
+  if(document.readyState!=='loading'){scan(document.documentElement); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>scan(n)))).observe(document.documentElement,{childList:true,subtree:true});}
+})();
+</script>
+
+
+<script id="socialapp-login-delegated-fix">
+(function () {
+  if (window.__socialAppLoginDelegatedFixInstalled) return;
+  window.__socialAppLoginDelegatedFixInstalled = true;
+  // Home is rebuilt after auth changes, so bind at document level rather than
+  // relying on a handler attached to a button that may later be replaced.
+  document.addEventListener('click', function (event) {
+    const button = event.target && event.target.closest
+      ? event.target.closest('#app button#login, #app .home-login button, button#login')
+      : null;
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    try {
+      if (typeof window.openSocialAuth === 'function') {
+        window.openSocialAuth('login');
+      } else {
+        console.error('SocialApp login handler unavailable: openSocialAuth is not a function.');
+        alert('Login is temporarily unavailable. Please refresh the page and try again.');
+      }
+    } catch (error) {
+      console.error('Could not open SocialApp login screen:', error);
+      alert('Could not open the login screen. Please refresh and try again.');
+    }
+  }, true);
+})();
+</script>
+
 </body>
 </html>
