@@ -10552,21 +10552,14 @@ try {
       (async () => {
         let active = false;
         try {
-          const nowIso = new Date().toISOString();
-          const { data, error } = await supabase
-            .from("premium_subscriptions")
-            .select("status,verified,expires_at")
-            .eq("user_id", accountUserId)
-            .eq("status", "active")
-            .eq("verified", true)
-            .gt("expires_at", nowIso)
-            .limit(1);
-          if (error) throw error;
-          active = Array.isArray(data) && data.some(row =>
-            String(row.status || "").toLowerCase() === "active" &&
-            row.verified === true && row.expires_at &&
-            new Date(row.expires_at).getTime() > Date.now()
+          // Use a server-side SECURITY DEFINER RPC so RLS on
+          // premium_subscriptions does not hide other users' valid status.
+          const { data, error } = await supabase.rpc(
+            "is_user_premium_account",
+            { target_user_id: accountUserId }
           );
+          if (error) throw error;
+          active = data === true || data?.is_user_premium_account === true;
         } catch (e) {
           console.warn("Could not verify account Premium badge:", e);
         }
@@ -28341,22 +28334,15 @@ window.openProfile = async function (
 
     let profileHasActivePremium = false;
     try {
-        const premiumNowIso = new Date().toISOString();
-        const { data: premiumRows, error: profilePremiumError } = await supabase
-            .from("premium_subscriptions")
-            .select("status, verified, expires_at")
-            .eq("user_id", userId)
-            .eq("status", "active")
-            .eq("verified", true)
-            .gt("expires_at", premiumNowIso)
-            .limit(1);
+        // Ask the server to verify this profile's subscription. Direct table
+        // reads can be blocked by premium_subscriptions RLS for other users.
+        const { data: premiumStatus, error: profilePremiumError } = await supabase.rpc(
+            "is_user_premium_account",
+            { target_user_id: userId }
+        );
 
         if (profilePremiumError) throw profilePremiumError;
-        profileHasActivePremium = Array.isArray(premiumRows) && premiumRows.some(row =>
-            String(row.status || "").toLowerCase() === "active" &&
-            row.verified === true &&
-            row.expires_at && new Date(row.expires_at).getTime() > Date.now()
-        );
+        profileHasActivePremium = premiumStatus === true || premiumStatus?.is_user_premium_account === true;
     } catch (profilePremiumError) {
         console.warn("Could not verify this profile's SocialApp Premium status:", profilePremiumError);
         profileHasActivePremium = false;
