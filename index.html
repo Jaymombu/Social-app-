@@ -4815,6 +4815,19 @@ body.dark #chatMessages .chat-reply-media-preview > div[style*="background:rgba(
   text-indent:0 !important;
 }
 .verified-badge::before{content:"✓" !important;}
+/* Premium accounts reuse the verified-badge position, transforming it into a crown. */
+.verified-badge.socialapp-premium-account-mark{
+  width:19px !important;height:19px !important;min-width:19px !important;
+  border-radius:0 !important;background:transparent !important;color:#a855f7 !important;
+  font-size:0 !important;line-height:0 !important;
+  filter:drop-shadow(0 1px 2px rgba(138,43,226,.32)) !important;
+}
+.verified-badge.socialapp-premium-account-mark::before{
+  content:"" !important;display:block !important;width:19px !important;height:19px !important;
+  background-color:currentColor !important;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 7.5 7.1 11l4.9-7 4.9 7L21 7.5l-2 11H5l-2-11Z' fill='%23000' stroke='%23000' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M5.5 21h13' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat !important;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 7.5 7.1 11l4.9-7 4.9 7L21 7.5l-2 11H5l-2-11Z' fill='%23000' stroke='%23000' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M5.5 21h13' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat !important;
+}
 .avatar-wrap,.story-avatar-wrap,.chat-avatar-wrap,.profile-avatar-wrap{
   position:relative !important;
   display:inline-block !important;
@@ -10349,9 +10362,7 @@ const isOwner =
               `
               : ""
           }
-          <span class="socialapp-account-premium-badge" data-premium-account-user="${escapeHtml(String(post.user_id || ""))}" aria-label="Active SocialApp Premium subscription" title="Active SocialApp Premium subscription" style="display:none;align-items:center;gap:4px;margin-left:5px;padding:3px 7px;border-radius:999px;background:linear-gradient(135deg,#8a2be2,#5b16a8);border:1px solid rgba(210,170,255,.7);color:#fff;font-size:10px;font-weight:800;letter-spacing:.2px;vertical-align:middle;white-space:nowrap;"><span aria-hidden="true">👑</span> PREMIUM</span>
-
-        </div>
+</div>
 
 
         ${
@@ -10535,49 +10546,62 @@ const isOwner =
 
   `;
 
-// Hydrate the account Premium badge from the server-verified subscription.
-// Cache results briefly to avoid repeating the same query for every post.
+// Hydrate the existing account badge from the server-verified subscription.
+// Premium transforms the verified badge into a crown; it never adds a second badge.
 try {
   const accountUserId = String(post.user_id || "");
   if (accountUserId && typeof supabase !== "undefined") {
     window.socialAppPremiumAccountCache = window.socialAppPremiumAccountCache || new Map();
     const cached = window.socialAppPremiumAccountCache.get(accountUserId);
-    const badge = div.querySelector(".socialapp-account-premium-badge");
-    const applyPremiumBadge = (isActive) => {
-      if (badge && isActive) badge.style.display = "inline-flex";
+    const applyPremiumMark = (isActive) => {
+      const nameContainer = div.querySelector(".verified-badge")?.parentElement ||
+        div.querySelector(".post-author-name, .post-username, .post-header-name") || null;
+      let mark = div.querySelector(".verified-badge");
+      if (isActive) {
+        if (!mark && nameContainer) {
+          mark = document.createElement("span");
+          mark.className = "verified-badge";
+          nameContainer.appendChild(mark);
+        }
+        if (mark) {
+          mark.classList.add("socialapp-premium-account-mark");
+          mark.setAttribute("aria-label", "Active SocialApp Premium subscription");
+          mark.setAttribute("title", "Active SocialApp Premium subscription");
+        }
+      } else if (mark) {
+        mark.classList.remove("socialapp-premium-account-mark");
+        mark.setAttribute("aria-label", "Verified");
+        mark.removeAttribute("title");
+      }
     };
     if (cached && cached.expiresAt > Date.now()) {
-      applyPremiumBadge(cached.active === true);
+      applyPremiumMark(cached.active === true);
     } else {
       (async () => {
         let active = false;
         try {
-          // Use a server-side SECURITY DEFINER RPC so RLS on
-          // premium_subscriptions does not hide other users' valid status.
           const { data, error } = await supabase.rpc(
             "is_user_premium_account",
             { target_user_id: accountUserId }
           );
           if (error) throw error;
-          // PostgREST normally returns a scalar boolean, but tolerate object/array
-          // shapes as well so the badge does not silently stay hidden.
           const premiumValue = Array.isArray(data) ? data[0] : data;
           active = premiumValue === true || premiumValue === "true" ||
             premiumValue?.is_user_premium_account === true ||
             premiumValue?.is_user_premium_account === "true";
         } catch (e) {
-          console.warn("Could not verify account Premium badge:", e);
+          console.warn("Could not verify account Premium mark:", e);
         }
         window.socialAppPremiumAccountCache.set(accountUserId, {
           active,
           expiresAt: Date.now() + 60000
         });
-        applyPremiumBadge(active);
+        applyPremiumMark(active);
       })();
     }
   }
 } catch (e) {
-  console.warn("Could not initialize account Premium badge:", e);
+  console.warn("Could not initialize account Premium mark:", e);
 }
 
 console.log(
@@ -28623,16 +28647,9 @@ window.openProfile = async function (
                     ${escapeHtml(profileName)}
 
                     ${
-                        profile.verified
+                        (profileHasActivePremium || profile.verified)
                             ? `
-                    <span class="verified-badge" aria-label="Verified"></span>
-                    `
-                            : ""
-                    }
-                    ${
-                        profileHasActivePremium
-                            ? `
-                    <span class="socialapp-profile-premium-badge" role="status" aria-label="Active SocialApp Premium subscription" title="Active SocialApp Premium subscription" style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;background:linear-gradient(135deg,#8a2be2,#5b16a8);border:1px solid rgba(210,170,255,.7);color:#fff;font-size:11px;font-weight:800;letter-spacing:.2px;vertical-align:middle;box-shadow:0 2px 8px rgba(138,43,226,.25);"><span aria-hidden="true">👑</span> PREMIUM</span>
+                    <span class="verified-badge${profileHasActivePremium ? ' socialapp-premium-account-mark' : ''}" aria-label="${profileHasActivePremium ? 'Active SocialApp Premium subscription' : 'Verified'}"${profileHasActivePremium ? ' title="Active SocialApp Premium subscription"' : ''}></span>
                     `
                             : ""
                     }
