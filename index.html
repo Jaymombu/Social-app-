@@ -37546,17 +37546,12 @@ window.openPrivacySettings = async function (addHistory = true) {
 
     console.log("🔒 OPEN PRIVACY SETTINGS");
 
+    // Do not reuse the already-rendered Privacy screen before checking the
+    // current session and server state. Reusing it here can preserve a previous
+    // account's Premium indicator/editor after an account switch until refresh.
+    // The screen element itself is reused below, but its data and markup are
+    // rebuilt on every open from the current authenticated account.
     const existingPrivacy = document.getElementById("privacySettingsScreen");
-    if (existingPrivacy) {
-        if (window.__reuseSettingsChildScreen(
-            "privacySettingsScreen",
-            addHistory,
-            { userId: history.state?.data?.userId || window.appNavigation?.current?.data?.userId || null, source: "profileSettings" }
-        )) {
-            console.log("♻️ REUSING EXISTING PRIVACY SETTINGS");
-            return true;
-        }
-    }
 
     if (!session?.user) {
         alert("Login first");
@@ -37564,6 +37559,7 @@ window.openPrivacySettings = async function (addHistory = true) {
     }
 
     const userId = session.user.id;
+    const privacySessionUserId = userId;
 
     // =================================================
     // LOAD CURRENT PRIVACY SETTINGS
@@ -37584,6 +37580,12 @@ window.openPrivacySettings = async function (addHistory = true) {
         `)
         .eq("id", userId)
         .single();
+
+    // Abort if the user switched accounts while the profile request was in flight.
+    if (!session?.user || session.user.id !== privacySessionUserId) {
+        console.warn("Ignoring stale Privacy Settings load after account switch.");
+        return false;
+    }
 
     if (error || !profile) {
         console.error(
@@ -37645,6 +37647,13 @@ window.openPrivacySettings = async function (addHistory = true) {
     } catch (e) {
         privacyHasPremium = false;
     }
+    // Do not render a result from an earlier account if auth changed while
+    // administrator/subscription RPCs were running.
+    if (!session?.user || session.user.id !== privacySessionUserId) {
+        console.warn("Ignoring stale Premium status after account switch.");
+        return false;
+    }
+
     const showCreatorSubscriptionEditor = privacyHasPremium && !privacyIsAdministrator;
 
     // =================================================
