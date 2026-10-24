@@ -10160,6 +10160,13 @@ console.log("Rendering:", post.id);
     post.verified ??
     false;
 
+  // Premium badge is based on the post's saved visibility, not account privacy.
+  const isPremiumPost =
+    String(post.visibility || "").trim().toLowerCase() === "premium";
+
+  const premiumPostBadge = isPremiumPost
+    ? `<span class="socialapp-premium-post-badge" aria-label="Premium post" title="Premium post" style="display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:4px 9px;border-radius:999px;background:linear-gradient(135deg,#8a2be2,#5b16a8);border:1px solid rgba(210,170,255,.7);color:#fff;font-size:11px;font-weight:800;letter-spacing:.45px;box-shadow:0 2px 8px rgba(138,43,226,.25);"><span aria-hidden="true">👑</span> PREMIUM</span>`
+    : "";
 
   const time =
     new Date(post.created_at)
@@ -10368,6 +10375,7 @@ const isOwner =
           color:#aaa;
         ">
           ${time}
+          ${premiumPostBadge}
         </div>
 
       </div>
