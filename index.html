@@ -6957,6 +6957,37 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
       console.warn("Could not fully clear signed-out UI:", clearError);
     }
     updateNotifBadge();
+
+    // Rebuild the Home shell using the now-confirmed signed-out session.
+    // Clearing only #posts leaves the previous account's composer and Add Story
+    // controls mounted because safeStart() intentionally skips an already-started app.
+    try {
+      window.__appStarted = false;
+      window.__appStartPromise = null;
+      await startApp();
+
+      // A signed-out visitor must not see account-only posting or story controls.
+      document.querySelectorAll('#app .home-composer').forEach(el => el.remove());
+      const storyHeading = document.querySelector('#app .home-section-label');
+      if (storyHeading) storyHeading.style.display = 'none';
+      const storiesBar = document.getElementById('storiesBar');
+      if (storiesBar) {
+        storiesBar.innerHTML = '';
+        storiesBar.style.display = 'none';
+      }
+
+      // Ensure a visible login/register action remains on Home.
+      const homeShell = document.querySelector('#app .home-shell');
+      if (homeShell && !document.getElementById('login')) {
+        const loginWrap = document.createElement('div');
+        loginWrap.className = 'home-login';
+        loginWrap.innerHTML = '<button id="login" type="button">Log in / Register</button>';
+        const posts = document.getElementById('posts');
+        homeShell.insertBefore(loginWrap, posts || null);
+      }
+    } catch (rebuildError) {
+      console.warn('Could not rebuild signed-out Home:', rebuildError);
+    }
   }
 
   // If a different account signs in without a full page reload, discard the
