@@ -37630,20 +37630,20 @@ window.openPrivacySettings = async function (addHistory = true) {
         } catch (e) {}
     }
 
-    if (privacyIsAdministrator) {
-        // Administrator Premium eligibility is automatic and does not require
-        // a paid subscription. This affects only the Privacy status indicator.
-        privacyHasPremium = true;
-    } else {
-        try {
-            const { data: activePremium, error: activePremiumError } = await supabase.rpc("has_active_premium_subscription");
-            privacyHasPremium = !activePremiumError && (
-                activePremium === true ||
-                activePremium === "true" ||
-                activePremium?.has_active_premium_subscription === true ||
-                activePremium?.has_active_premium_subscription === "true"
-            );
-        } catch (e) {}
+    // The indicator reflects an actual verified, currently active subscription
+    // recorded in the database for EVERY account, including the administrator.
+    // Admin eligibility for premium actions remains separate and is not changed
+    // here. This avoids showing "Premium active" merely because the user is admin.
+    try {
+        const { data: activePremium, error: activePremiumError } = await supabase.rpc("has_verified_paid_premium_subscription");
+        privacyHasPremium = !activePremiumError && (
+            activePremium === true ||
+            activePremium === "true" ||
+            activePremium?.has_verified_paid_premium_subscription === true ||
+            activePremium?.has_verified_paid_premium_subscription === "true"
+        );
+    } catch (e) {
+        privacyHasPremium = false;
     }
     const showCreatorSubscriptionEditor = privacyHasPremium && !privacyIsAdministrator;
 
