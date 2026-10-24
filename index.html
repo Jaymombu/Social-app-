@@ -9717,10 +9717,12 @@ async function createPost() {
     if (privacyReadError) throw privacyReadError;
     if (!accountPrivacy) throw new Error("The account privacy settings were not found.");
 
+    // post_privacy_mode is the canonical account-visibility setting.
+    // private_account is a legacy moderation/restriction flag and must not
+    // override the user's Public/Private choice.
     accountIsPrivate =
       accountPrivacy.post_privacy_mode === "private" ||
-      accountPrivacy.private_profile === true ||
-      accountPrivacy.private_account === true;
+      (accountPrivacy.post_privacy_mode !== "public" && accountPrivacy.private_profile === true);
   } catch (privacyReadError) {
     console.error("Could not read saved account visibility:", privacyReadError);
     alert("Could not verify your saved account visibility. Please try again.");
@@ -37913,6 +37915,30 @@ window.savePrivacySettings = async function () {
     window.currentAccountIsPrivate = privateAccount.checked;
     window.currentPrivacySettingsUserId = session.user.id;
 
+    // Update the visible Home composer account-visibility indicator immediately.
+    // This must happen before navigation or feed reloading, because the composer
+    // may already be mounted and will otherwise keep showing its old label.
+    const updateAccountVisibilityIndicator = () => {
+        const accountBadge = document.getElementById("postAccountVisibilityValue");
+        if (accountBadge) {
+            accountBadge.textContent = privateAccount.checked ? "Private" : "Public";
+            accountBadge.dataset.visibility = privateAccount.checked ? "private" : "public";
+            accountBadge.setAttribute("aria-label", `Account visibility: ${privateAccount.checked ? "Private" : "Public"}`);
+        }
+        const badgeWrap = document.getElementById("postAccountVisibilityBadge");
+        if (badgeWrap) {
+            badgeWrap.dataset.visibility = privateAccount.checked ? "private" : "public";
+            badgeWrap.style.borderColor = privateAccount.checked ? "#8a2be2" : "#1877f2";
+        }
+        const hint = document.getElementById("postAudienceHint");
+        if (hint) {
+            hint.textContent = privateAccount.checked
+                ? "New ordinary posts will be Private and visible to followers. Premium posts stay Premium."
+                : "New ordinary posts will be Public. Premium posts stay Premium.";
+        }
+    };
+    updateAccountVisibilityIndicator();
+
     // Synchronize cached ordinary posts immediately. Premium posts remain untouched.
     for (const tabName of ["explore", "following"]) {
         const cached = window.feedCache?.[tabName];
@@ -37947,6 +37973,11 @@ window.savePrivacySettings = async function () {
         history.back();
         // Wait for the previous screen to return, then refresh the feed in-app.
         setTimeout(() => {
+            const badge = document.getElementById("postAccountVisibilityValue");
+            if (badge) {
+                badge.textContent = window.currentAccountIsPrivate ? "Private" : "Public";
+                badge.dataset.visibility = window.currentAccountIsPrivate ? "private" : "public";
+            }
             if (document.getElementById("posts") && typeof window.loadPosts === "function") {
                 window.loadPosts(true).catch(error => console.warn("Immediate feed sync failed:", error));
             }
@@ -37960,6 +37991,11 @@ window.savePrivacySettings = async function () {
     ) {
         history.back();
         setTimeout(() => {
+            const badge = document.getElementById("postAccountVisibilityValue");
+            if (badge) {
+                badge.textContent = window.currentAccountIsPrivate ? "Private" : "Public";
+                badge.dataset.visibility = window.currentAccountIsPrivate ? "private" : "public";
+            }
             if (document.getElementById("posts") && typeof window.loadPosts === "function") {
                 window.loadPosts(true).catch(error => console.warn("Immediate feed sync failed:", error));
             }
@@ -41775,9 +41811,11 @@ if (
           if (accountPrivacyError) throw accountPrivacyError;
           if (!accountPrivacy) throw new Error("No saved profile privacy row was returned.");
 
+          // Use the same canonical value as Privacy settings and createPost().
+          // Do not let the legacy private_account moderation flag keep this
+          // indicator stuck on Private after the user selects Public.
           const accountIsPrivate = accountPrivacy.post_privacy_mode === "private"
-            || accountPrivacy.private_profile === true
-            || accountPrivacy.private_account === true;
+            || (accountPrivacy.post_privacy_mode !== "public" && accountPrivacy.private_profile === true);
           accountBadge.textContent = accountIsPrivate ? "Private" : "Public";
           accountBadge.dataset.visibility = accountIsPrivate ? "private" : "public";
         } catch (e) {
