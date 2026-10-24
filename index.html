@@ -10349,6 +10349,7 @@ const isOwner =
               `
               : ""
           }
+          <span class="socialapp-account-premium-badge" data-premium-account-user="${escapeHtml(String(post.user_id || ""))}" aria-label="Active SocialApp Premium subscription" title="Active SocialApp Premium subscription" style="display:none;align-items:center;gap:4px;margin-left:5px;padding:3px 7px;border-radius:999px;background:linear-gradient(135deg,#8a2be2,#5b16a8);border:1px solid rgba(210,170,255,.7);color:#fff;font-size:10px;font-weight:800;letter-spacing:.2px;vertical-align:middle;white-space:nowrap;"><span aria-hidden="true">👑</span> PREMIUM</span>
 
         </div>
 
@@ -10533,6 +10534,53 @@ const isOwner =
     }
 
   `;
+
+// Hydrate the account Premium badge from the server-verified subscription.
+// Cache results briefly to avoid repeating the same query for every post.
+try {
+  const accountUserId = String(post.user_id || "");
+  if (accountUserId && typeof supabase !== "undefined") {
+    window.socialAppPremiumAccountCache = window.socialAppPremiumAccountCache || new Map();
+    const cached = window.socialAppPremiumAccountCache.get(accountUserId);
+    const badge = div.querySelector(".socialapp-account-premium-badge");
+    const applyPremiumBadge = (isActive) => {
+      if (badge && isActive) badge.style.display = "inline-flex";
+    };
+    if (cached && cached.expiresAt > Date.now()) {
+      applyPremiumBadge(cached.active === true);
+    } else {
+      (async () => {
+        let active = false;
+        try {
+          const nowIso = new Date().toISOString();
+          const { data, error } = await supabase
+            .from("premium_subscriptions")
+            .select("status,verified,expires_at")
+            .eq("user_id", accountUserId)
+            .eq("status", "active")
+            .eq("verified", true)
+            .gt("expires_at", nowIso)
+            .limit(1);
+          if (error) throw error;
+          active = Array.isArray(data) && data.some(row =>
+            String(row.status || "").toLowerCase() === "active" &&
+            row.verified === true && row.expires_at &&
+            new Date(row.expires_at).getTime() > Date.now()
+          );
+        } catch (e) {
+          console.warn("Could not verify account Premium badge:", e);
+        }
+        window.socialAppPremiumAccountCache.set(accountUserId, {
+          active,
+          expiresAt: Date.now() + 60000
+        });
+        applyPremiumBadge(active);
+      })();
+    }
+  }
+} catch (e) {
+  console.warn("Could not initialize account Premium badge:", e);
+}
 
 console.log(
     "Returning post:",
