@@ -6373,6 +6373,33 @@ touch-action:pan-y;
 
 </div>
 
+
+<script id="socialapp-global-premium-account-badge-hydrator">
+(function(){
+  window.socialAppPremiumAccountCache = window.socialAppPremiumAccountCache || new Map();
+  window.socialAppHydratePremiumAccountBadge = async function(badge, userId){
+    if(!badge || !userId || !window.supabase) return;
+    const id = String(userId);
+    const apply = active => {
+      badge.classList.toggle("socialapp-premium-account-mark", !!active);
+      badge.setAttribute("aria-label", active ? "Active SocialApp Premium subscription" : "Verified");
+      if(active) badge.setAttribute("title", "Active SocialApp Premium subscription"); else badge.removeAttribute("title");
+    };
+    const cache = window.socialAppPremiumAccountCache;
+    const cached = cache.get(id);
+    if(cached && cached.expiresAt > Date.now()){ apply(cached.active === true); return; }
+    let active = false;
+    try {
+      const {data,error} = await window.supabase.rpc("is_user_premium_account", {target_user_id:id});
+      if(error) throw error;
+      const v = Array.isArray(data) ? data[0] : data;
+      active = v === true || v === "true" || v?.is_user_premium_account === true || v?.is_user_premium_account === "true";
+    } catch(e) { console.warn("Could not verify Premium account badge:", e); }
+    cache.set(id,{active,expiresAt:Date.now()+60000}); apply(active);
+  };
+})();
+</script>
+
 <script type="module">
 
   console.log("SCRIPT START");
@@ -14535,7 +14562,7 @@ touch-action:pan-y;
 
             ${
                 profile.verified
-                    ? '<span class="verified-badge" aria-label="Verified"></span>'
+                    ? `<span class="verified-badge" data-premium-account-user-id="${c.user_id || c.sender_id || profile.id || ''}" aria-label="Verified"></span>`
                     : ""
             }
 
@@ -34819,7 +34846,7 @@ window.navigateToScreen(
                     activeProfileScreen.querySelector("#profileNameDisplay");
                 if (profileNameEl) {
                     profileNameEl.innerHTML =
-                        `${escapeHtml(name || "User")} ${profile.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ""}`;
+                        `${escapeHtml(name || "User")} ${profile.verified ? `<span class="verified-badge" data-premium-account-user-id="${profile.id || currentProfile?.id || ''}" aria-label="Verified"></span>` : ""}`;
                 }
 
                 const avatarEl =
@@ -40777,7 +40804,7 @@ font-weight:bold;
 
 ${user.name}
 
-${user.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ""}
+${user.verified ? `<span class="verified-badge" data-premium-account-user-id="${user.id || ''}" aria-label="Verified"></span>` : ""}
 
 </div>
 
@@ -50367,7 +50394,7 @@ const bg =
             ">
 
               <b>
-                ${icon} ${username}${currentProfile.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ''}
+                ${icon} ${username}${currentProfile.verified ? `<span class="verified-badge" data-premium-account-user-id="${currentProfile.id || ''}" aria-label="Verified"></span>` : ''}
               </b>
 
               ${text}
@@ -58044,5 +58071,19 @@ window.reportMessage=id=>window.submitUserReport("message",id);
 window.reportProfile=id=>window.submitUserReport("profile",id);
 window.reportComment=id=>window.submitUserReport("comment",id);
 </script>
+
+<script id="socialapp-global-premium-badge-observer">
+(function(){
+  function scan(root){
+    if(!root || root.nodeType !== 1) return;
+    const nodes=[]; if(root.matches && root.matches('.verified-badge[data-premium-account-user-id]')) nodes.push(root);
+    if(root.querySelectorAll) nodes.push(...root.querySelectorAll('.verified-badge[data-premium-account-user-id]'));
+    nodes.forEach(el=>{ if(el.dataset.premiumBadgeHydrationStarted) return; el.dataset.premiumBadgeHydrationStarted='1'; window.socialAppHydratePremiumAccountBadge?.(el,el.dataset.premiumAccountUserId); });
+  }
+  document.addEventListener('DOMContentLoaded',()=>{scan(document.documentElement); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>scan(n)))).observe(document.documentElement,{childList:true,subtree:true});});
+  if(document.readyState!=='loading'){scan(document.documentElement); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>scan(n)))).observe(document.documentElement,{childList:true,subtree:true});}
+})();
+</script>
+
 </body>
 </html>
