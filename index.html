@@ -28286,6 +28286,35 @@ window.openProfile = async function (
 
 
     // =================================================
+    // VERIFIED SOCIALAPP PREMIUM PROFILE STATUS
+    // Read the persisted subscription for the profile being viewed.
+    // Fail closed: never show a badge when status cannot be verified.
+    // =================================================
+
+    let profileHasActivePremium = false;
+    try {
+        const premiumNowIso = new Date().toISOString();
+        const { data: premiumRows, error: profilePremiumError } = await supabase
+            .from("premium_subscriptions")
+            .select("status, verified, expires_at")
+            .eq("user_id", userId)
+            .eq("status", "active")
+            .eq("verified", true)
+            .gt("expires_at", premiumNowIso)
+            .limit(1);
+
+        if (profilePremiumError) throw profilePremiumError;
+        profileHasActivePremium = Array.isArray(premiumRows) && premiumRows.some(row =>
+            String(row.status || "").toLowerCase() === "active" &&
+            row.verified === true &&
+            row.expires_at && new Date(row.expires_at).getTime() > Date.now()
+        );
+    } catch (profilePremiumError) {
+        console.warn("Could not verify this profile's SocialApp Premium status:", profilePremiumError);
+        profileHasActivePremium = false;
+    }
+
+    // =================================================
     // PROFILE DATA
     // =================================================
 
@@ -28555,6 +28584,13 @@ window.openProfile = async function (
                         profile.verified
                             ? `
                     <span class="verified-badge" aria-label="Verified"></span>
+                    `
+                            : ""
+                    }
+                    ${
+                        profileHasActivePremium
+                            ? `
+                    <span class="socialapp-profile-premium-badge" role="status" aria-label="Active SocialApp Premium subscription" title="Active SocialApp Premium subscription" style="display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;background:linear-gradient(135deg,#8a2be2,#5b16a8);border:1px solid rgba(210,170,255,.7);color:#fff;font-size:11px;font-weight:800;letter-spacing:.2px;vertical-align:middle;box-shadow:0 2px 8px rgba(138,43,226,.25);"><span aria-hidden="true">👑</span> PREMIUM</span>
                     `
                             : ""
                     }
