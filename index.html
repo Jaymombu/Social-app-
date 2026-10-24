@@ -37907,6 +37907,33 @@ window.savePrivacySettings = async function () {
 
     console.log("✅ PRIVACY SETTINGS AND ORDINARY POSTS SAVED");
 
+    // Update the in-memory account state immediately so screens use the newly
+    // saved visibility without requiring a browser/page refresh.
+    window.currentAccountPrivacyMode = postPrivacyMode;
+    window.currentAccountIsPrivate = privateAccount.checked;
+    window.currentPrivacySettingsUserId = session.user.id;
+
+    // Synchronize cached ordinary posts immediately. Premium posts remain untouched.
+    for (const tabName of ["explore", "following"]) {
+        const cached = window.feedCache?.[tabName];
+        if (Array.isArray(cached)) {
+            for (const post of cached) {
+                if (String(post?.user_id) === String(session.user.id) &&
+                    String(post?.visibility || "").toLowerCase() !== "premium") {
+                    post.visibility = ordinaryPostVisibility;
+                }
+            }
+        }
+    }
+    if (Array.isArray(window.postsState)) {
+        for (const post of window.postsState) {
+            if (String(post?.user_id) === String(session.user.id) &&
+                String(post?.visibility || "").toLowerCase() !== "premium") {
+                post.visibility = ordinaryPostVisibility;
+            }
+        }
+    }
+
     alert("Privacy settings saved. Your ordinary posts now follow your account visibility; Premium posts were left unchanged.");
 
     // =================================================
@@ -37918,6 +37945,12 @@ window.savePrivacySettings = async function () {
         "privacySettingsScreen"
     ) {
         history.back();
+        // Wait for the previous screen to return, then refresh the feed in-app.
+        setTimeout(() => {
+            if (document.getElementById("posts") && typeof window.loadPosts === "function") {
+                window.loadPosts(true).catch(error => console.warn("Immediate feed sync failed:", error));
+            }
+        }, 250);
         return;
     }
 
@@ -37926,6 +37959,11 @@ window.savePrivacySettings = async function () {
         "privacySettingsScreen"
     ) {
         history.back();
+        setTimeout(() => {
+            if (document.getElementById("posts") && typeof window.loadPosts === "function") {
+                window.loadPosts(true).catch(error => console.warn("Immediate feed sync failed:", error));
+            }
+        }, 250);
         return;
     }
 
