@@ -10559,7 +10559,12 @@ try {
             { target_user_id: accountUserId }
           );
           if (error) throw error;
-          active = data === true || data?.is_user_premium_account === true;
+          // PostgREST normally returns a scalar boolean, but tolerate object/array
+          // shapes as well so the badge does not silently stay hidden.
+          const premiumValue = Array.isArray(data) ? data[0] : data;
+          active = premiumValue === true || premiumValue === "true" ||
+            premiumValue?.is_user_premium_account === true ||
+            premiumValue?.is_user_premium_account === "true";
         } catch (e) {
           console.warn("Could not verify account Premium badge:", e);
         }
@@ -28342,7 +28347,10 @@ window.openProfile = async function (
         );
 
         if (profilePremiumError) throw profilePremiumError;
-        profileHasActivePremium = premiumStatus === true || premiumStatus?.is_user_premium_account === true;
+        const premiumValue = Array.isArray(premiumStatus) ? premiumStatus[0] : premiumStatus;
+        profileHasActivePremium = premiumValue === true || premiumValue === "true" ||
+            premiumValue?.is_user_premium_account === true ||
+            premiumValue?.is_user_premium_account === "true";
     } catch (profilePremiumError) {
         console.warn("Could not verify this profile's SocialApp Premium status:", profilePremiumError);
         profileHasActivePremium = false;
