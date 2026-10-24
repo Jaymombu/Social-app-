@@ -37553,6 +37553,19 @@ window.openPrivacySettings = async function (addHistory = true) {
     // rebuilt on every open from the current authenticated account.
     let existingPrivacy = document.getElementById("privacySettingsScreen");
 
+    // Open the screen immediately. Auth/profile/Premium checks continue below,
+    // but navigation never leaves the user looking at an empty page.
+    if (!existingPrivacy) {
+        existingPrivacy = document.createElement("div");
+        existingPrivacy.id = "privacySettingsScreen";
+        existingPrivacy.style.cssText = "position:fixed;inset:0;width:100%;height:100%;background:#000;color:#fff;z-index:2147483646;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;";
+        document.body.appendChild(existingPrivacy);
+    }
+    existingPrivacy.style.display = "block";
+    document.body.style.overflow = "hidden";
+    if (typeof window.hideTopBar === "function") window.hideTopBar();
+    existingPrivacy.innerHTML = '<div style="min-height:100vh;background:#000;color:#fff;font-family:system-ui;box-sizing:border-box;"><div style="height:58px;display:flex;align-items:center;padding:0 14px;border-bottom:1px solid #222;font-weight:800;font-size:18px;">Privacy Settings</div><div style="padding:18px;color:#bbb;">Loading your saved settings…</div><div style="padding:0 18px;display:grid;gap:10px;"><div style="height:58px;border-radius:12px;background:#151515;"></div><div style="height:58px;border-radius:12px;background:#151515;"></div><div style="height:58px;border-radius:12px;background:#151515;"></div></div></div>';
+
     // Resolve the authoritative current Supabase session rather than relying
     // only on the app's cached global `session`, which can briefly lag during
     // navigation/auth refreshes.
@@ -37580,16 +37593,9 @@ window.openPrivacySettings = async function (addHistory = true) {
     const userId = currentAuthSession.user.id;
     const privacySessionUserId = userId;
 
-    // Show a visible loading state immediately so an async profile/RPC request
-    // cannot leave the user staring at an empty screen.
-    if (!existingPrivacy) {
-        existingPrivacy = document.createElement("div");
-        existingPrivacy.id = "privacySettingsScreen";
-        existingPrivacy.style.cssText = "position:fixed;inset:0;width:100%;height:100%;background:#000;color:#fff;z-index:2147483646;overflow-y:auto;box-sizing:border-box;";
-        document.body.appendChild(existingPrivacy);
-    }
-    existingPrivacy.style.display = "block";
-    existingPrivacy.innerHTML = '<div style="min-height:100vh;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;font:600 16px system-ui;">Loading Privacy Settings…</div>';
+    // Start the profile and Premium checks in parallel to reduce perceived wait.
+    // The Premium RPC is read-only; no payment, eligibility, or RLS logic changes.
+    const premiumStatusPromise = supabase.rpc("has_verified_paid_premium_subscription");
 
     // =================================================
     // LOAD CURRENT PRIVACY SETTINGS
@@ -37615,6 +37621,10 @@ window.openPrivacySettings = async function (addHistory = true) {
     const { data: profileAuthData } = await supabase.auth.getSession();
     if (!profileAuthData?.session?.user || profileAuthData.session.user.id !== privacySessionUserId) {
         console.warn("Ignoring stale Privacy Settings load after account switch.");
+        const screen = document.getElementById("privacySettingsScreen");
+        if (screen) screen.innerHTML = '<div style="min-height:100vh;background:#000;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;box-sizing:border-box;"><div style="font-size:18px;font-weight:800;margin-bottom:10px;">Account changed</div><div style="color:#bbb;margin-bottom:18px;">Please reopen Privacy Settings for the current account.</div><button id="privacyAccountRetry" style="padding:12px 18px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:800;">Reload settings</button></div>';
+        const retry = document.getElementById("privacyAccountRetry");
+        if (retry) retry.onclick = () => window.openPrivacySettings(addHistory);
         return false;
     }
 
@@ -37676,7 +37686,7 @@ window.openPrivacySettings = async function (addHistory = true) {
     // Admin eligibility for premium actions remains separate and is not changed
     // here. This avoids showing "Premium active" merely because the user is admin.
     try {
-        const { data: activePremium, error: activePremiumError } = await supabase.rpc("has_verified_paid_premium_subscription");
+        const { data: activePremium, error: activePremiumError } = await premiumStatusPromise;
         privacyHasPremium = !activePremiumError && (
             activePremium === true ||
             activePremium === "true" ||
@@ -37691,6 +37701,10 @@ window.openPrivacySettings = async function (addHistory = true) {
     const { data: premiumAuthData } = await supabase.auth.getSession();
     if (!premiumAuthData?.session?.user || premiumAuthData.session.user.id !== privacySessionUserId) {
         console.warn("Ignoring stale Premium status after account switch.");
+        const screen = document.getElementById("privacySettingsScreen");
+        if (screen) screen.innerHTML = '<div style="min-height:100vh;background:#000;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;box-sizing:border-box;"><div style="font-size:18px;font-weight:800;margin-bottom:10px;">Account changed</div><div style="color:#bbb;margin-bottom:18px;">Please reopen Privacy Settings for the current account.</div><button id="privacyAccountRetry" style="padding:12px 18px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:800;">Reload settings</button></div>';
+        const retry = document.getElementById("privacyAccountRetry");
+        if (retry) retry.onclick = () => window.openPrivacySettings(addHistory);
         return false;
     }
 
