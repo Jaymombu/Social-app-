@@ -37551,15 +37551,45 @@ window.openPrivacySettings = async function (addHistory = true) {
     // account's Premium indicator/editor after an account switch until refresh.
     // The screen element itself is reused below, but its data and markup are
     // rebuilt on every open from the current authenticated account.
-    const existingPrivacy = document.getElementById("privacySettingsScreen");
+    let existingPrivacy = document.getElementById("privacySettingsScreen");
 
-    if (!session?.user) {
-        alert("Login first");
-        return;
+    // Resolve the authoritative current Supabase session rather than relying
+    // only on the app's cached global `session`, which can briefly lag during
+    // navigation/auth refreshes.
+    let currentAuthSession = null;
+    try {
+        const { data: authData, error: authError } = await supabase.auth.getSession();
+        if (authError) throw authError;
+        currentAuthSession = authData?.session || null;
+    } catch (authError) {
+        console.error("Privacy Settings could not read the current session:", authError);
     }
 
-    const userId = session.user.id;
+    if (!currentAuthSession?.user) {
+        if (existingPrivacy) {
+            existingPrivacy.style.display = "block";
+            existingPrivacy.innerHTML = '<div style="min-height:100vh;background:#000;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;box-sizing:border-box;"><div style="font-size:18px;font-weight:800;margin-bottom:10px;">Please sign in again</div><div style="color:#bbb;margin-bottom:18px;">Your current session could not be confirmed.</div><button id="privacySessionRetry" style="padding:12px 18px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:800;">Try again</button></div>';
+            const retry = document.getElementById("privacySessionRetry");
+            if (retry) retry.onclick = () => window.openPrivacySettings(addHistory);
+        } else {
+            alert("Please log in to open Privacy Settings.");
+        }
+        return false;
+    }
+
+    const userId = currentAuthSession.user.id;
     const privacySessionUserId = userId;
+
+    // Show a visible loading state immediately so an async profile/RPC request
+    // cannot leave the user staring at an empty screen.
+    if (!existingPrivacy) {
+        existingPrivacy = document.createElement("div");
+        existingPrivacy.id = "privacySettingsScreen";
+        existingPrivacy.style.cssText = "position:fixed;inset:0;width:100%;height:100%;background:#000;color:#fff;z-index:2147483646;overflow-y:auto;box-sizing:border-box;";
+        document.body.appendChild(existingPrivacy);
+    }
+    existingPrivacy.style.display = "block";
+    existingPrivacy.innerHTML = '<div style="min-height:100vh;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;font:600 16px system-ui;">Loading Privacy Settings…</div>';
 
     // =================================================
     // LOAD CURRENT PRIVACY SETTINGS
@@ -37582,7 +37612,8 @@ window.openPrivacySettings = async function (addHistory = true) {
         .single();
 
     // Abort if the user switched accounts while the profile request was in flight.
-    if (!session?.user || session.user.id !== privacySessionUserId) {
+    const { data: profileAuthData } = await supabase.auth.getSession();
+    if (!profileAuthData?.session?.user || profileAuthData.session.user.id !== privacySessionUserId) {
         console.warn("Ignoring stale Privacy Settings load after account switch.");
         return false;
     }
@@ -37592,7 +37623,15 @@ window.openPrivacySettings = async function (addHistory = true) {
             "❌ PRIVACY PROFILE LOAD FAILED:",
             error || "No profile row was returned"
         );
-        alert("Could not load your saved privacy settings. Please refresh and try again.");
+        const screen = document.getElementById("privacySettingsScreen");
+        if (screen) {
+            screen.style.display = "block";
+            screen.innerHTML = '<div style="min-height:100vh;background:#000;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;box-sizing:border-box;"><div style="font-size:18px;font-weight:800;margin-bottom:10px;">Privacy Settings could not load</div><div style="color:#bbb;margin-bottom:18px;">Check your connection and try again.</div><button id="privacyLoadRetry" style="padding:12px 18px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:800;">Try again</button></div>';
+            const retry = document.getElementById("privacyLoadRetry");
+            if (retry) retry.onclick = () => window.openPrivacySettings(addHistory);
+        } else {
+            alert("Could not load your saved privacy settings. Please try again.");
+        }
         return false;
     }
 
@@ -37649,7 +37688,8 @@ window.openPrivacySettings = async function (addHistory = true) {
     }
     // Do not render a result from an earlier account if auth changed while
     // administrator/subscription RPCs were running.
-    if (!session?.user || session.user.id !== privacySessionUserId) {
+    const { data: premiumAuthData } = await supabase.auth.getSession();
+    if (!premiumAuthData?.session?.user || premiumAuthData.session.user.id !== privacySessionUserId) {
         console.warn("Ignoring stale Premium status after account switch.");
         return false;
     }
