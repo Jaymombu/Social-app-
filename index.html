@@ -10801,6 +10801,19 @@ try {
         } catch (e) {
           console.warn("Could not verify account Premium mark:", e);
         }
+        // For the signed-in account, check the session-scoped subscription RPC
+        // as a fallback. Admin role alone never activates the Premium crown.
+        if (!active) {
+          try {
+            const { data: authResult } = await supabase.auth.getUser();
+            if (authResult?.user && String(authResult.user.id) === accountUserId) {
+              const { data: ownStatus, error: ownError } = await supabase.rpc("has_active_premium_subscription");
+              if (!ownError) active = ownStatus === true || ownStatus?.has_active_premium_subscription === true;
+            }
+          } catch (ownError) {
+            console.warn("Could not verify own account Premium mark:", ownError);
+          }
+        }
         window.socialAppPremiumAccountCache.set(accountUserId, {
           active,
           expiresAt: Date.now() + 60000
@@ -28589,6 +28602,28 @@ window.openProfile = async function (
         profileHasActivePremium = false;
     }
 
+    // The owner can also verify their own active subscription through the
+    // session-scoped RPC. This fallback covers the administrator account if
+    // is_user_premium_account excludes or fails to resolve the owner profile.
+    // It does not grant Premium based on administrator status.
+    if (!profileHasActivePremium) {
+        try {
+            const { data: authResult } = await supabase.auth.getUser();
+            const signedInUser = authResult?.user;
+            if (signedInUser && String(signedInUser.id) === String(userId)) {
+                const { data: ownPremiumStatus, error: ownPremiumError } = await supabase.rpc(
+                    "has_active_premium_subscription"
+                );
+                if (!ownPremiumError) {
+                    profileHasActivePremium = ownPremiumStatus === true ||
+                        ownPremiumStatus?.has_active_premium_subscription === true;
+                }
+            }
+        } catch (ownPremiumCheckError) {
+            console.warn("Could not verify the signed-in owner's Premium status:", ownPremiumCheckError);
+        }
+    }
+
     // =================================================
     // PROFILE DATA
     // =================================================
@@ -39751,7 +39786,7 @@ window.closePhotoGallery = function (
 window.socialAuthState=window.socialAuthState||{mode:"login",busy:false};
 window.socialAuthMessage=function(msg,type){const b=document.querySelector(type==="success"?"#socialAuthCard .auth-success":"#socialAuthCard .auth-error");if(b){b.textContent=msg;b.style.display="block";}};
 window.socialAuthBusy=function(v){socialAuthState.busy=v;const b=document.getElementById("socialAuthSubmit");if(b){b.disabled=v;b.style.opacity=v?.65:1;}};
-window.openSocialAuth=function(mode="login"){socialAuthState.mode=mode;socialAuthState.busy=false;let o=document.getElementById("socialAuthOverlay");if(!o){o=document.createElement("div");o.id="socialAuthOverlay";o.innerHTML='<div id="socialAuthCard" role="dialog" aria-modal="true"></div>';document.body.appendChild(o);o.addEventListener("click",e=>{if(e.target===o&&!socialAuthState.busy)closeSocialAuth();});}o.classList.add("active");renderSocialAuth();setTimeout(()=>o.querySelector("input")?.focus(),40);};
+window.openSocialAuth=function(mode="login"){socialAuthState.mode=mode;socialAuthState.busy=false;let o=document.getElementById("socialAuthOverlay");if(!o){o=document.createElement("div");o.id="socialAuthOverlay";o.innerHTML='<div id="socialAuthCard" role="dialog" aria-modal="true"></div>';document.body.appendChild(o);o.addEventListener("click",e=>{if(e.target===o&&!socialAuthState.busy)closeSocialAuth();});}o.style.removeProperty("display");o.classList.remove("active");void o.offsetWidth;o.classList.add("active");renderSocialAuth();setTimeout(()=>o.querySelector("input")?.focus(),40);};
 window.closeSocialAuth=function(force=false){if(!force&&socialAuthState.busy)return;socialAuthState.busy=false;const overlay=document.getElementById("socialAuthOverlay");if(overlay){overlay.classList.remove("active");overlay.style.display="none";}};
 window.socialNormalizeUsername=function(value){return String(value||"").trim().replace(/^@+/,"").replace(/\s+/g,"_").toLowerCase();};
 window.socialCheckUsername=async function(username,excludeUserId=null){const u=socialNormalizeUsername(username);if(!/^[a-z0-9_.-]{3,30}$/.test(u))return {ok:false,message:"Username must be 3–30 characters and use only letters, numbers, underscores, dots or hyphens."};let q=supabase.from("profiles").select("id").eq("username",u).limit(1);if(excludeUserId)q=q.neq("id",excludeUserId);const {data,error}=await q;if(error)return {ok:false,message:"We could not check that username. Please try again."};if(data?.length)return {ok:false,message:`The username @${u} is already in use. Please choose another username.`};return {ok:true,username:u};};
