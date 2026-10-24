@@ -38214,6 +38214,67 @@ window.openPrivacySettings = async function (addHistory = true) {
     console.log("✅ PRIVACY SETTINGS OPEN");
 };
 
+// Reliability wrapper: prevent duplicate taps from starting overlapping loads,
+// and always replace a stuck loading screen with a retryable error state.
+// This is UI-only; it does not change subscription, payment, RLS, or DB rules.
+(function installPrivacySettingsReliabilityGuard() {
+    const originalOpenPrivacySettings = window.openPrivacySettings;
+    if (typeof originalOpenPrivacySettings !== "function" || originalOpenPrivacySettings.__reliabilityGuarded) return;
+
+    let inFlight = null;
+    const guardedOpenPrivacySettings = async function(addHistory = true) {
+        if (inFlight) return inFlight;
+
+        const screen = document.getElementById("privacySettingsScreen");
+        if (screen) {
+            screen.style.display = "block";
+            screen.style.position = "fixed";
+            screen.style.inset = "0";
+            screen.style.zIndex = "2147483646";
+        }
+
+        const loadPromise = (async () => {
+            let timeoutId;
+            try {
+                const operation = Promise.resolve().then(() => originalOpenPrivacySettings(addHistory));
+                const timeout = new Promise((_, reject) => {
+                    timeoutId = setTimeout(() => reject(new Error("Privacy settings load timed out")), 12000);
+                });
+                return await Promise.race([operation, timeout]);
+            } catch (error) {
+                console.error("Privacy Settings failed to open:", error);
+                let target = document.getElementById("privacySettingsScreen");
+                if (!target) {
+                    target = document.createElement("div");
+                    target.id = "privacySettingsScreen";
+                    document.body.appendChild(target);
+                }
+                target.style.cssText = "position:fixed;inset:0;width:100%;height:100%;display:block;background:#000;color:#fff;z-index:2147483646;overflow-y:auto;box-sizing:border-box;";
+                document.body.style.overflow = "hidden";
+                target.innerHTML = '<div style="min-height:100vh;background:#000;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;box-sizing:border-box;font-family:system-ui;"><div style="font-size:19px;font-weight:800;margin-bottom:10px;">Privacy Settings did not finish loading</div><div style="color:#bbb;max-width:320px;margin-bottom:18px;">Your saved settings have not been changed. Please check your connection and try again.</div><button id="privacyReliabilityRetry" style="padding:12px 18px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:800;">Try again</button><button id="privacyReliabilityBack" style="margin-top:10px;padding:10px 18px;border:1px solid #555;border-radius:10px;background:#111;color:#fff;">Back</button></div>';
+                const retry = document.getElementById("privacyReliabilityRetry");
+                if (retry) retry.onclick = () => { inFlight = null; guardedOpenPrivacySettings(false); };
+                const back = document.getElementById("privacyReliabilityBack");
+                if (back) back.onclick = () => {
+                    target.style.display = "none";
+                    document.body.style.overflow = "";
+                    const app = document.getElementById("app");
+                    if (app) app.style.display = "block";
+                    if (typeof window.showTopBar === "function") window.showTopBar();
+                };
+                return false;
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        })();
+        inFlight = loadPromise;
+        try { return await loadPromise; }
+        finally { if (inFlight === loadPromise) inFlight = null; }
+    };
+    guardedOpenPrivacySettings.__reliabilityGuarded = true;
+    window.openPrivacySettings = guardedOpenPrivacySettings;
+})();
+
 // =====================================================
 // SAVE PRIVACY SETTINGS
 // PRIVACY → PROFILE SETTINGS
