@@ -10202,6 +10202,50 @@ async function createPost() {
   }
 }
 
+// Robust delegated Post-button handler. The Home screen is rebuilt after login,
+// so direct onclick handlers can be lost or attached to a stale button node.
+// Capture clicks on the current #postBtn regardless of when it was created.
+if (!window.__socialAppDelegatedPostHandlerInstalled) {
+  window.__socialAppDelegatedPostHandlerInstalled = true;
+  document.addEventListener("click", function (event) {
+    const button = event.target && event.target.closest
+      ? event.target.closest("#postBtn")
+      : null;
+    if (!button) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (window.__socialAppPostClickInFlight) return;
+    window.__socialAppPostClickInFlight = true;
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+
+    Promise.resolve()
+      .then(() => {
+        // Read the latest session at click time, not a session captured during
+        // the previous render/login.
+        if (!session?.user) {
+          alert("Your session is not ready. Please log in again and retry.");
+          return;
+        }
+        return createPost();
+      })
+      .catch(error => {
+        console.error("Delegated post click failed:", error);
+        alert("Could not publish this post: " + (error?.message || String(error)));
+      })
+      .finally(() => {
+        window.__socialAppPostClickInFlight = false;
+        const currentButton = document.getElementById("postBtn");
+        if (currentButton) {
+          currentButton.disabled = false;
+          currentButton.removeAttribute("aria-busy");
+        }
+      });
+  }, true);
+}
+
 // =====================================================
 // 🆕 NEW POSTS → HOME BADGE
 // =====================================================
@@ -58220,6 +58264,36 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   }
   document.addEventListener('DOMContentLoaded',()=>{scan(document.documentElement); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>scan(n)))).observe(document.documentElement,{childList:true,subtree:true});});
   if(document.readyState!=='loading'){scan(document.documentElement); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>scan(n)))).observe(document.documentElement,{childList:true,subtree:true});}
+})();
+</script>
+
+
+<script id="socialapp-login-delegated-fix">
+(function () {
+  if (window.__socialAppLoginDelegatedFixInstalled) return;
+  window.__socialAppLoginDelegatedFixInstalled = true;
+  // Home is rebuilt after auth changes, so bind at document level rather than
+  // relying on a handler attached to a button that may later be replaced.
+  document.addEventListener('click', function (event) {
+    const button = event.target && event.target.closest
+      ? event.target.closest('#app button#login, #app .home-login button, button#login')
+      : null;
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    try {
+      if (typeof window.openSocialAuth === 'function') {
+        window.openSocialAuth('login');
+      } else {
+        console.error('SocialApp login handler unavailable: openSocialAuth is not a function.');
+        alert('Login is temporarily unavailable. Please refresh the page and try again.');
+      }
+    } catch (error) {
+      console.error('Could not open SocialApp login screen:', error);
+      alert('Could not open the login screen. Please refresh and try again.');
+    }
+  }, true);
 })();
 </script>
 
