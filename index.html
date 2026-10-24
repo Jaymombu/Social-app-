@@ -9717,7 +9717,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-async function createPost() {
+async function createPostInternal() {
 
   const input =
     document.getElementById("postInput");
@@ -10062,6 +10062,19 @@ if (error) {
   }
 
   loadPosts();
+}
+
+
+// Public click handler: surface unexpected post-creation errors instead of
+// silently leaving the Post button unresponsive for affected accounts.
+async function createPost() {
+  try {
+    await createPostInternal();
+  } catch (postCreationError) {
+    console.error("SocialApp post creation crashed:", postCreationError);
+    const message = postCreationError?.message || String(postCreationError || "Unknown error");
+    alert("Could not publish this post. Details: " + message);
+  }
 }
 
 // =====================================================
