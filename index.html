@@ -6929,10 +6929,49 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
   }
 
   if (event === "SIGNED_OUT") {
+    // Immediately remove account-owned content from the screen and memory.
+    // Do not wait for navigation/reload: signOut can be triggered elsewhere.
     window.hideAccountRestrictedScreen();
     notificationCache = [];
+    window.notificationCache = [];
+    window.seenNotifications = new Set();
     unreadCount = 0;
+    window.feedCache = { explore: [], following: [] };
+    window.postsState = [];
+    window.renderedPosts = new Set();
+    window.currentProfile = null;
+    window.viewedProfile = null;
+    window.activeChatUser = null;
+    try {
+      const postsDiv = document.getElementById("posts");
+      if (postsDiv) {
+        postsDiv.innerHTML = '<div class="home-login" style="padding:28px 16px;text-align:center;color:var(--text-color,#fff)"><p>Please log in or register to view posts.</p></div>';
+      }
+      const stories = document.getElementById("stories");
+      if (stories) stories.innerHTML = "";
+      const notifications = document.getElementById("notificationsList");
+      if (notifications) notifications.innerHTML = "";
+      const chatBadge = document.getElementById("chatBadge");
+      if (chatBadge) chatBadge.textContent = "";
+    } catch (clearError) {
+      console.warn("Could not fully clear signed-out UI:", clearError);
+    }
     updateNotifBadge();
+  }
+
+  // If a different account signs in without a full page reload, discard the
+  // previous account's feed and rendered DOM before restoring the new session.
+  if (event === "SIGNED_IN" && currentUser && previousUserId &&
+      String(previousUserId) !== String(currentUser.id)) {
+    window.feedCache = { explore: null, following: null };
+    window.postsState = [];
+    window.renderedPosts = new Set();
+    try {
+      const postsDiv = document.getElementById("posts");
+      if (postsDiv) postsDiv.innerHTML = "";
+    } catch (clearError) {
+      console.warn("Could not clear previous account feed:", clearError);
+    }
   }
 
   // A successful login can happen after the app has already been started
@@ -7009,6 +7048,20 @@ window.logout = async function () {
 
   currentUser = null;
   session = null;
+  window.feedCache = { explore: [], following: [] };
+  window.postsState = [];
+  window.renderedPosts = new Set();
+  notificationCache = [];
+  window.notificationCache = [];
+  window.seenNotifications = new Set();
+  try {
+    const postsDiv = document.getElementById("posts");
+    if (postsDiv) postsDiv.innerHTML = '<div class="home-login" style="padding:28px 16px;text-align:center;color:var(--text-color,#fff)"><p>Please log in or register to view posts.</p></div>';
+    const stories = document.getElementById("stories");
+    if (stories) stories.innerHTML = "";
+  } catch (clearError) {
+    console.warn("Could not clear UI during logout:", clearError);
+  }
 
   try {
     sessionStorage.removeItem("appNavigationState");
