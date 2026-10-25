@@ -37577,7 +37577,7 @@ window.openPrivacySettings = async function (addHistory = true) {
     if (!privacyScreen) {
         privacyScreen = document.createElement("div");
         privacyScreen.id = "privacySettingsScreen";
-        privacyScreen.style.cssText = "position:fixed;inset:0;width:100%;height:100%;background:#000;color:#fff;z-index:2147483646;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box;";
+        privacyScreen.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:auto;max-height:100dvh;background:#000;color:#fff;z-index:2147483646;overflow-x:hidden;overflow-y:scroll;overscroll-behavior-y:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch;box-sizing:border-box;";
         document.body.appendChild(privacyScreen);
     }
     privacyScreen.style.display = "block";
@@ -37670,16 +37670,51 @@ window.openPrivacySettings = async function (addHistory = true) {
     // recorded in the database for EVERY account, including the administrator.
     // Admin eligibility for premium actions remains separate and is not changed
     // here. This avoids showing "Premium active" merely because the user is admin.
+    let premiumStatusKnown = false;
     try {
         const { data: activePremium, error: activePremiumError } = await supabase.rpc("has_verified_paid_premium_subscription");
-        privacyHasPremium = !activePremiumError && (
-            activePremium === true ||
-            activePremium === "true" ||
-            activePremium?.has_verified_paid_premium_subscription === true ||
-            activePremium?.has_verified_paid_premium_subscription === "true"
-        );
+        if (activePremiumError) {
+            console.error("Privacy Premium status RPC failed:", activePremiumError);
+        } else {
+            const premiumValue = Array.isArray(activePremium) ? activePremium[0] : activePremium;
+            const rawPremiumFlag = typeof premiumValue === "object" && premiumValue !== null
+                ? (premiumValue.has_verified_paid_premium_subscription ?? premiumValue.has_verified_paid_premium_subscription_1 ?? premiumValue.active)
+                : premiumValue;
+            privacyHasPremium = rawPremiumFlag === true || rawPremiumFlag === "true" || rawPremiumFlag === 1 || rawPremiumFlag === "1";
+            premiumStatusKnown = true;
+        }
     } catch (e) {
-        privacyHasPremium = false;
+        console.error("Privacy Premium status RPC threw:", e);
+    }
+
+    // Safe fallback: check only the signed-in user's own subscription row. It
+    // never uses the administrator exemption or the general eligibility RPC.
+    // If RLS/permissions prevent this read, keep status unknown instead of
+    // incorrectly claiming that a paid subscription is inactive.
+    if (!privacyHasPremium || !premiumStatusKnown) {
+        try {
+            const nowIso = new Date().toISOString();
+            const { data: ownPremiumRows, error: ownPremiumError } = await supabase
+                .from("premium_subscriptions")
+                .select("status, verified_at, started_at, expires_at")
+                .eq("user_id", userId)
+                .eq("status", "active")
+                .not("verified_at", "is", null)
+                .lte("started_at", nowIso)
+                .gt("expires_at", nowIso)
+                .limit(1);
+            if (ownPremiumError) {
+                console.error("Privacy own-subscription fallback failed:", ownPremiumError);
+            } else {
+                const rowSaysPremium = Array.isArray(ownPremiumRows) && ownPremiumRows.length > 0;
+                // A verified qualifying row is sufficient for the indicator; a
+                // negative fallback must not erase a positive authoritative RPC.
+                privacyHasPremium = privacyHasPremium || rowSaysPremium;
+                premiumStatusKnown = true;
+            }
+        } catch (e) {
+            console.error("Privacy own-subscription fallback threw:", e);
+        }
     }
     const showCreatorSubscriptionEditor = privacyHasPremium && !privacyIsAdministrator;
 
@@ -37748,6 +37783,12 @@ window.openPrivacySettings = async function (addHistory = true) {
     // =================================================
     // RENDER
     // =================================================
+
+    privacyScreen.style.overflowY = "scroll";
+    privacyScreen.style.overflowX = "hidden";
+    privacyScreen.style.webkitOverflowScrolling = "touch";
+    privacyScreen.style.touchAction = "pan-y";
+    privacyScreen.scrollTop = 0;
 
     privacyScreen.innerHTML = `
 
@@ -37843,7 +37884,7 @@ window.openPrivacySettings = async function (addHistory = true) {
                         </div>
                         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
                             <span style="display:inline-flex;align-items:center;gap:6px;padding:8px 11px;border-radius:9px;border:1px solid ${privacyHasPremium ? "#8a2be2" : "#333"};background:${privacyHasPremium ? "#211337" : "#151515"};color:${privacyHasPremium ? "#d8b8ff" : "#888"};font-size:13px;font-weight:800;">
-                                ${privacyHasPremium ? "✓ SocialApp Premium active" : "SocialApp Premium inactive"}
+                                ${privacyHasPremium ? "✓ SocialApp Premium active" : (premiumStatusKnown ? "SocialApp Premium inactive" : "Premium status unavailable — retry") }
                             </span>
                         </div>
                         <div style="font-size:12px;color:#999;line-height:1.5;margin-top:10px;">Your Public or Private choice is saved to your account and survives logout/login. Existing ordinary posts follow this setting; Premium posts stay Premium. The Premium indicator is automatic and cannot be manually enabled.</div>
@@ -38099,6 +38140,8 @@ window.openPrivacySettings = async function (addHistory = true) {
 
         backBtn.onclick = function () {
 
+            // Release the document scroll lock as navigation leaves Privacy.
+            document.body.style.overflow = "";
             console.log("🔙 PRIVACY → PROFILE SETTINGS");
 
             if (
