@@ -28200,7 +28200,19 @@ window.openProfile = async function (
     // This makes Profile → Back/Close return to the exact feed position.
     if (history.state?.appScreen === "app" &&
         typeof window.saveHomeScroll === "function") {
+        // Save an immutable Home-feed snapshot before any profile-loading
+        // awaits or navigation state changes. #posts is often the real scroller.
         window.saveHomeScroll(true);
+        const homePosts = document.getElementById("posts");
+        window.__homeProfileScrollSnapshot = {
+            element: homePosts ? "posts" : (window.homeScrollElement || "window"),
+            posts: homePosts ? Number(homePosts.scrollTop) || 0 : null,
+            window: Number(window.scrollY || document.documentElement.scrollTop || 0),
+            scrollY: homePosts
+                ? (Number(homePosts.scrollTop) || 0)
+                : Number(window.homeScrollY || window.scrollY || 0),
+            capturedAt: Date.now()
+        };
     }
 
     console.log("👤 OPEN PROFILE:", userId);
@@ -55332,45 +55344,12 @@ if (requestedUserId) {
 
 // =====================================================
 // BACK-NAVIGATION SCREEN CLEANUP
-// Fix stacked screens after restoring a tab/page. The target screen is
-// allowed to remain visible; screens above it (especially Settings) are
-// forcibly hidden after the existing popstate restoration finishes.
-// This intentionally does not replace the existing navigation controller.
+// IMPORTANT: do not run a second popstate controller here. The main async
+// BROWSER / ANDROID BACK handler owns history restoration. A competing
+// delayed listener can read stale appNavigation.current (for example Settings)
+// after the browser has already moved to Profile/Home, then force that stale
+// screen back on top. The main controller already hides/restores screens.
 // =====================================================
-(function installBackScreenCleanup(){
-  if (window.__socialBackScreenCleanupInstalled) return;
-  window.__socialBackScreenCleanupInstalled = true;
-  const knownScreens = [
-    "app", "profileScreen", "profileSettingsScreen", "editProfileScreen",
-    "privacySettingsScreen", "languageSettingsScreen", "commentsScreen",
-    "searchScreen", "notificationsScreen", "inboxScreen", "chatScreen",
-    "followRequestsScreen", "savedPostsScreen", "storyViewer", "mediaViewer"
-  ];
-  window.addEventListener("popstate", function(event){
-    const target = String(event?.state?.appScreen || window.appNavigation?.current?.screen || "app");
-    // Let the established async popstate handler restore the target first,
-    // then ensure no stale foreground screen is layered over it.
-    setTimeout(() => {
-      const activeTarget = String(window.appNavigation?.current?.screen || target || "app");
-      const keep = activeTarget;
-      for (const id of knownScreens) {
-        const el = document.getElementById(id);
-        if (!el || id === keep) continue;
-        el.style.setProperty("display", "none", "important");
-        el.style.setProperty("visibility", "hidden", "important");
-        el.style.setProperty("opacity", "0", "important");
-        el.style.setProperty("pointer-events", "none", "important");
-      }
-      const visible = document.getElementById(keep);
-      if (visible) {
-        visible.style.setProperty("display", keep === "app" ? "block" : "block", "important");
-        visible.style.setProperty("visibility", "visible", "important");
-        visible.style.setProperty("opacity", "1", "important");
-        visible.style.setProperty("pointer-events", "auto", "important");
-      }
-    }, 350);
-  }, false);
-})();
 
 // =====================================================
 // BROWSER / ANDROID BACK
@@ -56210,6 +56189,12 @@ window.goHome = async function (explicitClick = false) {
 window.homeWasExplicitlyClicked =
     explicitClick === true;
 
+// An explicit Home tap intentionally starts a fresh feed. A normal return
+// keeps the snapshot captured before opening a profile from a feed post.
+if (explicitClick === true) {
+    window.__homeProfileScrollSnapshot = null;
+}
+
 // =====================================================
 // NAVIGATION STATE
 // =====================================================
@@ -56272,10 +56257,16 @@ if (explicitClick === true) {
     // stale overlay data cannot survive into the next Back/Close operation.
     // Preserve the Home feed position when returning from another screen.
     // Only an explicit Home-button click is allowed to reset it to the top.
+    const profileSnapshot = window.__homeProfileScrollSnapshot || null;
     const preservedHomeScrollY = Math.max(
         0,
-        Number(window.homeScrollY) || 0
+        Number(profileSnapshot?.scrollY ?? window.homeScrollY) || 0
     );
+    if (profileSnapshot) {
+        window.homeScrollElement = profileSnapshot.element || window.homeScrollElement || "window";
+        window.homeScrollY = preservedHomeScrollY;
+        window.homeScrollPosition = preservedHomeScrollY;
+    }
 
     const canonicalHomeState = {
         appScreen: "app",
@@ -56447,12 +56438,37 @@ if (explicitClick === true) {
     window.homeScrollY
   );
 
-  requestAnimationFrame(() => {
+  const restoreReturnedHomePosition = () => {
     if (typeof window.bindHomePostsScrollTracker === "function") {
       window.bindHomePostsScrollTracker();
     }
-    restoreHomeScroll();
-  });
+    const snapshot = window.__homeProfileScrollSnapshot;
+    if (snapshot) {
+      const posts = document.getElementById("posts");
+      if (snapshot.element === "posts" && posts && Number.isFinite(Number(snapshot.posts))) {
+        posts.scrollTop = Number(snapshot.posts);
+      }
+      if (Number.isFinite(Number(snapshot.window))) {
+        window.scrollTo({ top: Number(snapshot.window), left: 0, behavior: "auto" });
+      }
+      if (snapshot.element === "posts" && posts && Number.isFinite(Number(snapshot.posts))) {
+        posts.scrollTop = Number(snapshot.posts);
+      }
+    } else {
+      restoreHomeScroll();
+    }
+  };
+  requestAnimationFrame(restoreReturnedHomePosition);
+  requestAnimationFrame(() => requestAnimationFrame(restoreReturnedHomePosition));
+  setTimeout(restoreReturnedHomePosition, 80);
+  setTimeout(restoreReturnedHomePosition, 220);
+  setTimeout(() => {
+    // Clear only after browser/layout restoration has completed; explicit Home
+    // taps clear it immediately and refresh the feed from the top.
+    if (window.__homeProfileScrollSnapshot && !window.homeWasExplicitlyClicked) {
+      window.__homeProfileScrollSnapshot = null;
+    }
+  }, 500);
 
 };
 
