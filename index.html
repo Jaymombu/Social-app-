@@ -55331,6 +55331,48 @@ if (requestedUserId) {
 
 
 // =====================================================
+// BACK-NAVIGATION SCREEN CLEANUP
+// Fix stacked screens after restoring a tab/page. The target screen is
+// allowed to remain visible; screens above it (especially Settings) are
+// forcibly hidden after the existing popstate restoration finishes.
+// This intentionally does not replace the existing navigation controller.
+// =====================================================
+(function installBackScreenCleanup(){
+  if (window.__socialBackScreenCleanupInstalled) return;
+  window.__socialBackScreenCleanupInstalled = true;
+  const knownScreens = [
+    "app", "profileScreen", "profileSettingsScreen", "editProfileScreen",
+    "privacySettingsScreen", "languageSettingsScreen", "commentsScreen",
+    "searchScreen", "notificationsScreen", "inboxScreen", "chatScreen",
+    "followRequestsScreen", "savedPostsScreen", "storyViewer", "mediaViewer"
+  ];
+  window.addEventListener("popstate", function(event){
+    const target = String(event?.state?.appScreen || window.appNavigation?.current?.screen || "app");
+    // Let the established async popstate handler restore the target first,
+    // then ensure no stale foreground screen is layered over it.
+    setTimeout(() => {
+      const activeTarget = String(window.appNavigation?.current?.screen || target || "app");
+      const keep = activeTarget;
+      for (const id of knownScreens) {
+        const el = document.getElementById(id);
+        if (!el || id === keep) continue;
+        el.style.setProperty("display", "none", "important");
+        el.style.setProperty("visibility", "hidden", "important");
+        el.style.setProperty("opacity", "0", "important");
+        el.style.setProperty("pointer-events", "none", "important");
+      }
+      const visible = document.getElementById(keep);
+      if (visible) {
+        visible.style.setProperty("display", keep === "app" ? "block" : "block", "important");
+        visible.style.setProperty("visibility", "visible", "important");
+        visible.style.setProperty("opacity", "1", "important");
+        visible.style.setProperty("pointer-events", "auto", "important");
+      }
+    }, 350);
+  }, false);
+})();
+
+// =====================================================
 // BROWSER / ANDROID BACK
 // =====================================================
 
