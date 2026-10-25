@@ -68,6 +68,25 @@
   } catch (e) {}
 })();
 </script>
+<script>
+// Recovery guard: navigation restoration must not leave the whole PWA invisible.
+// Privacy Settings also clears this mask immediately when opened.
+(function () {
+  const releaseRestoreMask = () => {
+    document.documentElement.classList.remove("socialapp-restoring");
+    window.__navigationRestorePending = false;
+  };
+  window.__socialAppReleaseRestoreMask = releaseRestoreMask;
+  window.addEventListener("error", releaseRestoreMask, { once: true });
+  window.addEventListener("unhandledrejection", releaseRestoreMask, { once: true });
+  window.setTimeout(() => {
+    if (document.documentElement.classList.contains("socialapp-restoring")) {
+      console.warn("SocialApp restore watchdog released a stuck page mask.");
+      releaseRestoreMask();
+    }
+  }, 5000);
+})();
+</script>
 <style>
   /* RESET */
 body {
@@ -4815,6 +4834,19 @@ body.dark #chatMessages .chat-reply-media-preview > div[style*="background:rgba(
   text-indent:0 !important;
 }
 .verified-badge::before{content:"✓" !important;}
+/* Premium accounts reuse the verified-badge position, transforming it into a crown. */
+.verified-badge.socialapp-premium-account-mark{
+  width:19px !important;height:19px !important;min-width:19px !important;
+  border-radius:0 !important;background:transparent !important;color:#a855f7 !important;
+  font-size:0 !important;line-height:0 !important;
+  filter:drop-shadow(0 1px 2px rgba(138,43,226,.32)) !important;
+}
+.verified-badge.socialapp-premium-account-mark::before{
+  content:"" !important;display:block !important;width:19px !important;height:19px !important;
+  background-color:currentColor !important;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 7.5 7.1 11l4.9-7 4.9 7L21 7.5l-2 11H5l-2-11Z' fill='%23000' stroke='%23000' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M5.5 21h13' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat !important;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 7.5 7.1 11l4.9-7 4.9 7L21 7.5l-2 11H5l-2-11Z' fill='%23000' stroke='%23000' stroke-width='1.5' stroke-linejoin='round'/%3E%3Cpath d='M5.5 21h13' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center/contain no-repeat !important;
+}
 .avatar-wrap,.story-avatar-wrap,.chat-avatar-wrap,.profile-avatar-wrap{
   position:relative !important;
   display:inline-block !important;
@@ -6360,6 +6392,33 @@ touch-action:pan-y;
 
 </div>
 
+
+<script id="socialapp-global-premium-account-badge-hydrator">
+(function(){
+  window.socialAppPremiumAccountCache = window.socialAppPremiumAccountCache || new Map();
+  window.socialAppHydratePremiumAccountBadge = async function(badge, userId){
+    if(!badge || !userId || !window.supabase) return;
+    const id = String(userId);
+    const apply = active => {
+      badge.classList.toggle("socialapp-premium-account-mark", !!active);
+      badge.setAttribute("aria-label", active ? "Active SocialApp Premium subscription" : "Verified");
+      if(active) badge.setAttribute("title", "Active SocialApp Premium subscription"); else badge.removeAttribute("title");
+    };
+    const cache = window.socialAppPremiumAccountCache;
+    const cached = cache.get(id);
+    if(cached && cached.expiresAt > Date.now()){ apply(cached.active === true); return; }
+    let active = false;
+    try {
+      const {data,error} = await window.supabase.rpc("is_user_premium_account", {target_user_id:id});
+      if(error) throw error;
+      const v = Array.isArray(data) ? data[0] : data;
+      active = v === true || v === "true" || v?.is_user_premium_account === true || v?.is_user_premium_account === "true";
+    } catch(e) { console.warn("Could not verify Premium account badge:", e); }
+    cache.set(id,{active,expiresAt:Date.now()+60000}); apply(active);
+  };
+})();
+</script>
+
 <script type="module">
 
   console.log("SCRIPT START");
@@ -6889,10 +6948,95 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
   }
 
   if (event === "SIGNED_OUT") {
+    // Immediately remove account-owned content from the screen and memory.
+    // Do not wait for navigation/reload: signOut can be triggered elsewhere.
     window.hideAccountRestrictedScreen();
     notificationCache = [];
+    window.notificationCache = [];
+    window.seenNotifications = new Set();
     unreadCount = 0;
+    window.feedCache = { explore: [], following: [] };
+    window.postsState = [];
+    window.renderedPosts = new Set();
+    window.currentProfile = null;
+    window.viewedProfile = null;
+    window.activeChatUser = null;
+    try {
+      const postsDiv = document.getElementById("posts");
+      if (postsDiv) {
+        postsDiv.innerHTML = '<div class="home-login" style="padding:28px 16px;text-align:center;color:var(--text-color,#fff)"><p>Please log in or register to view posts.</p></div>';
+      }
+      const stories = document.getElementById("stories");
+      if (stories) stories.innerHTML = "";
+      const notifications = document.getElementById("notificationsList");
+      if (notifications) notifications.innerHTML = "";
+      const chatBadge = document.getElementById("chatBadge");
+      if (chatBadge) chatBadge.textContent = "";
+    } catch (clearError) {
+      console.warn("Could not fully clear signed-out UI:", clearError);
+    }
     updateNotifBadge();
+
+    // Rebuild the Home shell using the now-confirmed signed-out session.
+    // Clearing only #posts leaves the previous account's composer and Add Story
+    // controls mounted because safeStart() intentionally skips an already-started app.
+    try {
+      window.__appStarted = false;
+      window.__appStartPromise = null;
+      await startApp();
+
+      // A signed-out visitor must not see account-only posting or story controls.
+      document.querySelectorAll('#app .home-composer').forEach(el => el.remove());
+      const storyHeading = document.querySelector('#app .home-section-label');
+      if (storyHeading) storyHeading.style.display = 'none';
+      const storiesBar = document.getElementById('storiesBar');
+      if (storiesBar) {
+        storiesBar.innerHTML = '';
+        storiesBar.style.display = 'none';
+      }
+
+      // Ensure a visible login/register action remains on Home.
+      const homeShell = document.querySelector('#app .home-shell');
+      if (homeShell && !document.getElementById('login')) {
+        const loginWrap = document.createElement('div');
+        loginWrap.className = 'home-login';
+        loginWrap.innerHTML = '<button id="login" type="button">Log in / Register</button>';
+        // This button is created after startApp() has already bound the original
+        // Home controls, so bind its click handler explicitly.
+        const loginAction = loginWrap.querySelector('#login');
+        if (loginAction) {
+          loginAction.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof window.openSocialAuth === 'function') {
+              window.openSocialAuth('login');
+            } else {
+              console.error('Login screen function is unavailable.');
+              alert('The login screen could not be opened. Please refresh and try again.');
+            }
+          });
+        }
+        const posts = document.getElementById('posts');
+        homeShell.insertBefore(loginWrap, posts || null);
+      }
+    } catch (rebuildError) {
+      console.warn('Could not rebuild signed-out Home:', rebuildError);
+    }
+  }
+
+  // If a different account signs in without a full page reload, discard the
+  // previous account's feed and rendered DOM before restoring the new session.
+  if (event === "SIGNED_IN" && currentUser && previousUserId &&
+      String(previousUserId) !== String(currentUser.id)) {
+    window.feedCache = { explore: null, following: null };
+    window.postsState = [];
+    window.renderedPosts = new Set();
+    try {
+      const postsDiv = document.getElementById("posts");
+      if (postsDiv) postsDiv.innerHTML = "";
+    } catch (clearError) {
+      console.warn("Could not clear previous account feed:", clearError);
+    }
   }
 
   // A successful login can happen after the app has already been started
@@ -6938,6 +7082,32 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
       window.__authAppRefreshInProgress = true;
 
       await startApp();
+
+      // Reconnect the composer after the authenticated Home has been rebuilt.
+      // The DOM node from the signed-out shell may have been removed, so bind
+      // the current button rather than relying on a stale element reference.
+      const refreshedPostButton = document.getElementById("postBtn");
+      if (refreshedPostButton) {
+        refreshedPostButton.type = "button";
+        refreshedPostButton.onclick = createPost;
+        refreshedPostButton.disabled = false;
+        refreshedPostButton.removeAttribute("aria-disabled");
+      }
+      const refreshedPostInput = document.getElementById("postInput");
+      if (refreshedPostInput) {
+        refreshedPostInput.disabled = false;
+        refreshedPostInput.removeAttribute("aria-disabled");
+      }
+      const refreshedMediaInput = document.getElementById("mediaInput");
+      if (refreshedMediaInput) {
+        refreshedMediaInput.disabled = false;
+        refreshedMediaInput.removeAttribute("aria-disabled");
+      }
+      console.log("POST-LOGIN COMPOSER READY:", {
+        userId: currentUser?.id || null,
+        postButtonFound: !!refreshedPostButton,
+        postInputFound: !!refreshedPostInput
+      });
     } catch (refreshError) {
       console.error("POST-LOGIN APP REFRESH FAILED:", refreshError);
     } finally {
@@ -6969,6 +7139,20 @@ window.logout = async function () {
 
   currentUser = null;
   session = null;
+  window.feedCache = { explore: [], following: [] };
+  window.postsState = [];
+  window.renderedPosts = new Set();
+  notificationCache = [];
+  window.notificationCache = [];
+  window.seenNotifications = new Set();
+  try {
+    const postsDiv = document.getElementById("posts");
+    if (postsDiv) postsDiv.innerHTML = '<div class="home-login" style="padding:28px 16px;text-align:center;color:var(--text-color,#fff)"><p>Please log in or register to view posts.</p></div>';
+    const stories = document.getElementById("stories");
+    if (stories) stories.innerHTML = "";
+  } catch (clearError) {
+    console.warn("Could not clear UI during logout:", clearError);
+  }
 
   try {
     sessionStorage.removeItem("appNavigationState");
@@ -9677,7 +9861,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-async function createPost() {
+async function createPostInternal() {
 
   const input =
     document.getElementById("postInput");
@@ -9717,10 +9901,12 @@ async function createPost() {
     if (privacyReadError) throw privacyReadError;
     if (!accountPrivacy) throw new Error("The account privacy settings were not found.");
 
+    // post_privacy_mode is the canonical account-visibility setting.
+    // private_account is a legacy moderation/restriction flag and must not
+    // override the user's Public/Private choice.
     accountIsPrivate =
       accountPrivacy.post_privacy_mode === "private" ||
-      accountPrivacy.private_profile === true ||
-      accountPrivacy.private_account === true;
+      (accountPrivacy.post_privacy_mode !== "public" && accountPrivacy.private_profile === true);
   } catch (privacyReadError) {
     console.error("Could not read saved account visibility:", privacyReadError);
     alert("Could not verify your saved account visibility. Please try again.");
@@ -10022,6 +10208,63 @@ if (error) {
   loadPosts();
 }
 
+
+// Public click handler: surface unexpected post-creation errors instead of
+// silently leaving the Post button unresponsive for affected accounts.
+async function createPost() {
+  try {
+    await createPostInternal();
+  } catch (postCreationError) {
+    console.error("SocialApp post creation crashed:", postCreationError);
+    const message = postCreationError?.message || String(postCreationError || "Unknown error");
+    alert("Could not publish this post. Details: " + message);
+  }
+}
+
+// Robust delegated Post-button handler. The Home screen is rebuilt after login,
+// so direct onclick handlers can be lost or attached to a stale button node.
+// Capture clicks on the current #postBtn regardless of when it was created.
+if (!window.__socialAppDelegatedPostHandlerInstalled) {
+  window.__socialAppDelegatedPostHandlerInstalled = true;
+  document.addEventListener("click", function (event) {
+    const button = event.target && event.target.closest
+      ? event.target.closest("#postBtn")
+      : null;
+    if (!button) return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (window.__socialAppPostClickInFlight) return;
+    window.__socialAppPostClickInFlight = true;
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+
+    Promise.resolve()
+      .then(() => {
+        // Read the latest session at click time, not a session captured during
+        // the previous render/login.
+        if (!session?.user) {
+          alert("Your session is not ready. Please log in again and retry.");
+          return;
+        }
+        return createPost();
+      })
+      .catch(error => {
+        console.error("Delegated post click failed:", error);
+        alert("Could not publish this post: " + (error?.message || String(error)));
+      })
+      .finally(() => {
+        window.__socialAppPostClickInFlight = false;
+        const currentButton = document.getElementById("postBtn");
+        if (currentButton) {
+          currentButton.disabled = false;
+          currentButton.removeAttribute("aria-busy");
+        }
+      });
+  }, true);
+}
+
 // =====================================================
 // 🆕 NEW POSTS → HOME BADGE
 // =====================================================
@@ -10158,6 +10401,13 @@ console.log("Rendering:", post.id);
     post.verified ??
     false;
 
+  // Premium badge is based on the post's saved visibility, not account privacy.
+  const isPremiumPost =
+    String(post.visibility || "").trim().toLowerCase() === "premium";
+
+  const premiumPostBadge = isPremiumPost
+    ? `<span class="socialapp-premium-post-badge" aria-label="Premium post" title="Premium post" style="display:inline-flex;align-items:center;gap:5px;margin-top:5px;padding:4px 9px;border-radius:999px;background:linear-gradient(135deg,#8a2be2,#5b16a8);border:1px solid rgba(210,170,255,.7);color:#fff;font-size:11px;font-weight:800;letter-spacing:.45px;box-shadow:0 2px 8px rgba(138,43,226,.25);"><span aria-hidden="true">👑</span> PREMIUM</span>`
+    : "";
 
   const time =
     new Date(post.created_at)
@@ -10340,8 +10590,7 @@ const isOwner =
               `
               : ""
           }
-
-        </div>
+</div>
 
 
         ${
@@ -10366,6 +10615,7 @@ const isOwner =
           color:#aaa;
         ">
           ${time}
+          ${premiumPostBadge}
         </div>
 
       </div>
@@ -10523,6 +10773,82 @@ const isOwner =
     }
 
   `;
+
+// Hydrate the existing account badge from the server-verified subscription.
+// Premium transforms the verified badge into a crown; it never adds a second badge.
+try {
+  const accountUserId = String(post.user_id || "");
+  if (accountUserId && typeof supabase !== "undefined") {
+    window.socialAppPremiumAccountCache = window.socialAppPremiumAccountCache || new Map();
+    const cached = window.socialAppPremiumAccountCache.get(accountUserId);
+    const applyPremiumMark = (isActive) => {
+      const nameContainer = div.querySelector(".verified-badge")?.parentElement ||
+        div.querySelector(".post-author-name, .post-username, .post-header-name") || null;
+      let mark = div.querySelector(".verified-badge");
+      if (isActive) {
+        if (!mark && nameContainer) {
+          mark = document.createElement("span");
+          mark.className = "verified-badge";
+          nameContainer.appendChild(mark);
+        }
+        if (mark) {
+          mark.classList.add("socialapp-premium-account-mark");
+          mark.setAttribute("aria-label", "Active SocialApp Premium subscription");
+          mark.setAttribute("title", "Active SocialApp Premium subscription");
+        }
+      } else if (mark) {
+        mark.classList.remove("socialapp-premium-account-mark");
+        mark.setAttribute("aria-label", "Verified");
+        mark.removeAttribute("title");
+      }
+    };
+    if (cached && cached.expiresAt > Date.now()) {
+      applyPremiumMark(cached.active === true);
+    } else {
+      (async () => {
+        let active = false;
+        try {
+          const { data, error } = await supabase.rpc(
+            "is_user_premium_account",
+            { target_user_id: accountUserId }
+          );
+          if (error) throw error;
+          const premiumValue = Array.isArray(data) ? data[0] : data;
+          active = premiumValue === true || premiumValue === "true" ||
+            premiumValue?.is_user_premium_account === true ||
+            premiumValue?.is_user_premium_account === "true";
+        } catch (e) {
+          console.warn("Could not verify account Premium mark:", e);
+        }
+        // For the signed-in account, use the authoritative admin_api whoami
+        // check as the automatic Premium entitlement for the single admin.
+        // This only affects presentation; server-side authorization must enforce it too.
+        if (!active) {
+          try {
+            const { data: authResult } = await supabase.auth.getUser();
+            if (authResult?.user && String(authResult.user.id) === accountUserId) {
+              if (typeof window.isAdmin === "function" && await window.isAdmin(true) === true) {
+                active = true;
+              } else {
+                const { data: ownStatus, error: ownError } = await supabase.rpc("has_active_premium_subscription");
+                if (!ownError) active = ownStatus === true || ownStatus?.has_active_premium_subscription === true;
+              }
+            }
+          } catch (ownError) {
+            console.warn("Could not verify own account Premium mark:", ownError);
+          }
+        }
+        window.socialAppPremiumAccountCache.set(accountUserId, {
+          active,
+          expiresAt: Date.now() + 60000
+        });
+        applyPremiumMark(active);
+      })();
+    }
+  }
+} catch (e) {
+  console.warn("Could not initialize account Premium mark:", e);
+}
 
 console.log(
     "Returning post:",
@@ -14455,7 +14781,7 @@ touch-action:pan-y;
 
             ${
                 profile.verified
-                    ? '<span class="verified-badge" aria-label="Verified"></span>'
+                    ? `<span class="verified-badge" data-premium-account-user-id="${c.user_id || c.sender_id || profile.id || ''}" aria-label="Verified"></span>`
                     : ""
             }
 
@@ -28276,6 +28602,53 @@ window.openProfile = async function (
 
 
     // =================================================
+    // VERIFIED SOCIALAPP PREMIUM PROFILE STATUS
+    // Read the persisted subscription for the profile being viewed.
+    // Fail closed: never show a badge when status cannot be verified.
+    // =================================================
+
+    let profileHasActivePremium = false;
+    try {
+        // Ask the server to verify this profile's subscription. Direct table
+        // reads can be blocked by premium_subscriptions RLS for other users.
+        const { data: premiumStatus, error: profilePremiumError } = await supabase.rpc(
+            "is_user_premium_account",
+            { target_user_id: userId }
+        );
+
+        if (profilePremiumError) throw profilePremiumError;
+        const premiumValue = Array.isArray(premiumStatus) ? premiumStatus[0] : premiumStatus;
+        profileHasActivePremium = premiumValue === true || premiumValue === "true" ||
+            premiumValue?.is_user_premium_account === true ||
+            premiumValue?.is_user_premium_account === "true";
+    } catch (profilePremiumError) {
+        console.warn("Could not verify this profile's SocialApp Premium status:", profilePremiumError);
+        profileHasActivePremium = false;
+    }
+
+    // The owner can also verify their own active subscription through the
+    // session-scoped RPC. This fallback covers the administrator account if
+    // is_user_premium_account excludes or fails to resolve the owner profile.
+    // It does not grant Premium based on administrator status.
+    if (!profileHasActivePremium) {
+        try {
+            const { data: authResult } = await supabase.auth.getUser();
+            const signedInUser = authResult?.user;
+            if (signedInUser && String(signedInUser.id) === String(userId)) {
+                const { data: ownPremiumStatus, error: ownPremiumError } = await supabase.rpc(
+                    "has_active_premium_subscription"
+                );
+                if (!ownPremiumError) {
+                    profileHasActivePremium = ownPremiumStatus === true ||
+                        ownPremiumStatus?.has_active_premium_subscription === true;
+                }
+            }
+        } catch (ownPremiumCheckError) {
+            console.warn("Could not verify the signed-in owner's Premium status:", ownPremiumCheckError);
+        }
+    }
+
+    // =================================================
     // PROFILE DATA
     // =================================================
 
@@ -28542,9 +28915,9 @@ window.openProfile = async function (
                     ${escapeHtml(profileName)}
 
                     ${
-                        profile.verified
+                        (profileHasActivePremium || profile.verified)
                             ? `
-                    <span class="verified-badge" aria-label="Verified"></span>
+                    <span class="verified-badge${profileHasActivePremium ? ' socialapp-premium-account-mark' : ''}" aria-label="${profileHasActivePremium ? 'Active SocialApp Premium subscription' : 'Verified'}"${profileHasActivePremium ? ' title="Active SocialApp Premium subscription"' : ''}></span>
                     `
                             : ""
                     }
@@ -34714,7 +35087,7 @@ window.navigateToScreen(
                     activeProfileScreen.querySelector("#profileNameDisplay");
                 if (profileNameEl) {
                     profileNameEl.innerHTML =
-                        `${escapeHtml(name || "User")} ${profile.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ""}`;
+                        `${escapeHtml(name || "User")} ${profile.verified ? `<span class="verified-badge" data-premium-account-user-id="${profile.id || currentProfile?.id || ''}" aria-label="Verified"></span>` : ""}`;
                 }
 
                 const avatarEl =
@@ -37192,8 +37565,14 @@ window.openPrivacySettings = async function (addHistory = true) {
 
     console.log("🔒 OPEN PRIVACY SETTINGS");
 
-    // Render synchronously before any network/auth await. This prevents the
-    // navigation layer from leaving the user on an empty screen while Supabase responds.
+    // Privacy must never inherit a stuck whole-page restoration mask.
+    document.documentElement.classList.remove("socialapp-restoring");
+    window.__navigationRestorePending = false;
+
+    // Reveal a real screen immediately, before any network request. The old
+    // implementation returned early when a cached screen existed, leaving
+    // stale state behind; on a first open it waited for Supabase before
+    // creating the screen, which could look like a blank page.
     let privacyScreen = document.getElementById("privacySettingsScreen");
     if (!privacyScreen) {
         privacyScreen = document.createElement("div");
@@ -37202,70 +37581,52 @@ window.openPrivacySettings = async function (addHistory = true) {
         document.body.appendChild(privacyScreen);
     }
     privacyScreen.style.display = "block";
-    privacyScreen.innerHTML = `<div style="min-height:100%;background:#000;color:#fff;font-family:inherit;"><div style="height:58px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #222;font-size:20px;font-weight:700;">Privacy</div><div style="padding:28px 18px;color:#aaa;text-align:center;"><div style="font-size:16px;color:#fff;font-weight:700;margin-bottom:10px;">Opening Privacy Settings…</div><div style="font-size:13px;line-height:1.5;">Your saved settings will appear here shortly.</div><div style="margin:20px auto;width:24px;height:24px;border:3px solid #333;border-top-color:#8a2be2;border-radius:50%;animation:privacySettingsSpin .8s linear infinite;"></div></div></div><style>@keyframes privacySettingsSpin{to{transform:rotate(360deg)}}</style>`;
+    privacyScreen.style.visibility = "visible";
+    privacyScreen.style.opacity = "1";
+    privacyScreen.innerHTML = '<div style="min-height:100%;background:#000;color:#fff;padding:22px 16px;box-sizing:border-box;font-family:sans-serif"><div style="font-size:20px;font-weight:700;margin-bottom:20px">Privacy</div><div style="color:#aaa">Loading your privacy settings…</div></div>';
     document.body.style.overflow = "hidden";
-    if (typeof window.hideTopBar === "function") window.hideTopBar();
-    ["app","commentsScreen","profileScreen","searchScreen","notificationsScreen","inboxScreen","chatScreen","storyViewer","mediaViewer","profileSettingsScreen","editProfileScreen","languageSettingsScreen","followRequestsScreen"].forEach(id => {
+    ["app","profileScreen","searchScreen","notificationsScreen","inboxScreen","chatScreen","commentsScreen","profileSettingsScreen","editProfileScreen","languageSettingsScreen","followRequestsScreen","savedPostsScreen"].forEach(id => {
         const el = document.getElementById(id);
-        if (el && id !== "privacySettingsScreen") el.style.display = "none";
+        if (el && el !== privacyScreen) el.style.display = "none";
     });
+    if (typeof window.hideTopBar === "function") window.hideTopBar();
 
-    // Read the authoritative auth session instead of relying on the app's
-    // cached global `session`, which can be temporarily stale during startup.
-    let authSession = null;
-    try {
-        const authResult = await Promise.race([
-            supabase.auth.getSession(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Authentication timed out")), 8000))
-        ]);
-        authSession = authResult?.data?.session || null;
-    } catch (authError) {
-        console.error("Privacy settings auth check failed:", authError);
-    }
-
-    if (!authSession?.user?.id) {
-        privacyScreen.innerHTML = `<div style="padding:24px;background:#000;color:#fff;min-height:100%;box-sizing:border-box;"><h2>Privacy</h2><p style="color:#ffb4b4;">Your sign-in session could not be confirmed. Please return to the app and sign in again.</p><button onclick="location.reload()" style="padding:12px 16px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:700;">Reload app</button></div>`;
+    if (!session?.user) {
+        privacyScreen.innerHTML = '<div style="padding:24px;background:#000;color:#fff;min-height:100%;box-sizing:border-box"><div style="font-size:20px;font-weight:700;margin-bottom:16px">Privacy</div><div style="color:#ccc">Please sign in to view privacy settings.</div><button type="button" onclick="location.reload()" style="margin-top:18px;padding:10px 14px;border:0;border-radius:8px;background:#8a2be2;color:white">Reload app</button></div>';
         return false;
     }
 
-    const userId = authSession.user.id;
-    // Keep the shared session in sync when it exists, without depending on it.
-    if (typeof session !== "undefined") session = authSession;
+    const userId = session.user.id;
 
     // =================================================
     // LOAD CURRENT PRIVACY SETTINGS
     // =================================================
 
-    let profile = null;
-    let error = null;
-    try {
-        const profileResult = await Promise.race([
-            supabase.from("profiles").select(`
-                private_profile,
-                post_privacy_mode,
-                show_online,
-                show_last_seen,
-                allow_messages,
-                allow_followers,
-                creator_subscription_price_kes,
-                creator_subscription_duration_days,
-                creator_subscription_payout_phone
-            `).eq("id", userId).single(),
-            new Promise((_, reject) => setTimeout(() => reject(new Error("Profile request timed out after 12 seconds")), 12000))
-        ]);
-        profile = profileResult?.data || null;
-        error = profileResult?.error || null;
-    } catch (profileLoadError) {
-        error = profileLoadError;
-    }
+    const { data: profile, error } = await supabase
+        .from("profiles")
+        .select(`
+            private_profile,
+            post_privacy_mode,
+            show_online,
+            show_last_seen,
+            allow_messages,
+            allow_followers,
+            creator_subscription_price_kes,
+            creator_subscription_duration_days,
+            creator_subscription_payout_phone
+        `)
+        .eq("id", userId)
+        .single();
 
     if (error || !profile) {
-        console.error(
-            "❌ PRIVACY PROFILE LOAD FAILED:",
-            error || "No profile row was returned"
-        );
-        const target = document.getElementById("privacySettingsScreen");
-        if (target) target.innerHTML = `<div style="padding:24px;background:#000;color:#fff;min-height:100%;box-sizing:border-box;"><h2>Privacy</h2><p style="color:#ffb4b4;">We couldn't load your saved privacy settings. Check your connection and try again.</p><button onclick="window.openPrivacySettings(true)" style="padding:12px 16px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:700;">Try again</button><button onclick="location.reload()" style="margin-left:8px;padding:12px 16px;border:1px solid #444;border-radius:10px;background:#151515;color:#fff;">Reload app</button></div>`;
+        console.error("❌ PRIVACY PROFILE LOAD FAILED:", error || "No profile row was returned");
+        privacyScreen.style.display = "block";
+        privacyScreen.innerHTML = '<div style="min-height:100%;padding:22px 16px;background:#000;color:#fff;box-sizing:border-box;font-family:sans-serif"><div style="font-size:20px;font-weight:700;margin-bottom:18px">Privacy</div><div style="color:#ddd;margin-bottom:16px">Your privacy settings could not be loaded. Check your connection and try again.</div><button type="button" id="privacySettingsRetryBtn" style="padding:11px 15px;border:0;border-radius:9px;background:#8a2be2;color:#fff;font-weight:700">Try again</button><button type="button" id="privacySettingsErrorBackBtn" style="margin-left:8px;padding:11px 15px;border:1px solid #444;border-radius:9px;background:#151515;color:#fff">Back</button></div>';
+        document.getElementById("privacySettingsRetryBtn")?.addEventListener("click", () => window.openPrivacySettings(false));
+        document.getElementById("privacySettingsErrorBackBtn")?.addEventListener("click", () => {
+            if (typeof window.openProfileSettings === "function") window.openProfileSettings(false);
+            else { privacyScreen.style.display = "none"; document.body.style.overflow = ""; }
+        });
         return false;
     }
 
@@ -37277,19 +37638,48 @@ window.openPrivacySettings = async function (addHistory = true) {
 
     let privacyHasPremium = false;
     let privacyIsAdministrator = false;
+
+    // Privacy-screen-only status check. Keep account/profile badges and the
+    // post badge/rendering logic untouched. Accept the common Supabase RPC
+    // return shapes without trusting profile fields or client-stored roles.
+    const parseAdminWhoami = (value) => {
+        const row = Array.isArray(value) ? value[0] : value;
+        const flag = row?.is_admin ?? row?.isAdmin ?? row?.whoami?.is_admin;
+        return flag === true || flag === "true";
+    };
     try {
-        privacyIsAdministrator = typeof window.isAdmin === "function" && (await window.isAdmin(true)) === true;
+        if (typeof window.isAdmin === "function") {
+            privacyIsAdministrator = (await window.isAdmin(true)) === true;
+        }
     } catch (e) {}
+
+    // If the shared helper returned false because the RPC response was wrapped
+    // differently, independently normalize the same server-authoritative API.
+    // This does not grant admin access: admin_api.whoami remains the authority.
     if (!privacyIsAdministrator) {
         try {
-            const premiumResult = await Promise.race([
-                supabase.rpc("has_active_premium_subscription"),
-                new Promise((_, reject) => setTimeout(() => reject(new Error("Premium status check timed out")), 5000))
-            ]);
-            const activePremium = premiumResult?.data;
-            const activePremiumError = premiumResult?.error;
-            privacyHasPremium = !activePremiumError && (activePremium === true || activePremium?.has_active_premium_subscription === true);
-        } catch (e) { console.warn("Privacy Premium status check failed:", e); }
+            const { data: adminWhoami, error: adminWhoamiError } = await supabase.rpc("admin_api", {
+                p_action: "whoami",
+                p_payload: {}
+            });
+            if (!adminWhoamiError) privacyIsAdministrator = parseAdminWhoami(adminWhoami);
+        } catch (e) {}
+    }
+
+    // The indicator reflects an actual verified, currently active subscription
+    // recorded in the database for EVERY account, including the administrator.
+    // Admin eligibility for premium actions remains separate and is not changed
+    // here. This avoids showing "Premium active" merely because the user is admin.
+    try {
+        const { data: activePremium, error: activePremiumError } = await supabase.rpc("has_verified_paid_premium_subscription");
+        privacyHasPremium = !activePremiumError && (
+            activePremium === true ||
+            activePremium === "true" ||
+            activePremium?.has_verified_paid_premium_subscription === true ||
+            activePremium?.has_verified_paid_premium_subscription === "true"
+        );
+    } catch (e) {
+        privacyHasPremium = false;
     }
     const showCreatorSubscriptionEditor = privacyHasPremium && !privacyIsAdministrator;
 
@@ -37297,7 +37687,8 @@ window.openPrivacySettings = async function (addHistory = true) {
     // CREATE / REUSE DEDICATED SCREEN
     // =================================================
 
-    // Reuse the synchronously-created screen above.
+    // privacyScreen was created and shown synchronously above; keep that same
+    // node so the visible loading state transitions directly into real content.
 
     // =================================================
     // CENTRAL NAVIGATION
@@ -37918,6 +38309,57 @@ window.savePrivacySettings = async function () {
 
     console.log("✅ PRIVACY SETTINGS AND ORDINARY POSTS SAVED");
 
+    // Update the in-memory account state immediately so screens use the newly
+    // saved visibility without requiring a browser/page refresh.
+    window.currentAccountPrivacyMode = postPrivacyMode;
+    window.currentAccountIsPrivate = privateAccount.checked;
+    window.currentPrivacySettingsUserId = session.user.id;
+
+    // Update the visible Home composer account-visibility indicator immediately.
+    // This must happen before navigation or feed reloading, because the composer
+    // may already be mounted and will otherwise keep showing its old label.
+    const updateAccountVisibilityIndicator = () => {
+        const accountBadge = document.getElementById("postAccountVisibilityValue");
+        if (accountBadge) {
+            accountBadge.textContent = privateAccount.checked ? "Private" : "Public";
+            accountBadge.dataset.visibility = privateAccount.checked ? "private" : "public";
+            accountBadge.setAttribute("aria-label", `Account visibility: ${privateAccount.checked ? "Private" : "Public"}`);
+        }
+        const badgeWrap = document.getElementById("postAccountVisibilityBadge");
+        if (badgeWrap) {
+            badgeWrap.dataset.visibility = privateAccount.checked ? "private" : "public";
+            badgeWrap.style.borderColor = privateAccount.checked ? "#8a2be2" : "#1877f2";
+        }
+        const hint = document.getElementById("postAudienceHint");
+        if (hint) {
+            hint.textContent = privateAccount.checked
+                ? "New ordinary posts will be Private and visible to followers. Premium posts stay Premium."
+                : "New ordinary posts will be Public. Premium posts stay Premium.";
+        }
+    };
+    updateAccountVisibilityIndicator();
+
+    // Synchronize cached ordinary posts immediately. Premium posts remain untouched.
+    for (const tabName of ["explore", "following"]) {
+        const cached = window.feedCache?.[tabName];
+        if (Array.isArray(cached)) {
+            for (const post of cached) {
+                if (String(post?.user_id) === String(session.user.id) &&
+                    String(post?.visibility || "").toLowerCase() !== "premium") {
+                    post.visibility = ordinaryPostVisibility;
+                }
+            }
+        }
+    }
+    if (Array.isArray(window.postsState)) {
+        for (const post of window.postsState) {
+            if (String(post?.user_id) === String(session.user.id) &&
+                String(post?.visibility || "").toLowerCase() !== "premium") {
+                post.visibility = ordinaryPostVisibility;
+            }
+        }
+    }
+
     alert("Privacy settings saved. Your ordinary posts now follow your account visibility; Premium posts were left unchanged.");
 
     // =================================================
@@ -37929,6 +38371,17 @@ window.savePrivacySettings = async function () {
         "privacySettingsScreen"
     ) {
         history.back();
+        // Wait for the previous screen to return, then refresh the feed in-app.
+        setTimeout(() => {
+            const badge = document.getElementById("postAccountVisibilityValue");
+            if (badge) {
+                badge.textContent = window.currentAccountIsPrivate ? "Private" : "Public";
+                badge.dataset.visibility = window.currentAccountIsPrivate ? "private" : "public";
+            }
+            if (document.getElementById("posts") && typeof window.loadPosts === "function") {
+                window.loadPosts(true).catch(error => console.warn("Immediate feed sync failed:", error));
+            }
+        }, 250);
         return;
     }
 
@@ -37937,6 +38390,16 @@ window.savePrivacySettings = async function () {
         "privacySettingsScreen"
     ) {
         history.back();
+        setTimeout(() => {
+            const badge = document.getElementById("postAccountVisibilityValue");
+            if (badge) {
+                badge.textContent = window.currentAccountIsPrivate ? "Private" : "Public";
+                badge.dataset.visibility = window.currentAccountIsPrivate ? "private" : "public";
+            }
+            if (document.getElementById("posts") && typeof window.loadPosts === "function") {
+                window.loadPosts(true).catch(error => console.warn("Immediate feed sync failed:", error));
+            }
+        }, 250);
         return;
     }
 
@@ -38026,8 +38489,13 @@ window.openPremiumScreen = async function () {
 
   let active = false;
   try {
-    const { data, error } = await supabase.rpc("has_active_premium_subscription");
-    if (!error) active = data === true || data?.has_active_premium_subscription === true;
+    const adminEligible = typeof window.isAdmin === "function" && await window.isAdmin(true) === true;
+    if (adminEligible) {
+      active = true;
+    } else {
+      const { data, error } = await supabase.rpc("has_active_premium_subscription");
+      if (!error) active = data === true || data?.has_active_premium_subscription === true;
+    }
   } catch (e) {
     console.warn("Premium status could not be checked yet.", e);
   }
@@ -39376,7 +39844,7 @@ window.closePhotoGallery = function (
 window.socialAuthState=window.socialAuthState||{mode:"login",busy:false};
 window.socialAuthMessage=function(msg,type){const b=document.querySelector(type==="success"?"#socialAuthCard .auth-success":"#socialAuthCard .auth-error");if(b){b.textContent=msg;b.style.display="block";}};
 window.socialAuthBusy=function(v){socialAuthState.busy=v;const b=document.getElementById("socialAuthSubmit");if(b){b.disabled=v;b.style.opacity=v?.65:1;}};
-window.openSocialAuth=function(mode="login"){socialAuthState.mode=mode;socialAuthState.busy=false;let o=document.getElementById("socialAuthOverlay");if(!o){o=document.createElement("div");o.id="socialAuthOverlay";o.innerHTML='<div id="socialAuthCard" role="dialog" aria-modal="true"></div>';document.body.appendChild(o);o.addEventListener("click",e=>{if(e.target===o&&!socialAuthState.busy)closeSocialAuth();});}o.classList.add("active");renderSocialAuth();setTimeout(()=>o.querySelector("input")?.focus(),40);};
+window.openSocialAuth=function(mode="login"){socialAuthState.mode=mode;socialAuthState.busy=false;let o=document.getElementById("socialAuthOverlay");if(!o){o=document.createElement("div");o.id="socialAuthOverlay";o.innerHTML='<div id="socialAuthCard" role="dialog" aria-modal="true"></div>';document.body.appendChild(o);o.addEventListener("click",e=>{if(e.target===o&&!socialAuthState.busy)closeSocialAuth();});}o.style.removeProperty("display");o.classList.remove("active");void o.offsetWidth;o.classList.add("active");renderSocialAuth();setTimeout(()=>o.querySelector("input")?.focus(),40);};
 window.closeSocialAuth=function(force=false){if(!force&&socialAuthState.busy)return;socialAuthState.busy=false;const overlay=document.getElementById("socialAuthOverlay");if(overlay){overlay.classList.remove("active");overlay.style.display="none";}};
 window.socialNormalizeUsername=function(value){return String(value||"").trim().replace(/^@+/,"").replace(/\s+/g,"_").toLowerCase();};
 window.socialCheckUsername=async function(username,excludeUserId=null){const u=socialNormalizeUsername(username);if(!/^[a-z0-9_.-]{3,30}$/.test(u))return {ok:false,message:"Username must be 3–30 characters and use only letters, numbers, underscores, dots or hyphens."};let q=supabase.from("profiles").select("id").eq("username",u).limit(1);if(excludeUserId)q=q.neq("id",excludeUserId);const {data,error}=await q;if(error)return {ok:false,message:"We could not check that username. Please try again."};if(data?.length)return {ok:false,message:`The username @${u} is already in use. Please choose another username.`};return {ok:true,username:u};};
@@ -40611,7 +41079,7 @@ font-weight:bold;
 
 ${user.name}
 
-${user.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ""}
+${user.verified ? `<span class="verified-badge" data-premium-account-user-id="${user.id || ''}" aria-label="Verified"></span>` : ""}
 
 </div>
 
@@ -41748,9 +42216,11 @@ if (
           if (accountPrivacyError) throw accountPrivacyError;
           if (!accountPrivacy) throw new Error("No saved profile privacy row was returned.");
 
+          // Use the same canonical value as Privacy settings and createPost().
+          // Do not let the legacy private_account moderation flag keep this
+          // indicator stuck on Private after the user selects Public.
           const accountIsPrivate = accountPrivacy.post_privacy_mode === "private"
-            || accountPrivacy.private_profile === true
-            || accountPrivacy.private_account === true;
+            || (accountPrivacy.post_privacy_mode !== "public" && accountPrivacy.private_profile === true);
           accountBadge.textContent = accountIsPrivate ? "Private" : "Public";
           accountBadge.dataset.visibility = accountIsPrivate ? "private" : "public";
         } catch (e) {
@@ -50199,7 +50669,7 @@ const bg =
             ">
 
               <b>
-                ${icon} ${username}${currentProfile.verified ? '<span class="verified-badge" aria-label="Verified"></span>' : ''}
+                ${icon} ${username}${currentProfile.verified ? `<span class="verified-badge" data-premium-account-user-id="${currentProfile.id || ''}" aria-label="Verified"></span>` : ''}
               </b>
 
               ${text}
@@ -57876,5 +58346,49 @@ window.reportMessage=id=>window.submitUserReport("message",id);
 window.reportProfile=id=>window.submitUserReport("profile",id);
 window.reportComment=id=>window.submitUserReport("comment",id);
 </script>
+
+<script id="socialapp-global-premium-badge-observer">
+(function(){
+  function scan(root){
+    if(!root || root.nodeType !== 1) return;
+    const nodes=[]; if(root.matches && root.matches('.verified-badge[data-premium-account-user-id]')) nodes.push(root);
+    if(root.querySelectorAll) nodes.push(...root.querySelectorAll('.verified-badge[data-premium-account-user-id]'));
+    nodes.forEach(el=>{ if(el.dataset.premiumBadgeHydrationStarted) return; el.dataset.premiumBadgeHydrationStarted='1'; window.socialAppHydratePremiumAccountBadge?.(el,el.dataset.premiumAccountUserId); });
+  }
+  document.addEventListener('DOMContentLoaded',()=>{scan(document.documentElement); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>scan(n)))).observe(document.documentElement,{childList:true,subtree:true});});
+  if(document.readyState!=='loading'){scan(document.documentElement); new MutationObserver(ms=>ms.forEach(m=>m.addedNodes.forEach(n=>scan(n)))).observe(document.documentElement,{childList:true,subtree:true});}
+})();
+</script>
+
+
+<script id="socialapp-login-delegated-fix">
+(function () {
+  if (window.__socialAppLoginDelegatedFixInstalled) return;
+  window.__socialAppLoginDelegatedFixInstalled = true;
+  // Home is rebuilt after auth changes, so bind at document level rather than
+  // relying on a handler attached to a button that may later be replaced.
+  document.addEventListener('click', function (event) {
+    const button = event.target && event.target.closest
+      ? event.target.closest('#app button#login, #app .home-login button, button#login')
+      : null;
+    if (!button) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    try {
+      if (typeof window.openSocialAuth === 'function') {
+        window.openSocialAuth('login');
+      } else {
+        console.error('SocialApp login handler unavailable: openSocialAuth is not a function.');
+        alert('Login is temporarily unavailable. Please refresh the page and try again.');
+      }
+    } catch (error) {
+      console.error('Could not open SocialApp login screen:', error);
+      alert('Could not open the login screen. Please refresh and try again.');
+    }
+  }, true);
+})();
+</script>
+
 </body>
 </html>
