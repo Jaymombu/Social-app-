@@ -6737,6 +6737,7 @@ async function initAuth() {
 
   if (currentUser) {
     console.log("USER LOADED:", currentUser.id);
+    window.__schedulePrivacySettingsPrefetch?.(currentUser.id);
 
     await loadUnreadCount();
     await loadNotifications();
@@ -6938,6 +6939,7 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
 
   if (currentUser) {
     console.log("SIGNED IN:", currentUser.id);
+    window.__schedulePrivacySettingsPrefetch?.(currentUser.id);
 
     const restricted = await window.checkAccountRestriction(currentUser.id);
     if (restricted !== false) return;
@@ -6948,6 +6950,7 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
   }
 
   if (event === "SIGNED_OUT") {
+    window.__privacySettingsCache = { userId: null, promise: null, value: null, loadedAt: 0 };
     // Immediately remove account-owned content from the screen and memory.
     // Do not wait for navigation/reload: signOut can be triggered elsewhere.
     window.hideAccountRestrictedScreen();
@@ -37561,6 +37564,41 @@ window.declineFollowRequest = async function(requestId){
 
 };
 
+// Background cache for Privacy settings; scoped to the authenticated user.
+window.__privacySettingsCache = window.__privacySettingsCache || { userId: null, promise: null, value: null, loadedAt: 0 };
+window.__prefetchPrivacySettings = function (requestedUserId, force = false) {
+    const uid = requestedUserId || session?.user?.id;
+    if (!uid || !supabase) return Promise.resolve(null);
+    const cache = window.__privacySettingsCache;
+    if (!force && cache.userId === uid && cache.value && Date.now() - cache.loadedAt < 120000) return Promise.resolve(cache.value);
+    if (!force && cache.userId === uid && cache.promise) return cache.promise;
+    cache.userId = uid;
+    cache.value = null;
+    cache.promise = (async () => {
+        const [pr, pm, ad, own] = await Promise.all([
+            supabase.from("profiles").select("private_profile, post_privacy_mode, show_online, show_last_seen, allow_messages, allow_followers, creator_subscription_price_kes, creator_subscription_duration_days, creator_subscription_payout_phone").eq("id", uid).single(),
+            supabase.rpc("has_verified_paid_premium_subscription"),
+            supabase.rpc("admin_api", { p_action: "whoami", p_payload: {} }),
+            (async () => { const n = new Date().toISOString(); return supabase.from("premium_subscriptions").select("status, verified_at, started_at, expires_at").eq("user_id", uid).eq("status", "active").not("verified_at", "is", null).lte("started_at", n).gt("expires_at", n).limit(1); })()
+        ]);
+        const av = Array.isArray(ad?.data) ? ad.data[0] : ad?.data;
+        const isAdmin = !ad?.error && (av?.is_admin === true || av?.is_admin === "true" || av?.isAdmin === true || av?.isAdmin === "true" || av?.whoami?.is_admin === true);
+        const pv = Array.isArray(pm?.data) ? pm.data[0] : pm?.data;
+        const raw = pv && typeof pv === "object" ? (pv.has_verified_paid_premium_subscription ?? pv.has_verified_paid_premium_subscription_1 ?? pv.active) : pv;
+        const rpcPremium = raw === true || raw === "true" || raw === 1 || raw === "1";
+        const rowPremium = !own?.error && Array.isArray(own?.data) && own.data.length > 0;
+        const value = { userId: uid, profile: pr?.data || null, profileError: pr?.error || null, isAdmin, hasPremium: rpcPremium || rowPremium, premiumKnown: !pm?.error || !own?.error };
+        cache.value = value; cache.loadedAt = Date.now(); cache.promise = null;
+        return value;
+    })().catch(e => { console.warn("Privacy background preload failed:", e); cache.promise = null; return null; });
+    return cache.promise;
+};
+window.__schedulePrivacySettingsPrefetch = function (uid) {
+    if (!uid) return;
+    const run = () => window.__prefetchPrivacySettings(uid, true).catch(() => {});
+    if (typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 1800 }); else setTimeout(run, 250);
+};
+
 window.openPrivacySettings = async function (addHistory = true) {
 
     console.log("🔒 OPEN PRIVACY SETTINGS");
@@ -37602,21 +37640,10 @@ window.openPrivacySettings = async function (addHistory = true) {
     // LOAD CURRENT PRIVACY SETTINGS
     // =================================================
 
-    const { data: profile, error } = await supabase
-        .from("profiles")
-        .select(`
-            private_profile,
-            post_privacy_mode,
-            show_online,
-            show_last_seen,
-            allow_messages,
-            allow_followers,
-            creator_subscription_price_kes,
-            creator_subscription_duration_days,
-            creator_subscription_payout_phone
-        `)
-        .eq("id", userId)
-        .single();
+    let privacyPrefetched = await window.__prefetchPrivacySettings(userId);
+    if (!privacyPrefetched) privacyPrefetched = await window.__prefetchPrivacySettings(userId, true);
+    const profile = privacyPrefetched?.profile || null;
+    const error = privacyPrefetched?.profileError || null;
 
     if (error || !profile) {
         console.error("❌ PRIVACY PROFILE LOAD FAILED:", error || "No profile row was returned");
@@ -37636,85 +37663,14 @@ window.openPrivacySettings = async function (addHistory = true) {
         profile.post_privacy_mode === "private" ||
         (profile.post_privacy_mode !== "public" && profile.private_profile === true);
 
-    let privacyHasPremium = false;
-    let privacyIsAdministrator = false;
-
-    // Privacy-screen-only status check. Keep account/profile badges and the
-    // post badge/rendering logic untouched. Accept the common Supabase RPC
-    // return shapes without trusting profile fields or client-stored roles.
-    const parseAdminWhoami = (value) => {
-        const row = Array.isArray(value) ? value[0] : value;
-        const flag = row?.is_admin ?? row?.isAdmin ?? row?.whoami?.is_admin;
-        return flag === true || flag === "true";
-    };
-    try {
-        if (typeof window.isAdmin === "function") {
-            privacyIsAdministrator = (await window.isAdmin(true)) === true;
-        }
-    } catch (e) {}
-
-    // If the shared helper returned false because the RPC response was wrapped
-    // differently, independently normalize the same server-authoritative API.
-    // This does not grant admin access: admin_api.whoami remains the authority.
-    if (!privacyIsAdministrator) {
-        try {
-            const { data: adminWhoami, error: adminWhoamiError } = await supabase.rpc("admin_api", {
-                p_action: "whoami",
-                p_payload: {}
-            });
-            if (!adminWhoamiError) privacyIsAdministrator = parseAdminWhoami(adminWhoami);
-        } catch (e) {}
-    }
-
-    // The indicator reflects an actual verified, currently active subscription
-    // recorded in the database for EVERY account, including the administrator.
-    // Admin eligibility for premium actions remains separate and is not changed
-    // here. This avoids showing "Premium active" merely because the user is admin.
-    let premiumStatusKnown = false;
-    try {
-        const { data: activePremium, error: activePremiumError } = await supabase.rpc("has_verified_paid_premium_subscription");
-        if (activePremiumError) {
-            console.error("Privacy Premium status RPC failed:", activePremiumError);
-        } else {
-            const premiumValue = Array.isArray(activePremium) ? activePremium[0] : activePremium;
-            const rawPremiumFlag = typeof premiumValue === "object" && premiumValue !== null
-                ? (premiumValue.has_verified_paid_premium_subscription ?? premiumValue.has_verified_paid_premium_subscription_1 ?? premiumValue.active)
-                : premiumValue;
-            privacyHasPremium = rawPremiumFlag === true || rawPremiumFlag === "true" || rawPremiumFlag === 1 || rawPremiumFlag === "1";
-            premiumStatusKnown = true;
-        }
-    } catch (e) {
-        console.error("Privacy Premium status RPC threw:", e);
-    }
-
-    // Safe fallback: check only the signed-in user's own subscription row. It
-    // never uses the administrator exemption or the general eligibility RPC.
-    // If RLS/permissions prevent this read, keep status unknown instead of
-    // incorrectly claiming that a paid subscription is inactive.
-    if (!privacyHasPremium || !premiumStatusKnown) {
-        try {
-            const nowIso = new Date().toISOString();
-            const { data: ownPremiumRows, error: ownPremiumError } = await supabase
-                .from("premium_subscriptions")
-                .select("status, verified_at, started_at, expires_at")
-                .eq("user_id", userId)
-                .eq("status", "active")
-                .not("verified_at", "is", null)
-                .lte("started_at", nowIso)
-                .gt("expires_at", nowIso)
-                .limit(1);
-            if (ownPremiumError) {
-                console.error("Privacy own-subscription fallback failed:", ownPremiumError);
-            } else {
-                const rowSaysPremium = Array.isArray(ownPremiumRows) && ownPremiumRows.length > 0;
-                // A verified qualifying row is sufficient for the indicator; a
-                // negative fallback must not erase a positive authoritative RPC.
-                privacyHasPremium = privacyHasPremium || rowSaysPremium;
-                premiumStatusKnown = true;
-            }
-        } catch (e) {
-            console.error("Privacy own-subscription fallback threw:", e);
-        }
+    let privacyHasPremium = privacyPrefetched?.hasPremium === true;
+    let privacyIsAdministrator = privacyPrefetched?.isAdmin === true;
+    let premiumStatusKnown = privacyPrefetched?.premiumKnown === true;
+    if (!premiumStatusKnown) {
+        privacyPrefetched = await window.__prefetchPrivacySettings(userId, true);
+        privacyHasPremium = privacyPrefetched?.hasPremium === true;
+        privacyIsAdministrator = privacyPrefetched?.isAdmin === true;
+        premiumStatusKnown = privacyPrefetched?.premiumKnown === true;
     }
     const showCreatorSubscriptionEditor = privacyHasPremium && !privacyIsAdministrator;
 
