@@ -58,11 +58,10 @@
     // Hide the first paint when Chrome/Android reconstructed or reloaded the
     // document. This applies to Home as well as secondary screens, so the
     // transient startup shell cannot flash before the saved state is ready.
-    if (
-      (screen && screen !== "app") ||
-      document.wasDiscarded === true ||
-      navigationType === "reload"
-    ) {
+    // Only hide the first paint when this document is genuinely being
+    // reconstructed/reloaded. A saved secondary-screen value alone is not
+    // proof that the live page was destroyed.
+    if (document.wasDiscarded === true || navigationType === "reload") {
       document.documentElement.classList.add("socialapp-restoring");
     }
   } catch (e) {}
@@ -6806,8 +6805,17 @@ async function initAuth() {
     // We must not let that temporary Home shell become visible while a
     // secondary screen (Profile, Comments, Chat, etc.) is being restored.
     // Do this outside startApp() so the existing startApp() remains untouched.
+    const navigationEntry = performance.getEntriesByType?.("navigation")?.[0];
+    const documentWasReconstructed =
+      document.wasDiscarded === true || navigationEntry?.type === "reload";
+    window.__socialAppDocumentWasReconstructed = documentWasReconstructed;
+
+    // When Android destroys the document, start the app normally from a clean
+    // document instead of replaying an old secondary screen into a new runtime.
+    // When the original document survives/frozen-restores, it already owns the
+    // current screen and no navigation replay is needed.
     const restoringSecondaryScreen =
-      !!saved?.screen && saved.screen !== "app";
+      !documentWasReconstructed && !!saved?.screen && saved.screen !== "app";
 
     if (restoringSecondaryScreen) {
       const startupHome = document.getElementById("app");
@@ -51666,26 +51674,18 @@ window.addEventListener("pagehide", () => {
 });
 
 window.addEventListener("pageshow", event => {
-    // A persisted pageshow means the browser restored a previously frozen
-    // document. Refresh the exact saved navigation state without rebuilding
-    // the app when the page was merely shown again.
-    if (!event.persisted) return;
+    // If the browser restores this same document from its back-forward cache,
+    // it was NOT destroyed. Its DOM and in-memory screen are already intact.
+    // Replaying restoreNavigationAfterReload here would rebuild the screen,
+    // discard transient state, and can corrupt the Back stack.
+    if (event.persisted) {
+        window.__socialAppDocumentWasReconstructed = false;
+        return;
+    }
 
-    setTimeout(async () => {
-        try {
-            if (!currentUser && !session?.user) return;
-            const raw =
-                sessionStorage.getItem("appNavigationState") ||
-                localStorage.getItem("socialAppNavigationState");
-            const saved = raw ? JSON.parse(raw) : null;
-            if (saved?.screen && saved.screen !== "app" &&
-                typeof window.restoreNavigationAfterReload === "function") {
-                await window.restoreNavigationAfterReload();
-            }
-        } catch (error) {
-            console.warn("⚠️ PAGESHOW NAVIGATION RESTORE FAILED:", error);
-        }
-    }, 100);
+    // A non-persisted pageshow belongs to a newly loaded document. The normal
+    // startup path (safeStart) owns initialization; do not perform a second
+    // navigation from pageshow.
 }, { passive: true });
 
 
