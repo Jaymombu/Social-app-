@@ -37575,9 +37575,10 @@ window.__prefetchPrivacySettings = function (requestedUserId, force = false) {
     cache.userId = uid;
     cache.value = null;
     cache.promise = (async () => {
-        const [pr, pm, ad, own] = await Promise.all([
+        const [pr, pm, pi, ad, own] = await Promise.all([
             supabase.from("profiles").select("private_profile, post_privacy_mode, show_online, show_last_seen, allow_messages, allow_followers, creator_subscription_price_kes, creator_subscription_duration_days, creator_subscription_payout_phone").eq("id", uid).single(),
             supabase.rpc("has_verified_paid_premium_subscription"),
+            supabase.rpc("has_premium_privacy_indicator"),
             supabase.rpc("admin_api", { p_action: "whoami", p_payload: {} }),
             (async () => { const n = new Date().toISOString(); return supabase.from("premium_subscriptions").select("status, verified_at, started_at, expires_at").eq("user_id", uid).eq("status", "active").not("verified_at", "is", null).lte("started_at", n).gt("expires_at", n).limit(1); })()
         ]);
@@ -37586,8 +37587,16 @@ window.__prefetchPrivacySettings = function (requestedUserId, force = false) {
         const pv = Array.isArray(pm?.data) ? pm.data[0] : pm?.data;
         const raw = pv && typeof pv === "object" ? (pv.has_verified_paid_premium_subscription ?? pv.has_verified_paid_premium_subscription_1 ?? pv.active) : pv;
         const rpcPremium = raw === true || raw === "true" || raw === 1 || raw === "1";
+        const piv = Array.isArray(pi?.data) ? pi.data[0] : pi?.data;
+        const indicatorRaw = piv && typeof piv === "object"
+            ? (piv.has_premium_privacy_indicator ?? piv.active ?? piv.is_active)
+            : piv;
+        const rpcIndicator = indicatorRaw === true || indicatorRaw === "true" || indicatorRaw === 1 || indicatorRaw === "1";
         const rowPremium = !own?.error && Array.isArray(own?.data) && own.data.length > 0;
-        const value = { userId: uid, profile: pr?.data || null, profileError: pr?.error || null, isAdmin, hasPremium: rpcPremium || rowPremium, premiumKnown: !pm?.error || !own?.error };
+        // The indicator represents Premium entitlement: verified paid subscribers
+        // OR the server-authorized administrator exemption. It does not create
+        // a paid subscription or change payment/post authorization logic.
+        const value = { userId: uid, profile: pr?.data || null, profileError: pr?.error || null, isAdmin, hasPremium: isAdmin || rpcIndicator || rpcPremium || rowPremium, premiumKnown: isAdmin || !pi?.error || !pm?.error || !own?.error };
         cache.value = value; cache.loadedAt = Date.now(); cache.promise = null;
         return value;
     })().catch(e => { console.warn("Privacy background preload failed:", e); cache.promise = null; return null; });
