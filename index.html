@@ -51618,6 +51618,16 @@ window.persistNavigationBeforeBackground = function () {
         const snapshot = {
             ...current,
             data: { ...(current.data || {}) },
+            // Persist the in-app Back path as well as the visible screen.
+            // Android can discard the document while the tab is backgrounded;
+            // without this mirror, the restored screen may be the only history
+            // entry and the next Back action exits the app.
+            stack: Array.isArray(window.appNavigation?.stack)
+                ? window.appNavigation.stack.map(item => ({
+                    ...item,
+                    data: { ...(item?.data || {}) }
+                  }))
+                : [],
             scrollY,
             timestamp: Date.now(),
             userId: session?.user?.id || currentUser?.id || null
@@ -52424,25 +52434,83 @@ window.initializeAppNavigation = function () {
     if (preservedRefreshState?.screen &&
         preservedRefreshState.screen !== "app") {
 
-        window.setCurrentNavigationState(
-            preservedRefreshState.screen,
-            preservedRefreshState.data || {},
-            Number(preservedRefreshState.scrollY) || 0
-        );
+        const restoredScreen = preservedRefreshState.screen;
+        const restoredData = preservedRefreshState.data || {};
+        const restoredScrollY = Number(preservedRefreshState.scrollY) || 0;
+        const savedStack = Array.isArray(preservedRefreshState.stack)
+            ? preservedRefreshState.stack.filter(item => item?.screen && item.screen !== restoredScreen)
+            : [];
+        const browserAlreadyHasCurrent =
+            history.state?.appScreen === restoredScreen;
 
-        history.replaceState(
-            {
-                appScreen: preservedRefreshState.screen,
-                data: preservedRefreshState.data || {},
-                scrollY: Number(preservedRefreshState.scrollY) || 0
-            },
-            "",
-            "#" + preservedRefreshState.screen
+        window.appNavigation.stack = savedStack.map(item => ({
+            screen: item.screen,
+            data: { ...(item.data || {}) },
+            scrollY: Number(item.scrollY) || 0,
+            timestamp: Number(item.timestamp) || Date.now()
+        }));
+
+        // If Android reconstructed the page without its in-app browser-history
+        // chain, rebuild a safe internal path: Home -> saved prior screens ->
+        // current screen. Back then returns through SocialApp instead of
+        // immediately leaving the app. Do not rebuild when the current history
+        // entry already matches the saved screen, since that chain may be intact.
+        if (!browserAlreadyHasCurrent) {
+            try {
+                history.replaceState(
+                    { appScreen: "app", data: {}, scrollY: Number(window.homeScrollY) || 0,
+                      __socialAppHistoryRoot: true },
+                    "",
+                    "#app"
+                );
+                const chain = window.appNavigation.stack;
+                for (const item of chain) {
+                    history.pushState(
+                        { appScreen: item.screen, data: item.data || {}, scrollY: Number(item.scrollY) || 0,
+                          __socialAppRestoredHistory: true },
+                        "",
+                        "#" + item.screen
+                    );
+                }
+                history.pushState(
+                    { appScreen: restoredScreen, data: restoredData, scrollY: restoredScrollY,
+                      __socialAppRestoredHistory: true },
+                    "",
+                    "#" + restoredScreen
+                );
+            } catch (historyError) {
+                console.warn("⚠️ INTERNAL HISTORY REBUILD FAILED:", historyError);
+                history.replaceState(
+                    { appScreen: restoredScreen, data: restoredData, scrollY: restoredScrollY },
+                    "",
+                    "#" + restoredScreen
+                );
+            }
+        } else {
+            history.replaceState(
+                { ...history.state, appScreen: restoredScreen, data: restoredData, scrollY: restoredScrollY },
+                "",
+                "#" + restoredScreen
+            );
+        }
+
+        const restoredCurrentState = window.setCurrentNavigationState(
+            restoredScreen,
+            restoredData,
+            restoredScrollY
         );
+        if (restoredCurrentState) {
+            restoredCurrentState.stack = window.appNavigation.stack.map(item => ({
+                ...item,
+                data: { ...(item.data || {}) }
+            }));
+            window.syncNavigationSession?.(restoredCurrentState);
+        }
 
         console.log(
             "🧭 NAVIGATION INITIALIZED FROM REFRESH SNAPSHOT →",
-            preservedRefreshState.screen
+            restoredScreen,
+            "saved prior screens:", window.appNavigation.stack.length
         );
 
         return;
@@ -55836,6 +55904,16 @@ window.restoreNavigationAfterReload =
         window.appNavigation.restoring =
             true;
 
+        if (Array.isArray(saved.stack)) {
+            window.appNavigation.stack = saved.stack
+                .filter(item => item?.screen && item.screen !== saved.screen)
+                .map(item => ({
+                    screen: item.screen,
+                    data: { ...(item.data || {}) },
+                    scrollY: Number(item.scrollY) || 0,
+                    timestamp: Number(item.timestamp) || Date.now()
+                }));
+        }
 
         try {
 
