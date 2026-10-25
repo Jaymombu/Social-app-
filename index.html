@@ -37210,32 +37210,54 @@ window.openPrivacySettings = async function (addHistory = true) {
         if (el && id !== "privacySettingsScreen") el.style.display = "none";
     });
 
-    if (!session?.user) {
-        privacyScreen.innerHTML = `<div style="padding:24px;background:#000;color:#fff;min-height:100%;box-sizing:border-box;"><h2>Privacy</h2><p>Your session is not ready. Please sign in again.</p><button onclick="location.reload()" style="padding:12px 16px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:700;">Reload app</button></div>`;
+    // Read the authoritative auth session instead of relying on the app's
+    // cached global `session`, which can be temporarily stale during startup.
+    let authSession = null;
+    try {
+        const authResult = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Authentication timed out")), 8000))
+        ]);
+        authSession = authResult?.data?.session || null;
+    } catch (authError) {
+        console.error("Privacy settings auth check failed:", authError);
+    }
+
+    if (!authSession?.user?.id) {
+        privacyScreen.innerHTML = `<div style="padding:24px;background:#000;color:#fff;min-height:100%;box-sizing:border-box;"><h2>Privacy</h2><p style="color:#ffb4b4;">Your sign-in session could not be confirmed. Please return to the app and sign in again.</p><button onclick="location.reload()" style="padding:12px 16px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:700;">Reload app</button></div>`;
         return false;
     }
 
-    const userId = session.user.id;
+    const userId = authSession.user.id;
+    // Keep the shared session in sync when it exists, without depending on it.
+    if (typeof session !== "undefined") session = authSession;
 
     // =================================================
     // LOAD CURRENT PRIVACY SETTINGS
     // =================================================
 
-    const { data: profile, error } = await supabase
-        .from("profiles")
-        .select(`
-            private_profile,
-            post_privacy_mode,
-            show_online,
-            show_last_seen,
-            allow_messages,
-            allow_followers,
-            creator_subscription_price_kes,
-            creator_subscription_duration_days,
-            creator_subscription_payout_phone
-        `)
-        .eq("id", userId)
-        .single();
+    let profile = null;
+    let error = null;
+    try {
+        const profileResult = await Promise.race([
+            supabase.from("profiles").select(`
+                private_profile,
+                post_privacy_mode,
+                show_online,
+                show_last_seen,
+                allow_messages,
+                allow_followers,
+                creator_subscription_price_kes,
+                creator_subscription_duration_days,
+                creator_subscription_payout_phone
+            `).eq("id", userId).single(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error("Profile request timed out after 12 seconds")), 12000))
+        ]);
+        profile = profileResult?.data || null;
+        error = profileResult?.error || null;
+    } catch (profileLoadError) {
+        error = profileLoadError;
+    }
 
     if (error || !profile) {
         console.error(
@@ -37260,9 +37282,14 @@ window.openPrivacySettings = async function (addHistory = true) {
     } catch (e) {}
     if (!privacyIsAdministrator) {
         try {
-            const { data: activePremium, error: activePremiumError } = await supabase.rpc("has_active_premium_subscription");
+            const premiumResult = await Promise.race([
+                supabase.rpc("has_active_premium_subscription"),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Premium status check timed out")), 5000))
+            ]);
+            const activePremium = premiumResult?.data;
+            const activePremiumError = premiumResult?.error;
             privacyHasPremium = !activePremiumError && (activePremium === true || activePremium?.has_active_premium_subscription === true);
-        } catch (e) {}
+        } catch (e) { console.warn("Privacy Premium status check failed:", e); }
     }
     const showCreatorSubscriptionEditor = privacyHasPremium && !privacyIsAdministrator;
 
