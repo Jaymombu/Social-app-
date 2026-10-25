@@ -37615,12 +37615,36 @@ window.openPrivacySettings = async function (addHistory = true) {
     if (!privacyScreen) {
         privacyScreen = document.createElement("div");
         privacyScreen.id = "privacySettingsScreen";
-        privacyScreen.style.cssText = "position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:auto;max-height:100dvh;background:#000;color:#fff;z-index:2147483646;overflow-x:hidden;overflow-y:scroll;overscroll-behavior-y:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch;box-sizing:border-box;";
         document.body.appendChild(privacyScreen);
     }
-    privacyScreen.style.display = "block";
-    privacyScreen.style.visibility = "visible";
-    privacyScreen.style.opacity = "1";
+    // Reapply the complete scroll geometry on EVERY opening. Navigation and
+    // overlay cleanup elsewhere can leave inline height/overflow/touch styles
+    // stale after the first close, so do not rely on the initial creation path.
+    privacyScreen.setAttribute("data-settings-scroll", "");
+    Object.assign(privacyScreen.style, {
+        position: "fixed",
+        inset: "0",
+        width: "100%",
+        height: "100dvh",
+        maxHeight: "none",
+        margin: "0",
+        padding: "0",
+        background: "#000",
+        color: "#fff",
+        zIndex: "2147483646",
+        display: "block",
+        visibility: "visible",
+        opacity: "1",
+        pointerEvents: "auto",
+        overflowX: "hidden",
+        overflowY: "auto",
+        overscrollBehaviorY: "contain",
+        touchAction: "pan-y",
+        webkitOverflowScrolling: "touch",
+        boxSizing: "border-box"
+    });
+    privacyScreen.style.setProperty("overflow-y", "auto", "important");
+    privacyScreen.style.setProperty("touch-action", "pan-y", "important");
     privacyScreen.innerHTML = '<div style="min-height:100%;background:#000;color:#fff;padding:22px 16px;box-sizing:border-box;font-family:sans-serif"><div style="font-size:20px;font-weight:700;margin-bottom:20px">Privacy</div><div style="color:#aaa">Loading your privacy settings…</div></div>';
     document.body.style.overflow = "hidden";
     ["app","profileScreen","searchScreen","notificationsScreen","inboxScreen","chatScreen","commentsScreen","profileSettingsScreen","editProfileScreen","languageSettingsScreen","followRequestsScreen","savedPostsScreen"].forEach(id => {
@@ -37740,10 +37764,15 @@ window.openPrivacySettings = async function (addHistory = true) {
     // RENDER
     // =================================================
 
-    privacyScreen.style.overflowY = "scroll";
+    // Ensure the root screen itself remains the only vertical scroller after
+    // any close/reopen cycle (including Android Chrome's restored inline styles).
+    privacyScreen.style.height = "100dvh";
+    privacyScreen.style.maxHeight = "none";
     privacyScreen.style.overflowX = "hidden";
+    privacyScreen.style.setProperty("overflow-y", "auto", "important");
+    privacyScreen.style.setProperty("touch-action", "pan-y", "important");
     privacyScreen.style.webkitOverflowScrolling = "touch";
-    privacyScreen.style.touchAction = "pan-y";
+    privacyScreen.style.overscrollBehaviorY = "contain";
     privacyScreen.scrollTop = 0;
 
     privacyScreen.innerHTML = `
@@ -38096,8 +38125,14 @@ window.openPrivacySettings = async function (addHistory = true) {
 
         backBtn.onclick = function () {
 
-            // Release the document scroll lock as navigation leaves Privacy.
+            // Release document-level locks when leaving Privacy. The privacy
+            // root is independently scrollable while open; on exit, clear both
+            // body and documentElement locks so reopening starts from a clean state.
             document.body.style.overflow = "";
+            document.documentElement.style.overflow = "";
+            document.body.style.touchAction = "";
+            document.documentElement.style.touchAction = "";
+            privacyScreen.style.removeProperty("touch-action");
             console.log("🔙 PRIVACY → PROFILE SETTINGS");
 
             if (
