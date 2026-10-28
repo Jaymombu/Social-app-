@@ -58588,5 +58588,90 @@ window.reportComment=id=>window.submitUserReport("comment",id);
 })();
 </script>
 
+
+<!-- SOCIALAPP PREMIUM CREATOR STUDIO: analytics, profile appearance, scheduled-post queue -->
+<style id="socialapp-creator-studio-style">
+#saCreatorStudio{position:fixed;inset:0;z-index:2147483000;background:#08070c;color:#fff;overflow:auto;display:none;padding:18px;box-sizing:border-box;font-family:inherit}
+#saCreatorStudio .sa-shell{max-width:760px;margin:0 auto;padding-bottom:40px}
+#saCreatorStudio .sa-card{background:#15121d;border:1px solid #38264b;border-radius:16px;padding:15px;margin:12px 0}
+#saCreatorStudio .sa-btn{border:0;border-radius:10px;padding:11px 14px;background:#8a2be2;color:#fff;font-weight:700;cursor:pointer}
+#saCreatorStudio input,#saCreatorStudio textarea,#saCreatorStudio select{width:100%;box-sizing:border-box;border-radius:10px;border:1px solid #51405f;background:#0e0c13;color:#fff;padding:11px;margin:6px 0 12px;font:inherit}
+#saCreatorStudio .sa-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}#saCreatorStudio .sa-tabs button{background:#21182b;color:#fff;border:1px solid #59416e;border-radius:999px;padding:9px 12px}
+#saCreatorStudio .sa-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#saCreatorStudio .sa-stat{background:#20182a;border-radius:12px;padding:13px}#saCreatorStudio .sa-stat strong{display:block;font-size:24px;margin-top:5px}
+</style>
+<div id="saCreatorStudio" role="dialog" aria-modal="true" aria-label="Premium Creator Studio">
+ <div class="sa-shell">
+  <div style="display:flex;align-items:center;gap:12px;justify-content:space-between"><div><div style="font-size:12px;color:#c4a2e9;font-weight:800;letter-spacing:1px">SOCIALAPP PREMIUM</div><h2 style="margin:5px 0">Creator Studio</h2></div><button class="sa-btn" id="saCreatorClose" style="background:#302638">Close ✕</button></div>
+  <div class="sa-tabs"><button data-sa-tab="analytics">📊 Analytics</button><button data-sa-tab="appearance">🎨 Profile style</button><button data-sa-tab="schedule">🗓️ Schedule post</button></div>
+  <section id="saCreatorAnalytics">
+   <p style="color:#c7bacf">Your account performance from available SocialApp records. Views are only shown if your database records them.</p>
+   <div class="sa-grid"><div class="sa-stat">Your posts<strong id="saStatPosts">—</strong></div><div class="sa-stat">Likes recorded<strong id="saStatLikes">—</strong></div><div class="sa-stat">Comments received<strong id="saStatComments">—</strong></div><div class="sa-stat">Followers<strong id="saStatFollowers">—</strong></div></div>
+   <div class="sa-card"><strong>Recent posts</strong><div id="saCreatorTopPosts" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
+   <p style="font-size:12px;color:#9c8fa6">This first version reports counts from accessible posts, follows, and comments. It does not invent reach or views where tracking columns are unavailable.</p>
+  </section>
+  <section id="saCreatorAppearance" style="display:none">
+   <div class="sa-card"><h3 style="margin-top:0">Profile accent</h3><label for="saCreatorColor">Choose your profile accent color</label><input id="saCreatorColor" type="color" value="#8a2be2" style="height:54px;padding:5px"><label for="saCreatorBanner">Profile banner image URL</label><input id="saCreatorBanner" type="url" placeholder="https://…"><button class="sa-btn" id="saCreatorSaveStyle">Save appearance</button><p id="saCreatorStyleMsg" style="color:#c7bacf"></p></div>
+   <p style="font-size:12px;color:#9c8fa6">Appearance preferences are saved to the Premium creator settings table and can persist across logins.</p>
+  </section>
+  <section id="saCreatorSchedule" style="display:none">
+   <div class="sa-card"><h3 style="margin-top:0">Schedule a text post</h3><label for="saScheduleContent">Post text</label><textarea id="saScheduleContent" rows="4" maxlength="5000" placeholder="Write your post…"></textarea><label for="saScheduleAt">Publish date and time</label><input id="saScheduleAt" type="datetime-local"><button class="sa-btn" id="saScheduleSave">Save scheduled post</button><p id="saScheduleMsg" style="color:#c7bacf"></p></div>
+   <div class="sa-card"><strong>Your scheduled posts</strong><div id="saScheduleList" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
+   <p style="font-size:12px;color:#9c8fa6">Saved posts remain queued until the scheduled-publishing Edge Function and its scheduler are deployed and configured. Do not promise automatic publishing until that server job is active.</p>
+  </section>
+ </div>
+</div>
+<script id="socialapp-premium-creator-studio">
+(function(){
+ 'use strict';
+ const $=id=>document.getElementById(id);
+ let creatorUserId=null;
+ function client(){return window.supabase||null;}
+ async function hasAccess(){
+   if(!window.session?.user && !window.currentUser?.id) return false;
+   try{if(typeof window.isAdmin==='function' && await window.isAdmin(true)) return true;}catch(e){}
+   const sb=client(); if(!sb) return false;
+   try{const {data,error}=await sb.rpc('has_active_premium_subscription'); if(error) throw error; return data===true||data?.has_active_premium_subscription===true;}catch(e){console.warn('Creator Studio Premium check failed',e);return false;}
+ }
+ function currentId(){return window.session?.user?.id||window.currentUser?.id||null;}
+ function message(id,t){const el=$(id);if(el)el.textContent=t;}
+ function show(){ $('saCreatorStudio').style.display='block'; document.body.style.overflow='hidden'; }
+ function close(){ $('saCreatorStudio').style.display='none'; document.body.style.overflow=''; }
+ async function open(){
+   creatorUserId=currentId(); if(!creatorUserId){alert('Please log in to use Creator Studio.');return;}
+   if(!(await hasAccess())){alert('An active, verified SocialApp Premium subscription is required.'); if(typeof window.openPremiumScreen==='function')window.openPremiumScreen();return;}
+   show(); await Promise.all([loadAnalytics(),loadStyle(),loadSchedules()]);
+ }
+ async function loadAnalytics(){
+  const sb=client(); if(!sb||!creatorUserId)return;
+  ['saStatPosts','saStatLikes','saStatComments','saStatFollowers'].forEach(id=>$(id).textContent='…');
+  try{
+   const [postsR,commentsR,followersR]=await Promise.all([
+    sb.from('posts').select('id,content,likes,created_at,visibility',{count:'exact'}).eq('user_id',creatorUserId).order('created_at',{ascending:false}).limit(5),
+    sb.from('comments').select('id',{count:'exact',head:true}).eq('user_id',creatorUserId),
+    sb.from('follows').select('id',{count:'exact',head:true}).eq('following_id',creatorUserId)
+   ]);
+   if(postsR.error)throw postsR.error;
+   const {data:allPosts,error:countErr,count}=await sb.from('posts').select('id,likes',{count:'exact'}).eq('user_id',creatorUserId).limit(1000);
+   if(countErr)throw countErr;
+   const likes=(allPosts||[]).reduce((n,p)=>n+(Array.isArray(p.likes)?p.likes.length:(Number(p.likes)||0)),0);
+   $('saStatPosts').textContent=String(count??allPosts?.length??0);$('saStatLikes').textContent=String(likes);
+   $('saStatComments').textContent=commentsR.error?'—':String(commentsR.count??0);$('saStatFollowers').textContent=followersR.error?'—':String(followersR.count??0);
+   $('saCreatorTopPosts').innerHTML='';
+   for(const post of (postsR.data||[])) {const row=document.createElement('div');row.style.cssText='padding:10px 0;border-bottom:1px solid #38264b';const title=document.createElement('div');title.textContent=(post.content||'[Media post]').slice(0,110);const meta=document.createElement('div');meta.style.cssText='font-size:12px;color:#ad9ab9;margin-top:4px';meta.textContent=`${Array.isArray(post.likes)?post.likes.length:(Number(post.likes)||0)} likes · ${post.visibility||'public'} · ${post.created_at?new Date(post.created_at).toLocaleDateString():''}`;row.append(title,meta);$('saCreatorTopPosts').appendChild(row);}
+   if(!(postsR.data||[]).length)$('saCreatorTopPosts').textContent='No posts found yet.';
+  }catch(e){console.warn('Creator analytics query failed',e);['saStatPosts','saStatLikes','saStatComments','saStatFollowers'].forEach(id=>$(id).textContent='—');$('saCreatorTopPosts').textContent='Could not load analytics. Confirm the SQL migration and table permissions are installed.';}
+ }
+ async function loadStyle(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_creator_settings').select('accent_color,banner_url').eq('user_id',creatorUserId).maybeSingle();if(error)throw error;if(data){$('saCreatorColor').value=data.accent_color||'#8a2be2';$('saCreatorBanner').value=data.banner_url||'';}}catch(e){console.warn('Could not load creator style',e);}}
+ async function saveStyle(){const sb=client();if(!sb)return;message('saCreatorStyleMsg','Saving…');try{if(!(await hasAccess()))throw new Error('Premium subscription is not active.');const row={user_id:creatorUserId,accent_color:$('saCreatorColor').value,banner_url:$('saCreatorBanner').value.trim()||null,updated_at:new Date().toISOString()};const {error}=await sb.from('premium_creator_settings').upsert(row,{onConflict:'user_id'});if(error)throw error;message('saCreatorStyleMsg','Saved. Your preferences will be available on your next login.');}catch(e){message('saCreatorStyleMsg',e.message||'Could not save. Apply the SQL migration first.');}}
+ async function saveSchedule(){const sb=client();const content=$('saScheduleContent').value.trim();const local=$('saScheduleAt').value; if(!content){message('saScheduleMsg','Enter post text first.');return;}if(!local){message('saScheduleMsg','Choose a date and time.');return;}const publishAt=new Date(local);if(Number.isNaN(publishAt.getTime())||publishAt.getTime()<Date.now()+60000){message('saScheduleMsg','Choose a time at least one minute in the future.');return;}message('saScheduleMsg','Saving…');try{if(!(await hasAccess()))throw new Error('Premium subscription is not active.');const {error}=await sb.from('premium_scheduled_posts').insert({user_id:creatorUserId,content,publish_at:publishAt.toISOString(),status:'pending'});if(error)throw error;$('saScheduleContent').value='';message('saScheduleMsg','Scheduled post saved. Automatic publishing activates after the server scheduler is deployed.');await loadSchedules();}catch(e){message('saScheduleMsg',e.message||'Could not save. Apply the SQL migration first.');}}
+ async function loadSchedules(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_scheduled_posts').select('id,content,publish_at,status').eq('user_id',creatorUserId).order('publish_at',{ascending:true}).limit(30);if(error)throw error;const host=$('saScheduleList');host.innerHTML='';for(const item of (data||[])){const row=document.createElement('div');row.style.cssText='padding:10px 0;border-bottom:1px solid #38264b';const txt=document.createElement('div');txt.textContent=item.content.slice(0,120);const meta=document.createElement('div');meta.style.cssText='font-size:12px;color:#ad9ab9;margin:5px 0';meta.textContent=new Date(item.publish_at).toLocaleString()+' · '+item.status;row.append(txt,meta);if(item.status==='pending'){const b=document.createElement('button');b.className='sa-btn';b.style.cssText='padding:7px 10px;background:#392d44';b.textContent='Cancel';b.onclick=async()=>{const {error}=await sb.from('premium_scheduled_posts').update({status:'cancelled'}).eq('id',item.id).eq('user_id',creatorUserId).eq('status','pending');if(error)alert(error.message);else loadSchedules();};row.appendChild(b);}host.appendChild(row);}if(!data?.length)host.textContent='No scheduled posts yet.';}catch(e){$('saScheduleList').textContent='Could not load scheduled posts. Apply the SQL migration first.';}}
+ document.addEventListener('click',e=>{const b=e.target.closest('[data-sa-tab]');if(!b)return;const key=b.dataset.saTab;['Analytics','Appearance','Schedule'].forEach(x=> $('saCreator'+x).style.display=(x.toLowerCase()===key)?'block':'none');});
+ $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);
+ window.openSocialAppCreatorStudio=open;
+ function injectButton(){const screen=$('profileSettingsScreen');if(!screen||$('saCreatorOpenButton'))return;const btn=document.createElement('button');btn.id='saCreatorOpenButton';btn.type='button';btn.style.cssText='width:calc(100% - 28px);margin:14px;padding:15px;border:1px solid #6e3e91;border-radius:14px;background:linear-gradient(135deg,#28123d,#17111f);color:#fff;text-align:left;font-size:16px;font-weight:750;cursor:pointer';btn.innerHTML='👑 &nbsp; Premium Creator Studio <span style="float:right">›</span><div style="font-size:12px;font-weight:400;color:#c4a2e9;margin-top:5px">Analytics · Profile style · Scheduled posts</div>';btn.onclick=open;screen.appendChild(btn);}
+ const obs=new MutationObserver(injectButton);obs.observe(document.documentElement,{childList:true,subtree:true});setInterval(injectButton,1500);injectButton();
+})();
+</script>
+
 </body>
 </html>
