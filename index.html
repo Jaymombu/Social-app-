@@ -56166,6 +56166,25 @@ window.updateDefaultNavigation?.(window.appNavigation?.current?.screen || "app")
 
 window.goHome = async function (explicitClick = false) {
 
+  // Two-step Home-button behavior:
+  // First explicit tap refreshes the Home feed using the existing logic.
+  // A second explicit tap within 4 seconds performs a full page reload.
+  // Internal navigation calls (goHome(false)) never count as Home-button taps.
+  if (explicitClick === true) {
+    const now = Date.now();
+    const previousTap = Number(window.__socialAppLastHomeTapAt || 0);
+    const tapWindowMs = 4000;
+    if (previousTap && now - previousTap <= tapWindowMs) {
+      window.__socialAppLastHomeTapAt = 0;
+      console.log("🏠 HOME TAPPED TWICE → FULL APP RELOAD");
+      // Full document reload reinitializes app data and UI while Supabase auth
+      // and user preferences remain available through their existing storage.
+      window.location.reload();
+      return;
+    }
+    window.__socialAppLastHomeTapAt = now;
+  }
+
   console.log(
     "🏠 GO HOME:",
     explicitClick
