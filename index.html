@@ -58616,7 +58616,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   <section id="saCreatorSchedule" style="display:none">
    <div class="sa-card"><h3 style="margin-top:0">Schedule a text post</h3><label for="saScheduleContent">Post text</label><textarea id="saScheduleContent" rows="4" maxlength="5000" placeholder="Write your post…"></textarea><label for="saScheduleAt">Publish date and time</label><input id="saScheduleAt" type="datetime-local"><button class="sa-btn" id="saScheduleSave">Save scheduled post</button><p id="saScheduleMsg" style="color:#c7bacf"></p></div>
    <div class="sa-card"><strong>Your scheduled posts</strong><div id="saScheduleList" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
-   <p style="font-size:12px;color:#9c8fa6">Saved posts remain queued until the scheduled-publishing Edge Function and its scheduler are deployed and configured. Do not promise automatic publishing until that server job is active.</p>
+   <p style="font-size:12px;color:#9c8fa6">SocialApp checks scheduled posts on the server every minute. Posts are published when due only if the account has an active, verified Premium subscription at publication time. You can close this screen; server-side scheduling continues. This screen currently supports text posts.</p>
   </section>
  </div>
 </div>
@@ -58663,9 +58663,82 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  }
  async function loadStyle(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_creator_settings').select('accent_color,banner_url').eq('user_id',creatorUserId).maybeSingle();if(error)throw error;if(data){$('saCreatorColor').value=data.accent_color||'#8a2be2';$('saCreatorBanner').value=data.banner_url||'';}}catch(e){console.warn('Could not load creator style',e);}}
  async function saveStyle(){const sb=client();if(!sb)return;message('saCreatorStyleMsg','Saving…');try{if(!(await hasAccess()))throw new Error('Premium subscription is not active.');const row={user_id:creatorUserId,accent_color:$('saCreatorColor').value,banner_url:$('saCreatorBanner').value.trim()||null,updated_at:new Date().toISOString()};const {error}=await sb.from('premium_creator_settings').upsert(row,{onConflict:'user_id'});if(error)throw error;message('saCreatorStyleMsg','Saved. Your preferences will be available on your next login.');}catch(e){message('saCreatorStyleMsg',e.message||'Could not save. Apply the SQL migration first.');}}
- async function saveSchedule(){const sb=client();const content=$('saScheduleContent').value.trim();const local=$('saScheduleAt').value; if(!content){message('saScheduleMsg','Enter post text first.');return;}if(!local){message('saScheduleMsg','Choose a date and time.');return;}const publishAt=new Date(local);if(Number.isNaN(publishAt.getTime())||publishAt.getTime()<Date.now()+60000){message('saScheduleMsg','Choose a time at least one minute in the future.');return;}message('saScheduleMsg','Saving…');try{if(!(await hasAccess()))throw new Error('Premium subscription is not active.');const {error}=await sb.from('premium_scheduled_posts').insert({user_id:creatorUserId,content,publish_at:publishAt.toISOString(),status:'pending'});if(error)throw error;$('saScheduleContent').value='';message('saScheduleMsg','Scheduled post saved. Automatic publishing activates after the server scheduler is deployed.');await loadSchedules();}catch(e){message('saScheduleMsg',e.message||'Could not save. Apply the SQL migration first.');}}
- async function loadSchedules(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_scheduled_posts').select('id,content,publish_at,status').eq('user_id',creatorUserId).order('publish_at',{ascending:true}).limit(30);if(error)throw error;const host=$('saScheduleList');host.innerHTML='';for(const item of (data||[])){const row=document.createElement('div');row.style.cssText='padding:10px 0;border-bottom:1px solid #38264b';const txt=document.createElement('div');txt.textContent=item.content.slice(0,120);const meta=document.createElement('div');meta.style.cssText='font-size:12px;color:#ad9ab9;margin:5px 0';meta.textContent=new Date(item.publish_at).toLocaleString()+' · '+item.status;row.append(txt,meta);if(item.status==='pending'){const b=document.createElement('button');b.className='sa-btn';b.style.cssText='padding:7px 10px;background:#392d44';b.textContent='Cancel';b.onclick=async()=>{const {error}=await sb.from('premium_scheduled_posts').update({status:'cancelled'}).eq('id',item.id).eq('user_id',creatorUserId).eq('status','pending');if(error)alert(error.message);else loadSchedules();};row.appendChild(b);}host.appendChild(row);}if(!data?.length)host.textContent='No scheduled posts yet.';}catch(e){$('saScheduleList').textContent='Could not load scheduled posts. Apply the SQL migration first.';}}
- document.addEventListener('click',e=>{const b=e.target.closest('[data-sa-tab]');if(!b)return;const key=b.dataset.saTab;['Analytics','Appearance','Schedule'].forEach(x=> $('saCreator'+x).style.display=(x.toLowerCase()===key)?'block':'none');});
+ async function saveSchedule(){
+  const sb=client();
+  const button=$('saScheduleSave');
+  const contentEl=$('saScheduleContent');
+  const timeEl=$('saScheduleAt');
+  const content=contentEl?.value?.trim()||'';
+  const local=timeEl?.value||'';
+  if(!sb){message('saScheduleMsg','SocialApp could not connect to Supabase. Refresh and try again.');return;}
+  if(!content){message('saScheduleMsg','Enter post text first.');contentEl?.focus();return;}
+  if(!local){message('saScheduleMsg','Choose a date and time.');timeEl?.focus();return;}
+  const publishAt=new Date(local);
+  if(Number.isNaN(publishAt.getTime())||publishAt.getTime()<Date.now()+60000){message('saScheduleMsg','Choose a time at least one minute in the future.');return;}
+  const expectedUserId=currentId();
+  if(!expectedUserId||expectedUserId!==creatorUserId){message('saScheduleMsg','Your login session changed. Reopen Creator Studio and try again.');return;}
+  if(button?.disabled)return;
+  if(button){button.disabled=true;button.dataset.originalText=button.textContent||'Save scheduled post';button.textContent='Saving…';}
+  message('saScheduleMsg','Verifying your session and Premium access…');
+  try{
+   const {data:authData,error:authError}=await sb.auth.getUser();
+   if(authError)throw authError;
+   const authenticatedUserId=authData?.user?.id;
+   if(!authenticatedUserId||authenticatedUserId!==expectedUserId)throw new Error('Your login session could not be verified. Please sign in again.');
+   if(!(await hasAccess()))throw new Error('An active, verified Premium subscription is required to schedule posts.');
+   const {error}=await sb.from('premium_scheduled_posts').insert({user_id:authenticatedUserId,content,publish_at:publishAt.toISOString(),status:'pending'});
+   if(error)throw error;
+   contentEl.value='';
+   timeEl.value='';
+   message('saScheduleMsg','Scheduled successfully. SocialApp checks due posts every minute and will publish this post if your Premium subscription is still active and verified at that time.');
+   await loadSchedules();
+  }catch(e){
+   console.error('Could not save scheduled post:',e);
+   message('saScheduleMsg',e?.message||'Could not save the scheduled post. Check Premium access and database policies.');
+  }finally{
+   if(button){button.disabled=false;button.textContent=button.dataset.originalText||'Save scheduled post';delete button.dataset.originalText;}
+  }
+ }
+ async function loadSchedules(){
+  const sb=client();
+  const host=$('saScheduleList');
+  if(!host)return;
+  const userId=currentId();
+  if(!sb||!userId||userId!==creatorUserId){host.textContent='Sign in to view your scheduled posts.';return;}
+  host.textContent='Loading scheduled posts…';
+  try{
+   const {data,error}=await sb.from('premium_scheduled_posts').select('id,content,publish_at,status,post_id,published_at,error_message').eq('user_id',userId).order('publish_at',{ascending:true}).limit(50);
+   if(error)throw error;
+   host.innerHTML='';
+   if(!data?.length){host.textContent='No scheduled posts yet.';return;}
+   for(const item of data){
+    const row=document.createElement('div');
+    row.style.cssText='padding:12px 0;border-bottom:1px solid #38264b';
+    const txt=document.createElement('div');
+    txt.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';
+    txt.textContent=(item.content||'[Text post]').slice(0,500);
+    const meta=document.createElement('div');
+    meta.style.cssText='font-size:12px;color:#ad9ab9;margin:5px 0';
+    const date=item.publish_at?new Date(item.publish_at):null;
+    meta.textContent=(date&&!Number.isNaN(date.getTime())?date.toLocaleString():'Time unavailable')+' · '+(item.status||'unknown');
+    row.append(txt,meta);
+    if(item.status==='published'&&item.post_id!=null){
+     const info=document.createElement('div');info.style.cssText='font-size:12px;color:#8fe3a3';info.textContent='Published successfully · Post ID '+item.post_id;row.appendChild(info);
+    }else if(item.status==='failed'){
+     const info=document.createElement('div');info.style.cssText='font-size:12px;color:#ff9b9b;white-space:pre-wrap;overflow-wrap:anywhere';info.textContent='Publishing failed: '+(item.error_message||'No error details available.');row.appendChild(info);
+    }else if(item.status==='processing'){
+     const info=document.createElement('div');info.style.cssText='font-size:12px;color:#e3caff';info.textContent='The publishing worker is processing this post.';row.appendChild(info);
+    }else if(item.status==='pending'){
+     const info=document.createElement('div');info.style.cssText='font-size:12px;color:#ad9ab9';info.textContent='Waiting for the scheduled time. Cancellation is not available in this screen.';row.appendChild(info);
+    }
+    host.appendChild(row);
+   }
+  }catch(e){
+   console.error('Could not load scheduled posts:',e);
+   host.textContent='Could not load scheduled posts. Check the database SELECT policy and try again.';
+  }
+ }
+ document.addEventListener('click',e=>{const b=e.target.closest('[data-sa-tab]');if(!b)return;const key=b.dataset.saTab;['Analytics','Appearance','Schedule'].forEach(x=>{const panel=$('saCreator'+x);if(panel)panel.style.display=(x.toLowerCase()===key)?'block':'none';});if(key==='schedule'){const field=$('saScheduleAt');if(field){const min=new Date(Date.now()+60000);const pad=n=>String(n).padStart(2,'0');field.min=min.getFullYear()+'-'+pad(min.getMonth()+1)+'-'+pad(min.getDate())+'T'+pad(min.getHours())+':'+pad(min.getMinutes());}}});
  $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);
  window.openSocialAppCreatorStudio=open;
  function injectButton(){const screen=$('profileSettingsScreen');if(!screen||$('saCreatorOpenButton'))return;const btn=document.createElement('button');btn.id='saCreatorOpenButton';btn.type='button';btn.style.cssText='width:calc(100% - 28px);margin:14px;padding:15px;border:1px solid #6e3e91;border-radius:14px;background:linear-gradient(135deg,#28123d,#17111f);color:#fff;text-align:left;font-size:16px;font-weight:750;cursor:pointer';btn.innerHTML='👑 &nbsp; Premium Creator Studio <span style="float:right">›</span><div style="font-size:12px;font-weight:400;color:#c4a2e9;margin-top:5px">Analytics · Profile style · Scheduled posts</div>';btn.onclick=open;screen.appendChild(btn);}
