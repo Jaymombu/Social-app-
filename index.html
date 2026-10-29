@@ -10310,16 +10310,26 @@ window.setupNewPostListener = function () {
             payload.new
           );
 
-          // Don't count your own post
+          // Scheduled posts are inserted by the server, so they may not pass
+          // through the normal Post button UI. Refresh Home immediately when
+          // the current user's post arrives through Realtime.
           if (
             session?.user?.id &&
-            payload.new?.user_id ===
-            session.user.id
+            String(payload.new?.user_id) === String(session.user.id)
           ) {
+            if (typeof window.refreshHomeContents === "function") {
+              window.refreshHomeContents().catch(error =>
+                console.warn("Scheduled/new own post feed refresh failed:", error)
+              );
+            } else if (typeof window.loadPosts === "function") {
+              window.loadPosts(true).catch(error =>
+                console.warn("Own post feed refresh failed:", error)
+              );
+            }
             return;
           }
 
-          // Increase badge
+          // Increase badge for posts from other users
           window.homeNewPostCount =
             (window.homeNewPostCount || 0) + 1;
 
@@ -11419,6 +11429,41 @@ window.refreshHomeContents = async function () {
     console.error("❌ HOME CONTENT REFRESH FAILED:", error);
   }
 };
+
+// Scheduled posts are published by Supabase in the background. Realtime may
+// be unavailable on some deployments, so gently sync Home every 30 seconds
+// while the app is visible and the user is signed in. refreshHomeContents()
+// preserves the selected feed tab and scroll position.
+if (!window.__socialAppScheduledFeedRefreshTimer) {
+  window.__socialAppScheduledFeedRefreshTimer = setInterval(async () => {
+    if (document.visibilityState !== "visible") return;
+    if (!session?.user) return;
+    const postsDiv = document.getElementById("posts");
+    if (!postsDiv || !postsDiv.isConnected) return;
+    if (window.__socialAppScheduledFeedRefreshInProgress) return;
+
+    // Don't refresh the feed behind Creator Studio or another full-screen
+    // interaction. It will sync automatically when Home is visible again.
+    const creatorStudio = document.getElementById("saCreatorStudio");
+    if (creatorStudio && creatorStudio.style.display === "block") return;
+    const visibleModal = [...document.querySelectorAll("[role='dialog'], .modal, .screen-overlay")]
+      .some(el => el.offsetParent !== null && getComputedStyle(el).display !== "none");
+    if (visibleModal) return;
+
+    window.__socialAppScheduledFeedRefreshInProgress = true;
+    try {
+      if (typeof window.refreshHomeContents === "function") {
+        await window.refreshHomeContents();
+      } else if (typeof window.loadPosts === "function") {
+        await window.loadPosts(true);
+      }
+    } catch (error) {
+      console.warn("Automatic Home feed sync failed:", error);
+    } finally {
+      window.__socialAppScheduledFeedRefreshInProgress = false;
+    }
+  }, 30000);
+}
 
 window.toggleSavePost = async function(postId){
 
