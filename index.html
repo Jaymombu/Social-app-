@@ -58626,18 +58626,46 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  const $=id=>document.getElementById(id);
  let creatorUserId=null;
  function client(){return window.supabase||null;}
+ async function syncAuthSession(){
+   const sb=client();
+   if(!sb?.auth?.getSession) return null;
+   const {data,error}=await sb.auth.getSession();
+   if(error) throw error;
+   const activeSession=data?.session||null;
+   // Keep the legacy globals in sync with Supabase's authoritative session.
+   // Some app builds keep `session` in a module/closure, so reading only
+   // window.session can incorrectly report that a signed-in user is logged out.
+   try{window.session=activeSession;}catch(e){}
+   try{window.currentUser=activeSession?.user||null;}catch(e){}
+   return activeSession;
+ }
  async function hasAccess(){
-   if(!window.session?.user && !window.currentUser?.id) return false;
-   try{if(typeof window.isAdmin==='function' && await window.isAdmin(true)) return true;}catch(e){}
    const sb=client(); if(!sb) return false;
-   try{const {data,error}=await sb.rpc('has_active_premium_subscription'); if(error) throw error; return data===true||data?.has_active_premium_subscription===true;}catch(e){console.warn('Creator Studio Premium check failed',e);return false;}
+   try{
+     const activeSession=await syncAuthSession();
+     if(!activeSession?.user?.id) return false;
+     try{if(typeof window.isAdmin==='function' && await window.isAdmin(true)) return true;}catch(e){}
+     const {data,error}=await sb.rpc('has_active_premium_subscription');
+     if(error) throw error;
+     return data===true||data?.has_active_premium_subscription===true;
+   }catch(e){console.warn('Creator Studio Premium check failed',e);return false;}
  }
  function currentId(){return window.session?.user?.id||window.currentUser?.id||null;}
  function message(id,t){const el=$(id);if(el)el.textContent=t;}
  function show(){ $('saCreatorStudio').style.display='block'; document.body.style.overflow='hidden'; }
  function close(){ $('saCreatorStudio').style.display='none'; document.body.style.overflow=''; }
  async function open(){
-   creatorUserId=currentId(); if(!creatorUserId){alert('Please log in to use Creator Studio.');return;}
+   const sb=client();
+   if(!sb){alert('SocialApp could not connect to Supabase. Refresh the app and try again.');return;}
+   try{
+     const activeSession=await syncAuthSession();
+     creatorUserId=activeSession?.user?.id||currentId();
+   }catch(e){
+     console.error('Creator Studio could not verify the login session:',e);
+     alert('Could not verify your login session. Please check your connection and try again.');
+     return;
+   }
+   if(!creatorUserId){alert('Your login session is not available yet. Please reopen Settings, or sign out and sign in again if the problem continues.');return;}
    if(!(await hasAccess())){alert('An active, verified SocialApp Premium subscription is required.'); if(typeof window.openPremiumScreen==='function')window.openPremiumScreen();return;}
    show(); await Promise.all([loadAnalytics(),loadStyle(),loadSchedules()]);
  }
@@ -58741,7 +58769,27 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-sa-tab]');if(!b)return;const key=b.dataset.saTab;['Analytics','Appearance','Schedule'].forEach(x=>{const panel=$('saCreator'+x);if(panel)panel.style.display=(x.toLowerCase()===key)?'block':'none';});if(key==='schedule'){const field=$('saScheduleAt');if(field){const min=new Date(Date.now()+60000);const pad=n=>String(n).padStart(2,'0');field.min=min.getFullYear()+'-'+pad(min.getMonth()+1)+'-'+pad(min.getDate())+'T'+pad(min.getHours())+':'+pad(min.getMinutes());}}});
  $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);
  window.openSocialAppCreatorStudio=open;
- function injectButton(){const screen=$('profileSettingsScreen');if(!screen||$('saCreatorOpenButton'))return;const btn=document.createElement('button');btn.id='saCreatorOpenButton';btn.type='button';btn.style.cssText='width:calc(100% - 28px);margin:14px;padding:15px;border:1px solid #6e3e91;border-radius:14px;background:linear-gradient(135deg,#28123d,#17111f);color:#fff;text-align:left;font-size:16px;font-weight:750;cursor:pointer';btn.innerHTML='👑 &nbsp; Premium Creator Studio <span style="float:right">›</span><div style="font-size:12px;font-weight:400;color:#c4a2e9;margin-top:5px">Analytics · Profile style · Scheduled posts</div>';btn.onclick=open;screen.appendChild(btn);}
+ function injectButton(){
+   const screen=$('profileSettingsScreen');
+   if(!screen)return;
+   let btn=$('saCreatorOpenButton');
+   if(!btn){
+     btn=document.createElement('button');btn.id='saCreatorOpenButton';btn.type='button';
+     btn.style.cssText='width:100%;margin:0 0 16px;padding:15px;border:1px solid #6e3e91;border-radius:14px;background:linear-gradient(135deg,#28123d,#17111f);color:#fff;text-align:left;font-size:16px;font-weight:750;cursor:pointer;box-sizing:border-box;display:block';
+     btn.innerHTML='👑 &nbsp; Premium Creator Studio <span style="float:right">›</span><div style="font-size:12px;font-weight:400;color:#c4a2e9;margin-top:5px">Analytics · Profile style · Scheduled posts</div>';
+     btn.addEventListener('click',open);
+   }
+   // Put it at the top of the Settings content, immediately below the sticky
+   // header, instead of appending it after every Settings option at the bottom.
+   const outer=screen.firstElementChild;
+   const header=outer?.firstElementChild;
+   const content=header?.nextElementSibling;
+   if(content && content.parentElement===outer){
+     if(btn.parentElement!==content || content.firstElementChild!==btn) content.insertBefore(btn,content.firstElementChild);
+   }else if(outer){
+     if(btn.parentElement!==outer || outer.firstElementChild!==btn) outer.insertBefore(btn,outer.firstElementChild);
+   }else if(btn.parentElement!==screen){screen.insertBefore(btn,screen.firstChild);}
+ }
  const obs=new MutationObserver(injectButton);obs.observe(document.documentElement,{childList:true,subtree:true});setInterval(injectButton,1500);injectButton();
 })();
 </script>
