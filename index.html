@@ -58614,7 +58614,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    <p style="font-size:12px;color:#9c8fa6">Appearance preferences are saved to the Premium creator settings table and can persist across logins.</p>
   </section>
   <section id="saCreatorSchedule" style="display:none">
-   <div class="sa-card"><h3 style="margin-top:0">Schedule a text post</h3><label for="saScheduleContent">Post text</label><textarea id="saScheduleContent" rows="4" maxlength="5000" placeholder="Write your post…"></textarea><label for="saScheduleAt">Publish date and time</label><input id="saScheduleAt" type="datetime-local"><button class="sa-btn" id="saScheduleSave">Save scheduled post</button><p id="saScheduleMsg" style="color:#c7bacf"></p></div>
+   <div class="sa-card"><h3 style="margin-top:0">Schedule a text post</h3><label for="saScheduleContent">Post text</label><textarea id="saScheduleContent" rows="4" maxlength="5000" placeholder="Write your post…"></textarea><label for="saScheduleAt">Publish date and time</label><input id="saScheduleAt" type="datetime-local"><p id="saScheduleTimezone" style="font-size:12px;color:#ad9ab9;margin:6px 0 12px">Times are shown in your device’s local timezone.</p><button class="sa-btn" id="saScheduleSave">Save scheduled post</button><p id="saScheduleMsg" style="color:#c7bacf"></p></div>
    <div class="sa-card"><strong>Your scheduled posts</strong><div id="saScheduleList" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
    <p style="font-size:12px;color:#9c8fa6">SocialApp checks scheduled posts on the server every minute. Posts are published when due only if the account has an active, verified Premium subscription at publication time. You can close this screen; server-side scheduling continues. This screen currently supports text posts.</p>
   </section>
@@ -58667,7 +58667,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    }
    if(!creatorUserId){alert('Your login session is not available yet. Please reopen Settings, or sign out and sign in again if the problem continues.');return;}
    if(!(await hasAccess())){alert('An active, verified SocialApp Premium subscription is required.'); if(typeof window.openPremiumScreen==='function')window.openPremiumScreen();return;}
-   show(); await Promise.all([loadAnalytics(),loadStyle(),loadSchedules()]);
+   updateScheduleTimezone(); show(); await Promise.all([loadAnalytics(),loadStyle(),loadSchedules()]);
  }
  async function loadAnalytics(){
   const sb=client(); if(!sb||!creatorUserId)return;
@@ -58727,13 +58727,13 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(button){button.disabled=false;button.textContent=button.dataset.originalText||'Save scheduled post';delete button.dataset.originalText;}
   }
  }
- async function loadSchedules(){
+ async function loadSchedules(silent=false){
   const sb=client();
   const host=$('saScheduleList');
   if(!host)return;
   const userId=currentId();
   if(!sb||!userId||userId!==creatorUserId){host.textContent='Sign in to view your scheduled posts.';return;}
-  host.textContent='Loading scheduled posts…';
+  if(!silent)host.textContent='Loading scheduled posts…';
   try{
    const {data,error}=await sb.from('premium_scheduled_posts').select('id,content,publish_at,status,post_id,published_at,error_message').eq('user_id',userId).order('publish_at',{ascending:true}).limit(50);
    if(error)throw error;
@@ -58766,6 +58766,23 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    host.textContent='Could not load scheduled posts. Check the database SELECT policy and try again.';
   }
  }
+ function updateScheduleTimezone(){
+  const label=$('saScheduleTimezone');
+  if(!label)return;
+  try{
+   const zone=Intl.DateTimeFormat().resolvedOptions().timeZone||'device local time';
+   label.textContent='Publish time uses your device’s local timezone: '+zone+'. Keep your device timezone correct when scheduling.';
+  }catch(e){label.textContent='Publish time uses your device’s local timezone.';}
+ }
+ // Refresh statuses while Creator Studio is open on the Schedule tab.
+ // Silent refreshes avoid showing a loading message every time.
+ setInterval(()=>{
+  const modal=$('saCreatorStudio');
+  const panel=$('saCreatorSchedule');
+  if(modal?.style.display==='block'&&panel?.style.display!=='none'&&document.visibilityState==='visible'){
+   loadSchedules(true);
+  }
+ },30000);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-sa-tab]');if(!b)return;const key=b.dataset.saTab;['Analytics','Appearance','Schedule'].forEach(x=>{const panel=$('saCreator'+x);if(panel)panel.style.display=(x.toLowerCase()===key)?'block':'none';});if(key==='schedule'){const field=$('saScheduleAt');if(field){const min=new Date(Date.now()+60000);const pad=n=>String(n).padStart(2,'0');field.min=min.getFullYear()+'-'+pad(min.getMonth()+1)+'-'+pad(min.getDate())+'T'+pad(min.getHours())+':'+pad(min.getMinutes());}}});
  $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);
  window.openSocialAppCreatorStudio=open;
