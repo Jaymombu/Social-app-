@@ -58659,9 +58659,26 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    <p style="font-size:12px;color:#9c8fa6">Appearance preferences are saved to the Premium creator settings table and can persist across logins.</p>
   </section>
   <section id="saCreatorSchedule" style="display:none">
-   <div class="sa-card"><h3 style="margin-top:0">Schedule a post</h3><label for="saScheduleContent">Post text (optional when adding media)</label><textarea id="saScheduleContent" rows="4" maxlength="5000" placeholder="Write your post…"></textarea><label for="saScheduleMedia">Add a photo or video</label><input id="saScheduleMedia" type="file" accept="image/*,video/*"><div id="saScheduleMediaPreview" style="display:none;margin:8px 0 12px"></div><button type="button" class="sa-btn" id="saScheduleMediaClear" style="display:none;background:#302638;margin-bottom:10px">Remove selected media</button><label for="saScheduleAt">Publish date and time</label><input id="saScheduleAt" type="datetime-local"><p id="saScheduleTimezone" style="font-size:12px;color:#ad9ab9;margin:6px 0 12px">Times are shown in your device’s local timezone.</p><button class="sa-btn" id="saScheduleSave">Save scheduled post</button><p id="saScheduleMsg" style="color:#c7bacf"></p></div>
+   <div class="sa-card">
+    <h3 style="margin-top:0" id="saScheduleHeading">Create a post</h3>
+    <label for="saScheduleContent">Post text (optional when adding media)</label>
+    <textarea id="saScheduleContent" rows="4" maxlength="5000" placeholder="Write your post…"></textarea>
+    <label for="saScheduleMedia">Add photo or video</label>
+    <input id="saScheduleMedia" type="file" accept="image/*,video/*">
+    <label style="display:flex;align-items:center;gap:9px;font-size:13px"><input id="saScheduleRemoveMedia" type="checkbox" style="width:auto;margin:0"> Remove the existing attachment when saving this edit</label>
+    <div id="saScheduleMediaInfo" style="font-size:12px;color:#ad9ab9;margin:5px 0 12px">Images and videos are stored in your private posts_media bucket.</div>
+    <label for="saScheduleAt">Premium scheduled publishing date and time</label>
+    <input id="saScheduleAt" type="datetime-local">
+    <p id="saScheduleTimezone" style="font-size:12px;color:#ad9ab9;margin:6px 0 12px">Times are shown in your device’s local timezone.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+     <button class="sa-btn" id="saScheduleSave">Schedule as Premium</button>
+     <button class="sa-btn" id="saSchedulePublishNow" style="background:#286a45">Publish ordinary post now</button>
+     <button class="sa-btn" id="saScheduleCancelEdit" style="background:#493c55;display:none">Stop editing</button>
+    </div>
+    <p id="saScheduleMsg" style="color:#c7bacf;white-space:pre-wrap"></p>
+   </div>
    <div class="sa-card"><strong>Your scheduled posts</strong><div id="saScheduleList" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
-   <p style="font-size:12px;color:#9c8fa6">SocialApp checks scheduled posts on the server every minute. Posts are published when due only if the account has an active, verified Premium subscription at publication time. Uploaded media is stored in the private posts_media bucket and resolved securely when displayed.</p>
+   <p style="font-size:12px;color:#9c8fa6">Choose “Schedule as Premium” to publish later. The server checks your active, verified Premium subscription again when the post is due. “Publish ordinary post now” uses the normal Home composer and your saved account privacy setting. Pending posts can be edited or cancelled; processing and published posts cannot.</p>
   </section>
  </div>
 </div>
@@ -58670,6 +58687,9 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  'use strict';
  const $=id=>document.getElementById(id);
  let creatorUserId=null;
+ let editingScheduleId=null;
+ let editingExistingFileUrl=null;
+ let editingExistingMediaType=null;
  function client(){return window.supabase||null;}
  async function syncAuthSession(){
    const sb=client();
@@ -58736,84 +58756,161 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  }
  async function loadStyle(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_creator_settings').select('accent_color,banner_url').eq('user_id',creatorUserId).maybeSingle();if(error)throw error;if(data){$('saCreatorColor').value=data.accent_color||'#8a2be2';$('saCreatorBanner').value=data.banner_url||'';}}catch(e){console.warn('Could not load creator style',e);}}
  async function saveStyle(){const sb=client();if(!sb)return;message('saCreatorStyleMsg','Saving…');try{if(!(await hasAccess()))throw new Error('Premium subscription is not active.');const row={user_id:creatorUserId,accent_color:$('saCreatorColor').value,banner_url:$('saCreatorBanner').value.trim()||null,updated_at:new Date().toISOString()};const {error}=await sb.from('premium_creator_settings').upsert(row,{onConflict:'user_id'});if(error)throw error;message('saCreatorStyleMsg','Saved. Your preferences will be available on your next login.');}catch(e){message('saCreatorStyleMsg',e.message||'Could not save. Apply the SQL migration first.');}}
- function selectedScheduleFile(){return $('saScheduleMedia')?.files?.[0]||null;}
- function clearScheduleMedia(){
-  const input=$('saScheduleMedia');if(input)input.value='';
-  const preview=$('saScheduleMediaPreview');if(preview){preview.replaceChildren();preview.style.display='none';}
-  const clear=$('saScheduleMediaClear');if(clear)clear.style.display='none';
+ function resetScheduleEditor(){
+  editingScheduleId=null;
+  editingExistingFileUrl=null;
+  editingExistingMediaType=null;
+  $('saScheduleHeading').textContent='Create a post';
+  $('saScheduleSave').textContent='Schedule as Premium';
+  $('saScheduleCancelEdit').style.display='none';
+  $('saScheduleContent').value='';
+  $('saScheduleMedia').value='';
+  $('saScheduleRemoveMedia').checked=false;
+  $('saScheduleAt').value='';
+  $('saScheduleMediaInfo').textContent='Images and videos are stored in your private posts_media bucket.';
  }
- function previewScheduleMedia(){
-  const file=selectedScheduleFile();const preview=$('saScheduleMediaPreview');const clear=$('saScheduleMediaClear');
-  if(!preview||!clear)return;
-  preview.replaceChildren();
-  if(!file){preview.style.display='none';clear.style.display='none';return;}
-  const type=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':null;
-  if(!type){clearScheduleMedia();message('saScheduleMsg','Choose a valid image or video file.');return;}
-  const url=URL.createObjectURL(file);const media=document.createElement(type==='image'?'img':'video');
-  media.src=url;media.style.cssText='display:block;max-width:100%;max-height:280px;border-radius:12px;background:#000';
-  if(type==='video'){media.controls=true;media.playsInline=true;}
-  media.onload=media.onloadedmetadata=()=>URL.revokeObjectURL(url);
-  preview.appendChild(media);preview.style.display='block';clear.style.display='inline-block';
-  message('saScheduleMsg','Media selected: '+file.name);
+ function selectedScheduleMedia(){
+  const file=$('saScheduleMedia')?.files?.[0]||null;
+  if(!file)return null;
+  if(file.type.startsWith('image/'))return {file,type:'image'};
+  if(file.type.startsWith('video/'))return {file,type:'video'};
+  throw new Error('Choose a valid image or video file.');
+ }
+ async function uploadScheduleMedia(sb,file){
+  const safeName=String(file.name||'media').replace(/[^a-zA-Z0-9._-]/g,'_').slice(-120)||'media';
+  const path=`${creatorUserId}_${Date.now()}_${safeName}`;
+  const {error}=await sb.storage.from('posts_media').upload(path,file,{upsert:false});
+  if(error)throw error;
+  return path;
  }
  async function saveSchedule(){
-  const sb=client();const button=$('saScheduleSave');const contentEl=$('saScheduleContent');const timeEl=$('saScheduleAt');
-  const content=contentEl?.value?.trim()||'';const local=timeEl?.value||'';const file=selectedScheduleFile();
+  const sb=client(),button=$('saScheduleSave'),contentEl=$('saScheduleContent'),timeEl=$('saScheduleAt');
+  const content=contentEl?.value?.trim()||'',local=timeEl?.value||'';
+  let media;
+  try{media=selectedScheduleMedia();}catch(e){message('saScheduleMsg',e.message);return;}
   if(!sb){message('saScheduleMsg','SocialApp could not connect to Supabase. Refresh and try again.');return;}
-  if(!content&&!file){message('saScheduleMsg','Write some text or select a photo/video.');contentEl?.focus();return;}
+  const removeExisting=$('saScheduleRemoveMedia').checked;
+  const retainedFile=editingScheduleId&&!removeExisting?editingExistingFileUrl:null;
+  if(!content&&!media&&!retainedFile){message('saScheduleMsg','Enter post text or attach an image/video.');contentEl?.focus();return;}
   if(!local){message('saScheduleMsg','Choose a date and time.');timeEl?.focus();return;}
-  const publishAt=new Date(local);if(Number.isNaN(publishAt.getTime())||publishAt.getTime()<Date.now()+60000){message('saScheduleMsg','Choose a time at least one minute in the future.');return;}
-  let mediaType=null;if(file){mediaType=file.type.startsWith('image/')?'image':file.type.startsWith('video/')?'video':null;if(!mediaType){message('saScheduleMsg','Only image and video files are supported.');return;}}
-  const expectedUserId=currentId();if(!expectedUserId||expectedUserId!==creatorUserId){message('saScheduleMsg','Your login session changed. Reopen Creator Studio and try again.');return;}
-  if(button?.disabled)return;if(button){button.disabled=true;button.dataset.originalText=button.textContent||'Save scheduled post';button.textContent='Saving…';}
+  const publishAt=new Date(local);
+  if(Number.isNaN(publishAt.getTime())||publishAt.getTime()<Date.now()+60000){message('saScheduleMsg','Choose a time at least one minute in the future.');return;}
+  const expectedUserId=creatorUserId;
+  if(!expectedUserId||currentId()!==expectedUserId){message('saScheduleMsg','Your login session changed. Reopen Creator Studio and try again.');return;}
+  if(button?.disabled)return;
+  if(button){button.disabled=true;button.dataset.originalText=button.textContent||'Schedule as Premium';button.textContent=editingScheduleId?'Updating…':'Uploading and scheduling…';}
+  message('saScheduleMsg','Verifying your session and Premium access…');
   let uploadedPath=null;
   try{
-   message('saScheduleMsg','Verifying your session and Premium access…');
-   const {data:authData,error:authError}=await sb.auth.getUser();if(authError)throw authError;
-   const authenticatedUserId=authData?.user?.id;if(!authenticatedUserId||authenticatedUserId!==expectedUserId)throw new Error('Your login session could not be verified. Please sign in again.');
-   if(!(await hasAccess()))throw new Error('An active, verified Premium subscription is required to schedule posts.');
-   let fileUrl=null;
-   if(file){
-    message('saScheduleMsg','Uploading media securely…');
-    const safeName=String(file.name||'media').replace(/[^a-zA-Z0-9._-]/g,'_').slice(-120);
-    uploadedPath=authenticatedUserId+'/scheduled_'+Date.now()+'_'+crypto.randomUUID()+'_'+safeName;
-    const {error:uploadError}=await sb.storage.from('posts_media').upload(uploadedPath,file,{cacheControl:'3600',upsert:false,contentType:file.type||undefined});
-    if(uploadError)throw uploadError;
-    // Keep a durable bucket/path reference, not an expiring signed URL.
-    fileUrl='storage://posts_media/'+uploadedPath;
+   const {data:authData,error:authError}=await sb.auth.getUser();
+   if(authError)throw authError;
+   const authenticatedUserId=authData?.user?.id;
+   if(!authenticatedUserId||authenticatedUserId!==expectedUserId)throw new Error('Your login session could not be verified. Please sign in again.');
+   if(!(await hasAccess()))throw new Error('An active, verified Premium subscription is required to schedule or edit posts.');
+   if(media){uploadedPath=await uploadScheduleMedia(sb,media.file);}
+   const fileUrl=media?uploadedPath:(removeExisting?null:(editingExistingFileUrl||null));
+   const mediaType=media?media.type:(removeExisting?null:(editingExistingMediaType||null));
+   if(editingScheduleId){
+    const {data,error}=await sb.rpc('edit_premium_scheduled_post',{
+     p_post_id:editingScheduleId,p_content:content,p_file_url:fileUrl,p_media_type:mediaType,p_publish_at:publishAt.toISOString()
+    });
+    if(error)throw error;
+    if(data?.success===false)throw new Error(data.message||'Could not update scheduled post.');
+    message('saScheduleMsg','Scheduled post updated successfully.');
+   }else{
+    const {error}=await sb.from('premium_scheduled_posts').insert({user_id:authenticatedUserId,content,file_url:fileUrl,media_type:mediaType,publish_at:publishAt.toISOString(),status:'pending'});
+    if(error)throw error;
+    message('saScheduleMsg','Scheduled successfully. SocialApp checks due posts every minute and verifies Premium again before publishing.');
    }
-   const {error}=await sb.from('premium_scheduled_posts').insert({user_id:authenticatedUserId,content,publish_at:publishAt.toISOString(),status:'pending',file_url:fileUrl,media_type:mediaType});
-   if(error)throw error;
-   contentEl.value='';timeEl.value='';clearScheduleMedia();
-   message('saScheduleMsg','Scheduled successfully. The server will publish it at the selected local time if your Premium subscription is still active and verified.');
+   resetScheduleEditor();
    await loadSchedules();
   }catch(e){
    console.error('Could not save scheduled post:',e);
    if(uploadedPath){try{await sb.storage.from('posts_media').remove([uploadedPath]);}catch(cleanupError){console.warn('Could not clean up unused scheduled media:',cleanupError);}}
-   message('saScheduleMsg',e?.message||'Could not save the scheduled post. Check Premium access, storage upload permissions, and database policies.');
-  }finally{if(button){button.disabled=false;button.textContent=button.dataset.originalText||'Save scheduled post';delete button.dataset.originalText;}}
+   message('saScheduleMsg',e?.message||'Could not save the scheduled post.');
+  }finally{
+   if(button){button.disabled=false;button.textContent=button.dataset.originalText||'Schedule as Premium';delete button.dataset.originalText;}
+  }
+ }
+ async function editSchedule(item){
+  if(item.status!=='pending')return;
+  editingScheduleId=item.id;
+  editingExistingFileUrl=item.file_url||null;
+  editingExistingMediaType=item.media_type||null;
+  $('saScheduleHeading').textContent='Edit pending scheduled post';
+  $('saScheduleSave').textContent='Save changes';
+  $('saScheduleCancelEdit').style.display='inline-block';
+  $('saScheduleContent').value=item.content||'';
+  $('saScheduleMedia').value='';
+  $('saScheduleRemoveMedia').checked=false;
+  $('saScheduleAt').value='';
+  if(item.publish_at){const d=new Date(item.publish_at);const pad=n=>String(n).padStart(2,'0');$('saScheduleAt').value=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());}
+  $('saScheduleMediaInfo').textContent=item.file_url?'Current attachment: '+(item.media_type||'media')+'. Choose a replacement or tick remove attachment.':'No current attachment.';
+  message('saScheduleMsg','Editing pending post. Leave the media picker empty to keep its current attachment.');
+  $('saScheduleHeading').scrollIntoView({behavior:'smooth',block:'start'});
+ }
+ async function cancelSchedule(item){
+  if(item.status!=='pending')return;
+  if(!confirm('Cancel this scheduled post? It will not be published.'))return;
+  const sb=client();
+  try{
+   const {data,error}=await sb.rpc('cancel_premium_scheduled_post',{p_post_id:item.id});
+   if(error)throw error;
+   if(data?.success===false)throw new Error(data.message||'Could not cancel this scheduled post.');
+   if(editingScheduleId===item.id)resetScheduleEditor();
+   message('saScheduleMsg','Scheduled post cancelled.');
+   await loadSchedules();
+  }catch(e){console.error('Could not cancel scheduled post:',e);message('saScheduleMsg',e?.message||'Could not cancel this scheduled post.');}
+ }
+ async function publishOrdinaryNow(){
+  const content=$('saScheduleContent')?.value?.trim()||'';
+  let media;
+  try{media=selectedScheduleMedia();}catch(e){message('saScheduleMsg',e.message);return;}
+  if(!content&&!media){message('saScheduleMsg','Enter post text or attach an image/video first.');return;}
+  if(editingScheduleId){message('saScheduleMsg','Finish editing or stop editing before publishing a new ordinary post.');return;}
+  const sb=client();
+  const {data,error}=await sb.auth.getUser();
+  if(error||!data?.user?.id||data.user.id!==creatorUserId){message('saScheduleMsg','Your login session could not be verified.');return;}
+  const postInput=$('postInput'),mainMedia=$('mediaInput'),postButton=$('postBtn');
+  if(!postInput||!mainMedia||!postButton){message('saScheduleMsg','The Home post composer is not available. Open Home and try again.');return;}
+  if(mainMedia.files?.length){message('saScheduleMsg','The Home composer already has an attachment. Clear it before transferring this post.');return;}
+  try{
+   postInput.value=content;
+   if(media){const transfer=new DataTransfer();transfer.items.add(media.file);mainMedia.files=transfer.files;}
+   const premiumChoice=$('postVisibilityPremium');if(premiumChoice)premiumChoice.checked=false;
+   close();
+   postButton.click();
+   resetScheduleEditor();
+  }catch(e){console.error('Could not hand post to Home composer:',e);message('saScheduleMsg','Could not prepare the ordinary post. Please use the Home composer instead.');}
  }
  async function loadSchedules(silent=false){
-  const sb=client();const host=$('saScheduleList');if(!host)return;
-  const userId=currentId();if(!sb||!userId||userId!==creatorUserId){host.textContent='Sign in to view your scheduled posts.';return;}
+  const sb=client(),host=$('saScheduleList'),userId=currentId();
+  if(!host)return;
+  if(!sb||!userId||userId!==creatorUserId){host.textContent='Sign in to view your scheduled posts.';return;}
   if(!silent)host.textContent='Loading scheduled posts…';
   try{
-   const {data,error}=await sb.from('premium_scheduled_posts').select('id,content,publish_at,status,post_id,published_at,error_message,file_url,media_type').eq('user_id',userId).order('publish_at',{ascending:true}).limit(50);
-   if(error)throw error;host.replaceChildren();if(!data?.length){host.textContent='No scheduled posts yet.';return;}
+   const {data,error}=await sb.from('premium_scheduled_posts').select('id,content,file_url,media_type,publish_at,status,post_id,published_at,error_message').eq('user_id',userId).order('publish_at',{ascending:true}).limit(50);
+   if(error)throw error;
+   host.innerHTML='';
+   if(!data?.length){host.textContent='No scheduled posts yet.';return;}
    for(const item of data){
     const row=document.createElement('div');row.style.cssText='padding:12px 0;border-bottom:1px solid #38264b';
-    if(item.file_url&&['image','video'].includes(item.media_type)){
-     const preview=document.createElement(item.media_type==='image'?'img':'video');preview.style.cssText='display:block;width:100%;max-height:260px;object-fit:contain;border-radius:10px;background:#000;margin:0 0 9px';
-     if(item.media_type==='video'){preview.controls=true;preview.playsInline=true;}
-     try{const resolved=await window.getAuthorizedStorageUrl('posts_media',item.file_url,3600);if(resolved){preview.src=resolved;row.appendChild(preview);}}catch(mediaError){console.warn('Could not resolve scheduled media preview:',mediaError);}
-    }
-    const txt=document.createElement('div');txt.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';txt.textContent=(item.content|| (item.media_type==='video'?'[Video post]':item.media_type==='image'?'[Photo post]':'[Empty post]')).slice(0,500);
-    const meta=document.createElement('div');meta.style.cssText='font-size:12px;color:#ad9ab9;margin:5px 0';const date=item.publish_at?new Date(item.publish_at):null;
-    meta.textContent=(date&&!Number.isNaN(date.getTime())?date.toLocaleString():'Time unavailable')+' · '+(item.media_type||'text')+' · '+(item.status||'unknown');row.append(txt,meta);
+    const txt=document.createElement('div');txt.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';txt.textContent=(item.content||'[Media-only post]').slice(0,500);
+    const meta=document.createElement('div');meta.style.cssText='font-size:12px;color:#ad9ab9;margin:5px 0';
+    const date=item.publish_at?new Date(item.publish_at):null;
+    meta.textContent=(date&&!Number.isNaN(date.getTime())?date.toLocaleString():'Time unavailable')+' · '+(item.status||'unknown')+(item.media_type?' · '+item.media_type:'');
+    row.append(txt,meta);
+    if(item.file_url){const mediaInfo=document.createElement('div');mediaInfo.style.cssText='font-size:12px;color:#c4a2e9;margin:4px 0';mediaInfo.textContent='Attachment: '+(item.media_type||'media');row.appendChild(mediaInfo);}
     if(item.status==='published'&&item.post_id!=null){const info=document.createElement('div');info.style.cssText='font-size:12px;color:#8fe3a3';info.textContent='Published successfully · Post ID '+item.post_id;row.appendChild(info);}
     else if(item.status==='failed'){const info=document.createElement('div');info.style.cssText='font-size:12px;color:#ff9b9b;white-space:pre-wrap;overflow-wrap:anywhere';info.textContent='Publishing failed: '+(item.error_message||'No error details available.');row.appendChild(info);}
-    else if(item.status==='processing'){const info=document.createElement('div');info.style.cssText='font-size:12px;color:#e3caff';info.textContent='The publishing worker is processing this post.';row.appendChild(info);}
-    else if(item.status==='pending'){const info=document.createElement('div');info.style.cssText='font-size:12px;color:#ad9ab9';info.textContent='Waiting for the scheduled time. Cancellation is not available in this screen.';row.appendChild(info);}
+    else if(item.status==='processing'){const info=document.createElement('div');info.style.cssText='font-size:12px;color:#e3caff';info.textContent='The publishing worker is processing this post. It can no longer be edited or cancelled.';row.appendChild(info);}
+    else if(item.status==='pending'){
+     const actions=document.createElement('div');actions.style.cssText='display:flex;gap:8px;flex-wrap:wrap;margin-top:9px';
+     const edit=document.createElement('button');edit.type='button';edit.className='sa-btn';edit.textContent='Edit';edit.style.padding='8px 12px';edit.addEventListener('click',()=>editSchedule(item));
+     const cancel=document.createElement('button');cancel.type='button';cancel.className='sa-btn';cancel.textContent='Cancel post';cancel.style.cssText='background:#65313a;padding:8px 12px';cancel.addEventListener('click',()=>cancelSchedule(item));
+     actions.append(edit,cancel);row.appendChild(actions);
+     const info=document.createElement('div');info.style.cssText='font-size:12px;color:#ad9ab9;margin-top:5px';info.textContent='Waiting for the scheduled time.';row.appendChild(info);
+    }else if(item.status==='deleted'){const info=document.createElement('div');info.style.cssText='font-size:12px;color:#ad9ab9';info.textContent='Cancelled';row.appendChild(info);}
     host.appendChild(row);
    }
   }catch(e){console.error('Could not load scheduled posts:',e);host.textContent='Could not load scheduled posts. Check the database SELECT policy and try again.';}
@@ -58836,7 +58933,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   }
  },30000);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-sa-tab]');if(!b)return;const key=b.dataset.saTab;['Analytics','Appearance','Schedule'].forEach(x=>{const panel=$('saCreator'+x);if(panel)panel.style.display=(x.toLowerCase()===key)?'block':'none';});if(key==='schedule'){const field=$('saScheduleAt');if(field){const min=new Date(Date.now()+60000);const pad=n=>String(n).padStart(2,'0');field.min=min.getFullYear()+'-'+pad(min.getMonth()+1)+'-'+pad(min.getDate())+'T'+pad(min.getHours())+':'+pad(min.getMinutes());}}});
- $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);$('saScheduleMedia').addEventListener('change',previewScheduleMedia);$('saScheduleMediaClear').addEventListener('click',clearScheduleMedia);
+ $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);$('saSchedulePublishNow').addEventListener('click',publishOrdinaryNow);$('saScheduleCancelEdit').addEventListener('click',()=>{resetScheduleEditor();message('saScheduleMsg','Stopped editing.');});$('saScheduleRemoveMedia').addEventListener('change',e=>{if(e.target.checked)$('saScheduleMedia').value='';});$('saScheduleMedia').addEventListener('change',()=>{const f=$('saScheduleMedia').files?.[0];if(f)$('saScheduleMediaInfo').textContent='Selected: '+f.name+' ('+Math.round(f.size/1024/1024)+' MB)';});
  window.openSocialAppCreatorStudio=open;
  function injectButton(){
    const screen=$('profileSettingsScreen');
