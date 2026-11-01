@@ -58642,7 +58642,22 @@ window.reportComment=id=>window.submitUserReport("comment",id);
 #saCreatorStudio .sa-btn{border:0;border-radius:10px;padding:11px 14px;background:#8a2be2;color:#fff;font-weight:700;cursor:pointer}
 #saCreatorStudio input,#saCreatorStudio textarea,#saCreatorStudio select{width:100%;box-sizing:border-box;border-radius:10px;border:1px solid #51405f;background:#0e0c13;color:#fff;padding:11px;margin:6px 0 12px;font:inherit}
 #saCreatorStudio .sa-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}#saCreatorStudio .sa-tabs button{background:#21182b;color:#fff;border:1px solid #59416e;border-radius:999px;padding:9px 12px}
-#saCreatorStudio .sa-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#saCreatorStudio .sa-stat{background:#20182a;border-radius:12px;padding:13px}#saCreatorStudio .sa-stat strong{display:block;font-size:24px;margin-top:5px}
+#saCreatorStudio .sa-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#saCreatorStudio .sa-stat{background:linear-gradient(145deg,#241832,#17121f);border:1px solid #49315f;border-radius:15px;padding:14px}#saCreatorStudio .sa-stat strong{display:block;font-size:24px;margin-top:5px}
+#saCreatorStudio{background:radial-gradient(ellipse at 15% 0%,rgba(138,43,226,.22),transparent 42%),#08070c}
+#saCreatorStudio .sa-shell{max-width:780px}
+#saCreatorStudio .sa-card{background:linear-gradient(155deg,rgba(31,24,43,.98),rgba(17,14,24,.98));border:1px solid rgba(171,112,220,.28);border-radius:19px;padding:17px;box-shadow:0 12px 32px rgba(0,0,0,.22)}
+#saCreatorStudio .sa-btn{border-radius:12px;padding:12px 16px;box-shadow:0 5px 16px rgba(138,43,226,.18);transition:transform .15s ease,filter .15s ease}
+#saCreatorStudio .sa-btn:active{transform:scale(.98);filter:brightness(1.12)}
+#saCreatorStudio .sa-tabs button{font-weight:700;padding:10px 14px;transition:background .15s ease,border-color .15s ease}
+#saCreatorStudio .sa-tabs button:hover{background:#39234d;border-color:#a66bd1}
+#saCreatorStudio input:not([type=color]):focus,#saCreatorStudio textarea:focus,#saCreatorStudio select:focus{outline:2px solid rgba(174,111,230,.5);border-color:#a66bd1}
+#saCreatorStudio textarea{min-height:112px;resize:vertical;line-height:1.5}
+#saCreatorStudio input[type=file]{padding:13px;border:1px dashed #8057a0;background:rgba(138,43,226,.08)}
+#saScheduleMediaPreview{display:none;margin:12px 0 16px;padding:10px;border:1px solid #5b3a75;border-radius:15px;background:rgba(138,43,226,.08)}
+#saScheduleMediaPreview img,#saScheduleMediaPreview video{display:block;width:100%;max-height:340px;object-fit:contain;border-radius:10px;background:#050408}
+#saScheduleMediaPreview .sa-preview-caption{font-size:12px;color:#cdb5e4;margin:8px 2px 0;overflow-wrap:anywhere}
+#saCreatorStudio label{font-size:13px;font-weight:650;color:#e2d5ed}
+@media(max-width:520px){#saCreatorStudio{padding:11px}#saCreatorStudio .sa-card{padding:13px}#saCreatorStudio .sa-grid{gap:8px}#saCreatorStudio .sa-stat{padding:11px}#saCreatorStudio .sa-btn{padding:11px 13px}}
 </style>
 <div id="saCreatorStudio" role="dialog" aria-modal="true" aria-label="Premium Creator Studio">
  <div class="sa-shell">
@@ -58667,6 +58682,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     <input id="saScheduleMedia" type="file" accept="image/*,video/*">
     <label style="display:flex;align-items:center;gap:9px;font-size:13px"><input id="saScheduleRemoveMedia" type="checkbox" style="width:auto;margin:0"> Remove the existing attachment when saving this edit</label>
     <div id="saScheduleMediaInfo" style="font-size:12px;color:#ad9ab9;margin:5px 0 12px">Images and videos are stored in your private posts_media bucket.</div>
+    <div id="saScheduleMediaPreview" aria-live="polite"><div id="saSchedulePreviewContent"></div><div class="sa-preview-caption" id="saSchedulePreviewCaption"></div></div>
     <label for="saScheduleAt">Premium scheduled publishing date and time</label>
     <input id="saScheduleAt" type="datetime-local">
     <p id="saScheduleTimezone" style="font-size:12px;color:#ad9ab9;margin:6px 0 12px">Times are shown in your device’s local timezone.</p>
@@ -58690,6 +58706,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  let editingScheduleId=null;
  let editingExistingFileUrl=null;
  let editingExistingMediaType=null;
+ let schedulePreviewObjectUrl=null;
  function client(){return window.supabase||null;}
  async function syncAuthSession(){
    const sb=client();
@@ -58756,7 +58773,32 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  }
  async function loadStyle(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_creator_settings').select('accent_color,banner_url').eq('user_id',creatorUserId).maybeSingle();if(error)throw error;if(data){$('saCreatorColor').value=data.accent_color||'#8a2be2';$('saCreatorBanner').value=data.banner_url||'';}}catch(e){console.warn('Could not load creator style',e);}}
  async function saveStyle(){const sb=client();if(!sb)return;message('saCreatorStyleMsg','Saving…');try{if(!(await hasAccess()))throw new Error('Premium subscription is not active.');const row={user_id:creatorUserId,accent_color:$('saCreatorColor').value,banner_url:$('saCreatorBanner').value.trim()||null,updated_at:new Date().toISOString()};const {error}=await sb.from('premium_creator_settings').upsert(row,{onConflict:'user_id'});if(error)throw error;message('saCreatorStyleMsg','Saved. Your preferences will be available on your next login.');}catch(e){message('saCreatorStyleMsg',e.message||'Could not save. Apply the SQL migration first.');}}
+ function clearSchedulePreview(){
+  if(schedulePreviewObjectUrl){URL.revokeObjectURL(schedulePreviewObjectUrl);schedulePreviewObjectUrl=null;}
+  const wrap=$('saScheduleMediaPreview'),content=$('saSchedulePreviewContent'),caption=$('saSchedulePreviewCaption');
+  if(content)content.innerHTML='';if(caption)caption.textContent='';if(wrap)wrap.style.display='none';
+ }
+ function renderSchedulePreview(source,type,label){
+  if(schedulePreviewObjectUrl && source!==schedulePreviewObjectUrl){URL.revokeObjectURL(schedulePreviewObjectUrl);schedulePreviewObjectUrl=null;}
+  const wrap=$('saScheduleMediaPreview'),content=$('saSchedulePreviewContent'),caption=$('saSchedulePreviewCaption');
+  if(content)content.innerHTML='';if(caption)caption.textContent='';if(wrap)wrap.style.display='none';
+  if(!source)return;
+  if(!wrap||!content)return;
+  const el=document.createElement(type==='video'?'video':'img');
+  if(type==='video'){el.controls=true;el.playsInline=true;el.preload='metadata';}else{el.alt='Selected image preview';el.loading='eager';}
+  el.src=source;content.appendChild(el);if(caption)caption.textContent=label||('Preview · '+type);
+  wrap.style.display='block';
+ }
+ async function showExistingSchedulePreview(){
+  if(!editingExistingFileUrl)return;
+  try{
+   const {data,error}=await client().storage.from('posts_media').createSignedUrl(editingExistingFileUrl,3600);
+   if(error)throw error;
+   if(data?.signedUrl)renderSchedulePreview(data.signedUrl,editingExistingMediaType||'image','Current attachment · '+(editingExistingMediaType||'media'));
+  }catch(e){console.warn('Could not preview existing scheduled media:',e);message('saScheduleMediaInfo','Current attachment is saved. Select a replacement or remove it; preview could not be loaded.');}
+ }
  function resetScheduleEditor(){
+  clearSchedulePreview();
   editingScheduleId=null;
   editingExistingFileUrl=null;
   editingExistingMediaType=null;
@@ -58846,6 +58888,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   $('saScheduleAt').value='';
   if(item.publish_at){const d=new Date(item.publish_at);const pad=n=>String(n).padStart(2,'0');$('saScheduleAt').value=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());}
   $('saScheduleMediaInfo').textContent=item.file_url?'Current attachment: '+(item.media_type||'media')+'. Choose a replacement or tick remove attachment.':'No current attachment.';
+  if(item.file_url)await showExistingSchedulePreview();
   message('saScheduleMsg','Editing pending post. Leave the media picker empty to keep its current attachment.');
   $('saScheduleHeading').scrollIntoView({behavior:'smooth',block:'start'});
  }
@@ -58933,7 +58976,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   }
  },30000);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-sa-tab]');if(!b)return;const key=b.dataset.saTab;['Analytics','Appearance','Schedule'].forEach(x=>{const panel=$('saCreator'+x);if(panel)panel.style.display=(x.toLowerCase()===key)?'block':'none';});if(key==='schedule'){const field=$('saScheduleAt');if(field){const min=new Date(Date.now()+60000);const pad=n=>String(n).padStart(2,'0');field.min=min.getFullYear()+'-'+pad(min.getMonth()+1)+'-'+pad(min.getDate())+'T'+pad(min.getHours())+':'+pad(min.getMinutes());}}});
- $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);$('saSchedulePublishNow').addEventListener('click',publishOrdinaryNow);$('saScheduleCancelEdit').addEventListener('click',()=>{resetScheduleEditor();message('saScheduleMsg','Stopped editing.');});$('saScheduleRemoveMedia').addEventListener('change',e=>{if(e.target.checked)$('saScheduleMedia').value='';});$('saScheduleMedia').addEventListener('change',()=>{const f=$('saScheduleMedia').files?.[0];if(f)$('saScheduleMediaInfo').textContent='Selected: '+f.name+' ('+Math.round(f.size/1024/1024)+' MB)';});
+ $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);$('saSchedulePublishNow').addEventListener('click',publishOrdinaryNow);$('saScheduleCancelEdit').addEventListener('click',()=>{resetScheduleEditor();message('saScheduleMsg','Stopped editing.');});$('saScheduleRemoveMedia').addEventListener('change',e=>{if(e.target.checked){$('saScheduleMedia').value='';clearSchedulePreview();$('saScheduleMediaInfo').textContent='Existing attachment will be removed when you save.';}else if(editingExistingFileUrl){$('saScheduleMediaInfo').textContent='Keeping the current attachment unless you choose a replacement.';showExistingSchedulePreview();}});$('saScheduleMedia').addEventListener('change',()=>{const f=$('saScheduleMedia').files?.[0];if(f){if(!f.type.startsWith('image/')&&!f.type.startsWith('video/')){message('saScheduleMsg','Choose a valid image or video file.');return;}schedulePreviewObjectUrl=URL.createObjectURL(f);renderSchedulePreview(schedulePreviewObjectUrl,f.type.startsWith('video/')?'video':'image','Preview before publishing · '+f.name);$('saScheduleRemoveMedia').checked=false;$('saScheduleMediaInfo').textContent='Selected: '+f.name+' ('+Math.max(1,Math.round(f.size/1024/1024))+' MB)';}else if(editingExistingFileUrl&&!$('saScheduleRemoveMedia').checked){showExistingSchedulePreview();}else clearSchedulePreview();});
  window.openSocialAppCreatorStudio=open;
  function injectButton(){
    const screen=$('profileSettingsScreen');
