@@ -58666,7 +58666,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   <section id="saCreatorAnalytics">
    <p style="color:#c7bacf">Your account performance from available SocialApp records. Views are only shown if your database records them.</p>
    <div class="sa-grid"><div class="sa-stat">Your posts<strong id="saStatPosts">—</strong></div><div class="sa-stat">Likes recorded<strong id="saStatLikes">—</strong></div><div class="sa-stat">Comments received<strong id="saStatComments">—</strong></div><div class="sa-stat">Followers<strong id="saStatFollowers">—</strong></div></div>
-   <div class="sa-card"><strong>Recent posts</strong><div id="saCreatorTopPosts" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
+   <div class="sa-card"><strong>Top-performing posts</strong><div id="saCreatorTopPosts" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
    <p style="font-size:12px;color:#9c8fa6">This first version reports counts from accessible posts, follows, and comments. It does not invent reach or views where tracking columns are unavailable.</p>
   </section>
   <section id="saCreatorAppearance" style="display:none">
@@ -58759,21 +58759,80 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   const sb=client(); if(!sb||!creatorUserId)return;
   ['saStatPosts','saStatLikes','saStatComments','saStatFollowers'].forEach(id=>$(id).textContent='…');
   try{
-   const [postsR,commentsR,followersR]=await Promise.all([
-    sb.from('posts').select('id,content,likes,created_at,visibility',{count:'exact'}).eq('user_id',creatorUserId).order('created_at',{ascending:false}).limit(5),
-    sb.from('comments').select('id',{count:'exact',head:true}).eq('user_id',creatorUserId),
+   // Read the creator's posts in pages so accounts with more than 1,000
+   // posts are not silently under-counted by a single limited query.
+   const allPosts=[];
+   const pageSize=500;
+   let from=0;
+   while(true){
+    const {data,error}=await sb.from('posts')
+     .select('id,content,likes,created_at,visibility',{count:'exact'})
+     .eq('user_id',creatorUserId)
+     .order('created_at',{ascending:false})
+     .range(from,from+pageSize-1);
+    if(error)throw error;
+    const page=data||[];
+    allPosts.push(...page);
+    if(page.length<pageSize)break;
+    from+=pageSize;
+   }
+
+   const [followersR]=await Promise.all([
     sb.from('follows').select('id',{count:'exact',head:true}).eq('following_id',creatorUserId)
    ]);
-   if(postsR.error)throw postsR.error;
-   const {data:allPosts,error:countErr,count}=await sb.from('posts').select('id,likes',{count:'exact'}).eq('user_id',creatorUserId).limit(1000);
-   if(countErr)throw countErr;
-   const likes=(allPosts||[]).reduce((n,p)=>n+(Array.isArray(p.likes)?p.likes.length:(Number(p.likes)||0)),0);
-   $('saStatPosts').textContent=String(count??allPosts?.length??0);$('saStatLikes').textContent=String(likes);
-   $('saStatComments').textContent=commentsR.error?'—':String(commentsR.count??0);$('saStatFollowers').textContent=followersR.error?'—':String(followersR.count??0);
-   $('saCreatorTopPosts').innerHTML='';
-   for(const post of (postsR.data||[])) {const row=document.createElement('div');row.style.cssText='padding:10px 0;border-bottom:1px solid #38264b';const title=document.createElement('div');title.textContent=(post.content||'[Media post]').slice(0,110);const meta=document.createElement('div');meta.style.cssText='font-size:12px;color:#ad9ab9;margin-top:4px';meta.textContent=`${Array.isArray(post.likes)?post.likes.length:(Number(post.likes)||0)} likes · ${post.visibility||'public'} · ${post.created_at?new Date(post.created_at).toLocaleDateString():''}`;row.append(title,meta);$('saCreatorTopPosts').appendChild(row);}
-   if(!(postsR.data||[]).length)$('saCreatorTopPosts').textContent='No posts found yet.';
-  }catch(e){console.warn('Creator analytics query failed',e);['saStatPosts','saStatLikes','saStatComments','saStatFollowers'].forEach(id=>$(id).textContent='—');$('saCreatorTopPosts').textContent='Could not load analytics. Confirm the SQL migration and table permissions are installed.';}
+   if(followersR.error)throw followersR.error;
+
+   const postIds=allPosts.map(p=>p.id).filter(id=>id!==null&&id!==undefined);
+   // Count comments ON the creator's posts, not comments authored by the creator.
+   // Batch IDs to keep PostgREST URL/query sizes reasonable.
+   let commentsReceived=0;
+   for(let i=0;i<postIds.length;i+=200){
+    const ids=postIds.slice(i,i+200);
+    const {count,error}=await sb.from('comments')
+     .select('id',{count:'exact',head:true})
+     .in('post_id',ids)
+     .eq('hidden',false);
+    if(error)throw error;
+    commentsReceived+=count||0;
+   }
+
+   const likesFor=post=>Array.isArray(post.likes)?post.likes.length:(Number(post.likes)||0);
+   const totalLikes=allPosts.reduce((sum,post)=>sum+likesFor(post),0);
+   $('saStatPosts').textContent=String(allPosts.length);
+   $('saStatLikes').textContent=String(totalLikes);
+   $('saStatComments').textContent=String(commentsReceived);
+   $('saStatFollowers').textContent=String(followersR.count??0);
+
+   // Rank the creator's posts by recorded likes, then newest first.
+   const topPosts=[...allPosts].sort((a,b)=>{
+    const likeDiff=likesFor(b)-likesFor(a);
+    if(likeDiff!==0)return likeDiff;
+    return new Date(b.created_at||0)-new Date(a.created_at||0);
+   }).slice(0,5);
+
+   const host=$('saCreatorTopPosts');
+   host.innerHTML='';
+   const heading=document.createElement('div');
+   heading.textContent='Top posts by likes';
+   heading.style.cssText='font-size:13px;color:#cdb5e4;margin-bottom:4px;font-weight:700';
+   host.appendChild(heading);
+   for(const post of topPosts){
+    const row=document.createElement('div');
+    row.style.cssText='padding:10px 0;border-bottom:1px solid #38264b';
+    const title=document.createElement('div');
+    title.textContent=(post.content||'[Media post]').slice(0,110);
+    const meta=document.createElement('div');
+    meta.style.cssText='font-size:12px;color:#ad9ab9;margin-top:4px';
+    meta.textContent=`${likesFor(post)} likes · ${post.visibility||'public'} · ${post.created_at?new Date(post.created_at).toLocaleDateString():''}`;
+    row.append(title,meta);
+    host.appendChild(row);
+   }
+   if(!topPosts.length)host.textContent='No posts found yet.';
+  }catch(e){
+   console.warn('Creator analytics query failed',e);
+   ['saStatPosts','saStatLikes','saStatComments','saStatFollowers'].forEach(id=>$(id).textContent='—');
+   $('saCreatorTopPosts').textContent='Could not load analytics. Check the posts, comments and follows SELECT policies, then try again.';
+  }
  }
  async function loadStyle(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_creator_settings').select('accent_color,banner_url').eq('user_id',creatorUserId).maybeSingle();if(error)throw error;if(data){$('saCreatorColor').value=data.accent_color||'#8a2be2';$('saCreatorBanner').value=data.banner_url||'';}}catch(e){console.warn('Could not load creator style',e);}}
  async function saveStyle(){const sb=client();if(!sb)return;message('saCreatorStyleMsg','Saving…');try{if(!(await hasAccess()))throw new Error('Premium subscription is not active.');const row={user_id:creatorUserId,accent_color:$('saCreatorColor').value,banner_url:$('saCreatorBanner').value.trim()||null,updated_at:new Date().toISOString()};const {error}=await sb.from('premium_creator_settings').upsert(row,{onConflict:'user_id'});if(error)throw error;message('saCreatorStyleMsg','Saved. Your preferences will be available on your next login.');}catch(e){message('saCreatorStyleMsg',e.message||'Could not save. Apply the SQL migration first.');}}
