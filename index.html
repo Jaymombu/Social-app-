@@ -58694,14 +58694,13 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     <input id="saScheduleAt" type="datetime-local">
     <p id="saScheduleTimezone" style="font-size:12px;color:#ad9ab9;margin:6px 0 12px">Times are shown in your device’s local timezone.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-     <button class="sa-btn" id="saScheduleSave">Schedule as Premium</button>
-     <button class="sa-btn" id="saSchedulePublishNow" style="background:#286a45">Publish ordinary post now</button>
+     <button class="sa-btn" id="saScheduleSave">Schedule post</button>
      <button class="sa-btn" id="saScheduleCancelEdit" style="background:#493c55;display:none">Stop editing</button>
     </div>
     <p id="saScheduleMsg" style="color:#c7bacf;white-space:pre-wrap"></p>
    </div>
    <div class="sa-card"><strong>Your scheduled posts</strong><div id="saScheduleList" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
-   <p style="font-size:12px;color:#9c8fa6">Choose the audience for each scheduled post: Public, Private (followers), or Premium. The server must preserve this audience and recheck Premium eligibility when a Premium post is due. “Publish ordinary post now” uses the normal Home composer and your saved account privacy setting. Pending posts can be edited or cancelled; processing and published posts cannot.</p>
+   <p style="font-size:12px;color:#9c8fa6">Scheduled posts follow your saved account privacy by default. Turn on “Publish as Premium” only for posts intended for the Premium audience. Premium eligibility is checked again when the post is due. Pending posts can be edited or cancelled; processing and published posts cannot.</p>
   </section>
  </div>
 </div>
@@ -58814,6 +58813,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   $('saScheduleCancelEdit').style.display='none';
   $('saScheduleContent').value='';
   $('saSchedulePremium').checked=false;
+  const audienceHint=$('saScheduleAudienceHint');if(audienceHint)audienceHint.textContent='Ordinary scheduled posts automatically follow your account privacy.';
   $('saScheduleMedia').value='';
   $('saScheduleRemoveMedia').checked=false;
   $('saScheduleAt').value='';
@@ -58930,27 +58930,6 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    await loadSchedules();
   }catch(e){console.error('Could not cancel scheduled post:',e);message('saScheduleMsg',e?.message||'Could not cancel this scheduled post.');}
  }
- async function publishOrdinaryNow(){
-  const content=$('saScheduleContent')?.value?.trim()||'';
-  let media;
-  try{media=selectedScheduleMedia();}catch(e){message('saScheduleMsg',e.message);return;}
-  if(!content&&!media){message('saScheduleMsg','Enter post text or attach an image/video first.');return;}
-  if(editingScheduleId){message('saScheduleMsg','Finish editing or stop editing before publishing a new ordinary post.');return;}
-  const sb=client();
-  const {data,error}=await sb.auth.getUser();
-  if(error||!data?.user?.id||data.user.id!==creatorUserId){message('saScheduleMsg','Your login session could not be verified.');return;}
-  const postInput=$('postInput'),mainMedia=$('mediaInput'),postButton=$('postBtn');
-  if(!postInput||!mainMedia||!postButton){message('saScheduleMsg','The Home post composer is not available. Open Home and try again.');return;}
-  if(mainMedia.files?.length){message('saScheduleMsg','The Home composer already has an attachment. Clear it before transferring this post.');return;}
-  try{
-   postInput.value=content;
-   if(media){const transfer=new DataTransfer();transfer.items.add(media.file);mainMedia.files=transfer.files;}
-   const premiumChoice=$('postVisibilityPremium');if(premiumChoice)premiumChoice.checked=false;
-   close();
-   postButton.click();
-   resetScheduleEditor();
-  }catch(e){console.error('Could not hand post to Home composer:',e);message('saScheduleMsg','Could not prepare the ordinary post. Please use the Home composer instead.');}
- }
  async function loadSchedules(silent=false){
   const sb=client(),host=$('saScheduleList'),userId=currentId();
   if(!host)return;
@@ -58966,7 +58945,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     const txt=document.createElement('div');txt.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';txt.textContent=(item.content||'[Media-only post]').slice(0,500);
     const meta=document.createElement('div');meta.style.cssText='font-size:12px;color:#ad9ab9;margin:5px 0';
     const date=item.publish_at?new Date(item.publish_at):null;
-    meta.textContent=(date&&!Number.isNaN(date.getTime())?date.toLocaleString():'Time unavailable')+' · '+(item.status||'unknown')+(item.media_type?' · '+item.media_type:'')+' · '+({public:'Account audience · Public',followers:'Account audience · Followers',premium:'Premium'}[item.visibility]||'Account audience');
+    meta.textContent=(date&&!Number.isNaN(date.getTime())?date.toLocaleString():'Time unavailable')+' · '+(item.status||'unknown')+(item.media_type?' · '+item.media_type:'')+' · '+({public:'Public',followers:'Private · followers',premium:'Premium'}[item.visibility]||'Public');
     row.append(txt,meta);
     if(item.file_url){const mediaInfo=document.createElement('div');mediaInfo.style.cssText='font-size:12px;color:#c4a2e9;margin:4px 0';mediaInfo.textContent='Attachment: '+(item.media_type||'media');row.appendChild(mediaInfo);}
     if(item.status==='published'&&item.post_id!=null){const info=document.createElement('div');info.style.cssText='font-size:12px;color:#8fe3a3';info.textContent='Published successfully · Post ID '+item.post_id;row.appendChild(info);}
@@ -59001,7 +58980,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   }
  },30000);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-sa-tab]');if(!b)return;const key=b.dataset.saTab;['Analytics','Appearance','Schedule'].forEach(x=>{const panel=$('saCreator'+x);if(panel)panel.style.display=(x.toLowerCase()===key)?'block':'none';});if(key==='schedule'){const field=$('saScheduleAt');if(field){const min=new Date(Date.now()+60000);const pad=n=>String(n).padStart(2,'0');field.min=min.getFullYear()+'-'+pad(min.getMonth()+1)+'-'+pad(min.getDate())+'T'+pad(min.getHours())+':'+pad(min.getMinutes());}}});
- $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);$('saSchedulePublishNow').addEventListener('click',publishOrdinaryNow);$('saScheduleCancelEdit').addEventListener('click',()=>{resetScheduleEditor();message('saScheduleMsg','Stopped editing.');});$('saSchedulePremium').addEventListener('change',()=>{const h=$('saScheduleAudienceHint');if(h)h.textContent=$('saSchedulePremium').checked?'This post will use Premium visibility. Your active, verified subscription is checked again when it publishes.':'This post will follow your saved account privacy: Public accounts publish publicly; Private accounts publish to followers.';});$('saScheduleRemoveMedia').addEventListener('change',e=>{if(e.target.checked){$('saScheduleMedia').value='';clearSchedulePreview();$('saScheduleMediaInfo').textContent='Existing attachment will be removed when you save.';}else if(editingExistingFileUrl){$('saScheduleMediaInfo').textContent='Keeping the current attachment unless you choose a replacement.';showExistingSchedulePreview();}});$('saScheduleMedia').addEventListener('change',()=>{const f=$('saScheduleMedia').files?.[0];if(f){if(!f.type.startsWith('image/')&&!f.type.startsWith('video/')){message('saScheduleMsg','Choose a valid image or video file.');return;}schedulePreviewObjectUrl=URL.createObjectURL(f);renderSchedulePreview(schedulePreviewObjectUrl,f.type.startsWith('video/')?'video':'image','Preview before publishing · '+f.name);$('saScheduleRemoveMedia').checked=false;$('saScheduleMediaInfo').textContent='Selected: '+f.name+' ('+Math.max(1,Math.round(f.size/1024/1024))+' MB)';}else if(editingExistingFileUrl&&!$('saScheduleRemoveMedia').checked){showExistingSchedulePreview();}else clearSchedulePreview();});
+ $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);$('saSchedulePremium').addEventListener('change',()=>{const h=$('saScheduleAudienceHint');if(h)h.textContent=$('saSchedulePremium').checked?'This post will use Premium visibility. Your active, verified subscription is checked again when it publishes.':'This post will follow your saved account privacy: Public accounts publish publicly; Private accounts publish to followers.';});$('saScheduleCancelEdit').addEventListener('click',()=>{resetScheduleEditor();message('saScheduleMsg','Stopped editing.');});$('saScheduleRemoveMedia').addEventListener('change',e=>{if(e.target.checked){$('saScheduleMedia').value='';clearSchedulePreview();$('saScheduleMediaInfo').textContent='Existing attachment will be removed when you save.';}else if(editingExistingFileUrl){$('saScheduleMediaInfo').textContent='Keeping the current attachment unless you choose a replacement.';showExistingSchedulePreview();}});$('saScheduleMedia').addEventListener('change',()=>{const f=$('saScheduleMedia').files?.[0];if(f){if(!f.type.startsWith('image/')&&!f.type.startsWith('video/')){message('saScheduleMsg','Choose a valid image or video file.');return;}schedulePreviewObjectUrl=URL.createObjectURL(f);renderSchedulePreview(schedulePreviewObjectUrl,f.type.startsWith('video/')?'video':'image','Preview before publishing · '+f.name);$('saScheduleRemoveMedia').checked=false;$('saScheduleMediaInfo').textContent='Selected: '+f.name+' ('+Math.max(1,Math.round(f.size/1024/1024))+' MB)';}else if(editingExistingFileUrl&&!$('saScheduleRemoveMedia').checked){showExistingSchedulePreview();}else clearSchedulePreview();});
  window.openSocialAppCreatorStudio=open;
  function injectButton(){
    const screen=$('profileSettingsScreen');
