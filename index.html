@@ -58678,19 +58678,19 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     <h3 style="margin-top:0" id="saScheduleHeading">Create a post</h3>
     <label for="saScheduleContent">Post text (optional when adding media)</label>
     <textarea id="saScheduleContent" rows="4" maxlength="5000" placeholder="Write your post…"></textarea>
+    <div style="margin:12px 0;padding:13px;border:1px solid #59416e;border-radius:13px;background:rgba(138,43,226,.08)">
+     <label style="display:flex;align-items:flex-start;gap:10px;font-size:14px;cursor:pointer;margin:0">
+      <input id="saSchedulePremium" type="checkbox" style="width:auto;margin:3px 0 0;accent-color:#8a2be2">
+      <span><strong>Publish as Premium</strong><div style="font-size:12px;font-weight:400;color:#c7bacf;margin-top:3px">Off: follows your saved Public/Private account setting. On: visible to the Premium audience.</div></span>
+     </label>
+     <div id="saScheduleAudienceHint" style="font-size:12px;color:#ad9ab9;margin-top:8px">Ordinary scheduled posts automatically follow your account privacy.</div>
+    </div>
     <label for="saScheduleMedia">Add photo or video</label>
     <input id="saScheduleMedia" type="file" accept="image/*,video/*">
     <label style="display:flex;align-items:center;gap:9px;font-size:13px"><input id="saScheduleRemoveMedia" type="checkbox" style="width:auto;margin:0"> Remove the existing attachment when saving this edit</label>
     <div id="saScheduleMediaInfo" style="font-size:12px;color:#ad9ab9;margin:5px 0 12px">Images and videos are stored in your private posts_media bucket.</div>
     <div id="saScheduleMediaPreview" aria-live="polite"><div id="saSchedulePreviewContent"></div><div class="sa-preview-caption" id="saSchedulePreviewCaption"></div></div>
-    <div style="margin:12px 0;padding:13px;border:1px solid #59416e;border-radius:13px;background:rgba(138,43,226,.08)">
-     <label style="display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer;margin:0">
-      <input id="saSchedulePremium" type="checkbox" style="width:auto;margin:0;accent-color:#8a2be2">
-      <span><strong>Publish as Premium</strong><div style="font-size:12px;font-weight:400;color:#c7bacf;margin-top:3px">Off: follows your saved Public/Private account setting. On: visible to Premium audience.</div></span>
-     </label>
-     <div id="saScheduleAudienceHint" style="font-size:12px;color:#ad9ab9;margin-top:8px">Ordinary scheduled posts automatically follow your account privacy.</div>
-    </div>
-    <label for="saScheduleAt">Publishing date and time</label>
+    <label for="saScheduleAt">Premium scheduled publishing date and time</label>
     <input id="saScheduleAt" type="datetime-local">
     <p id="saScheduleTimezone" style="font-size:12px;color:#ad9ab9;margin:6px 0 12px">Times are shown in your device’s local timezone.</p>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -58701,7 +58701,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     <p id="saScheduleMsg" style="color:#c7bacf;white-space:pre-wrap"></p>
    </div>
    <div class="sa-card"><strong>Your scheduled posts</strong><div id="saScheduleList" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
-   <p style="font-size:12px;color:#9c8fa6">Choose “Publish as Premium” only when you want this individual post to use the Premium audience. Otherwise it follows your saved account privacy (Public or Private). The server checks your active, verified Premium subscription again when a Premium post is due. “Publish ordinary post now” uses the normal Home composer and your saved account privacy setting. Pending posts can be edited or cancelled; processing and published posts cannot.</p>
+   <p style="font-size:12px;color:#9c8fa6">Choose the audience for each scheduled post: Public, Private (followers), or Premium. The server must preserve this audience and recheck Premium eligibility when a Premium post is due. “Publish ordinary post now” uses the normal Home composer and your saved account privacy setting. Pending posts can be edited or cancelled; processing and published posts cannot.</p>
   </section>
  </div>
 </div>
@@ -58810,12 +58810,12 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   editingExistingFileUrl=null;
   editingExistingMediaType=null;
   $('saScheduleHeading').textContent='Create a post';
-  $('saScheduleSave').textContent='Schedule as Premium';
+  $('saScheduleSave').textContent='Schedule post';
   $('saScheduleCancelEdit').style.display='none';
   $('saScheduleContent').value='';
+  $('saSchedulePremium').checked=false;
   $('saScheduleMedia').value='';
   $('saScheduleRemoveMedia').checked=false;
-  $('saSchedulePremium').checked=false;
   $('saScheduleAt').value='';
   $('saScheduleMediaInfo').textContent='Images and videos are stored in your private posts_media bucket.';
  }
@@ -58833,20 +58833,10 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   if(error)throw error;
   return path;
  }
- async function getScheduleVisibility(sb, premiumSelected){
-  if(premiumSelected) return 'premium';
-  const {data:profile,error}=await sb.from('profiles')
-   .select('post_privacy_mode,private_profile,private_account')
-   .eq('id',creatorUserId).maybeSingle();
-  if(error)throw error;
-  if(!profile)throw new Error('Could not read your saved account privacy setting.');
-  const isPrivate=profile.post_privacy_mode==='private'||
-   (profile.post_privacy_mode!=='public'&&profile.private_profile===true);
-  return isPrivate?'followers':'public';
- }
  async function saveSchedule(){
   const sb=client(),button=$('saScheduleSave'),contentEl=$('saScheduleContent'),timeEl=$('saScheduleAt');
   const content=contentEl?.value?.trim()||'',local=timeEl?.value||'';
+  let visibility='public';
   let media;
   try{media=selectedScheduleMedia();}catch(e){message('saScheduleMsg',e.message);return;}
   if(!sb){message('saScheduleMsg','SocialApp could not connect to Supabase. Refresh and try again.');return;}
@@ -58859,7 +58849,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   const expectedUserId=creatorUserId;
   if(!expectedUserId||currentId()!==expectedUserId){message('saScheduleMsg','Your login session changed. Reopen Creator Studio and try again.');return;}
   if(button?.disabled)return;
-  if(button){button.disabled=true;button.dataset.originalText=button.textContent||'Schedule as Premium';button.textContent=editingScheduleId?'Updating…':'Uploading and scheduling…';}
+  if(button){button.disabled=true;button.dataset.originalText=button.textContent||'Schedule post';button.textContent=editingScheduleId?'Updating…':'Uploading and scheduling…';}
   message('saScheduleMsg','Verifying your session and Premium access…');
   let uploadedPath=null;
   try{
@@ -58867,10 +58857,21 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(authError)throw authError;
    const authenticatedUserId=authData?.user?.id;
    if(!authenticatedUserId||authenticatedUserId!==expectedUserId)throw new Error('Your login session could not be verified. Please sign in again.');
-   if(!(await hasAccess()))throw new Error('An active, verified Premium subscription is required to schedule or edit posts.');
+   if(!(await hasAccess()))throw new Error('An active, verified Premium subscription is required to use Creator Studio scheduling.');
    const premiumSelected=$('saSchedulePremium')?.checked===true;
-   const visibility=await getScheduleVisibility(sb,premiumSelected);
-   if(premiumSelected && !(await hasAccess()))throw new Error('An active, verified Premium subscription is required to publish a Premium post.');
+   if(premiumSelected){
+    visibility='premium';
+    if(!(await hasAccess()))throw new Error('An active, verified Premium subscription is required to schedule a Premium-audience post.');
+   }else{
+    const {data:accountPrivacy,error:privacyError}=await sb.from('profiles')
+     .select('post_privacy_mode,private_profile,private_account')
+     .eq('id',authenticatedUserId).maybeSingle();
+    if(privacyError)throw privacyError;
+    if(!accountPrivacy)throw new Error('Could not read your saved account privacy setting.');
+    const accountIsPrivate=accountPrivacy.post_privacy_mode==='private'||
+     (accountPrivacy.post_privacy_mode!=='public'&&accountPrivacy.private_profile===true);
+    visibility=accountIsPrivate?'followers':'public';
+   }
    if(media){uploadedPath=await uploadScheduleMedia(sb,media.file);}
    const fileUrl=media?uploadedPath:(removeExisting?null:(editingExistingFileUrl||null));
    const mediaType=media?media.type:(removeExisting?null:(editingExistingMediaType||null));
@@ -58893,7 +58894,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(uploadedPath){try{await sb.storage.from('posts_media').remove([uploadedPath]);}catch(cleanupError){console.warn('Could not clean up unused scheduled media:',cleanupError);}}
    message('saScheduleMsg',e?.message||'Could not save the scheduled post.');
   }finally{
-   if(button){button.disabled=false;button.textContent=button.dataset.originalText||'Schedule as Premium';delete button.dataset.originalText;}
+   if(button){button.disabled=false;button.textContent=button.dataset.originalText||'Schedule post';delete button.dataset.originalText;}
   }
  }
  async function editSchedule(item){
@@ -58905,9 +58906,10 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   $('saScheduleSave').textContent='Save changes';
   $('saScheduleCancelEdit').style.display='inline-block';
   $('saScheduleContent').value=item.content||'';
+  $('saSchedulePremium').checked=item.visibility==='premium';
+  const audienceHint=$('saScheduleAudienceHint');if(audienceHint)audienceHint.textContent=$('saSchedulePremium').checked?'This post will use Premium visibility. Your active, verified subscription is checked again when it publishes.':'This post will follow your saved account privacy setting.';
   $('saScheduleMedia').value='';
   $('saScheduleRemoveMedia').checked=false;
-  $('saSchedulePremium').checked=item.visibility==='premium';
   $('saScheduleAt').value='';
   if(item.publish_at){const d=new Date(item.publish_at);const pad=n=>String(n).padStart(2,'0');$('saScheduleAt').value=d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());}
   $('saScheduleMediaInfo').textContent=item.file_url?'Current attachment: '+(item.media_type||'media')+'. Choose a replacement or tick remove attachment.':'No current attachment.';
@@ -58964,7 +58966,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     const txt=document.createElement('div');txt.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';txt.textContent=(item.content||'[Media-only post]').slice(0,500);
     const meta=document.createElement('div');meta.style.cssText='font-size:12px;color:#ad9ab9;margin:5px 0';
     const date=item.publish_at?new Date(item.publish_at):null;
-    meta.textContent=(date&&!Number.isNaN(date.getTime())?date.toLocaleString():'Time unavailable')+' · '+(item.status||'unknown')+(item.media_type?' · '+item.media_type:'')+' · '+(item.visibility==='premium'?'Premium':item.visibility==='followers'?'Private audience':'Account audience');
+    meta.textContent=(date&&!Number.isNaN(date.getTime())?date.toLocaleString():'Time unavailable')+' · '+(item.status||'unknown')+(item.media_type?' · '+item.media_type:'')+' · '+({public:'Account audience · Public',followers:'Account audience · Followers',premium:'Premium'}[item.visibility]||'Account audience');
     row.append(txt,meta);
     if(item.file_url){const mediaInfo=document.createElement('div');mediaInfo.style.cssText='font-size:12px;color:#c4a2e9;margin:4px 0';mediaInfo.textContent='Attachment: '+(item.media_type||'media');row.appendChild(mediaInfo);}
     if(item.status==='published'&&item.post_id!=null){const info=document.createElement('div');info.style.cssText='font-size:12px;color:#8fe3a3';info.textContent='Published successfully · Post ID '+item.post_id;row.appendChild(info);}
@@ -58999,7 +59001,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   }
  },30000);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-sa-tab]');if(!b)return;const key=b.dataset.saTab;['Analytics','Appearance','Schedule'].forEach(x=>{const panel=$('saCreator'+x);if(panel)panel.style.display=(x.toLowerCase()===key)?'block':'none';});if(key==='schedule'){const field=$('saScheduleAt');if(field){const min=new Date(Date.now()+60000);const pad=n=>String(n).padStart(2,'0');field.min=min.getFullYear()+'-'+pad(min.getMonth()+1)+'-'+pad(min.getDate())+'T'+pad(min.getHours())+':'+pad(min.getMinutes());}}});
- $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);$('saSchedulePublishNow').addEventListener('click',publishOrdinaryNow);$('saScheduleCancelEdit').addEventListener('click',()=>{resetScheduleEditor();message('saScheduleMsg','Stopped editing.');});$('saScheduleRemoveMedia').addEventListener('change',e=>{if(e.target.checked){$('saScheduleMedia').value='';clearSchedulePreview();$('saScheduleMediaInfo').textContent='Existing attachment will be removed when you save.';}else if(editingExistingFileUrl){$('saScheduleMediaInfo').textContent='Keeping the current attachment unless you choose a replacement.';showExistingSchedulePreview();}});$('saSchedulePremium').addEventListener('change',()=>{const h=$('saScheduleAudienceHint');if(h)h.textContent=$('saSchedulePremium').checked?'This post will use Premium visibility. Your active, verified Premium subscription is checked again when it publishes.':'This post will follow your saved account privacy: Public accounts publish publicly; Private accounts publish to followers.';});$('saScheduleMedia').addEventListener('change',()=>{const f=$('saScheduleMedia').files?.[0];if(f){if(!f.type.startsWith('image/')&&!f.type.startsWith('video/')){message('saScheduleMsg','Choose a valid image or video file.');return;}schedulePreviewObjectUrl=URL.createObjectURL(f);renderSchedulePreview(schedulePreviewObjectUrl,f.type.startsWith('video/')?'video':'image','Preview before publishing · '+f.name);$('saScheduleRemoveMedia').checked=false;$('saScheduleMediaInfo').textContent='Selected: '+f.name+' ('+Math.max(1,Math.round(f.size/1024/1024))+' MB)';}else if(editingExistingFileUrl&&!$('saScheduleRemoveMedia').checked){showExistingSchedulePreview();}else clearSchedulePreview();});
+ $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);$('saSchedulePublishNow').addEventListener('click',publishOrdinaryNow);$('saScheduleCancelEdit').addEventListener('click',()=>{resetScheduleEditor();message('saScheduleMsg','Stopped editing.');});$('saSchedulePremium').addEventListener('change',()=>{const h=$('saScheduleAudienceHint');if(h)h.textContent=$('saSchedulePremium').checked?'This post will use Premium visibility. Your active, verified subscription is checked again when it publishes.':'This post will follow your saved account privacy: Public accounts publish publicly; Private accounts publish to followers.';});$('saScheduleRemoveMedia').addEventListener('change',e=>{if(e.target.checked){$('saScheduleMedia').value='';clearSchedulePreview();$('saScheduleMediaInfo').textContent='Existing attachment will be removed when you save.';}else if(editingExistingFileUrl){$('saScheduleMediaInfo').textContent='Keeping the current attachment unless you choose a replacement.';showExistingSchedulePreview();}});$('saScheduleMedia').addEventListener('change',()=>{const f=$('saScheduleMedia').files?.[0];if(f){if(!f.type.startsWith('image/')&&!f.type.startsWith('video/')){message('saScheduleMsg','Choose a valid image or video file.');return;}schedulePreviewObjectUrl=URL.createObjectURL(f);renderSchedulePreview(schedulePreviewObjectUrl,f.type.startsWith('video/')?'video':'image','Preview before publishing · '+f.name);$('saScheduleRemoveMedia').checked=false;$('saScheduleMediaInfo').textContent='Selected: '+f.name+' ('+Math.max(1,Math.round(f.size/1024/1024))+' MB)';}else if(editingExistingFileUrl&&!$('saScheduleRemoveMedia').checked){showExistingSchedulePreview();}else clearSchedulePreview();});
  window.openSocialAppCreatorStudio=open;
  function injectButton(){
    const screen=$('profileSettingsScreen');
