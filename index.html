@@ -59089,163 +59089,171 @@ window.reportComment=id=>window.submitUserReport("comment",id);
 </script>
 
 
-<!-- SOCIALAPP POST VIEW TRACKING: records eligible, genuinely visible Home-feed posts. -->
+<!-- SOCIALAPP POST VIEW TRACKING: resiliently waits for Supabase auth and visible Home feed cards. -->
 <script id="socialapp-post-view-tracker">
 (function () {
   'use strict';
-
   if (window.__socialAppPostViewTrackerInstalled) return;
   window.__socialAppPostViewTrackerInstalled = true;
 
   const completed = new Set();
   const pending = new Set();
-  const retryAfter = new Map();
+  const retryAt = new Map();
   const visibleCards = new Set();
 
-  let supabaseClient = null;
-  let sessionPromise = null;
   let observer = null;
-  let feedObserver = null;
-  let observedFeed = null;
+  let feedMutationObserver = null;
+  let currentFeed = null;
+  let currentClient = null;
+  let sessionPromise = null;
+  let authListenerClient = null;
 
   function getClient() {
-    const current = window.supabase;
-    if (current !== supabaseClient) {
-      supabaseClient = current || null;
+    const sb = window.supabase || null;
+    if (sb !== currentClient) {
+      currentClient = sb;
       sessionPromise = null;
     }
-    return supabaseClient;
+    return sb;
   }
 
-  async function getAuthenticatedSession() {
-    const sb = getClient();
+  async function getSession(sb) {
     if (!sb || !sb.auth || typeof sb.auth.getSession !== 'function') return null;
-
     if (!sessionPromise) {
-      sessionPromise = sb.auth.getSession()
-        .then(result => {
-          if (result && !result.error) return result.data && result.data.session || null;
+      sessionPromise = sb.auth.getSession().then(({ data, error }) => {
+        if (error) {
           sessionPromise = null;
           return null;
-        })
-        .catch(() => {
-          sessionPromise = null;
-          return null;
-        });
+        }
+        return data && data.session && data.session.user ? data.session : null;
+      }).catch(() => {
+        sessionPromise = null;
+        return null;
+      });
     }
-
-    const session = await sessionPromise;
-    return session && session.user && session.user.id ? session : null;
+    return sessionPromise;
   }
 
-  async function recordVisibleCard(card) {
-    const postId = String(card && card.id || '').replace(/^post-/, '');
-    if (!/^\d+$/.test(postId)) return;
-    if (completed.has(postId) || pending.has(postId)) return;
+  function cardIsActuallyVisible(card) {
+    if (!card || !card.isConnected) return false;
+    const feed = document.getElementById('posts');
+    if (!feed) return false;
 
-    const nextAllowed = retryAfter.get(postId) || 0;
-    if (Date.now() < nextAllowed) return;
+    const r = card.getBoundingClientRect();
+    const f = feed.getBoundingClientRect();
+    const top = Math.max(r.top, f.top, 0);
+    const bottom = Math.min(r.bottom, f.bottom, window.innerHeight);
+    const left = Math.max(r.left, f.left, 0);
+    const right = Math.min(r.right, f.right, window.innerWidth);
+    const visibleHeight = Math.max(0, bottom - top);
+    const visibleWidth = Math.max(0, right - left);
 
-    pending.add(postId);
+    // A percentage-only threshold misses tall cards: a post can occupy
+    // most of the screen while still being less than 50% of its own height.
+    return visibleHeight >= 120 && visibleWidth >= 80;
+  }
+
+  async function record(card) {
+    const id = String(card && card.id || '').replace(/^post-/, '');
+    if (!/^\d+$/.test(id) || completed.has(id) || pending.has(id)) return;
+    if ((retryAt.get(id) || 0) > Date.now()) return;
+
+    pending.add(id);
     try {
       const sb = getClient();
-      const session = await getAuthenticatedSession();
-
-      // Do not mark a post as completed when auth is still restoring.
-      // The periodic visibility scan will retry once a session is available.
-      if (!sb || !session) return;
-
-      const result = await sb.rpc('record_post_view', {
-        p_post_id: Number(postId)
-      });
-
-      if (result && result.error) {
-        retryAfter.set(postId, Date.now() + 10000);
-        console.warn('SocialApp post-view RPC error:', result.error.message || result.error);
+      const session = await getSession(sb);
+      if (!sb || !session || !session.user || !session.user.id) {
+        retryAt.set(id, Date.now() + 2500);
         return;
       }
 
-      // true = newly recorded; false = duplicate or rejected by the
-      // server-side ownership/privacy/eligibility checks. Both are settled.
-      completed.add(postId);
-      retryAfter.delete(postId);
+      const { data, error } = await sb.rpc('record_post_view', {
+        p_post_id: Number(id)
+      });
+
+      if (error) {
+        retryAt.set(id, Date.now() + 8000);
+        console.warn('SocialApp post-view RPC failed:', error.message || error);
+        return;
+      }
+
+      // The server returns false for own views, duplicates, or viewers
+      // who fail the post privacy/subscription checks. Do not fake a count.
+      completed.add(id);
+      retryAt.delete(id);
+      card.dataset.saViewRecorded = '1';
     } catch (error) {
-      retryAfter.set(postId, Date.now() + 10000);
+      retryAt.set(id, Date.now() + 8000);
       console.warn('SocialApp post-view tracking error:', error);
     } finally {
-      pending.delete(postId);
+      pending.delete(id);
     }
   }
 
-  function processVisibleCards() {
-    visibleCards.forEach(card => {
-      if (!card || !card.isConnected) {
+  function scanVisibleCards() {
+    const feed = document.getElementById('posts');
+    if (!feed) return;
+    feed.querySelectorAll('.post-card[id^="post-"]').forEach(card => {
+      if (cardIsActuallyVisible(card)) {
+        visibleCards.add(card);
+        record(card);
+      } else {
         visibleCards.delete(card);
-        return;
       }
-      recordVisibleCard(card);
     });
   }
 
-  function attachFeed() {
+  function bindAuthListener() {
+    const sb = getClient();
+    if (!sb || !sb.auth || typeof sb.auth.onAuthStateChange !== 'function') return;
+    if (authListenerClient === sb) return;
+    authListenerClient = sb;
+    sb.auth.onAuthStateChange(() => {
+      sessionPromise = null;
+      setTimeout(scanVisibleCards, 300);
+    });
+  }
+
+  function observeFeed() {
     const feed = document.getElementById('posts');
     if (!feed) return;
 
-    if (typeof IntersectionObserver === 'undefined') return;
+    if (feed !== currentFeed) {
+      if (feedMutationObserver) feedMutationObserver.disconnect();
+      currentFeed = feed;
+      feedMutationObserver = new MutationObserver(scanVisibleCards);
+      feedMutationObserver.observe(feed, { childList: true, subtree: true });
+    }
 
-    if (!observer) {
-      // Use the browser viewport as the root. IntersectionObserver still
-      // accounts for clipping/scrolling ancestors such as the Home feed.
+    // Use viewport root so replacing #posts does not leave an observer
+    // attached to a detached feed element. Clipping ancestors are respected.
+    if (!observer && typeof IntersectionObserver !== 'undefined') {
       observer = new IntersectionObserver(entries => {
         entries.forEach(entry => {
-          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+          if (entry.isIntersecting && entry.intersectionRect.height >= 120) {
             visibleCards.add(entry.target);
+            record(entry.target);
           } else {
             visibleCards.delete(entry.target);
           }
         });
-        processVisibleCards();
-      }, { root: null, threshold: [0, 0.5, 0.75, 1] });
+      }, { root: null, threshold: [0, 0.05, 0.1, 0.25] });
     }
 
-    if (feed !== observedFeed) {
-      if (feedObserver) feedObserver.disconnect();
-      observedFeed = feed;
-      feedObserver = new MutationObserver(observeCards);
-      feedObserver.observe(feed, { childList: true, subtree: true });
+    if (observer) {
+      feed.querySelectorAll('.post-card[id^="post-"]').forEach(card => {
+        if (card.dataset.saViewObserved === '1') return;
+        card.dataset.saViewObserved = '1';
+        observer.observe(card);
+      });
     }
-
-    observeCards();
-  }
-
-  function observeCards() {
-    if (!observedFeed || !observer) return;
-    observedFeed.querySelectorAll('.post-card[id^="post-"]').forEach(card => {
-      if (card.dataset.saViewObserved === '1') return;
-      card.dataset.saViewObserved = '1';
-      observer.observe(card);
-    });
-  }
-
-  function initializeAuthListener() {
-    const sb = getClient();
-    if (!sb || !sb.auth || typeof sb.auth.onAuthStateChange !== 'function') return;
-
-    if (window.__socialAppPostViewAuthClient === sb) return;
-    window.__socialAppPostViewAuthClient = sb;
-
-    sb.auth.onAuthStateChange(() => {
-      sessionPromise = null;
-      // Let Supabase finish updating its session before retrying visible cards.
-      setTimeout(processVisibleCards, 250);
-    });
+    scanVisibleCards();
   }
 
   function start() {
     getClient();
-    initializeAuthListener();
-    attachFeed();
-    processVisibleCards();
+    bindAuthListener();
+    observeFeed();
   }
 
   if (document.readyState === 'loading') {
@@ -59254,23 +59262,25 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     start();
   }
 
-  // Handle feed creation/replacement, post rerenders, and auth restoration.
   const pageObserver = new MutationObserver(start);
   pageObserver.observe(document.documentElement, { childList: true, subtree: true });
 
   window.addEventListener('load', start, { once: true });
-  window.addEventListener('scroll', processVisibleCards, true);
-  window.addEventListener('resize', processVisibleCards);
+  window.addEventListener('scroll', scanVisibleCards, true);
+  window.addEventListener('resize', scanVisibleCards);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
       sessionPromise = null;
       start();
+      scanVisibleCards();
     }
   });
 
-  // Keeps retrying visible cards if the app/session initializes after the
-  // first visibility event or a temporary network/RPC error occurs.
-  setInterval(start, 2000);
+  // Retry visible cards after auth restoration and transient network errors.
+  setInterval(() => {
+    start();
+    scanVisibleCards();
+  }, 2500);
 })();
 </script>
 </body>
