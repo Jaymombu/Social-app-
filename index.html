@@ -59089,90 +59089,188 @@ window.reportComment=id=>window.submitUserReport("comment",id);
 </script>
 
 
-<!-- SOCIALAPP POST VIEW TRACKING: resiliently waits for Supabase auth and visible Home feed cards. -->
+<!-- SOCIALAPP POST VIEW TRACKING: records eligible, genuinely visible Home-feed posts. -->
 <script id="socialapp-post-view-tracker">
-(function(){
- 'use strict';
- if(window.__socialAppPostViewTrackerInstalled)return;
- window.__socialAppPostViewTrackerInstalled=true;
- const seen=new Set();
- const pending=new Set();
- let observer=null;
- let mutationObserver=null;
- const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
- async function record(card){
-  const id=String(card?.id||'').replace(/^post-/,'');
-  if(!/^\d+$/.test(id)||seen.has(id)||pending.has(id))return;
-  pending.add(id);
-  try{
-   let sb=null, session=null;
-   // This classic script can run before the deferred ES module creates
-   // window.supabase. Retry briefly rather than losing the first visibility event.
-   for(let attempt=0;attempt<20;attempt++){
-    sb=window.supabase||null;
-    if(sb?.auth?.getSession){
-     try{
-      const result=await sb.auth.getSession();
-      session=result?.data?.session||null;
-      if(session?.user?.id)break;
-     }catch(e){}
+(function () {
+  'use strict';
+
+  if (window.__socialAppPostViewTrackerInstalled) return;
+  window.__socialAppPostViewTrackerInstalled = true;
+
+  const completed = new Set();
+  const pending = new Set();
+  const retryAfter = new Map();
+  const visibleCards = new Set();
+
+  let supabaseClient = null;
+  let sessionPromise = null;
+  let observer = null;
+  let feedObserver = null;
+  let observedFeed = null;
+
+  function getClient() {
+    const current = window.supabase;
+    if (current !== supabaseClient) {
+      supabaseClient = current || null;
+      sessionPromise = null;
     }
-    await sleep(500);
-   }
-   if(!sb?.rpc||!session?.user?.id){
-    console.warn('SocialApp view tracking skipped: authenticated Supabase session was not ready.');
-    return;
-   }
-   const {data,error}=await sb.rpc('record_post_view',{p_post_id:Number(id)});
-   if(error){
-    console.warn('SocialApp view tracking failed:',error.message);
-    return;
-   }
-   // false means the server correctly rejected a duplicate or ineligible view.
-   seen.add(id);
-  }catch(error){
-   console.warn('SocialApp view tracking unavailable:',error);
-  }finally{
-   pending.delete(id);
+    return supabaseClient;
   }
- }
- function observeCards(){
-  const feed=document.getElementById('posts');
-  if(!feed||typeof IntersectionObserver==='undefined')return;
-  if(!observer){
-   observer=new IntersectionObserver(entries=>{
-    for(const entry of entries){
-     if(entry.isIntersecting&&entry.intersectionRatio>=0.5)record(entry.target);
+
+  async function getAuthenticatedSession() {
+    const sb = getClient();
+    if (!sb || !sb.auth || typeof sb.auth.getSession !== 'function') return null;
+
+    if (!sessionPromise) {
+      sessionPromise = sb.auth.getSession()
+        .then(result => {
+          if (result && !result.error) return result.data && result.data.session || null;
+          sessionPromise = null;
+          return null;
+        })
+        .catch(() => {
+          sessionPromise = null;
+          return null;
+        });
     }
-   },{root:feed,threshold:[0,0.5,0.75,1]});
+
+    const session = await sessionPromise;
+    return session && session.user && session.user.id ? session : null;
   }
-  feed.querySelectorAll('.post-card[id^="post-"]').forEach(card=>{
-   if(card.dataset.saViewObserved==='1')return;
-   card.dataset.saViewObserved='1';
-   observer.observe(card);
+
+  async function recordVisibleCard(card) {
+    const postId = String(card && card.id || '').replace(/^post-/, '');
+    if (!/^\d+$/.test(postId)) return;
+    if (completed.has(postId) || pending.has(postId)) return;
+
+    const nextAllowed = retryAfter.get(postId) || 0;
+    if (Date.now() < nextAllowed) return;
+
+    pending.add(postId);
+    try {
+      const sb = getClient();
+      const session = await getAuthenticatedSession();
+
+      // Do not mark a post as completed when auth is still restoring.
+      // The periodic visibility scan will retry once a session is available.
+      if (!sb || !session) return;
+
+      const result = await sb.rpc('record_post_view', {
+        p_post_id: Number(postId)
+      });
+
+      if (result && result.error) {
+        retryAfter.set(postId, Date.now() + 10000);
+        console.warn('SocialApp post-view RPC error:', result.error.message || result.error);
+        return;
+      }
+
+      // true = newly recorded; false = duplicate or rejected by the
+      // server-side ownership/privacy/eligibility checks. Both are settled.
+      completed.add(postId);
+      retryAfter.delete(postId);
+    } catch (error) {
+      retryAfter.set(postId, Date.now() + 10000);
+      console.warn('SocialApp post-view tracking error:', error);
+    } finally {
+      pending.delete(postId);
+    }
+  }
+
+  function processVisibleCards() {
+    visibleCards.forEach(card => {
+      if (!card || !card.isConnected) {
+        visibleCards.delete(card);
+        return;
+      }
+      recordVisibleCard(card);
+    });
+  }
+
+  function attachFeed() {
+    const feed = document.getElementById('posts');
+    if (!feed) return;
+
+    if (typeof IntersectionObserver === 'undefined') return;
+
+    if (!observer) {
+      // Use the browser viewport as the root. IntersectionObserver still
+      // accounts for clipping/scrolling ancestors such as the Home feed.
+      observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+            visibleCards.add(entry.target);
+          } else {
+            visibleCards.delete(entry.target);
+          }
+        });
+        processVisibleCards();
+      }, { root: null, threshold: [0, 0.5, 0.75, 1] });
+    }
+
+    if (feed !== observedFeed) {
+      if (feedObserver) feedObserver.disconnect();
+      observedFeed = feed;
+      feedObserver = new MutationObserver(observeCards);
+      feedObserver.observe(feed, { childList: true, subtree: true });
+    }
+
+    observeCards();
+  }
+
+  function observeCards() {
+    if (!observedFeed || !observer) return;
+    observedFeed.querySelectorAll('.post-card[id^="post-"]').forEach(card => {
+      if (card.dataset.saViewObserved === '1') return;
+      card.dataset.saViewObserved = '1';
+      observer.observe(card);
+    });
+  }
+
+  function initializeAuthListener() {
+    const sb = getClient();
+    if (!sb || !sb.auth || typeof sb.auth.onAuthStateChange !== 'function') return;
+
+    if (window.__socialAppPostViewAuthClient === sb) return;
+    window.__socialAppPostViewAuthClient = sb;
+
+    sb.auth.onAuthStateChange(() => {
+      sessionPromise = null;
+      // Let Supabase finish updating its session before retrying visible cards.
+      setTimeout(processVisibleCards, 250);
+    });
+  }
+
+  function start() {
+    getClient();
+    initializeAuthListener();
+    attachFeed();
+    processVisibleCards();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true });
+  } else {
+    start();
+  }
+
+  // Handle feed creation/replacement, post rerenders, and auth restoration.
+  const pageObserver = new MutationObserver(start);
+  pageObserver.observe(document.documentElement, { childList: true, subtree: true });
+
+  window.addEventListener('load', start, { once: true });
+  window.addEventListener('scroll', processVisibleCards, true);
+  window.addEventListener('resize', processVisibleCards);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      sessionPromise = null;
+      start();
+    }
   });
- }
- function start(){
-  const feed=document.getElementById('posts');
-  if(!feed)return;
-  if(!mutationObserver){
-   mutationObserver=new MutationObserver(observeCards);
-   mutationObserver.observe(feed,{childList:true,subtree:true});
-  }
-  observeCards();
- }
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
- else start();
- window.addEventListener('load',()=>{start();observeCards();},{once:true});
- // The feed may be created by startApp after this tracker script executes.
- const pageObserver=new MutationObserver(()=>{start();observeCards();});
- pageObserver.observe(document.documentElement,{childList:true,subtree:true});
- // Re-check after the ES module/Supabase client and auth restoration settle.
- let retries=0;
- const retryTimer=setInterval(()=>{
-  start();observeCards();
-  if(window.supabase?.auth?.getSession||retries++>40)clearInterval(retryTimer);
- },500);
+
+  // Keeps retrying visible cards if the app/session initializes after the
+  // first visibility event or a temporary network/RPC error occurs.
+  setInterval(start, 2000);
 })();
 </script>
 </body>
