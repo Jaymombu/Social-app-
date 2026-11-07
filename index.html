@@ -58783,26 +58783,6 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(followersR.error)throw followersR.error;
 
    const postIds=allPosts.map(p=>p.id).filter(id=>id!==null&&id!==undefined);
-   // Count comments ON the creator's posts, not comments authored by the creator.
-   // Batch IDs to keep PostgREST URL/query sizes reasonable.
-   let commentsReceived=0;
-   for(let i=0;i<postIds.length;i+=200){
-    const ids=postIds.slice(i,i+200);
-    const {count,error}=await sb.from('comments')
-     .select('id',{count:'exact',head:true})
-     .in('post_id',ids)
-     .eq('hidden',false);
-    if(error)throw error;
-    commentsReceived+=count||0;
-   }
-
-   const likesFor=post=>Array.isArray(post.likes)?post.likes.length:(Number(post.likes)||0);
-   const totalLikes=allPosts.reduce((sum,post)=>sum+likesFor(post),0);
-   $('saStatPosts').textContent=String(allPosts.length);
-   $('saStatLikes').textContent=String(totalLikes);
-   $('saStatComments').textContent=String(commentsReceived);
-   $('saStatFollowers').textContent=String(followersR.count??0);
-
    // Read views only for this creator. RLS must allow owners to read their
    // own post_views rows; if not, show an unavailable marker, never fake data.
    let viewRows=[];
@@ -58825,6 +58805,26 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    $('saStatReach').textContent=viewsAvailable?String(uniqueViewers.size):'—';
    const viewsByPost=new Map();
    for(const view of viewRows)viewsByPost.set(String(view.post_id),(viewsByPost.get(String(view.post_id))||0)+1);
+   // Count comments ON the creator's posts, not comments authored by the creator.
+   // Batch IDs to keep PostgREST URL/query sizes reasonable.
+   let commentsReceived=0;
+   for(let i=0;i<postIds.length;i+=200){
+    const ids=postIds.slice(i,i+200);
+    const {count,error}=await sb.from('comments')
+     .select('id',{count:'exact',head:true})
+     .in('post_id',ids)
+     .eq('hidden',false);
+    if(error)throw error;
+    commentsReceived+=count||0;
+   }
+
+   const likesFor=post=>Array.isArray(post.likes)?post.likes.length:(Number(post.likes)||0);
+   const totalLikes=allPosts.reduce((sum,post)=>sum+likesFor(post),0);
+   $('saStatPosts').textContent=String(allPosts.length);
+   $('saStatLikes').textContent=String(totalLikes);
+   $('saStatComments').textContent=String(commentsReceived);
+   $('saStatFollowers').textContent=String(followersR.count??0);
+
 
    // Rank by recorded views first, then likes, then newest.
 
@@ -58856,8 +58856,10 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(!topPosts.length)host.textContent='No posts found yet.';
   }catch(e){
    console.warn('Creator analytics query failed',e);
-   ['saStatPosts','saStatLikes','saStatComments','saStatFollowers','saStatViews','saStatReach'].forEach(id=>$(id).textContent='—');
-   $('saCreatorTopPosts').textContent='Could not load analytics. Check the posts, comments and follows SELECT policies, then try again.';
+   ['saStatPosts','saStatLikes','saStatComments','saStatFollowers'].forEach(id=>$(id).textContent='—');
+   // Keep view values if their independent query succeeded; do not hide them
+   // because an unrelated comments/follows query failed.
+   $('saCreatorTopPosts').textContent='Some analytics could not load. Check the browser console for the specific query error.';
   }
  }
  async function loadStyle(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_creator_settings').select('accent_color,banner_url').eq('user_id',creatorUserId).maybeSingle();if(error)throw error;if(data){$('saCreatorColor').value=data.accent_color||'#8a2be2';$('saCreatorBanner').value=data.banner_url||'';}}catch(e){console.warn('Could not load creator style',e);}}
@@ -59087,30 +59089,56 @@ window.reportComment=id=>window.submitUserReport("comment",id);
 </script>
 
 
-<!-- SOCIALAPP POST VIEW TRACKING: observes visible Home feed cards; no startApp changes. -->
+<!-- SOCIALAPP POST VIEW TRACKING: resiliently waits for Supabase auth and visible Home feed cards. -->
 <script id="socialapp-post-view-tracker">
 (function(){
  'use strict';
  if(window.__socialAppPostViewTrackerInstalled)return;
  window.__socialAppPostViewTrackerInstalled=true;
  const seen=new Set();
+ const pending=new Set();
  let observer=null;
+ let mutationObserver=null;
+ const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  async function record(card){
-  const id=String(card.id||'').replace(/^post-/,'');
-  if(!/^\d+$/.test(id)||seen.has(id))return;
-  const sb=window.supabase;
-  if(!sb?.rpc)return;
+  const id=String(card?.id||'').replace(/^post-/,'');
+  if(!/^\d+$/.test(id)||seen.has(id)||pending.has(id))return;
+  pending.add(id);
   try{
-   const {data:sessionData}=await sb.auth.getSession();
-   if(!sessionData?.session?.user?.id)return;
+   let sb=null, session=null;
+   // This classic script can run before the deferred ES module creates
+   // window.supabase. Retry briefly rather than losing the first visibility event.
+   for(let attempt=0;attempt<20;attempt++){
+    sb=window.supabase||null;
+    if(sb?.auth?.getSession){
+     try{
+      const result=await sb.auth.getSession();
+      session=result?.data?.session||null;
+      if(session?.user?.id)break;
+     }catch(e){}
+    }
+    await sleep(500);
+   }
+   if(!sb?.rpc||!session?.user?.id){
+    console.warn('SocialApp view tracking skipped: authenticated Supabase session was not ready.');
+    return;
+   }
+   const {data,error}=await sb.rpc('record_post_view',{p_post_id:Number(id)});
+   if(error){
+    console.warn('SocialApp view tracking failed:',error.message);
+    return;
+   }
+   // false means the server correctly rejected a duplicate or ineligible view.
    seen.add(id);
-   const {error}=await sb.rpc('record_post_view',{p_post_id:Number(id)});
-   if(error){seen.delete(id);console.warn('SocialApp view tracking failed:',error.message);}
-  }catch(error){seen.delete(id);console.warn('SocialApp view tracking unavailable:',error);}
+  }catch(error){
+   console.warn('SocialApp view tracking unavailable:',error);
+  }finally{
+   pending.delete(id);
+  }
  }
  function observeCards(){
   const feed=document.getElementById('posts');
-  if(!feed)return;
+  if(!feed||typeof IntersectionObserver==='undefined')return;
   if(!observer){
    observer=new IntersectionObserver(entries=>{
     for(const entry of entries){
@@ -59120,16 +59148,31 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   }
   feed.querySelectorAll('.post-card[id^="post-"]').forEach(card=>{
    if(card.dataset.saViewObserved==='1')return;
-   card.dataset.saViewObserved='1';observer.observe(card);
+   card.dataset.saViewObserved='1';
+   observer.observe(card);
   });
  }
- const mutationObserver=new MutationObserver(observeCards);
  function start(){
   const feed=document.getElementById('posts');
-  if(feed){mutationObserver.observe(feed,{childList:true,subtree:true});observeCards();}
+  if(!feed)return;
+  if(!mutationObserver){
+   mutationObserver=new MutationObserver(observeCards);
+   mutationObserver.observe(feed,{childList:true,subtree:true});
+  }
+  observeCards();
  }
- if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
- const retry=new MutationObserver(start);retry.observe(document.documentElement,{childList:true,subtree:true});
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
+ else start();
+ window.addEventListener('load',()=>{start();observeCards();},{once:true});
+ // The feed may be created by startApp after this tracker script executes.
+ const pageObserver=new MutationObserver(()=>{start();observeCards();});
+ pageObserver.observe(document.documentElement,{childList:true,subtree:true});
+ // Re-check after the ES module/Supabase client and auth restoration settle.
+ let retries=0;
+ const retryTimer=setInterval(()=>{
+  start();observeCards();
+  if(window.supabase?.auth?.getSession||retries++>40)clearInterval(retryTimer);
+ },500);
 })();
 </script>
 </body>
