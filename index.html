@@ -58665,7 +58665,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   <div class="sa-tabs"><button data-sa-tab="analytics">📊 Analytics</button><button data-sa-tab="appearance">🎨 Profile style</button><button data-sa-tab="schedule">🗓️ Schedule post</button></div>
   <section id="saCreatorAnalytics">
    <p style="color:#c7bacf">Your account performance from available SocialApp records. Views are only shown if your database records them.</p>
-   <div class="sa-grid"><div class="sa-stat">Your posts<strong id="saStatPosts">—</strong></div><div class="sa-stat">Likes recorded<strong id="saStatLikes">—</strong></div><div class="sa-stat">Comments received<strong id="saStatComments">—</strong></div><div class="sa-stat">Followers<strong id="saStatFollowers">—</strong></div></div>
+   <div class="sa-grid"><div class="sa-stat">Your posts<strong id="saStatPosts">—</strong></div><div class="sa-stat">Likes recorded<strong id="saStatLikes">—</strong></div><div class="sa-stat">Comments received<strong id="saStatComments">—</strong></div><div class="sa-stat">Followers<strong id="saStatFollowers">—</strong></div><div class="sa-stat">Total views<strong id="saStatViews">—</strong></div><div class="sa-stat">Unique viewers<strong id="saStatReach">—</strong></div></div>
    <div class="sa-card"><strong>Top-performing posts</strong><div id="saCreatorTopPosts" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
    <p style="font-size:12px;color:#9c8fa6">This first version reports counts from accessible posts, follows, and comments. It does not invent reach or views where tracking columns are unavailable.</p>
   </section>
@@ -58757,7 +58757,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  }
  async function loadAnalytics(){
   const sb=client(); if(!sb||!creatorUserId)return;
-  ['saStatPosts','saStatLikes','saStatComments','saStatFollowers'].forEach(id=>$(id).textContent='…');
+  ['saStatPosts','saStatLikes','saStatComments','saStatFollowers','saStatViews','saStatReach'].forEach(id=>$(id).textContent='…');
   try{
    // Read the creator's posts in pages so accounts with more than 1,000
    // posts are not silently under-counted by a single limited query.
@@ -58803,8 +58803,34 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    $('saStatComments').textContent=String(commentsReceived);
    $('saStatFollowers').textContent=String(followersR.count??0);
 
-   // Rank the creator's posts by recorded likes, then newest first.
+   // Read views only for this creator. RLS must allow owners to read their
+   // own post_views rows; if not, show an unavailable marker, never fake data.
+   let viewRows=[];
+   let viewsAvailable=true;
+   try{
+    if(postIds.length){
+     for(let i=0;i<postIds.length;i+=200){
+      const ids=postIds.slice(i,i+200);
+      const {data,error}=await sb.from('post_views').select('post_id,viewer_id').eq('owner_id',creatorUserId).in('post_id',ids);
+      if(error)throw error;
+      viewRows.push(...(data||[]));
+     }
+    }
+   }catch(viewError){
+    viewsAvailable=false;
+    console.warn('Creator view analytics are not readable yet. Check post_views SELECT RLS:',viewError);
+   }
+   const uniqueViewers=new Set(viewRows.map(v=>v.viewer_id).filter(Boolean));
+   $('saStatViews').textContent=viewsAvailable?String(viewRows.length):'—';
+   $('saStatReach').textContent=viewsAvailable?String(uniqueViewers.size):'—';
+   const viewsByPost=new Map();
+   for(const view of viewRows)viewsByPost.set(String(view.post_id),(viewsByPost.get(String(view.post_id))||0)+1);
+
+   // Rank by recorded views first, then likes, then newest.
+
    const topPosts=[...allPosts].sort((a,b)=>{
+    const viewDiff=(viewsByPost.get(String(b.id))||0)-(viewsByPost.get(String(a.id))||0);
+    if(viewDiff!==0)return viewDiff;
     const likeDiff=likesFor(b)-likesFor(a);
     if(likeDiff!==0)return likeDiff;
     return new Date(b.created_at||0)-new Date(a.created_at||0);
@@ -58823,14 +58849,14 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     title.textContent=(post.content||'[Media post]').slice(0,110);
     const meta=document.createElement('div');
     meta.style.cssText='font-size:12px;color:#ad9ab9;margin-top:4px';
-    meta.textContent=`${likesFor(post)} likes · ${post.visibility||'public'} · ${post.created_at?new Date(post.created_at).toLocaleDateString():''}`;
+    meta.textContent=`${viewsByPost.get(String(post.id))||0} views · ${likesFor(post)} likes · ${post.visibility||'public'} · ${post.created_at?new Date(post.created_at).toLocaleDateString():''}`;
     row.append(title,meta);
     host.appendChild(row);
    }
    if(!topPosts.length)host.textContent='No posts found yet.';
   }catch(e){
    console.warn('Creator analytics query failed',e);
-   ['saStatPosts','saStatLikes','saStatComments','saStatFollowers'].forEach(id=>$(id).textContent='—');
+   ['saStatPosts','saStatLikes','saStatComments','saStatFollowers','saStatViews','saStatReach'].forEach(id=>$(id).textContent='—');
    $('saCreatorTopPosts').textContent='Could not load analytics. Check the posts, comments and follows SELECT policies, then try again.';
   }
  }
@@ -59060,5 +59086,51 @@ window.reportComment=id=>window.submitUserReport("comment",id);
 })();
 </script>
 
+
+<!-- SOCIALAPP POST VIEW TRACKING: observes visible Home feed cards; no startApp changes. -->
+<script id="socialapp-post-view-tracker">
+(function(){
+ 'use strict';
+ if(window.__socialAppPostViewTrackerInstalled)return;
+ window.__socialAppPostViewTrackerInstalled=true;
+ const seen=new Set();
+ let observer=null;
+ async function record(card){
+  const id=String(card.id||'').replace(/^post-/,'');
+  if(!/^\d+$/.test(id)||seen.has(id))return;
+  const sb=window.supabase;
+  if(!sb?.rpc)return;
+  try{
+   const {data:sessionData}=await sb.auth.getSession();
+   if(!sessionData?.session?.user?.id)return;
+   seen.add(id);
+   const {error}=await sb.rpc('record_post_view',{p_post_id:Number(id)});
+   if(error){seen.delete(id);console.warn('SocialApp view tracking failed:',error.message);}
+  }catch(error){seen.delete(id);console.warn('SocialApp view tracking unavailable:',error);}
+ }
+ function observeCards(){
+  const feed=document.getElementById('posts');
+  if(!feed)return;
+  if(!observer){
+   observer=new IntersectionObserver(entries=>{
+    for(const entry of entries){
+     if(entry.isIntersecting&&entry.intersectionRatio>=0.5)record(entry.target);
+    }
+   },{root:feed,threshold:[0,0.5,0.75,1]});
+  }
+  feed.querySelectorAll('.post-card[id^="post-"]').forEach(card=>{
+   if(card.dataset.saViewObserved==='1')return;
+   card.dataset.saViewObserved='1';observer.observe(card);
+  });
+ }
+ const mutationObserver=new MutationObserver(observeCards);
+ function start(){
+  const feed=document.getElementById('posts');
+  if(feed){mutationObserver.observe(feed,{childList:true,subtree:true});observeCards();}
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+ const retry=new MutationObserver(start);retry.observe(document.documentElement,{childList:true,subtree:true});
+})();
+</script>
 </body>
 </html>
