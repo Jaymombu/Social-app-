@@ -188,6 +188,17 @@ body {
   transform: scale(1.2);
   transition: 0.2s;
 }
+/* Live likes: briefly pulse the heart/count when another account reacts. */
+.post-like-count.socialapp-like-updated {
+  animation: socialAppLikePulse .42s ease;
+  color: #ff4d6d !important;
+}
+@keyframes socialAppLikePulse {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+
 #posts {
   position: relative;
   z-index: 1;
@@ -10151,6 +10162,9 @@ if (error) {
             );
           }
         }
+        if (typeof window.hydratePostLikes === "function") {
+          await window.hydratePostLikes([displayPost]);
+        }
       }
     }
   } catch (instantPostError) {
@@ -10986,14 +11000,16 @@ async function hydratePostLikes(posts) {
       const key = String(post.id);
       post.likes = counts.get(key) || 0;
       post.liked_by = mine.has(key) ? [viewerId] : [];
-      const card = document.getElementById(`post-${key}`);
-      if (!card) continue;
-      const countEl = card.querySelector('.post-like-count');
-      const button = card.querySelector('.like-btn');
-      if (countEl) countEl.textContent = `❤️ ${post.likes}`;
-      if (button) {
-        button.innerHTML = `${mine.has(key) ? '❤️ Liked' : '🤍 Like'} (${post.likes})`;
-        button.style.background = mine.has(key) ? '#ff4d6d' : '#222';
+      const cards = [...document.querySelectorAll(`[id="post-${CSS.escape(key)}"]`)];
+      for (const card of cards) {
+        const countEl = card.querySelector('.post-like-count');
+        const button = card.querySelector('.like-btn');
+        if (countEl) countEl.textContent = `❤️ ${post.likes}`;
+        if (button) {
+          button.innerHTML = `${mine.has(key) ? '❤️ Liked' : '🤍 Like'} (${post.likes})`;
+          button.style.background = mine.has(key) ? '#ff4d6d' : '#222';
+          button.setAttribute('aria-pressed', mine.has(key) ? 'true' : 'false');
+        }
       }
     }
     // Keep any currently open comments-post like control in sync as well.
@@ -11571,6 +11587,8 @@ window.toggleSavePost = async function(postId){
 
 };
 
+window.hydratePostLikes = hydratePostLikes;
+
 window.socialAppLikePostV2 = async (id) => {
   const userId = session?.user?.id;
   if (!userId) { alert("Login to like posts"); return; }
@@ -11578,11 +11596,12 @@ window.socialAppLikePostV2 = async (id) => {
   if (!sb) { alert('Likes are temporarily unavailable. Please try again.'); return; }
   const postId = Number(id);
   if (!Number.isFinite(postId)) return;
-  const postDiv = document.getElementById(`post-${id}`);
-  const btn = postDiv?.querySelector('.like-btn');
+  const postDivs = [...document.querySelectorAll(`[id="post-${CSS.escape(String(id))}"]`)];
+  const buttons = postDivs.map(card => card.querySelector('.like-btn')).filter(Boolean);
+  const btn = buttons[0] || null;
   const commentsLikeBtn = String(window.currentPostId) === String(id)
     ? document.querySelector('.comments-post-like-btn') : null;
-  if (btn) btn.disabled = true;
+  buttons.forEach(button => button.disabled = true);
   if (commentsLikeBtn) commentsLikeBtn.disabled = true;
   try {
     const { data: existing, error: readError } = await sb
@@ -11606,11 +11625,20 @@ window.socialAppLikePostV2 = async (id) => {
     if (countError) throw countError;
     const total = Number(count || 0);
     const label = `${liked ? '❤️ Liked' : '🤍 Like'} (${total})`;
-    [btn, commentsLikeBtn].filter(Boolean).forEach(button => {
+    [...buttons, commentsLikeBtn].filter(Boolean).forEach(button => {
       button.innerHTML = label;
       button.style.background = liked ? '#ff4d6d' : '#222';
     });
+    if (typeof window.refreshPostLikeUI === "function") {
+      // Update the current client from the database too; the Realtime event
+      // independently updates the post owner and every other open viewer.
+      await window.refreshPostLikeUI(postId, true);
+    }
     const patch = { id: postId, likes: total, liked_by: liked ? [userId] : [] };
+    if (Array.isArray(window.profilePosts)) {
+      const profilePost = window.profilePosts.find(x => String(x.id) === String(postId));
+      if (profilePost) { profilePost.likes = total; profilePost.liked_by = liked ? [userId] : []; }
+    }
     if (Array.isArray(window.postsState)) {
       const post = window.postsState.find(x => String(x.id) === String(postId));
       if (post) { post.likes = total; post.liked_by = liked ? [userId] : []; }
@@ -11643,10 +11671,97 @@ window.socialAppLikePostV2 = async (id) => {
     console.error('Could not save like:', error);
     alert(`Your like was not saved: ${error.message || 'Please try again.'}`);
   } finally {
-    if (btn) btn.disabled = false;
+    buttons.forEach(button => button.disabled = false);
     if (commentsLikeBtn) commentsLikeBtn.disabled = false;
   }
 };
+
+// Keep every open SocialApp client in sync when anyone likes/unlikes a post.
+// This updates the creator's post card immediately without a page refresh.
+window.refreshPostLikeUI = async function (rawPostId, animate = true) {
+  const sb = window.supabase;
+  const postId = Number(rawPostId);
+  if (!sb || !Number.isFinite(postId)) return;
+  try {
+    const [{ count, error: countError }, { data: authData, error: authError }] = await Promise.all([
+      sb.from('post_likes').select('id', { count: 'exact', head: true }).eq('post_id', postId),
+      sb.auth.getSession()
+    ]);
+    if (countError) throw countError;
+    if (authError) throw authError;
+    const viewerId = authData?.session?.user?.id || null;
+    let viewerLiked = false;
+    if (viewerId) {
+      const { data, error } = await sb.from('post_likes').select('id')
+        .eq('post_id', postId).eq('user_id', viewerId).maybeSingle();
+      if (error) throw error;
+      viewerLiked = !!data;
+    }
+    const total = Number(count || 0);
+    const key = String(postId);
+    const updateList = list => {
+      if (!Array.isArray(list)) return;
+      const post = list.find(item => String(item?.id) === key);
+      if (post) {
+        post.likes = total;
+        post.liked_by = viewerLiked && viewerId ? [viewerId] : [];
+      }
+    };
+    updateList(window.postsState);
+    updateList(window.profilePosts);
+    if (window.feedCache) Object.values(window.feedCache).forEach(updateList);
+    const cards = [...document.querySelectorAll(`[id="post-${CSS.escape(key)}"]`)];
+    for (const card of cards) {
+      const countEl = card.querySelector('.post-like-count');
+      const button = card.querySelector('.like-btn');
+      if (countEl) {
+        countEl.textContent = `❤️ ${total}`;
+        if (animate) {
+          countEl.classList.remove('socialapp-like-updated');
+          void countEl.offsetWidth;
+          countEl.classList.add('socialapp-like-updated');
+        }
+      }
+      if (button) {
+        button.innerHTML = `${viewerLiked ? '❤️ Liked' : '🤍 Like'} (${total})`;
+        button.style.background = viewerLiked ? '#ff4d6d' : '#222';
+        button.setAttribute('aria-pressed', viewerLiked ? 'true' : 'false');
+      }
+    }
+    if (String(window.currentPostId || '') === key) {
+      const button = document.querySelector('.comments-post-like-btn');
+      if (button) {
+        button.innerHTML = `${viewerLiked ? '❤️ Liked' : '🤍 Like Post'} (${total})`;
+        button.style.background = viewerLiked ? '#ff4d6d' : '#222';
+      }
+    }
+  } catch (error) {
+    console.warn('Could not refresh live post likes:', error);
+  }
+};
+
+(function installPostLikesRealtime() {
+  const sb = window.supabase;
+  if (!sb || window.__socialAppPostLikesChannel) return;
+  const channel = sb.channel('socialapp-post-likes-live')
+    .on('postgres_changes', {
+      event: '*', schema: 'public', table: 'post_likes'
+    }, payload => {
+      const postId = payload.new?.post_id ?? payload.old?.post_id;
+      if (postId != null && typeof window.refreshPostLikeUI === 'function') {
+        window.refreshPostLikeUI(postId, true);
+      }
+    })
+    .subscribe(status => {
+      if (status === 'SUBSCRIBED') {
+        console.log('✅ SocialApp live post likes connected');
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn('⚠️ Live post likes subscription:', status,
+          'Check that post_likes is enabled in Supabase Realtime publication and SELECT RLS permits the viewer.');
+      }
+    });
+  window.__socialAppPostLikesChannel = channel;
+})();
 
 function upsertPost(updatedPost) {
   if (!updatedPost || updatedPost.id == null) return;
@@ -12213,6 +12328,10 @@ window.openSavedPosts = async function (addHistory = true) {
             );
         }
     });
+
+    if (typeof window.hydratePostLikes === "function") {
+        await window.hydratePostLikes(savedPosts);
+    }
 
     // =================================================
     // TOP BUTTON STATE
@@ -30492,6 +30611,10 @@ window.loadProfilePosts = async function (userId) {
             }
         }
 
+
+        if (typeof window.hydratePostLikes === "function") {
+            await window.hydratePostLikes(posts);
+        }
 
         console.log(
             "✅ PROFILE POSTS LOADED:",
