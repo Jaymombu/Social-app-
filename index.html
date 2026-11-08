@@ -12406,8 +12406,7 @@ window.openComments = async function (
     targetCommentId = null,
     addHistory = true
 ) {
-// Explicitly opening the post detail counts as a view; the database RPC
-// still excludes creators, duplicates, and viewers without access.
+// Count explicit post-detail opens through the same secure database RPC.
 if (typeof window.recordSocialAppPostView === "function") {
     window.recordSocialAppPostView(postId);
 }
@@ -58753,11 +58752,11 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   <div style="display:flex;align-items:center;gap:12px;justify-content:space-between"><div><div style="font-size:12px;color:#c4a2e9;font-weight:800;letter-spacing:1px">SOCIALAPP PREMIUM</div><h2 style="margin:5px 0">Creator Studio</h2></div><button class="sa-btn" id="saCreatorClose" style="background:#302638">Close ✕</button></div>
   <div class="sa-tabs"><button data-sa-tab="analytics">📊 Analytics</button><button data-sa-tab="appearance">🎨 Profile style</button><button data-sa-tab="schedule">🗓️ Schedule post</button></div>
   <section id="saCreatorAnalytics">
-   <p style="color:#c7bacf">Your account performance from available SocialApp records. Views count when a post is at least 50% visible while scrolling, or when its post detail is opened. Each viewer is counted once per post.</p>
-   <div id="saViewTrackingDiagnostics" class="sa-card" style="margin:10px 0;border:1px solid #68428a;background:rgba(138,43,226,.08);font-size:13px;line-height:1.55" aria-live="polite">
+   <p style="color:#c7bacf">Your account performance from available SocialApp records. Views count when a post is at least 50% visible in the Home feed or when its post detail is opened.</p>
+   <div id="saViewTrackingDiagnostics" class="sa-card" style="margin:10px 0;font-size:13px;line-height:1.5" aria-live="polite">
     <strong>View tracking diagnostics</strong>
-    <div id="saViewTrackingStatus" style="margin-top:6px;white-space:pre-wrap">Waiting for tracking status…</div>
-    <button type="button" class="sa-btn" id="saRetryViewTracking" style="padding:8px 12px;margin-top:9px">Run view tracking check</button>
+    <div id="saViewTrackingStatus" style="margin-top:6px;white-space:pre-wrap">Waiting for tracker…</div>
+    <button type="button" class="sa-btn" id="saRetryViewTracking" style="margin-top:8px">Run view tracking check</button>
    </div>
    <div class="sa-grid"><div class="sa-stat">Your posts<strong id="saStatPosts">—</strong></div><div class="sa-stat">Likes recorded<strong id="saStatLikes">—</strong></div><div class="sa-stat">Comments received<strong id="saStatComments">—</strong></div><div class="sa-stat">Followers<strong id="saStatFollowers">—</strong></div><div class="sa-stat">Total views<strong id="saStatViews">—</strong></div><div class="sa-stat">Unique viewers<strong id="saStatReach">—</strong></div></div>
    <div class="sa-card"><strong>Top-performing posts</strong><div id="saCreatorTopPosts" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
@@ -58948,7 +58947,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    const host=$('saCreatorTopPosts');
    host.innerHTML='';
    const heading=document.createElement('div');
-   heading.textContent=viewsAvailable?'Top posts by views':'Top posts by likes';
+   heading.textContent='Top posts by likes';
    heading.style.cssText='font-size:13px;color:#cdb5e4;margin-bottom:4px;font-weight:700';
    host.appendChild(heading);
    for(const post of topPosts){
@@ -59206,90 +59205,93 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  'use strict';
  if(window.__socialAppPostViewTrackerInstalled)return;
  window.__socialAppPostViewTrackerInstalled=true;
- const seen=new Set(),pending=new Set(),retryAt=new Map();
- let observer=null,feedObserver=null,sessionPromise=null,lastStatus='Tracker initialized.',lastError='',lastPost='—',visibleCount=0,scanTimer=null;
- function status(extra){
-  const el=document.getElementById('saViewTrackingStatus');if(!el)return;
-  const feed=document.getElementById('posts');
-  const cards=Array.from(document.querySelectorAll('.post-card[id^="post-"]'));
-  const lines=[
-   'Tracker: '+(typeof IntersectionObserver==='function'?'IntersectionObserver available':'IntersectionObserver unavailable'),
-   'Home feed container: '+(feed?'found':'not currently mounted'),
-   'Post cards found in page: '+cards.length,
+ const recorded=new Set(),pending=new Set();
+ let observer=null,feedObserver=null,sessionPromise=null,lastMessage='Tracker initialized.',lastError='',lastPost='—',visibleCount=0;
+ function status(){
+  const box=document.getElementById('saViewTrackingStatus');
+  if(!box)return;
+  const cards=[...document.querySelectorAll('.post-card[id^="post-"]')];
+  box.textContent=[
+   'Tracker: '+(typeof IntersectionObserver==='function'?'active':'IntersectionObserver unavailable'),
+   'Home feed: '+(document.getElementById('posts')?'found':'not mounted'),
+   'Post cards found: '+cards.length,
    'Cards at least 50% visible: '+visibleCount,
-   'Signed-in viewer: '+(window.__saViewDebugUser?'confirmed ('+window.__saViewDebugUser.slice(0,8)+'…)':'not confirmed'),
+   'Signed-in viewer: '+(window.__saViewDebugUser?'yes ('+window.__saViewDebugUser.slice(0,8)+'…)':'not confirmed'),
    'Last post checked: '+lastPost,
-   'Last result: '+lastStatus
-  ];
-  if(lastError)lines.push('Last error: '+lastError);
-  if(extra)lines.push(extra);
-  el.textContent=lines.join('\n');
+   'Last result: '+lastMessage,
+   ...(lastError?['Last error: '+lastError]:[])
+  ].join('\n');
  }
  async function getSession(sb){
-  if(!sessionPromise)sessionPromise=sb.auth.getSession().then(({data,error})=>{if(error)throw error;return data?.session||null;}).catch(e=>{sessionPromise=null;throw e;});
+  if(!sessionPromise)sessionPromise=sb.auth.getSession().then(({data,error})=>{if(error)throw error;return data&&data.session?data.session:null;}).catch(e=>{sessionPromise=null;throw e;});
   return sessionPromise;
  }
- async function recordId(value,card){
-  const id=String(value??'').replace(/^post-/,'');
-  if(!/^\d+$/.test(id)||seen.has(id)||pending.has(id)||(retryAt.get(id)||0)>Date.now())return;
+ async function recordId(rawId,card){
+  const id=String(rawId==null?'':rawId).replace(/^post-/,'');
+  if(!/^\d+$/.test(id)||recorded.has(id)||pending.has(id))return;
   const sb=window.supabase;
-  if(!sb?.rpc||!sb?.auth?.getSession){lastStatus='Waiting for Supabase client.';status();return;}
-  pending.add(id);lastPost=id;lastStatus='Checking session…';status();
+  if(!sb||!sb.rpc||!sb.auth||!sb.auth.getSession){lastMessage='Waiting for Supabase client.';status();return;}
+  pending.add(id);lastPost=id;
   try{
-   const session=await getSession(sb);
-   if(!session?.user?.id){lastStatus='No authenticated session; will retry.';retryAt.set(id,Date.now()+2500);return;}
-   window.__saViewDebugUser=session.user.id;
-   lastStatus='Sending record_post_view RPC…';status();
+   const sess=await getSession(sb);
+   if(!sess||!sess.user){lastMessage='No signed-in session.';status();return;}
+   window.__saViewDebugUser=sess.user.id;
+   lastMessage='Calling record_post_view…';status();
    const {data,error}=await sb.rpc('record_post_view',{p_post_id:Number(id)});
    if(error)throw error;
-   // false is an expected server response for owner views, duplicate views,
-   // or viewers who fail the post privacy/Premium access check.
-   seen.add(id);retryAt.delete(id);lastError='';
-   lastStatus=data===true?'SUCCESS: new view recorded.':data===false?'RPC returned false: owner, duplicate, or access/privacy check.':'RPC completed: '+String(data);
+   recorded.add(id);
+   lastError='';
+   lastMessage=data===true?'SUCCESS: view recorded.':data===false?'RPC returned false (owner, duplicate, or privacy/access check).':'RPC completed: '+String(data);
    if(card)card.dataset.saViewRecorded='1';
-  }catch(e){lastError=e?.message||String(e);lastStatus='RPC failed; eligible posts will be retried.';retryAt.set(id,Date.now()+5000);console.warn('SocialApp view tracking error:',e);}
+  }catch(e){lastError=e&&e.message?e.message:String(e);lastMessage='RPC failed.';console.warn('SocialApp view tracking:',e);}
   finally{pending.delete(id);status();}
  }
  function ratio(card){
-  if(!card?.isConnected||document.hidden)return 0;
-  const style=getComputedStyle(card),r=card.getBoundingClientRect();
-  if(style.display==='none'||style.visibility==='hidden'||Number(style.opacity||1)===0||!r.width||!r.height)return 0;
-  const left=Math.max(0,r.left),top=Math.max(0,r.top),right=Math.min(innerWidth,r.right),bottom=Math.min(innerHeight,r.bottom);
-  return Math.max(0,right-left)*Math.max(0,bottom-top)/Math.max(1,r.width*r.height);
- }
- function observeCards(){
-  const cards=document.querySelectorAll('.post-card[id^="post-"]');
-  cards.forEach(card=>{if(card.dataset.saViewObserved==='1')return;card.dataset.saViewObserved='1';observer?.observe(card);});
-  scan();
+  if(!card||!card.isConnected||document.hidden)return 0;
+  const st=getComputedStyle(card),r=card.getBoundingClientRect();
+  if(st.display==='none'||st.visibility==='hidden'||Number(st.opacity||1)===0||!r.width||!r.height)return 0;
+  const l=Math.max(0,r.left),t=Math.max(0,r.top),rr=Math.min(innerWidth,r.right),b=Math.min(innerHeight,r.bottom);
+  return Math.max(0,rr-l)*Math.max(0,b-t)/Math.max(1,r.width*r.height);
  }
  function scan(){
-  const cards=Array.from(document.querySelectorAll('.post-card[id^="post-"]'));
+  const cards=[...document.querySelectorAll('.post-card[id^="post-"]')];
   visibleCount=cards.filter(c=>ratio(c)>=0.5).length;
-  cards.forEach(c=>{if(ratio(c)>=0.5)recordId(c.id,c);});
-  status();
+  cards.forEach(c=>{if(ratio(c)>=0.5)recordId(c.id,c);});status();
  }
- function scheduleScan(){if(scanTimer)return;scanTimer=setTimeout(()=>{scanTimer=null;scan();},180);}
- function start(){
-  if(typeof IntersectionObserver!=='function'){lastStatus='Browser does not support IntersectionObserver.';status();return;}
-  if(!observer)observer=new IntersectionObserver(entries=>{
-   for(const entry of entries){if(entry.isIntersecting&&entry.intersectionRatio>=0.5)recordId(entry.target.id,entry.target);}
-   scheduleScan();
-  },{root:null,threshold:[0,0.5,0.75,1]});
+ function observeCards(){
   const feed=document.getElementById('posts');
-  if(feed&&!feedObserver){feedObserver=new MutationObserver(observeCards);feedObserver.observe(feed,{childList:true,subtree:true});}
-  observeCards();lastStatus='Tracking active; waiting for an eligible post to reach 50% visibility.';status();
+  if(!feed)return;
+  if(!observer)observer=new IntersectionObserver(entries=>{
+   entries.forEach(entry=>{if(entry.isIntersecting&&entry.intersectionRatio>=0.5)recordId(entry.target.id,entry.target);});
+   scan();
+  },{root:feed,threshold:[0,0.5,0.75,1]});
+  feed.querySelectorAll('.post-card[id^="post-"]').forEach(card=>{
+   if(card.dataset.saViewObserved==='1')return;
+   card.dataset.saViewObserved='1';observer.observe(card);
+  });
+  scan();
  }
- // Explicit detail entry point; SQL remains the source of truth for eligibility.
- window.recordSocialAppPostView=function(postId){return recordId(postId,null);};
- document.addEventListener('click',e=>{if(e.target?.closest?.('#saRetryViewTracking')){sessionPromise=null;lastError='';lastStatus='Manual diagnostic check started.';start();scan();}},true);
+ let queued=false;
+ function queueScan(){if(queued)return;queued=true;setTimeout(()=>{queued=false;observeCards();},200);}
+ window.recordSocialAppPostView=postId=>recordId(postId,null);
+ function start(){
+  const feed=document.getElementById('posts');
+  if(feed&&!feedObserver){feedObserver=new MutationObserver(queueScan);feedObserver.observe(feed,{childList:true,subtree:true});}
+  observeCards();lastMessage='Tracking ready; waiting for eligible visibility.';status();
+ }
+ document.addEventListener('click',e=>{
+  if(e.target&&e.target.closest&&e.target.closest('#saRetryViewTracking')){sessionPromise=null;lastError='';lastMessage='Manual check requested.';start();scan();}
+ },true);
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
- const pageObserver=new MutationObserver(()=>{start();scheduleScan();});
- pageObserver.observe(document.documentElement,{childList:true,subtree:true});
- window.addEventListener('scroll',scheduleScan,true);window.addEventListener('resize',scheduleScan);
- document.addEventListener('visibilitychange',()=>{if(!document.hidden){sessionPromise=null;start();}});
- if(window.supabase?.auth?.onAuthStateChange){try{window.supabase.auth.onAuthStateChange(()=>{sessionPromise=null;start();});}catch(e){}}
- // Retry failed requests / auth startup without repeating successfully checked IDs.
- setInterval(()=>{start();scan();},3000);
+ // Observe only top-level additions to find a newly mounted Home feed. Ignore
+ // diagnostics mutations, which prevents recursive observer loops/freezing.
+ const mountObserver=new MutationObserver(records=>{
+  if(records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1&&(n.id==='posts'||(n.querySelector&&n.querySelector('#posts'))))))start();
+ });
+ mountObserver.observe(document.documentElement,{childList:true,subtree:true});
+ window.addEventListener('scroll',queueScan,true);window.addEventListener('resize',queueScan);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden){sessionPromise=null;queueScan();}});
+ if(window.supabase&&window.supabase.auth&&window.supabase.auth.onAuthStateChange){try{window.supabase.auth.onAuthStateChange(()=>{sessionPromise=null;queueScan();});}catch(e){}}
 })();
 </script>
 </body>
