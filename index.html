@@ -12406,11 +12406,6 @@ window.openComments = async function (
     targetCommentId = null,
     addHistory = true
 ) {
-// Count explicit post-detail opens through the same secure database RPC.
-if (typeof window.recordSocialAppPostView === "function") {
-    window.recordSocialAppPostView(postId);
-}
-
 
 // Capture Home BEFORE Comments changes the navigation state.
 if (history.state?.appScreen === "app" &&
@@ -58752,12 +58747,8 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   <div style="display:flex;align-items:center;gap:12px;justify-content:space-between"><div><div style="font-size:12px;color:#c4a2e9;font-weight:800;letter-spacing:1px">SOCIALAPP PREMIUM</div><h2 style="margin:5px 0">Creator Studio</h2></div><button class="sa-btn" id="saCreatorClose" style="background:#302638">Close ✕</button></div>
   <div class="sa-tabs"><button data-sa-tab="analytics">📊 Analytics</button><button data-sa-tab="appearance">🎨 Profile style</button><button data-sa-tab="schedule">🗓️ Schedule post</button></div>
   <section id="saCreatorAnalytics">
-   <p style="color:#c7bacf">Your account performance from available SocialApp records. Views count when a post is at least 50% visible in the Home feed or when its post detail is opened.</p>
-   <div id="saViewTrackingDiagnostics" class="sa-card" style="margin:10px 0;font-size:13px;line-height:1.5" aria-live="polite">
-    <strong>View tracking diagnostics</strong>
-    <div id="saViewTrackingStatus" style="margin-top:6px;white-space:pre-wrap">Waiting for tracker…</div>
-    <button type="button" class="sa-btn" id="saRetryViewTracking" style="margin-top:8px">Run view tracking check</button>
-   </div>
+   <p style="color:#c7bacf">Your account performance from available SocialApp records. Views are counted from saved post_views records.</p>
+   <div id="saViewReadDiagnostics" class="sa-card" style="font-size:13px;line-height:1.55;white-space:pre-wrap" aria-live="polite"><strong>View analytics read diagnostics</strong><div id="saViewReadStatus" style="margin-top:7px">Waiting for analytics query…</div></div>
    <div class="sa-grid"><div class="sa-stat">Your posts<strong id="saStatPosts">—</strong></div><div class="sa-stat">Likes recorded<strong id="saStatLikes">—</strong></div><div class="sa-stat">Comments received<strong id="saStatComments">—</strong></div><div class="sa-stat">Followers<strong id="saStatFollowers">—</strong></div><div class="sa-stat">Total views<strong id="saStatViews">—</strong></div><div class="sa-stat">Unique viewers<strong id="saStatReach">—</strong></div></div>
    <div class="sa-card"><strong>Top-performing posts</strong><div id="saCreatorTopPosts" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
    <p style="font-size:12px;color:#9c8fa6">This first version reports counts from accessible posts, follows, and comments. It does not invent reach or views where tracking columns are unavailable.</p>
@@ -58848,8 +58839,33 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(!(await hasAccess())){alert('An active, verified SocialApp Premium subscription is required.'); if(typeof window.openPremiumScreen==='function')window.openPremiumScreen();return;}
    updateScheduleTimezone(); show(); await Promise.all([loadAnalytics(),loadStyle(),loadSchedules()]);
  }
+ let saViewReadDebug={stage:'Not started',creatorId:null,postCount:0,rows:0,unique:0,error:null};
+ function renderViewReadDiagnostics(){
+  const out=$('saViewReadStatus');if(!out)return;
+  const d=saViewReadDebug||{};
+  const err=d.error;
+  const lines=[
+   'Read status: '+(err?'FAILED':d.stage==='Complete'?'SUCCESS':'IN PROGRESS'),
+   'Query stage: '+(d.stage||'Unknown'),
+   'Creator ID: '+(d.creatorId||'not available'),
+   'Creator posts retrieved: '+(d.postCount??0),
+   'Post IDs sent to post_views query: '+(d.postIds??0),
+   'View rows retrieved: '+(d.rows??0),
+   'Unique viewer IDs: '+(d.unique??0)
+  ];
+  if(err){
+   lines.push('Error message: '+(err.message||String(err)));
+   if(err.code)lines.push('Error code: '+err.code);
+   if(err.details)lines.push('Details: '+err.details);
+   if(err.hint)lines.push('Hint: '+err.hint);
+  }else if(d.stage==='Complete'&&d.rows===0){
+   lines.push('No rows were returned. If SQL confirms rows exist, inspect the SELECT RLS policy and owner_id values.');
+  }
+  out.textContent=lines.join('\n');
+ }
  async function loadAnalytics(){
   const sb=client(); if(!sb||!creatorUserId)return;
+  saViewReadDebug={stage:'Starting analytics',creatorId:creatorUserId,postCount:0,postIds:0,rows:0,unique:0,error:null};renderViewReadDiagnostics();
   ['saStatPosts','saStatLikes','saStatComments','saStatFollowers','saStatViews','saStatReach'].forEach(id=>$(id).textContent='…');
   try{
    // Read the creator's posts in pages so accounts with more than 1,000
@@ -58866,6 +58882,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     if(error)throw error;
     const page=data||[];
     allPosts.push(...page);
+    saViewReadDebug.stage='Loading creator posts';saViewReadDebug.postCount=allPosts.length;renderViewReadDiagnostics();
     if(page.length<pageSize)break;
     from+=pageSize;
    }
@@ -58876,23 +58893,40 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(followersR.error)throw followersR.error;
 
    const postIds=allPosts.map(p=>p.id).filter(id=>id!==null&&id!==undefined);
-   // Read views only for this creator. RLS must allow owners to read their
-   // own post_views rows; if not, show an unavailable marker, never fake data.
+   // Read views only for this creator and expose the exact query outcome
+   // in Creator Studio so an RLS error is distinguishable from zero rows.
    let viewRows=[];
    let viewsAvailable=true;
+   saViewReadDebug.stage='Preparing post_views query';
+   saViewReadDebug.postIds=postIds.length;
+   renderViewReadDiagnostics();
    try{
     if(postIds.length){
      for(let i=0;i<postIds.length;i+=200){
       const ids=postIds.slice(i,i+200);
-      const {data,error}=await sb.from('post_views').select('post_id,viewer_id').eq('owner_id',creatorUserId).in('post_id',ids);
+      saViewReadDebug.stage=`Reading post_views batch ${Math.floor(i/200)+1}`;renderViewReadDiagnostics();
+      const {data,error}=await sb.from('post_views')
+       .select('post_id,viewer_id',{count:'exact'})
+       .eq('owner_id',creatorUserId)
+       .in('post_id',ids);
       if(error)throw error;
       viewRows.push(...(data||[]));
+      saViewReadDebug.rows=viewRows.length;
+      saViewReadDebug.unique=new Set(viewRows.map(v=>v.viewer_id).filter(Boolean)).size;
+      renderViewReadDiagnostics();
      }
     }
+    saViewReadDebug.stage='Complete';
+    saViewReadDebug.rows=viewRows.length;
+    saViewReadDebug.unique=new Set(viewRows.map(v=>v.viewer_id).filter(Boolean)).size;
+    saViewReadDebug.error=null;
    }catch(viewError){
     viewsAvailable=false;
-    console.warn('Creator view analytics are not readable yet. Check post_views SELECT RLS:',viewError);
+    saViewReadDebug.stage='post_views SELECT failed';
+    saViewReadDebug.error={message:viewError?.message||String(viewError),code:viewError?.code||'',details:viewError?.details||'',hint:viewError?.hint||''};
+    console.warn('Creator view analytics SELECT failed:',viewError);
    }
+   renderViewReadDiagnostics();
    // Count comments ON the creator's posts, not comments authored by the creator.
    // Batch IDs to keep PostgREST URL/query sizes reasonable.
    let commentsReceived=0;
@@ -58947,7 +58981,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    const host=$('saCreatorTopPosts');
    host.innerHTML='';
    const heading=document.createElement('div');
-   heading.textContent='Top posts by likes';
+   heading.textContent=viewsAvailable?'Top posts by views':'Top posts by likes';
    heading.style.cssText='font-size:13px;color:#cdb5e4;margin-bottom:4px;font-weight:700';
    host.appendChild(heading);
    for(const post of topPosts){
@@ -58963,6 +58997,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    }
    if(!topPosts.length)host.textContent='No posts found yet.';
   }catch(e){
+   if(!saViewReadDebug.error){saViewReadDebug.stage='Other analytics query failed';saViewReadDebug.error={message:e?.message||String(e),code:e?.code||'',details:e?.details||'',hint:e?.hint||''};renderViewReadDiagnostics();}
    console.warn('Creator analytics query failed',e);
    ['saStatPosts','saStatLikes','saStatComments','saStatFollowers'].forEach(id=>$(id).textContent='—');
    // View cards are populated by their own guarded query; don't overwrite them
@@ -59205,93 +59240,43 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  'use strict';
  if(window.__socialAppPostViewTrackerInstalled)return;
  window.__socialAppPostViewTrackerInstalled=true;
- const recorded=new Set(),pending=new Set();
- let observer=null,feedObserver=null,sessionPromise=null,lastMessage='Tracker initialized.',lastError='',lastPost='—',visibleCount=0;
- function status(){
-  const box=document.getElementById('saViewTrackingStatus');
-  if(!box)return;
-  const cards=[...document.querySelectorAll('.post-card[id^="post-"]')];
-  box.textContent=[
-   'Tracker: '+(typeof IntersectionObserver==='function'?'active':'IntersectionObserver unavailable'),
-   'Home feed: '+(document.getElementById('posts')?'found':'not mounted'),
-   'Post cards found: '+cards.length,
-   'Cards at least 50% visible: '+visibleCount,
-   'Signed-in viewer: '+(window.__saViewDebugUser?'yes ('+window.__saViewDebugUser.slice(0,8)+'…)':'not confirmed'),
-   'Last post checked: '+lastPost,
-   'Last result: '+lastMessage,
-   ...(lastError?['Last error: '+lastError]:[])
-  ].join('\n');
- }
- async function getSession(sb){
-  if(!sessionPromise)sessionPromise=sb.auth.getSession().then(({data,error})=>{if(error)throw error;return data&&data.session?data.session:null;}).catch(e=>{sessionPromise=null;throw e;});
-  return sessionPromise;
- }
- async function recordId(rawId,card){
-  const id=String(rawId==null?'':rawId).replace(/^post-/,'');
-  if(!/^\d+$/.test(id)||recorded.has(id)||pending.has(id))return;
+ const seen=new Set();
+ let observer=null;
+ async function record(card){
+  const id=String(card.id||'').replace(/^post-/,'');
+  if(!/^\d+$/.test(id)||seen.has(id))return;
   const sb=window.supabase;
-  if(!sb||!sb.rpc||!sb.auth||!sb.auth.getSession){lastMessage='Waiting for Supabase client.';status();return;}
-  pending.add(id);lastPost=id;
+  if(!sb?.rpc)return;
   try{
-   const sess=await getSession(sb);
-   if(!sess||!sess.user){lastMessage='No signed-in session.';status();return;}
-   window.__saViewDebugUser=sess.user.id;
-   lastMessage='Calling record_post_view…';status();
-   const {data,error}=await sb.rpc('record_post_view',{p_post_id:Number(id)});
-   if(error)throw error;
-   recorded.add(id);
-   lastError='';
-   lastMessage=data===true?'SUCCESS: view recorded.':data===false?'RPC returned false (owner, duplicate, or privacy/access check).':'RPC completed: '+String(data);
-   if(card)card.dataset.saViewRecorded='1';
-  }catch(e){lastError=e&&e.message?e.message:String(e);lastMessage='RPC failed.';console.warn('SocialApp view tracking:',e);}
-  finally{pending.delete(id);status();}
- }
- function ratio(card){
-  if(!card||!card.isConnected||document.hidden)return 0;
-  const st=getComputedStyle(card),r=card.getBoundingClientRect();
-  if(st.display==='none'||st.visibility==='hidden'||Number(st.opacity||1)===0||!r.width||!r.height)return 0;
-  const l=Math.max(0,r.left),t=Math.max(0,r.top),rr=Math.min(innerWidth,r.right),b=Math.min(innerHeight,r.bottom);
-  return Math.max(0,rr-l)*Math.max(0,b-t)/Math.max(1,r.width*r.height);
- }
- function scan(){
-  const cards=[...document.querySelectorAll('.post-card[id^="post-"]')];
-  visibleCount=cards.filter(c=>ratio(c)>=0.5).length;
-  cards.forEach(c=>{if(ratio(c)>=0.5)recordId(c.id,c);});status();
+   const {data:sessionData}=await sb.auth.getSession();
+   if(!sessionData?.session?.user?.id)return;
+   seen.add(id);
+   const {error}=await sb.rpc('record_post_view',{p_post_id:Number(id)});
+   if(error){seen.delete(id);console.warn('SocialApp view tracking failed:',error.message);}
+  }catch(error){seen.delete(id);console.warn('SocialApp view tracking unavailable:',error);}
  }
  function observeCards(){
   const feed=document.getElementById('posts');
   if(!feed)return;
-  if(!observer)observer=new IntersectionObserver(entries=>{
-   entries.forEach(entry=>{if(entry.isIntersecting&&entry.intersectionRatio>=0.5)recordId(entry.target.id,entry.target);});
-   scan();
-  },{root:feed,threshold:[0,0.5,0.75,1]});
+  if(!observer){
+   observer=new IntersectionObserver(entries=>{
+    for(const entry of entries){
+     if(entry.isIntersecting&&entry.intersectionRatio>=0.5)record(entry.target);
+    }
+   },{root:feed,threshold:[0,0.5,0.75,1]});
+  }
   feed.querySelectorAll('.post-card[id^="post-"]').forEach(card=>{
    if(card.dataset.saViewObserved==='1')return;
    card.dataset.saViewObserved='1';observer.observe(card);
   });
-  scan();
  }
- let queued=false;
- function queueScan(){if(queued)return;queued=true;setTimeout(()=>{queued=false;observeCards();},200);}
- window.recordSocialAppPostView=postId=>recordId(postId,null);
+ const mutationObserver=new MutationObserver(observeCards);
  function start(){
   const feed=document.getElementById('posts');
-  if(feed&&!feedObserver){feedObserver=new MutationObserver(queueScan);feedObserver.observe(feed,{childList:true,subtree:true});}
-  observeCards();lastMessage='Tracking ready; waiting for eligible visibility.';status();
+  if(feed){mutationObserver.observe(feed,{childList:true,subtree:true});observeCards();}
  }
- document.addEventListener('click',e=>{
-  if(e.target&&e.target.closest&&e.target.closest('#saRetryViewTracking')){sessionPromise=null;lastError='';lastMessage='Manual check requested.';start();scan();}
- },true);
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
- // Observe only top-level additions to find a newly mounted Home feed. Ignore
- // diagnostics mutations, which prevents recursive observer loops/freezing.
- const mountObserver=new MutationObserver(records=>{
-  if(records.some(r=>[...r.addedNodes].some(n=>n.nodeType===1&&(n.id==='posts'||(n.querySelector&&n.querySelector('#posts'))))))start();
- });
- mountObserver.observe(document.documentElement,{childList:true,subtree:true});
- window.addEventListener('scroll',queueScan,true);window.addEventListener('resize',queueScan);
- document.addEventListener('visibilitychange',()=>{if(!document.hidden){sessionPromise=null;queueScan();}});
- if(window.supabase&&window.supabase.auth&&window.supabase.auth.onAuthStateChange){try{window.supabase.auth.onAuthStateChange(()=>{sessionPromise=null;queueScan();});}catch(e){}}
+ const retry=new MutationObserver(start);retry.observe(document.documentElement,{childList:true,subtree:true});
 })();
 </script>
 </body>
