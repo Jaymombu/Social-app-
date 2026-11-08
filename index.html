@@ -58665,7 +58665,10 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   <div class="sa-tabs"><button data-sa-tab="analytics">📊 Analytics</button><button data-sa-tab="appearance">🎨 Profile style</button><button data-sa-tab="schedule">🗓️ Schedule post</button></div>
   <section id="saCreatorAnalytics">
    <p style="color:#c7bacf">Your account performance from available SocialApp records. Views are only shown if your database records them.</p>
-   <div id="saViewTrackingDiagnostics" class="sa-card" style="margin:10px 0;border:1px solid #68428a;background:rgba(138,43,226,.08);font-size:13px;line-height:1.55" aria-live="polite">View tracking diagnostics: waiting for the feed…<div style="margin-top:9px"><button type="button" class="sa-btn" id="saRetryViewTracking" style="padding:8px 12px">Check view tracking again</button></div></div>
+   <div id="saViewTrackingDiagnostics" class="sa-card" style="margin:10px 0;border:1px solid #68428a;background:rgba(138,43,226,.08);font-size:13px;line-height:1.55" aria-live="polite">
+    <strong>View tracking check</strong><div id="saViewTrackingStatus" style="margin-top:6px">Waiting for feed and sign-in status…</div>
+    <button type="button" class="sa-btn" id="saRetryViewTracking" style="padding:8px 12px;margin-top:9px">Check view tracking again</button>
+   </div>
    <div class="sa-grid"><div class="sa-stat">Your posts<strong id="saStatPosts">—</strong></div><div class="sa-stat">Likes recorded<strong id="saStatLikes">—</strong></div><div class="sa-stat">Comments received<strong id="saStatComments">—</strong></div><div class="sa-stat">Followers<strong id="saStatFollowers">—</strong></div><div class="sa-stat">Total views<strong id="saStatViews">—</strong></div><div class="sa-stat">Unique viewers<strong id="saStatReach">—</strong></div></div>
    <div class="sa-card"><strong>Top-performing posts</strong><div id="saCreatorTopPosts" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
    <p style="font-size:12px;color:#9c8fa6">This first version reports counts from accessible posts, follows, and comments. It does not invent reach or views where tracking columns are unavailable.</p>
@@ -59097,136 +59100,115 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   if (window.__socialAppPostViewTrackerInstalled) return;
   window.__socialAppPostViewTrackerInstalled = true;
 
-  const completed = new Set();
+  const recorded = new Set();
   const pending = new Set();
   const retryAt = new Map();
-  let currentClient = null;
-  let sessionPromise = null;
-  let lastResult = 'No post has been checked yet.';
-  let lastError = '';
-  let lastPostId = '';
-  let scanCount = 0;
+  let clientRef = null, sessionPromise = null;
+  let lastResult = 'No post has been checked yet.', lastError = '', lastPostId = '';
+  let scanQueued = false;
 
-  function getClient() {
+  function client() {
     const sb = window.supabase || null;
-    if (sb !== currentClient) { currentClient = sb; sessionPromise = null; }
+    if (sb !== clientRef) { clientRef = sb; sessionPromise = null; }
     return sb;
   }
-
-  async function getSession(sb) {
-    if (!sb?.auth?.getSession) return null;
-    if (!sessionPromise) {
-      sessionPromise = sb.auth.getSession().then(({data,error}) => {
-        if (error) { sessionPromise = null; lastError = 'Session: ' + (error.message || String(error)); return null; }
-        return data?.session || null;
-      }).catch(e => { sessionPromise = null; lastError = 'Session: ' + (e.message || String(e)); return null; });
-    }
+  function session(sb) {
+    if (!sb || !sb.auth || !sb.auth.getSession) return Promise.resolve(null);
+    if (!sessionPromise) sessionPromise = sb.auth.getSession().then(({data,error}) => {
+      if (error) { sessionPromise = null; lastError = 'Session: ' + (error.message || String(error)); return null; }
+      return data && data.session ? data.session : null;
+    }).catch(e => { sessionPromise = null; lastError = 'Session: ' + (e.message || String(e)); return null; });
     return sessionPromise;
   }
-
-  function isVisible(el) {
+  function visible(el) {
     if (!el || !el.isConnected) return false;
-    const r = el.getBoundingClientRect();
-    const cs = getComputedStyle(el);
-    return r.width > 0 && r.height > 0 && cs.display !== 'none' && cs.visibility !== 'hidden' && Number(cs.opacity || 1) !== 0;
+    const r=el.getBoundingClientRect(), c=getComputedStyle(el);
+    return r.width>0 && r.height>0 && c.display!=='none' && c.visibility!=='hidden' && Number(c.opacity||1)!==0;
   }
-
-  // This HTML contains more than one element with id="posts" (one is in
-  // the original shell and another is in the rebuilt home template). Never
-  // assume getElementById() returns the live feed: choose the visible feed
-  // that actually contains rendered post cards.
-  function getLiveFeeds() {
-    return Array.from(document.querySelectorAll('#posts')).filter(isVisible);
+  function feeds() { return Array.from(document.querySelectorAll('#posts')).filter(visible); }
+  function feed() {
+    const list=feeds();
+    const populated=list.filter(x=>x.querySelector('.post-card[id^="post-"]'));
+    if(populated.length) return populated.sort((a,b)=>b.querySelectorAll('.post-card[id^="post-"]').length-a.querySelectorAll('.post-card[id^="post-"]').length)[0];
+    return list.length ? list[list.length-1] : null;
   }
-  function getFeed() {
-    const feeds = getLiveFeeds();
-    const withCards = feeds.filter(f => f.querySelector('.post-card[id^="post-"]'));
-    if (withCards.length) return withCards.sort((a,b) => b.querySelectorAll('.post-card[id^="post-"]').length - a.querySelectorAll('.post-card[id^="post-"]').length)[0];
-    return feeds[feeds.length - 1] || null;
+  function onScreen(card, root) {
+    if(!visible(card)||!visible(root)) return false;
+    const r=card.getBoundingClientRect(), f=root.getBoundingClientRect();
+    const h=Math.min(r.bottom,f.bottom,window.innerHeight)-Math.max(r.top,f.top,0);
+    const w=Math.min(r.right,f.right,window.innerWidth)-Math.max(r.left,f.left,0);
+    return h>=80 && w>=60;
   }
-
-  function visibleOnScreen(card, feed) {
-    if (!isVisible(card) || !feed || !isVisible(feed)) return false;
-    const r=card.getBoundingClientRect(), f=feed.getBoundingClientRect();
-    const top=Math.max(r.top,f.top,0), bottom=Math.min(r.bottom,f.bottom,window.innerHeight);
-    const left=Math.max(r.left,f.left,0), right=Math.min(r.right,f.right,window.innerWidth);
-    return bottom-top >= 100 && right-left >= 80;
-  }
-
-  function renderDiagnostics(extra='') {
-    const el=document.getElementById('saViewTrackingDiagnostics');
-    if(!el) return;
-    const feeds=getLiveFeeds();
-    const feed=getFeed();
-    const cards=feed ? Array.from(feed.querySelectorAll('.post-card[id^="post-"]')) : [];
-    const visible=feed ? cards.filter(c=>visibleOnScreen(c,feed)).length : 0;
-    const sb=getClient();
-    const sessionText=window.__saTrackerUserId ? String(window.__saTrackerUserId).slice(0,8)+'…' : 'not confirmed';
-    const status=[
-      'Feed containers visible: '+feeds.length,
-      'Post cards detected in selected feed: '+cards.length,
-      'Post cards currently visible: '+visible,
-      'Signed-in viewer: '+sessionText,
-      'Last post checked: '+(lastPostId || 'none'),
-      'Last tracking result: '+lastResult
+  function showStatus() {
+    const out=document.getElementById('saViewTrackingStatus');
+    if(!out) return;
+    const root=feed(), cards=root?Array.from(root.querySelectorAll('.post-card[id^="post-"]')):[];
+    const visibleCount=root?cards.filter(x=>onScreen(x,root)).length:0;
+    const uid=window.__saTrackerViewerId;
+    const lines=[
+      'Visible feed containers: '+feeds().length,
+      'Post cards found: '+cards.length,
+      'Post cards currently on screen: '+visibleCount,
+      'Signed-in viewer: '+(uid?uid.slice(0,8)+'…':'not confirmed'),
+      'Last post checked: '+(lastPostId||'none'),
+      'Last result: '+lastResult
     ];
-    if(lastError) status.push('Last error: '+lastError);
-    if(extra) status.push(extra);
-    const button='<div style="margin-top:9px"><button type="button" class="sa-btn" id="saRetryViewTracking" style="padding:8px 12px">Check view tracking again</button></div>';
-    el.innerHTML='<strong>View tracking check</strong><div style="margin-top:6px">'+status.map(x=>'<div></div>').join('')+'</div>'+button;
-    const lines=el.querySelector('div');
-    status.forEach(line=>{const row=document.createElement('div');row.textContent=line;lines.appendChild(row);});
-    el.querySelector('#saRetryViewTracking')?.addEventListener('click',()=>{sessionPromise=null;scan();});
+    if(lastError) lines.push('Error: '+lastError);
+    out.textContent=lines.join('\n'); out.style.whiteSpace='pre-wrap';
   }
-
   async function record(card) {
-    const id=String(card?.id||'').replace(/^post-/,'');
-    if(!/^\d+$/.test(id)||completed.has(id)||pending.has(id)||(retryAt.get(id)||0)>Date.now()) return;
+    const id=String(card.id||'').replace(/^post-/,'');
+    if(!/^\d+$/.test(id)||recorded.has(id)||pending.has(id)||(retryAt.get(id)||0)>Date.now()) return;
     pending.add(id); lastPostId=id;
     try {
-      const sb=getClient();
-      const session=await getSession(sb);
-      if(!sb||!session?.user?.id){
-        window.__saTrackerUserId=''; lastResult='Waiting for a signed-in session.';
-        retryAt.set(id,Date.now()+2500); renderDiagnostics(); return;
+      const sb=client(), sess=await session(sb);
+      if(!sb||!sess||!sess.user||!sess.user.id) {
+        window.__saTrackerViewerId=''; lastResult='Waiting for a signed-in session.';
+        retryAt.set(id,Date.now()+3000); return;
       }
-      window.__saTrackerUserId=session.user.id;
-      const {data,error}=await sb.rpc('record_post_view',{p_post_id:Number(id)});
-      if(error){lastError=error.message||String(error);lastResult='RPC failed.';retryAt.set(id,Date.now()+5000);renderDiagnostics();return;}
+      window.__saTrackerViewerId=sess.user.id;
+      const result=await sb.rpc('record_post_view',{p_post_id:Number(id)});
+      if(result.error) {
+        lastError=result.error.message||String(result.error); lastResult='RPC failed; will retry.';
+        retryAt.set(id,Date.now()+6000); return;
+      }
       lastError='';
-      lastResult=data===true?'RPC returned TRUE — view recorded.':data===false?'RPC returned FALSE — server did not record this view (owner, duplicate, or access check).':'RPC returned '+String(data)+'.';
-      completed.add(id); retryAt.delete(id); card.dataset.saViewRecorded='1';
-      renderDiagnostics();
+      lastResult=result.data===true?'RPC returned TRUE — view recorded.':result.data===false?'RPC returned FALSE — server declined to record (owner, duplicate, or access check).':'RPC returned '+String(result.data)+'.';
+      recorded.add(id); retryAt.delete(id); card.dataset.saViewRecorded='1';
     } catch(e) {
-      lastError=e?.message||String(e); lastResult='Tracking request failed.'; retryAt.set(id,Date.now()+5000); renderDiagnostics();
-    } finally { pending.delete(id); }
+      lastError=e&&e.message?e.message:String(e); lastResult='Tracking request failed; will retry.';
+      retryAt.set(id,Date.now()+6000);
+    } finally { pending.delete(id); showStatus(); }
   }
-
   function scan() {
-    scanCount++;
-    const feed=getFeed();
-    if(feed) {
-      const cards=Array.from(feed.querySelectorAll('.post-card[id^="post-"]'));
-      cards.forEach(card=>{if(visibleOnScreen(card,feed)) record(card);});
-    }
-    renderDiagnostics();
+    const root=feed();
+    if(root) Array.from(root.querySelectorAll('.post-card[id^="post-"]')).forEach(card=>{if(onScreen(card,root)) record(card);});
+    showStatus();
   }
-
+  function queueScan() {
+    if(scanQueued) return; scanQueued=true;
+    setTimeout(()=>{scanQueued=false;scan();},180);
+  }
   function start() {
-    const sb=getClient();
-    if(sb?.auth?.onAuthStateChange && !sb.__saViewTrackerAuthBound){
-      try { sb.auth.onAuthStateChange(()=>{sessionPromise=null;setTimeout(scan,250);}); sb.__saViewTrackerAuthBound=true; } catch(e) {}
+    const sb=client();
+    if(sb&&sb.auth&&sb.auth.onAuthStateChange&&!sb.__saViewTrackerAuthBound) {
+      try { sb.auth.onAuthStateChange(()=>{sessionPromise=null;queueScan();}); sb.__saViewTrackerAuthBound=true; } catch(e) {}
     }
     scan();
   }
-
+  document.addEventListener('click',e=>{if(e.target&&e.target.id==='saRetryViewTracking'){sessionPromise=null;start();}},true);
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true}); else start();
-  const pageObserver=new MutationObserver(()=>scan());
-  pageObserver.observe(document.documentElement,{childList:true,subtree:true});
-  window.addEventListener('scroll',scan,true);
-  window.addEventListener('resize',scan);
+  // Ignore diagnostic-panel mutations. This prevents the observer from reacting
+  // to its own status updates and creating an endless mutation/scan loop.
+  const observer=new MutationObserver(records=>{
+    const relevant=records.some(r=>!(r.target&&r.target.closest&&r.target.closest('#saViewTrackingDiagnostics')));
+    if(relevant) queueScan();
+  });
+  observer.observe(document.documentElement,{childList:true,subtree:true});
+  window.addEventListener('scroll',queueScan,true);
+  window.addEventListener('resize',queueScan);
   document.addEventListener('visibilitychange',()=>{if(!document.hidden){sessionPromise=null;start();}});
-  setInterval(start,1800);
+  setInterval(start,2500);
 })();
 </script>
 </body>
