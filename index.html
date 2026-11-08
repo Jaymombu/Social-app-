@@ -12792,45 +12792,36 @@ const postLikeArea =
 document.getElementById("commentPostLikeArea");
 
 if (postLikeArea) {
+  // Keep the comments view attached to the same post identity and shared
+  // post_likes handler used by Home/Profile cards.
+  window.currentPostId = String(post.id);
+  currentPostId = post.id;
 
-const userId =  
-    session?.user?.id;  
+  const userId = session?.user?.id || null;
+  const button = document.createElement("button");
+  button.className = "comments-post-like-btn";
+  button.type = "button";
+  button.style.cssText = `
+    width:100%; height:46px; border:none; border-radius:12px;
+    background:#222; color:white; font-size:15px; font-weight:600;
+    cursor:pointer;
+  `;
+  button.textContent = `🤍 Like Post (${Number(post.likes || 0)})`;
+  button.addEventListener("click", () => {
+    if (typeof window.socialAppLikePostV2 === "function") {
+      window.socialAppLikePostV2(post.id);
+    } else {
+      console.error("Shared SocialApp like handler is unavailable.");
+    }
+  });
+  postLikeArea.replaceChildren(button);
 
-const likedBy =  
-    post.liked_by || [];  
-
-const isLiked =  
-    userId &&  
-    likedBy.includes(userId);  
-
-postLikeArea.innerHTML = `  
-
-    <button  
-        class="comments-post-like-btn"  
-        onclick="likePost('${post.id}')"  
-        style="  
-            width:100%;  
-            height:46px;  
-            border:none;  
-            border-radius:12px;  
-            background:${isLiked ? "#ff4d6d" : "#222"};  
-            color:white;  
-            font-size:15px;  
-            font-weight:600;  
-            cursor:pointer;  
-        "  
-    >  
-        ${  
-            isLiked  
-                ? "❤️ Liked"  
-                : "🤍 Like Post"  
-        }  
-
-        (${post.likes || 0})  
-    </button>  
-
-`;
-
+  // The posts row can contain legacy likes/liked_by values. Immediately
+  // replace that initial display with the authoritative post_likes count
+  // and this viewer's own like state.
+  if (typeof window.refreshPostLikeUI === "function") {
+    await window.refreshPostLikeUI(post.id, false);
+  }
 }
 
 // ==========================================  
