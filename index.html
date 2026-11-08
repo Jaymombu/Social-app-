@@ -10677,7 +10677,7 @@ const isOwner =
     ${mediaHTML}
 
 
-    <div style="
+    <div class="post-like-count" style="
       margin-top:8px;
     ">
       ❤️ ${post.likes || 0}
@@ -10930,6 +10930,7 @@ function renderFeed(posts) {
   // Only replace the container's children once. Existing unchanged nodes
   // are moved rather than recreated, preserving their media state.
   postsDiv.replaceChildren(fragment);
+  hydratePostLikes(posts);
 
   // Restore immediately, then once after layout. The second restore handles
   // images/video metadata changing the feed height on Android Chrome.
@@ -10951,6 +10952,63 @@ function renderFeed(posts) {
         behavior: "auto"
       });
     });
+  }
+}
+
+// Load authoritative like state from post_likes after cards are rendered.
+// This replaces legacy posts.likes/posts.liked_by values in the UI without
+// changing the posts table or rebuilding media elements.
+async function hydratePostLikes(posts) {
+  try {
+    const sb = window.supabase;
+    if (!sb || !Array.isArray(posts) || !posts.length) return;
+    const { data: authData, error: authError } = await sb.auth.getSession();
+    if (authError) throw authError;
+    const viewerId = authData?.session?.user?.id || null;
+    if (!viewerId) return;
+    const ids = [...new Set(posts.map(p => Number(p?.id)).filter(Number.isFinite))];
+    if (!ids.length) return;
+    const rows = [];
+    for (let i = 0; i < ids.length; i += 150) {
+      const { data, error } = await sb.from('post_likes')
+        .select('post_id,user_id').in('post_id', ids.slice(i, i + 150));
+      if (error) throw error;
+      rows.push(...(data || []));
+    }
+    const counts = new Map();
+    const mine = new Set();
+    for (const row of rows) {
+      const key = String(row.post_id);
+      counts.set(key, (counts.get(key) || 0) + 1);
+      if (String(row.user_id) === String(viewerId)) mine.add(key);
+    }
+    for (const post of posts) {
+      const key = String(post.id);
+      post.likes = counts.get(key) || 0;
+      post.liked_by = mine.has(key) ? [viewerId] : [];
+      const card = document.getElementById(`post-${key}`);
+      if (!card) continue;
+      const countEl = card.querySelector('.post-like-count');
+      const button = card.querySelector('.like-btn');
+      if (countEl) countEl.textContent = `❤️ ${post.likes}`;
+      if (button) {
+        button.innerHTML = `${mine.has(key) ? '❤️ Liked' : '🤍 Like'} (${post.likes})`;
+        button.style.background = mine.has(key) ? '#ff4d6d' : '#222';
+      }
+    }
+    // Keep any currently open comments-post like control in sync as well.
+    const activeId = String(window.currentPostId || '');
+    if (activeId && ids.some(id => String(id) === activeId)) {
+      const active = posts.find(p => String(p.id) === activeId);
+      const button = document.querySelector('.comments-post-like-btn');
+      if (active && button) {
+        const liked = mine.has(activeId);
+        button.innerHTML = `${liked ? '❤️ Liked' : '🤍 Like Post'} (${active.likes || 0})`;
+        button.style.background = liked ? '#ff4d6d' : '#222';
+      }
+    }
+  } catch (error) {
+    console.warn('Could not hydrate post likes from post_likes:', error);
   }
 }
 
@@ -11513,7 +11571,7 @@ window.toggleSavePost = async function(postId){
 
 };
 
-window.likePost = async (id) => {
+window.socialAppLikePostV2 = async (id) => {
   const userId = session?.user?.id;
   if (!userId) { alert("Login to like posts"); return; }
   const sb = (typeof supabase !== 'undefined' && supabase) || window.supabase;
@@ -56601,7 +56659,7 @@ window.loadUnreadCount = loadUnreadCount;
 window.openProfile = openProfile;
 window.openEditProfile = openEditProfile;
 
-window.likePost = likePost;
+window.likePost = window.socialAppLikePostV2 || likePost;
 window.deletePost = deletePost;
 window.openComments = openComments;
 window.openChat = openChat;
@@ -58694,6 +58752,23 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(followersR.error)throw followersR.error;
 
    const postIds=allPosts.map(p=>p.id).filter(id=>id!==null&&id!==undefined);
+   // Read views only for this creator. RLS must allow owners to read their
+   // own post_views rows; if not, show an unavailable marker, never fake data.
+   let viewRows=[];
+   let viewsAvailable=true;
+   try{
+    if(postIds.length){
+     for(let i=0;i<postIds.length;i+=200){
+      const ids=postIds.slice(i,i+200);
+      const {data,error}=await sb.from('post_views').select('post_id,viewer_id').eq('owner_id',creatorUserId).in('post_id',ids);
+      if(error)throw error;
+      viewRows.push(...(data||[]));
+     }
+    }
+   }catch(viewError){
+    viewsAvailable=false;
+    console.warn('Creator view analytics are not readable yet. Check post_views SELECT RLS:',viewError);
+   }
    // Count comments ON the creator's posts, not comments authored by the creator.
    // Batch IDs to keep PostgREST URL/query sizes reasonable.
    let commentsReceived=0;
@@ -58729,23 +58804,6 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    $('saStatComments').textContent=String(commentsReceived);
    $('saStatFollowers').textContent=String(followersR.count??0);
 
-   // Read views only for this creator. RLS must allow owners to read their
-   // own post_views rows; if not, show an unavailable marker, never fake data.
-   let viewRows=[];
-   let viewsAvailable=true;
-   try{
-    if(postIds.length){
-     for(let i=0;i<postIds.length;i+=200){
-      const ids=postIds.slice(i,i+200);
-      const {data,error}=await sb.from('post_views').select('post_id,viewer_id').eq('owner_id',creatorUserId).in('post_id',ids);
-      if(error)throw error;
-      viewRows.push(...(data||[]));
-     }
-    }
-   }catch(viewError){
-    viewsAvailable=false;
-    console.warn('Creator view analytics are not readable yet. Check post_views SELECT RLS:',viewError);
-   }
    const uniqueViewers=new Set(viewRows.map(v=>v.viewer_id).filter(Boolean));
    $('saStatViews').textContent=viewsAvailable?String(viewRows.length):'—';
    $('saStatReach').textContent=viewsAvailable?String(uniqueViewers.size):'—';
