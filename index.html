@@ -12318,11 +12318,11 @@ window.openComments = async function (
     targetCommentId = null,
     addHistory = true
 ) {
-// Opening a post's Comments/detail view is also a meaningful view event.
-// record_post_view remains authoritative and rejects owners/duplicates/blocked viewers.
-if (typeof window.recordSocialAppPostView === "function") {
-    window.recordSocialAppPostView(postId);
-}
+    // Count an opened post detail using the same server-side privacy and
+    // unique-view checks as scrolling. The creator's own view is rejected by SQL.
+    if (typeof window.recordSocialAppPostView === "function") {
+        window.recordSocialAppPostView(postId);
+    }
 
 
 // Capture Home BEFORE Comments changes the navigation state.
@@ -47802,11 +47802,9 @@ window.openMedia = function (
     type = "image",
     options = {}
 ) {
-// Post media opened in the media viewer counts as a view when its caller
-// supplies the originating post ID. Profile avatars/covers do not pass one.
-if (options && options.postId != null && typeof window.recordSocialAppPostView === "function") {
-    window.recordSocialAppPostView(options.postId);
-}
+    if (options && options.postId != null && typeof window.recordSocialAppPostView === "function") {
+        window.recordSocialAppPostView(options.postId);
+    }
 
 
     // Capture Home BEFORE opening Post/Avatar media. Do this from the
@@ -58676,14 +58674,10 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   <div style="display:flex;align-items:center;gap:12px;justify-content:space-between"><div><div style="font-size:12px;color:#c4a2e9;font-weight:800;letter-spacing:1px">SOCIALAPP PREMIUM</div><h2 style="margin:5px 0">Creator Studio</h2></div><button class="sa-btn" id="saCreatorClose" style="background:#302638">Close ✕</button></div>
   <div class="sa-tabs"><button data-sa-tab="analytics">📊 Analytics</button><button data-sa-tab="appearance">🎨 Profile style</button><button data-sa-tab="schedule">🗓️ Schedule post</button></div>
   <section id="saCreatorAnalytics">
-   <p style="color:#c7bacf">Your account performance from available SocialApp records. Views count when at least 50% of a post is visible while scrolling, or when its post detail/Comments screen is opened. Creator-only totals are read from your post_views records.</p>
-   <div id="saViewTrackingDiagnostics" class="sa-card" style="margin:10px 0;border:1px solid #68428a;background:rgba(138,43,226,.08);font-size:13px;line-height:1.55" aria-live="polite">
-    <strong>View tracking check</strong><div id="saViewTrackingStatus" style="margin-top:6px">Waiting for feed and sign-in status…</div>
-    <button type="button" class="sa-btn" id="saRetryViewTracking" style="padding:8px 12px;margin-top:9px">Check view tracking again</button>
-   </div>
+   <p style="color:#c7bacf">Your account performance from SocialApp records. A view counts when at least 50% of a post is visible while scrolling, or when its post detail is opened. Repeat views by the same viewer are counted once per post.</p>
    <div class="sa-grid"><div class="sa-stat">Your posts<strong id="saStatPosts">—</strong></div><div class="sa-stat">Likes recorded<strong id="saStatLikes">—</strong></div><div class="sa-stat">Comments received<strong id="saStatComments">—</strong></div><div class="sa-stat">Followers<strong id="saStatFollowers">—</strong></div><div class="sa-stat">Total views<strong id="saStatViews">—</strong></div><div class="sa-stat">Unique viewers<strong id="saStatReach">—</strong></div></div>
    <div class="sa-card"><strong>Top-performing posts</strong><div id="saCreatorTopPosts" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
-   <p style="font-size:12px;color:#9c8fa6">This first version reports counts from accessible posts, follows, and comments. It does not invent reach or views where tracking columns are unavailable.</p>
+   <p style="font-size:12px;color:#9c8fa6">Views and unique viewers are read from your post_views records. Only views visible under your existing creator-only database policy are included.</p>
   </section>
   <section id="saCreatorAppearance" style="display:none">
    <div class="sa-card"><h3 style="margin-top:0">Profile accent</h3><label for="saCreatorColor">Choose your profile accent color</label><input id="saCreatorColor" type="color" value="#8a2be2" style="height:54px;padding:5px"><label for="saCreatorBanner">Profile banner image URL</label><input id="saCreatorBanner" type="url" placeholder="https://…"><button class="sa-btn" id="saCreatorSaveStyle">Save appearance</button><p id="saCreatorStyleMsg" style="color:#c7bacf"></p></div>
@@ -58799,6 +58793,26 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(followersR.error)throw followersR.error;
 
    const postIds=allPosts.map(p=>p.id).filter(id=>id!==null&&id!==undefined);
+   // Count comments ON the creator's posts, not comments authored by the creator.
+   // Batch IDs to keep PostgREST URL/query sizes reasonable.
+   let commentsReceived=0;
+   for(let i=0;i<postIds.length;i+=200){
+    const ids=postIds.slice(i,i+200);
+    const {count,error}=await sb.from('comments')
+     .select('id',{count:'exact',head:true})
+     .in('post_id',ids)
+     .eq('hidden',false);
+    if(error)throw error;
+    commentsReceived+=count||0;
+   }
+
+   const likesFor=post=>Array.isArray(post.likes)?post.likes.length:(Number(post.likes)||0);
+   const totalLikes=allPosts.reduce((sum,post)=>sum+likesFor(post),0);
+   $('saStatPosts').textContent=String(allPosts.length);
+   $('saStatLikes').textContent=String(totalLikes);
+   $('saStatComments').textContent=String(commentsReceived);
+   $('saStatFollowers').textContent=String(followersR.count??0);
+
    // Read views only for this creator. RLS must allow owners to read their
    // own post_views rows; if not, show an unavailable marker, never fake data.
    let viewRows=[];
@@ -58821,26 +58835,6 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    $('saStatReach').textContent=viewsAvailable?String(uniqueViewers.size):'—';
    const viewsByPost=new Map();
    for(const view of viewRows)viewsByPost.set(String(view.post_id),(viewsByPost.get(String(view.post_id))||0)+1);
-   // Count comments ON the creator's posts, not comments authored by the creator.
-   // Batch IDs to keep PostgREST URL/query sizes reasonable.
-   let commentsReceived=0;
-   for(let i=0;i<postIds.length;i+=200){
-    const ids=postIds.slice(i,i+200);
-    const {count,error}=await sb.from('comments')
-     .select('id',{count:'exact',head:true})
-     .in('post_id',ids)
-     .eq('hidden',false);
-    if(error)throw error;
-    commentsReceived+=count||0;
-   }
-
-   const likesFor=post=>Array.isArray(post.likes)?post.likes.length:(Number(post.likes)||0);
-   const totalLikes=allPosts.reduce((sum,post)=>sum+likesFor(post),0);
-   $('saStatPosts').textContent=String(allPosts.length);
-   $('saStatLikes').textContent=String(totalLikes);
-   $('saStatComments').textContent=String(commentsReceived);
-   $('saStatFollowers').textContent=String(followersR.count??0);
-
 
    // Rank by recorded views first, then likes, then newest.
 
@@ -58872,10 +58866,8 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(!topPosts.length)host.textContent='No posts found yet.';
   }catch(e){
    console.warn('Creator analytics query failed',e);
-   ['saStatPosts','saStatLikes','saStatComments','saStatFollowers'].forEach(id=>$(id).textContent='—');
-   // Keep view values if their independent query succeeded; do not hide them
-   // because an unrelated comments/follows query failed.
-   $('saCreatorTopPosts').textContent='Some analytics could not load. Check the browser console for the specific query error.';
+   ['saStatPosts','saStatLikes','saStatComments','saStatFollowers','saStatViews','saStatReach'].forEach(id=>$(id).textContent='—');
+   $('saCreatorTopPosts').textContent='Could not load analytics. Check the posts, comments and follows SELECT policies, then try again.';
   }
  }
  async function loadStyle(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_creator_settings').select('accent_color,banner_url').eq('user_id',creatorUserId).maybeSingle();if(error)throw error;if(data){$('saCreatorColor').value=data.accent_color||'#8a2be2';$('saCreatorBanner').value=data.banner_url||'';}}catch(e){console.warn('Could not load creator style',e);}}
@@ -59105,132 +59097,80 @@ window.reportComment=id=>window.submitUserReport("comment",id);
 </script>
 
 
-<!-- SOCIALAPP POST VIEW TRACKING: resiliently waits for Supabase auth and visible Home feed cards. -->
+<!-- SOCIALAPP POST VIEW TRACKING: observes visible Home feed cards; no startApp changes. -->
 <script id="socialapp-post-view-tracker">
-(function () {
-  'use strict';
-  if (window.__socialAppPostViewTrackerInstalled) return;
-  window.__socialAppPostViewTrackerInstalled = true;
-
-  const recorded = new Set();
-  const pending = new Set();
-  const retryAt = new Map();
-  let clientRef = null, sessionPromise = null;
-  let lastResult = 'No post has been checked yet.', lastError = '', lastPostId = '';
-  let scanQueued = false;
-
-  function client() {
-    const sb = window.supabase || null;
-    if (sb !== clientRef) { clientRef = sb; sessionPromise = null; }
-    return sb;
-  }
-  function session(sb) {
-    if (!sb || !sb.auth || !sb.auth.getSession) return Promise.resolve(null);
-    if (!sessionPromise) sessionPromise = sb.auth.getSession().then(({data,error}) => {
-      if (error) { sessionPromise = null; lastError = 'Session: ' + (error.message || String(error)); return null; }
-      return data && data.session ? data.session : null;
-    }).catch(e => { sessionPromise = null; lastError = 'Session: ' + (e.message || String(e)); return null; });
-    return sessionPromise;
-  }
-  function visible(el) {
-    if (!el || !el.isConnected) return false;
-    const r=el.getBoundingClientRect(), c=getComputedStyle(el);
-    return r.width>0 && r.height>0 && c.display!=='none' && c.visibility!=='hidden' && Number(c.opacity||1)!==0;
-  }
-  function postCards() {
-    return Array.from(document.querySelectorAll('.post-card[id^="post-"]')).filter(visible);
-  }
-  // A post counts during scrolling only when at least half of its card is
-  // actually inside the visible browser viewport. This avoids counting cards
-  // that merely touch the screen edge.
-  function onScreen(card) {
-    if(!visible(card) || document.hidden) return false;
-    const r=card.getBoundingClientRect();
-    const left=Math.max(0,r.left), top=Math.max(0,r.top);
-    const right=Math.min(window.innerWidth,r.right), bottom=Math.min(window.innerHeight,r.bottom);
-    const iw=Math.max(0,right-left), ih=Math.max(0,bottom-top);
-    const total=Math.max(1,r.width*r.height);
-    return (iw*ih)/total >= 0.5;
-  }
-  function showStatus() {
-    const out=document.getElementById('saViewTrackingStatus');
-    if(!out) return;
-    const cards=postCards();
-    const visibleCount=cards.filter(onScreen).length;
-    const uid=window.__saTrackerViewerId;
-    const lines=[
-      'Post cards found across screens: '+cards.length,
-      'Post cards at least 50% visible: '+visibleCount,
-      'Signed-in viewer: '+(uid?uid.slice(0,8)+'…':'not confirmed'),
-      'Last post checked: '+(lastPostId||'none'),
-      'Last result: '+lastResult
-    ];
-    if(lastError) lines.push('Error: '+lastError);
-    out.textContent=lines.join('\n'); out.style.whiteSpace='pre-wrap';
-  }
-  async function recordId(rawId, sourceCard) {
-    const id=String(rawId==null?'':rawId).replace(/^post-/,'');
-    if(!/^\d+$/.test(id)||recorded.has(id)||pending.has(id)||(retryAt.get(id)||0)>Date.now()) return false;
-    pending.add(id); lastPostId=id;
-    try {
-      const sb=client(), sess=await session(sb);
-      if(!sb||!sess||!sess.user||!sess.user.id) {
-        window.__saTrackerViewerId=''; lastResult='Waiting for a signed-in session.';
-        retryAt.set(id,Date.now()+3000); return false;
-      }
-      window.__saTrackerViewerId=sess.user.id;
-      const result=await sb.rpc('record_post_view',{p_post_id:Number(id)});
-      if(result.error) {
-        lastError=result.error.message||String(result.error); lastResult='RPC failed; will retry.';
-        retryAt.set(id,Date.now()+6000); return false;
-      }
-      lastError='';
-      lastResult=result.data===true?'View recorded.':result.data===false?'Server declined (creator, duplicate, or access check).':'RPC returned '+String(result.data)+'.';
-      // FALSE is still final: the server intentionally declines owner views,
-      // duplicate views, and posts the viewer is not allowed to access.
-      recorded.add(id); retryAt.delete(id);
-      if(sourceCard) sourceCard.dataset.saViewRecorded='1';
-      return result.data===true;
-    } catch(e) {
-      lastError=e&&e.message?e.message:String(e); lastResult='Tracking request failed; will retry.';
-      retryAt.set(id,Date.now()+6000); return false;
-    } finally { pending.delete(id); showStatus(); }
-  }
-  function record(card) {
-    const id=String(card && card.id || '').replace(/^post-/,'');
-    return recordId(id,card);
-  }
-  // Public hook for opened-post surfaces (Comments and media detail). The
-  // same RPC enforces owner exclusion, privacy and Premium entitlement.
-  window.recordSocialAppPostView = function(postId) {
-    return recordId(postId,null);
-  };
-  function scan() {
-    postCards().forEach(card=>{if(onScreen(card)) record(card);});
-    showStatus();
-  }
-  function queueScan() {
-    if(scanQueued) return; scanQueued=true;
-    setTimeout(()=>{scanQueued=false;scan();},180);
-  }
-  function start() {
-    const sb=client();
-    if(sb&&sb.auth&&sb.auth.onAuthStateChange&&!sb.__saViewTrackerAuthBound) {
-      try { sb.auth.onAuthStateChange(()=>{sessionPromise=null;queueScan();}); sb.__saViewTrackerAuthBound=true; } catch(e) {}
-    }
-    scan();
-  }
-  document.addEventListener('click',e=>{if(e.target&&e.target.id==='saRetryViewTracking'){sessionPromise=null;start();}},true);
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',start,{once:true}); else start();
-  const observer=new MutationObserver(records=>{
-    const relevant=records.some(r=>!(r.target&&r.target.closest&&r.target.closest('#saViewTrackingDiagnostics')));
-    if(relevant) queueScan();
+(function(){
+ 'use strict';
+ if(window.__socialAppPostViewTrackerInstalled)return;
+ window.__socialAppPostViewTrackerInstalled=true;
+ const recorded=new Set(),pending=new Set(),retryAt=new Map();
+ let sessionPromise=null,scanQueued=false,lastError='';
+ function sb(){return window.supabase||null;}
+ function getSession(client){
+  if(!sessionPromise)sessionPromise=client.auth.getSession().then(({data,error})=>{
+   if(error){sessionPromise=null;throw error;}return data?.session||null;
+  }).catch(e=>{sessionPromise=null;throw e;});
+  return sessionPromise;
+ }
+ async function recordPost(rawId,source){
+  const id=String(rawId??'').replace(/^post-/,'');
+  if(!/^\d+$/.test(id)||recorded.has(id)||pending.has(id)||(retryAt.get(id)||0)>Date.now())return;
+  const client=sb();if(!client?.rpc||!client?.auth?.getSession)return;
+  pending.add(id);
+  try{
+   const active=await getSession(client);
+   if(!active?.user?.id){retryAt.set(id,Date.now()+3000);return;}
+   const {data,error}=await client.rpc('record_post_view',{p_post_id:Number(id)});
+   if(error)throw error;
+   // FALSE is an intentional server decision (creator, duplicate, or blocked viewer).
+   // It is final for this browser session; SQL remains authoritative for uniqueness.
+   recorded.add(id);retryAt.delete(id);lastError='';
+   if(source?.dataset)source.dataset.saViewRecorded='1';
+  }catch(e){lastError=e?.message||String(e);retryAt.set(id,Date.now()+6000);console.warn('SocialApp post view tracking failed:',lastError);}
+  finally{pending.delete(id);}
+ }
+ function isVisible(el){
+  if(!el?.isConnected||document.hidden)return false;
+  const st=getComputedStyle(el),r=el.getBoundingClientRect();
+  return st.display!=='none'&&st.visibility!=='hidden'&&Number(st.opacity||1)>0&&r.width>0&&r.height>0;
+ }
+ function qualifies(el){
+  if(!isVisible(el))return false;
+  const r=el.getBoundingClientRect();
+  const left=Math.max(0,r.left),top=Math.max(0,r.top);
+  const right=Math.min(window.innerWidth,r.right),bottom=Math.min(window.innerHeight,r.bottom);
+  const visibleArea=Math.max(0,right-left)*Math.max(0,bottom-top);
+  return visibleArea/Math.max(1,r.width*r.height)>=0.5;
+ }
+ function scan(){
+  scanQueued=false;
+  // Generic selector intentionally covers Home, Profile, search, saved and
+  // any other screen that renders the app's standard post-card markup.
+  document.querySelectorAll('.post-card[id^="post-"]').forEach(card=>{
+   if(qualifies(card))recordPost(card.id,card);
   });
-  observer.observe(document.documentElement,{childList:true,subtree:true});
-  window.addEventListener('scroll',queueScan,true);
-  window.addEventListener('resize',queueScan);
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){sessionPromise=null;start();}});
-  setInterval(start,2500);
+ }
+ function queueScan(){if(scanQueued)return;scanQueued=true;setTimeout(scan,150);}
+ // Public entry point for post detail surfaces such as Comments.
+ window.recordSocialAppPostView=postId=>recordPost(postId,null);
+ const io=new IntersectionObserver(entries=>{
+  for(const entry of entries){if(entry.isIntersecting&&entry.intersectionRatio>=0.5)recordPost(entry.target.id,entry.target);}
+ },{root:null,threshold:[0,0.5,0.75,1]});
+ function observeAll(){
+  document.querySelectorAll('.post-card[id^="post-"]').forEach(card=>{
+   if(card.dataset.saViewObserved==='1')return;
+   card.dataset.saViewObserved='1';io.observe(card);
+  });
+  queueScan();
+ }
+ const mutations=new MutationObserver(()=>observeAll());
+ function start(){observeAll();}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
+ mutations.observe(document.documentElement,{childList:true,subtree:true});
+ window.addEventListener('scroll',queueScan,true);
+ window.addEventListener('resize',queueScan);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden){sessionPromise=null;queueScan();}});
+ if(window.supabase?.auth?.onAuthStateChange){try{window.supabase.auth.onAuthStateChange(()=>{sessionPromise=null;queueScan();});}catch(e){}}
 })();
 </script>
 </body>
