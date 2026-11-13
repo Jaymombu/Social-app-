@@ -10697,11 +10697,6 @@ const isOwner =
       ❤️ ${post.likes || 0}
     </div>
 
-    <div class="post-view-count" data-post-id="${post.id}" aria-label="Post views" style="margin-top:5px;font-size:12px;color:#aaa;">
-      👁 — views
-    </div>
-
-
     <button
       class="like-btn"
       onclick="likePost('${post.id}')"
@@ -10810,6 +10805,11 @@ const isOwner =
         `
         : ""
     }
+
+    <span class="post-view-count" data-post-id="${post.id}" aria-label="Post views" style="display:inline-flex;align-items:center;gap:6px;vertical-align:middle;margin:5px 0 0 8px;padding:5px 10px;min-height:28px;box-sizing:border-box;font-size:13px;color:#aaa;white-space:nowrap;">
+      <svg class="post-view-icon" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false" style="display:block;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>
+      <span class="post-view-label">— views</span>
+    </span>
 
   `;
 
@@ -12824,12 +12824,12 @@ if (postLikeArea) {
   const viewCount = document.createElement("div");
   viewCount.className = "post-view-count comments-post-view-count";
   viewCount.dataset.postId = String(post.id);
-  viewCount.style.cssText = "margin-top:8px;text-align:center;font-size:13px;color:#aaa";
-  viewCount.textContent = "👁 — views";
+  viewCount.style.cssText = "margin-top:8px;display:flex;align-items:center;justify-content:center;gap:6px;font-size:13px;color:#aaa";
+  viewCount.innerHTML = '<svg class="post-view-icon" viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false" style="display:block;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z"/><circle cx="12" cy="12" r="2.7"/></svg><span class="post-view-label">— views</span>';
   postLikeArea.replaceChildren(button, viewCount);
 
   // Opening a post detail is also an eligible view. The database function
-  // prevents the same signed-in viewer being counted twice for this post.
+  // enforces a 30-minute per-viewer/post session cooldown server-side.
   if (typeof window.recordSocialAppPostView === "function") {
     await window.recordSocialAppPostView(post.id);
   }
@@ -58887,22 +58887,19 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(followersR.error)throw followersR.error;
 
    const postIds=allPosts.map(p=>p.id).filter(id=>id!==null&&id!==undefined);
-   // Read views only for this creator. RLS must allow owners to read their
-   // own post_views rows; if not, show an unavailable marker, never fake data.
-   let viewRows=[];
+   // Creator analytics come from the secure aggregate RPC. This avoids
+   // PostgREST row limits and never exposes individual viewer identities.
    let viewsAvailable=true;
+   let creatorViewTotals={total_views:0,unique_viewers:0,per_post:{}};
    try{
     if(postIds.length){
-     for(let i=0;i<postIds.length;i+=200){
-      const ids=postIds.slice(i,i+200);
-      const {data,error}=await sb.from('post_views').select('post_id,viewer_id').eq('owner_id',creatorUserId).in('post_id',ids);
-      if(error)throw error;
-      viewRows.push(...(data||[]));
-     }
+     const {data,error}=await sb.rpc('get_creator_view_analytics',{p_post_ids:postIds});
+     if(error)throw error;
+     if(data&&data.length)creatorViewTotals=data[0];
     }
    }catch(viewError){
     viewsAvailable=false;
-    console.warn('Creator view analytics are not readable yet. Check post_views SELECT RLS:',viewError);
+    console.warn('Creator aggregate view analytics are unavailable:',viewError);
    }
    // Count comments ON the creator's posts, not comments authored by the creator.
    // Batch IDs to keep PostgREST URL/query sizes reasonable.
@@ -58939,11 +58936,9 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    $('saStatComments').textContent=String(commentsReceived);
    $('saStatFollowers').textContent=String(followersR.count??0);
 
-   const uniqueViewers=new Set(viewRows.map(v=>v.viewer_id).filter(Boolean));
-   $('saStatViews').textContent=viewsAvailable?String(viewRows.length):'—';
-   $('saStatReach').textContent=viewsAvailable?String(uniqueViewers.size):'—';
-   const viewsByPost=new Map();
-   for(const view of viewRows)viewsByPost.set(String(view.post_id),(viewsByPost.get(String(view.post_id))||0)+1);
+   $('saStatViews').textContent=viewsAvailable?String(Number(creatorViewTotals.total_views||0)):'—';
+   $('saStatReach').textContent=viewsAvailable?String(Number(creatorViewTotals.unique_viewers||0)):'—';
+   const viewsByPost=new Map(Object.entries(creatorViewTotals.per_post||{}).map(([id,count])=>[String(id),Number(count||0)]));
 
    // Rank by recorded views first, then likes, then newest.
 
@@ -59218,6 +59213,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  window.__socialAppPostViewTrackerInstalled=true;
  const recorded=new Set();
  const pending=new Set();
+ const negativeCache=new Map();
  const countCache=new Map();
  let countRequest=Promise.resolve();
  const asId=value=>String(value??'').replace(/^post-/,'');
@@ -59241,9 +59237,11 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     const value=countCache.get(id);
     if(!value)return;
     document.querySelectorAll('.post-view-count[data-post-id="'+CSS.escape(id)+'"]').forEach(el=>{
-      el.textContent='👁 '+value.total+' views';
+      const label=el.querySelector('.post-view-label');
+      if(label)label.textContent=value.total+' views · '+value.unique+' unique';
+      else el.textContent=value.total+' views · '+value.unique+' unique';
       el.dataset.uniqueViewers=String(value.unique);
-      el.title=value.unique+' unique viewer'+(value.unique===1?'':'s');
+      el.title=value.total+' viewing sessions · '+value.unique+' unique viewer'+(value.unique===1?'':'s');
     });
    });
   }).catch(error=>console.warn('SocialApp view count refresh failed:',error));
@@ -59252,28 +59250,37 @@ window.reportComment=id=>window.submitUserReport("comment",id);
 
  window.recordSocialAppPostView=async function(postId){
   const id=asId(postId);
-  if(!/^\d+$/.test(id)||recorded.has(id)||pending.has(id))return false;
+  if(!/^\d+$/.test(id))return false;
   const sb=window.supabase;
-  if(!sb?.rpc)return false;
-  pending.add(id);
+  if(!sb?.rpc||!sb?.auth?.getSession)return false;
+  let viewerId=null;
   try{
    const {data:sessionData,error:sessionError}=await sb.auth.getSession();
    if(sessionError)throw sessionError;
-   if(!sessionData?.session?.user?.id)return false;
+   viewerId=sessionData?.session?.user?.id||null;
+   if(!viewerId)return false;
+   const key=viewerId+':'+id;
+   if(recorded.has(key)||pending.has(key))return false;
+   const retryAfter=negativeCache.get(key)||0;
+   if(Date.now()<retryAfter)return false;
+   pending.add(key);
    const {data,error}=await sb.rpc('record_post_view',{p_post_id:Number(id)});
    if(error)throw error;
-   // FALSE means owner, duplicate, or access check; it is still a completed
-   // attempt for this tab. The database remains the source of truth.
-   recorded.add(id);
    if(data===true){
+    recorded.add(key);
+    negativeCache.delete(key);
     countCache.delete(id);
     await window.refreshSocialAppPostViewCounts([id]);
+   }else{
+    // A false result is not permanently cached: access/session state may change.
+    // Briefly dampen repeated observer callbacks; the server enforces the cooldown.
+    negativeCache.set(key,Date.now()+15000);
    }
    return data===true;
   }catch(error){
    console.warn('SocialApp view recording failed for post '+id+':',error.message||error);
    return false;
-  }finally{pending.delete(id);}
+  }finally{if(viewerId)pending.delete(viewerId+':'+id);}
  };
 
  function collectCards(root){
