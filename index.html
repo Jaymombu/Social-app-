@@ -51389,15 +51389,15 @@ function appendReplies(data) {
   }, { passive: true });
 })();
 
-async function openExactPostFromNotification(postId) {
+async function openExactPostFromNotification(postId, options = {}) {
 
-    console.log("❤️ OPENING EXACT LIKED POST:", postId);
+    console.log("🎯 OPENING EXACT POST:", postId);
 
     // ------------------------------------------
     // REMEMBER WE CAME FROM NOTIFICATIONS
     // ------------------------------------------
 
-    openedLikedPostFromNotification = true;
+    if (options.portfolio !== true) openedLikedPostFromNotification = true;
 
     // ------------------------------------------
     // HIDE NOTIFICATIONS
@@ -51579,6 +51579,8 @@ async function openExactPostFromNotification(postId) {
 
     });
 }
+
+window.openExactSocialAppPost = (postId, options = {}) => openExactPostFromNotification(postId, options);
 
 function highlightExactPost(postElement) {
 
@@ -59908,7 +59910,12 @@ https://instagram.com/yourname"></textarea>
 (async function(){
  const params=new URLSearchParams(location.search),slug=params.get('portfolio');if(!slug)return;
  const root=document.createElement('main');root.id='saPublicPortfolio';root.style.cssText='position:fixed;inset:0;z-index:2147483647;overflow:auto;background:#100d16;color:#f7f2fb;font:16px system-ui;line-height:1.6;padding:24px;box-sizing:border-box';root.innerHTML='<p style="text-align:center;color:#c4a2e9">Loading creator portfolio…</p>';document.body.appendChild(root);
- try{const sb=window.supabase;if(!sb)throw new Error('SocialApp connection unavailable');const {data,error}=await sb.rpc('get_public_creator_portfolio',{p_slug:slug});if(error)throw error;if(!data)throw new Error('This creator portfolio was not found or is not public.');
+ try{
+  // The Supabase client is created by a type=module script, which runs
+  // asynchronously. Wait for it instead of failing immediately for logged-out visitors.
+  let sb=null;for(let i=0;i<100&&!sb;i++){sb=window.supabase||null;if(!sb)await new Promise(resolve=>setTimeout(resolve,100));}
+  if(!sb)throw new Error('Could not connect to SocialApp. Please refresh and try again.');
+  const {data,error}=await sb.rpc('get_public_creator_portfolio',{p_slug:slug});if(error)throw error;if(!data)throw new Error('This creator portfolio was not found or is not public.');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const profile=data.profile||{};
   root.innerHTML='<div style="max-width:820px;margin:24px auto"><header style="padding:28px;border:1px solid #68418a;border-radius:22px;background:linear-gradient(135deg,#48206b,#17111f)">'+(profile.avatar_url?'<img src="'+esc(profile.avatar_url)+'" alt="Creator" style="width:88px;height:88px;border-radius:50%;object-fit:cover">':'')+'<div style="color:#d5aaff;font-size:13px">'+esc(profile.name)+(profile.verified?' · ✓ Verified':'')+'</div><h1 style="margin:8px 0">'+esc(data.title||'Creator portfolio')+'</h1><p style="white-space:pre-wrap">'+esc(data.bio)+'</p>'+(Array.isArray(data.links)?data.links.map(u=>'<a href="'+esc(u)+'" target="_blank" rel="noopener noreferrer" style="color:#d5aaff;margin-right:12px">'+esc(new URL(u).hostname)+'</a>').join(''):'')+'</header><h2>Featured posts</h2>'+(data.posts||[]).map(p=>'<article style="padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523">'+(p.media_url?(p.media_type==='video'?'<video controls src="'+esc(p.media_url)+'" style="width:100%;max-height:460px;border-radius:12px"></video>':'<img src="'+esc(p.media_url)+'" alt="Featured post" style="width:100%;max-height:460px;object-fit:cover;border-radius:12px">'):'')+'<p style="white-space:pre-wrap">'+esc(p.content)+'</p><small style="color:#bdaacb">'+(p.created_at?new Date(p.created_at).toLocaleDateString():'')+'</small></article>').join('')+'</div>';
  }catch(e){console.error('Public portfolio failed:',e);root.innerHTML='<div style="max-width:600px;margin:15vh auto;text-align:center"><h2>Portfolio unavailable</h2><p>'+String(e.message||'Please try again later.')+'</p><a href="'+location.origin+location.pathname+'" style="color:#d5aaff">Open SocialApp</a></div>';}
@@ -59917,15 +59924,32 @@ https://instagram.com/yourname"></textarea>
 
 <script id="socialapp-portfolio-deep-links">
 (function(){
- const q=new URLSearchParams(location.search),profileId=q.get('socialapp_profile'),postId=q.get('socialapp_post');
- if(!profileId&&!postId)return;let tries=0;const timer=setInterval(async()=>{
-  if(++tries>100){clearInterval(timer);return;}
-  if(typeof window.openProfile!=='function'||typeof window.openComments!=='function')return;
-  clearInterval(timer);try{
-   if(postId)await window.openComments(postId,null,true);
-   else await window.openProfile(profileId,'Creator',{source:'portfolio'});
-   const u=new URL(location.href);['socialapp_profile','socialapp_post','socialapp_owner'].forEach(k=>u.searchParams.delete(k));history.replaceState(history.state,'',u.pathname+u.search+u.hash);
-  }catch(e){console.error('Portfolio deep link failed:',e);}
+ const params=new URLSearchParams(location.search);
+ const profileId=params.get('socialapp_profile');
+ const postId=params.get('socialapp_post');
+ if(!profileId&&!postId)return;
+ const key='socialapp_portfolio_deeplink_done:'+location.pathname+':'+(postId||profileId);
+ try{if(sessionStorage.getItem(key)==='1')return;sessionStorage.setItem(key,'1');}catch(e){}
+ // Remove the one-shot route BEFORE opening a screen. If app initialization
+ // or navigation causes a refresh, the same deep link cannot fire repeatedly.
+ const cleanUrl=new URL(location.href);
+ ['socialapp_profile','socialapp_post','socialapp_owner'].forEach(k=>cleanUrl.searchParams.delete(k));
+ history.replaceState(history.state||{},'',cleanUrl.pathname+cleanUrl.search+cleanUrl.hash);
+ let attempts=0,finished=false;
+ const timer=setInterval(async()=>{
+  if(finished){clearInterval(timer);return;}
+  if(++attempts>120){finished=true;clearInterval(timer);try{sessionStorage.removeItem(key);}catch(e){}console.warn('SocialApp portfolio link timed out waiting for app startup.');return;}
+  const canOpenPost=typeof window.openExactSocialAppPost==='function';
+  const canOpenProfile=typeof window.openProfile==='function';
+  if(postId?!canOpenPost:!canOpenProfile)return;
+  finished=true;clearInterval(timer);
+  try{
+   if(postId){
+    await window.openExactSocialAppPost(postId,{portfolio:true,ownerId:params.get('socialapp_owner')||null});
+   }else{
+    await window.openProfile(profileId,'Creator',{source:'portfolio',returnSource:'home'});
+   }
+  }catch(e){console.error('SocialApp portfolio navigation failed:',e);try{sessionStorage.removeItem(key);}catch(_){} }
  },250);
 })();
 </script>
