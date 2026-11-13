@@ -58909,6 +58909,9 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  let editingExistingFileUrl=null;
  let editingExistingMediaType=null;
  let schedulePreviewObjectUrl=null;
+ let creatorStudioHistoryOpen=false;
+ let creatorStudioClosingFromPopstate=false;
+ const CREATOR_STUDIO_HISTORY_KEY='__socialAppCreatorStudioOverlay';
  function client(){return window.supabase||null;}
  async function syncAuthSession(){
    const sb=client();
@@ -58936,8 +58939,64 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  }
  function currentId(){return window.session?.user?.id||window.currentUser?.id||null;}
  function message(id,t){const el=$(id);if(el)el.textContent=t;}
- function show(){ $('saCreatorStudio').style.display='block'; document.body.style.overflow='hidden'; }
- function close(){ $('saCreatorStudio').style.display='none'; document.body.style.overflow=''; }
+ function show(){
+   const modal=$('saCreatorStudio');
+   if(!modal)return;
+   // Give Creator Studio its own history entry. Android's system Back and
+   // desktop browser Back then close this overlay before leaving its parent
+   // SocialApp screen. Preserve the app's existing navigation state.
+   if(modal.style.display!=='block' && !history.state?.[CREATOR_STUDIO_HISTORY_KEY]){
+     try{
+       history.pushState(
+         {...(history.state||{}),[CREATOR_STUDIO_HISTORY_KEY]:true},
+         '',
+         location.href
+       );
+       creatorStudioHistoryOpen=true;
+     }catch(error){
+       creatorStudioHistoryOpen=false;
+       console.warn('Creator Studio could not add a browser Back entry:',error);
+     }
+   }else if(history.state?.[CREATOR_STUDIO_HISTORY_KEY]){
+     creatorStudioHistoryOpen=true;
+   }
+   modal.style.display='block';
+   document.body.style.overflow='hidden';
+ }
+ function close(fromPopstate=false){
+   const modal=$('saCreatorStudio');
+   if(!modal || modal.style.display==='none')return;
+   const ownsHistoryEntry=!!history.state?.[CREATOR_STUDIO_HISTORY_KEY];
+   modal.style.display='none';
+   document.body.style.overflow='';
+   creatorStudioHistoryOpen=false;
+   if(fromPopstate || creatorStudioClosingFromPopstate)return;
+   // Remove only our own overlay entry; never consume the user's previous
+   // app screen or navigate away from SocialApp when tapping Close.
+   if(ownsHistoryEntry){
+     creatorStudioClosingFromPopstate=true;
+     try{history.back();}
+     catch(error){console.warn('Could not clean up Creator Studio history:',error);}
+     // popstate normally clears this flag. The timeout is only a fallback
+     // for browsers that do not dispatch it after a history traversal.
+     setTimeout(()=>{creatorStudioClosingFromPopstate=false;},700);
+   }
+ }
+ window.addEventListener('popstate',function(event){
+   const modal=$('saCreatorStudio');
+   if(!modal || modal.style.display!=='block')return;
+   // The main SocialApp popstate controller restores the underlying screen;
+   // this listener only dismisses the Creator Studio overlay.
+   creatorStudioClosingFromPopstate=true;
+   close(true);
+   creatorStudioClosingFromPopstate=false;
+ });
+ document.addEventListener('keydown',function(event){
+   if(event.key==='Escape' && $('saCreatorStudio')?.style.display==='block'){
+     event.preventDefault();
+     close();
+   }
+ });
  async function open(){
    const sb=client();
    if(!sb){alert('SocialApp could not connect to Supabase. Refresh the app and try again.');return;}
@@ -59087,75 +59146,61 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   const button=$('saExportCreatorReport');
   const original=button?.textContent||'↓ Export creator report (PDF)';
   if(button){button.disabled=true;button.textContent='Preparing PDF…';}
-  const ids=['saStatPosts','saStatLikes','saStatComments','saStatFollowers','saStatViews','saStatReach'];
-  const labels=['Published posts','Total likes','Comments received','Current followers','Viewing sessions','Unique viewers'];
-  const stats=ids.map((id,i)=>[labels[i],$(id)?.textContent?.trim()||'—']);
-  const audience=$('saAudienceInsights')?.innerText?.trim()||'Not available';
-  const posts=$('saPostPerformance')?.innerText?.trim()||'Not available';
-  const goals=$('saGoalProgress')?.innerText?.trim()||'No creator goals set';
-  const range=$('saChartPeriodLabel')?.textContent?.trim()||'Latest available period';
-  const rows=creatorTimelineRows||[];
-  const end=Math.max(0,rows.length-creatorTimelineOffset),begin=Math.max(0,end-CREATOR_CHART_WINDOW);
-  const visible=rows.slice(begin,end);
-  const safeFile='SocialApp-Creator-Report-'+new Date().toISOString().slice(0,10)+'.pdf';
   try{
-   if(!window.jspdf?.jsPDF){
-    await new Promise((resolve,reject)=>{
-     const script=document.createElement('script');
-     script.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
-     script.onload=resolve;script.onerror=()=>reject(new Error('PDF library could not be loaded.'));
-     document.head.appendChild(script);
-    });
+   const ids=['saStatPosts','saStatLikes','saStatComments','saStatFollowers','saStatViews','saStatReach'];
+   const labels=['Published posts','Total likes','Comments received','Current followers','Viewing sessions','Unique viewers'];
+   const stats=ids.map((id,i)=>[labels[i],$(id)?.textContent?.trim()||'—']);
+   const audience=$('saAudienceInsights')?.innerText?.trim()||'Not available';
+   const posts=$('saPostPerformance')?.innerText?.trim()||'Not available';
+   const goals=$('saGoalProgress')?.innerText?.trim()||'No creator goals set';
+   const range=$('saChartPeriodLabel')?.textContent?.trim()||'Latest available period';
+   const rows=creatorTimelineRows||[];
+   const end=Math.max(0,rows.length-creatorTimelineOffset),begin=Math.max(0,end-CREATOR_CHART_WINDOW);
+   const visible=rows.slice(begin,end).slice(-30);
+   const filename='SocialApp-Creator-Report-'+new Date().toISOString().slice(0,10)+'.pdf';
+
+   // Build a standards-compliant, text-based PDF locally: no CDN, library, or internet dependency.
+   const report=[
+    'SOCIALAPP CREATOR REPORT','Generated: '+new Date().toLocaleString(),'Selected analytics window: '+range,'',
+    'ACCOUNT OVERVIEW',...stats.map(([k,v])=>k+': '+v),'',
+    'ANALYTICS TIMELINE','Date | Views | Unique viewers | Likes | Comments | Followers',
+    ...(visible.length?visible.map(r=>[String(r.day||'').slice(0,10),r.total_views??0,r.unique_viewers??0,r.likes??0,r.comments??0,r.followers_total??'-'].join(' | ')):['Daily timeline data is not available.']),
+    '','AUDIENCE INSIGHTS',audience,'','POST PERFORMANCE',posts,'','CREATOR GOALS',goals,'',
+    'Private aggregate creator analytics. This report does not include viewer identities.'
+   ];
+   const clean=s=>String(s??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[•·–—]/g,'-').replace(/[^\x20-\x7E]/g,'?');
+   const wrap=(value,max=92)=>{const words=clean(value).split(/\s+/);const out=[];let line='';for(const word of words){if(!word)continue;if(line&&line.length+1+word.length>max){out.push(line);line=word;}else line+=(line?' ':'')+word;}out.push(line);return out;};
+   const lines=report.flatMap(v=>wrap(v));
+   const pageLines=lines.reduce((a,_,i)=>{if(i%54===0)a.push([]);a[a.length-1].push(lines[i]);return a;},[]);
+   const objects=[];
+   const add=o=>(objects.push(o),objects.length);
+   const catalogId=add('');
+   const pagesId=add('');
+   const fontId=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+   const pageIds=[];
+   for(const page of pageLines){
+    const commands=['BT','/F1 9 Tf','48 794 Td','12 TL'];
+    page.forEach((line,i)=>{if(i)commands.push('T*');commands.push('('+clean(line).replace(/([\\()])/g,'\\$1')+') Tj');});
+    commands.push('ET');
+    const stream=commands.join('\n');
+    const contentId=add('<< /Length '+stream.length+' >>\nstream\n'+stream+'\nendstream');
+    const pageId=add('<< /Type /Page /Parent '+pagesId+' 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 '+fontId+' 0 R >> >> /Contents '+contentId+' 0 R >>');
+    pageIds.push(pageId);
    }
-   const JsPDF=window.jspdf?.jsPDF;
-   if(!JsPDF)throw new Error('PDF generator is unavailable.');
-   const doc=new JsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-   const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
-   const margin=16,contentW=pageW-margin*2;let y=20;
-   const addPageIfNeeded=(needed=8)=>{if(y+needed>pageH-17){doc.addPage();y=20;}};
-   const heading=(title)=>{addPageIfNeeded(13);doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(92,43,145);doc.text(title,margin,y);y+=8;};
-   const paragraph=(value,size=9)=>{
-    doc.setFont('helvetica','normal');doc.setFontSize(size);doc.setTextColor(55,48,62);
-    const lines=doc.splitTextToSize(String(value||'—').replace(/\s+/g,' '),contentW);
-    lines.forEach(line=>{addPageIfNeeded(5);doc.text(line,margin,y);y+=4.7;});y+=2;
-   };
-   doc.setFillColor(35,20,52);doc.rect(0,0,pageW,39,'F');
-   doc.setFont('helvetica','bold');doc.setFontSize(20);doc.setTextColor(255,255,255);doc.text('SocialApp Creator Report',margin,19);
-   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(220,204,237);doc.text('Generated '+new Date().toLocaleString(),margin,28);
-   y=49;heading('Account overview');
-   stats.forEach(([label,value])=>{
-    addPageIfNeeded(9);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(70,60,78);doc.text(label,margin,y);
-    doc.setFont('helvetica','bold');doc.setTextColor(35,25,45);doc.text(String(value).slice(0,55),pageW-margin,y,{align:'right'});doc.setDrawColor(225,219,231);doc.line(margin,y+2,pageW-margin,y+2);y+=8;
-   });
-   y+=4;heading('Analytics timeline');paragraph('Selected window: '+range);
-   if(visible.length){
-    const daily=visible.slice(-30);
-    const headers=['Date','Views','Unique','Likes','Comments','Followers'];
-    const widths=[31,27,27,25,27,31];
-    const drawRow=(cells,isHeader=false)=>{
-     addPageIfNeeded(8);let x=margin;
-     if(isHeader){doc.setFillColor(239,232,247);doc.rect(margin,y-5,contentW,7,'F');}
-     doc.setFont('helvetica',isHeader?'bold':'normal');doc.setFontSize(7.5);doc.setTextColor(isHeader?80:65,isHeader?48:58,isHeader?112:75);
-     cells.forEach((cell,i)=>{doc.text(String(cell??'—').slice(0,18),x+1,y);x+=widths[i];});y+=7;
-    };
-    drawRow(headers,true);
-    daily.forEach(r=>drawRow([String(r.day||'').slice(0,10),r.total_views??0,r.unique_viewers??0,r.likes??0,r.comments??0,r.followers_total??'—']));
-   }else paragraph('Daily timeline data is not available for this report.');
-   y+=3;heading('Audience insights');paragraph(audience);
-   heading('Post performance');paragraph(posts);
-   heading('Creator goals');paragraph(goals);
-   addPageIfNeeded(15);y+=4;doc.setFontSize(8);doc.setTextColor(115,105,122);
-   doc.text('Private aggregate creator analytics. This report does not include viewer identities.',margin,y);
-   const pageCount=doc.getNumberOfPages();
-   for(let page=1;page<=pageCount;page++){doc.setPage(page);doc.setFontSize(8);doc.setTextColor(130,120,138);doc.text('SocialApp · '+page+' / '+pageCount,pageW-margin,pageH-9,{align:'right'});}
-   doc.save(safeFile);
+   objects[catalogId-1]='<< /Type /Catalog /Pages '+pagesId+' 0 R >>';
+   objects[pagesId-1]='<< /Type /Pages /Kids ['+pageIds.map(id=>id+' 0 R').join(' ')+'] /Count '+pageIds.length+' >>';
+   let pdf='%PDF-1.4\n%SocialApp\n',offsets=[0];
+   objects.forEach((obj,i)=>{offsets.push(pdf.length);pdf+=(i+1)+' 0 obj\n'+obj+'\nendobj\n';});
+   const xref=pdf.length;pdf+='xref\n0 '+(objects.length+1)+'\n0000000000 65535 f \n';
+   for(let i=1;i<offsets.length;i++)pdf+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+   pdf+='trailer\n<< /Size '+(objects.length+1)+' /Root '+catalogId+' 0 R >>\nstartxref\n'+xref+'\n%%EOF';
+   const blob=new Blob([pdf],{type:'application/pdf'}),url=URL.createObjectURL(blob);
+   const a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),3000);
    if(button)button.textContent='✓ PDF downloaded';
   }catch(error){
    console.error('Creator PDF export failed:',error);
-   // Keep a usable export path when a browser blocks the PDF library CDN.
-   const text=['SOCIALAPP CREATOR REPORT','Generated: '+new Date().toLocaleString(),'Selected window: '+range,'',...stats.map(x=>x.join(': ')),'','AUDIENCE INSIGHTS',audience,'','POST PERFORMANCE',posts,'','CREATOR GOALS',goals,'','Daily timeline',...visible.map(r=>[r.day,r.total_views,r.unique_viewers,r.likes,r.comments,r.followers_total].join(' | '))].join('\n');
-   const blob=new Blob([text],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=safeFile.replace(/\.pdf$/,'.txt');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
-   alert('A PDF could not be generated because the PDF library was unavailable. A report text file has been downloaded instead. Check your connection and try PDF export again.');
+   alert('The creator report could not be created. Please try again.');
   }finally{if(button){button.disabled=false;setTimeout(()=>{button.textContent=original;},1800);}}
  }
 
