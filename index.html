@@ -59599,17 +59599,43 @@ https://instagram.com/yourname"></textarea>
   try{const {data,error}=await sb.from('posts').select('id,content,created_at,visibility,file_url,media_type').eq('user_id',uid).order('created_at',{ascending:false}).limit(50);if(error)throw error;
    creatorPortfolioPosts=Array.isArray(data)?data:[];host.innerHTML='';
    if(!creatorPortfolioPosts.length){host.textContent='No posts found to feature.';return;}
-   creatorPortfolioPosts.forEach(post=>{const row=document.createElement('label');row.style.cssText='display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid #38264b;cursor:pointer';const cb=document.createElement('input');cb.type='checkbox';cb.checked=creatorPortfolioFeatured.includes(String(post.id));cb.disabled=post.visibility!=='public'&& !cb.checked;cb.style.cssText='width:18px;height:18px;flex:0 0 auto;margin-top:2px';const body=document.createElement('span');body.style.cssText='font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere';body.textContent=(post.content||'[Media-only post]').slice(0,180)+' · '+(post.visibility||'public');cb.addEventListener('change',()=>{if(cb.checked){if(creatorPortfolioFeatured.length>=6){cb.checked=false;message('saPortfolioMessage','Choose no more than 6 featured posts.');return;}creatorPortfolioFeatured.push(String(post.id));}else creatorPortfolioFeatured=creatorPortfolioFeatured.filter(id=>id!==String(post.id));saveCreatorPortfolio(true);});row.append(cb,body);host.appendChild(row);});renderCreatorPortfolioPreview();
+   creatorPortfolioPosts.forEach(post=>{const row=document.createElement('label');row.style.cssText='display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid #38264b;cursor:pointer';const cb=document.createElement('input');cb.type='checkbox';cb.checked=creatorPortfolioFeatured.includes(String(post.id));cb.disabled=post.visibility!=='public'&& !cb.checked;cb.style.cssText='width:18px;height:18px;flex:0 0 auto;margin-top:2px';const body=document.createElement('span');body.style.cssText='font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere';body.textContent=(post.content|| (post.file_url?'[Media post]':'[Post without text]')).slice(0,180)+' · '+(post.visibility||'public');cb.addEventListener('change',()=>{if(cb.checked){if(creatorPortfolioFeatured.length>=6){cb.checked=false;message('saPortfolioMessage','Choose no more than 6 featured posts.');return;}creatorPortfolioFeatured.push(String(post.id));}else creatorPortfolioFeatured=creatorPortfolioFeatured.filter(id=>id!==String(post.id));saveCreatorPortfolio(true);});row.append(cb,body);host.appendChild(row);});renderCreatorPortfolioPreview();
   }catch(e){console.error('Portfolio posts failed to load:',e);host.textContent='Could not load posts. Check your posts SELECT policy and try again.';}
+ }
+ async function portfolioMediaForExport(bucket,value,kind){
+  if(!value)return '';
+  try{
+   const signed=await window.getAuthorizedStorageUrl(bucket,value,604800);
+   if(!signed)return '';
+   // Embed reasonably sized files so exported portfolios remain self-contained.
+   const response=await fetch(signed);
+   if(response.ok){const blob=await response.blob();const limit=kind==='video'?15*1024*1024:10*1024*1024;
+    if(blob.size<=limit){return await new Promise(resolve=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||''));reader.onerror=()=>resolve(signed);reader.readAsDataURL(blob);});}
+   }
+   // Very large videos fall back to a time-limited signed URL.
+   return signed;
+  }catch(e){console.warn('Portfolio media export failed:',e);return '';}
  }
  async function exportCreatorPortfolio(){
   const data=await saveCreatorPortfolio(true);if(!data)return;
-  const featured=creatorPortfolioPosts.filter(p=>data.featured.includes(String(p.id))&&p.visibility==='public');
-  const name=window.currentUser?.user_metadata?.name||window.currentUser?.user_metadata?.full_name||'SocialApp Creator';
-  const linkHtml=data.links.map(url=>'<a href="'+portfolioEscape(url)+'" rel="noopener noreferrer">'+portfolioEscape(new URL(url).hostname)+'</a>').join(' · ');
-  const postHtml=featured.map(p=>'<article>'+(p.file_url?'<'+(p.media_type==='video'?'video controls':'img')+' src=\"'+portfolioEscape(p.file_url)+'\" '+(p.media_type==='video'?'':'alt=\"Featured creator post\"')+' style=\"width:100%;max-height:420px;object-fit:cover;border-radius:12px\"></'+(p.media_type==='video'?'video':'img')+'>':'')+'<p>'+portfolioEscape(p.content||'Featured post').replace(/\n/g,'<br>')+'</p><small>'+portfolioEscape(p.created_at?new Date(p.created_at).toLocaleDateString():'SocialApp post')+'</small></article>').join('\n');
-  const html='<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+portfolioEscape(data.title||name)+'</title><style>body{margin:0;background:#100d16;color:#f7f2fb;font:16px system-ui;line-height:1.6}.wrap{max-width:760px;margin:auto;padding:32px 20px}header{padding:30px;border-radius:20px;background:linear-gradient(135deg,#48206b,#17111f);border:1px solid #70449a}h1{margin:0 0 8px}article{padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523}a{color:#d5aaff;margin-right:12px}small{color:#bdaacb}.foot{margin-top:32px;color:#9d8ca9;font-size:12px}</style><main class="wrap"><header><small>'+portfolioEscape(name)+'</small><h1>'+portfolioEscape(data.title||'Creator portfolio')+'</h1><p>'+portfolioEscape(data.bio).replace(/\n/g,'<br>')+'</p>'+linkHtml+'</header><h2>Featured content</h2>'+(postHtml||'<p>No featured public posts selected.</p>')+'<p class="foot">Creator portfolio exported from SocialApp. Only selected public post text is included.</p></main></html>';
-  const blob=new Blob([html],{type:'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='SocialApp-Creator-Portfolio.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);message('saPortfolioMessage','HTML exported. Your live portfolio URL is '+portfolioPublicUrl(data.slug)+' (available when Publish is enabled).');
+  const featured=creatorPortfolioPosts.filter(p=>data.featured.includes(String(p.id))&&String(p.visibility||'public').toLowerCase()==='public');
+  const profile=creatorPortfolioProfile||{};
+  const name=profile.name||window.currentUser?.user_metadata?.name||window.currentUser?.user_metadata?.full_name||'SocialApp Creator';
+  const avatar=profile.avatar_url?await portfolioMediaForExport('avatars',profile.avatar_url,'image'):'';
+  const linkHtml=data.links.map(url=>'<a href="'+portfolioEscape(url)+'" target="_blank" rel="noopener noreferrer">'+portfolioEscape(new URL(url).hostname)+'</a>').join(' · ');
+  const postCards=[];
+  for(const p of featured){
+   const media=p.file_url?await portfolioMediaForExport('posts_media',p.file_url,p.media_type):'';
+   const isVideo=p.media_type==='video';
+   const mediaHtml=media?(isVideo?'<video controls playsinline preload="metadata" src="'+portfolioEscape(media)+'" style="width:100%;max-height:420px;border-radius:12px;background:#000"></video>':'<img loading="lazy" src="'+portfolioEscape(media)+'" alt="Featured creator post" style="width:100%;max-height:420px;object-fit:cover;border-radius:12px">'):'';
+   const content=p.content?portfolioEscape(p.content).replace(/\n/g,'<br>'):(media?'':'Media unavailable in this export');
+   postCards.push('<article>'+mediaHtml+(content?'<p>'+content+'</p>':'')+'<small>'+portfolioEscape(p.created_at?new Date(p.created_at).toLocaleDateString():'SocialApp post')+'</small></article>');
+  }
+  const avatarHtml=avatar?'<img src="'+portfolioEscape(avatar)+'" alt="Creator profile" style="width:88px;height:88px;border-radius:50%;object-fit:cover;margin-bottom:12px">':'';
+  const verified=profile.verified===true?'<span class="verified">✓ Verified</span>':'';
+  const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+portfolioEscape(data.title||name)+'</title><style>*{box-sizing:border-box}body{margin:0;background:#100d16;color:#f7f2fb;font:16px system-ui;line-height:1.6}.wrap{max-width:760px;margin:auto;padding:32px 20px}header{padding:30px;border-radius:20px;background:linear-gradient(135deg,#48206b,#17111f);border:1px solid #70449a}h1{margin:0 0 8px}article{padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523;overflow:hidden}article img,article video{display:block}a{color:#d5aaff;margin-right:12px}small{color:#bdaacb}.verified{display:inline-block;color:#c8a4ff;border:1px solid #70449a;border-radius:20px;padding:1px 8px;font-size:12px}.foot{margin-top:32px;color:#9d8ca9;font-size:12px}</style></head><body><main class="wrap"><header>'+avatarHtml+'<div style="color:#d5aaff;font-size:13px">'+portfolioEscape(name)+' '+verified+'</div><h1>'+portfolioEscape(data.title||'Creator portfolio')+'</h1><p style="white-space:pre-wrap">'+portfolioEscape(data.bio).replace(/\n/g,'<br>')+'</p>'+linkHtml+'</header><h2>Featured content</h2>'+(postCards.join('\n')||'<p>No featured public posts selected.</p>')+'<p class="foot">Creator portfolio exported from SocialApp. Public featured content only.</p></main></body></html>';
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='SocialApp-Creator-Portfolio.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);
+  message('saPortfolioMessage','Portfolio exported. Images and smaller videos are embedded in the file; very large videos use a secure link that expires after 7 days.');
  }
  function calendarDateKey(date){const d=new Date(date);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
  function renderCreatorCalendar(){
