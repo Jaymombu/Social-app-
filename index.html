@@ -58804,6 +58804,37 @@ window.reportComment=id=>window.submitUserReport("comment",id);
 #saCreatorStudio .sa-stat span{color:#b9a9c8;font-size:11px;letter-spacing:.25px}
 #saCreatorStudio .sa-chart-footnote{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.025);color:#94869f}
 @media(max-width:520px){#saCreatorStudio .sa-chart-grid{grid-template-columns:1fr;gap:10px}#saCreatorStudio .sa-card.sa-chart-card,#saCreatorStudio .sa-chart-grid .sa-card{padding:14px;border-radius:16px}#saCreatorStudio .sa-chart{min-height:155px}#saCreatorStudio .sa-chart svg{width:100%}#saCreatorStudio .sa-top-row{grid-template-columns:minmax(0,1fr) 48px}}
+
+#saCreatorStudio .sa-chart svg{touch-action:pan-y pinch-zoom;cursor:crosshair;outline:none}
+#saCreatorStudio .sa-chart svg:focus-visible{outline:1px solid rgba(180,119,255,.7);outline-offset:3px;border-radius:8px}
+#saCreatorStudio .sa-scrub-line,#saCreatorStudio .sa-eng-scrub-line{filter:drop-shadow(0 0 3px rgba(255,255,255,.55))}
+
+#saCreatorStudio .sa-insights-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}
+#saCreatorStudio .sa-insight-card,#saCreatorStudio .sa-goals-card{background:linear-gradient(145deg,rgba(43,31,57,.98),rgba(27,20,38,.98));border:1px solid rgba(190,145,235,.14);border-radius:17px;padding:15px;margin:12px 0}
+#saCreatorStudio .sa-insight-content{font-size:13px;color:#d9cce5;line-height:1.65}
+#saCreatorStudio .sa-insight-metric{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}
+#saCreatorStudio .sa-insight-metric:last-child{border:0}
+#saCreatorStudio .sa-insight-metric strong{color:#fff}
+#saCreatorStudio .sa-goals-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-items:end}
+#saCreatorStudio .sa-goals-form label{font-size:12px;color:#c7bacf}
+#saCreatorStudio .sa-goals-form input{display:block;width:100%;box-sizing:border-box;margin-top:6px;background:#17111f;color:#fff;border:1px solid #58416b;border-radius:10px;padding:11px}
+#saCreatorStudio .sa-goal-row{margin:12px 0}.sa-goal-row>div:first-child{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#d9cce5;margin-bottom:6px}
+#saCreatorStudio .sa-goal-track{height:9px;border-radius:99px;background:#382943;overflow:hidden}#saCreatorStudio .sa-goal-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#8a2be2,#42c6b1);transition:width .5s}
+#saCreatorStudio .sa-report-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0 18px}#saCreatorStudio .sa-report-actions span{font-size:11px;color:#a99ab7}
+@media(max-width:560px){#saCreatorStudio .sa-insights-grid{grid-template-columns:1fr}#saCreatorStudio .sa-goals-form{grid-template-columns:1fr}}
+#saCreatorStudio .sa-chart-period{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:4px 0 14px;padding:12px;border:1px solid rgba(190,145,235,.16);border-radius:16px;background:linear-gradient(120deg,rgba(138,43,226,.12),rgba(66,198,177,.06))}
+#saCreatorStudio .sa-chart-period>div{min-width:145px;text-align:center;display:flex;flex-direction:column;gap:3px}
+#saCreatorStudio .sa-chart-period strong{font-size:13px;color:#f3eaff}
+#saCreatorStudio .sa-chart-period span{font-size:10px;color:#aa9bb8}
+#saCreatorStudio .sa-chart-period button{min-height:36px;padding:8px 12px}
+#saCreatorStudio .sa-chart-period button:disabled{opacity:.35;cursor:not-allowed}
+#saCreatorStudio .sa-chart-today{background:#284a47!important}
+#saCreatorStudio .sa-chart svg .sa-scrub-line,#saCreatorStudio .sa-chart svg .sa-eng-scrub-line{transition:x1 .18s ease,x2 .18s ease,opacity .18s ease}
+#saCreatorStudio .sa-chart svg .sa-scrub-dot{transition:cx .18s ease,cy .18s ease,opacity .18s ease}
+#saCreatorStudio .sa-chart svg .sa-scrub-tip{transition:transform .18s ease,opacity .18s ease}
+#saCreatorStudio .sa-chart svg .sa-main-line{stroke-dasharray:1200;stroke-dashoffset:1200;animation:saCreatorLineDraw 1.1s cubic-bezier(.22,.7,.2,1) forwards}
+@keyframes saCreatorLineDraw{to{stroke-dashoffset:0}}
+@media(max-width:520px){#saCreatorStudio .sa-chart-period{gap:7px;padding:9px}#saCreatorStudio .sa-chart-period>div{order:-1;flex:1 0 100%}#saCreatorStudio .sa-chart-period button{flex:1;padding:8px 9px;font-size:12px}}
 </style>
 <div id="saCreatorStudio" role="dialog" aria-modal="true" aria-label="Premium Creator Studio">
  <div class="sa-shell">
@@ -58812,6 +58843,18 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   <section id="saCreatorAnalytics">
    <p style="color:#c7bacf">Your account performance from available SocialApp records. Views are only shown if your database records them.</p>
    <div class="sa-grid"><div class="sa-stat"><span>Published posts</span><strong id="saStatPosts">—</strong></div><div class="sa-stat"><span>Total likes</span><strong id="saStatLikes">—</strong></div><div class="sa-stat"><span>Comments received</span><strong id="saStatComments">—</strong></div><div class="sa-stat"><span>Current followers</span><strong id="saStatFollowers">—</strong></div><div class="sa-stat"><span>Viewing sessions</span><strong id="saStatViews">—</strong></div><div class="sa-stat"><span>Unique viewers</span><strong id="saStatReach">—</strong></div></div>
+   <div class="sa-insights-grid">
+    <div class="sa-card sa-insight-card"><div class="sa-chart-heading"><strong>Audience insights</strong><span>Aggregated audience activity · no viewer identities</span></div><div id="saAudienceInsights" class="sa-insight-content">Loading audience insights…</div></div>
+    <div class="sa-card sa-insight-card"><div class="sa-chart-heading"><strong>Post performance</strong><span>Compare your strongest posts</span></div><div id="saPostPerformance" class="sa-insight-content">Loading post performance…</div></div>
+   </div>
+   <div class="sa-card sa-goals-card"><div class="sa-chart-heading"><strong>Creator goals</strong><span>Personal targets saved on this device</span></div><div class="sa-goals-form"><label>Follower target<input id="saGoalFollowers" type="number" min="1" max="100000000" placeholder="e.g. 1000"></label><label>30-day views target<input id="saGoalViews" type="number" min="1" max="1000000000" placeholder="e.g. 5000"></label><button class="sa-btn" id="saSaveGoals" type="button">Save goals</button></div><div id="saGoalProgress" class="sa-goal-progress">Set a target to track your progress.</div></div>
+   <div class="sa-report-actions"><button class="sa-btn" id="saExportCreatorReport" type="button">↓ Export creator report (PDF)</button><span>Opens a print-ready report. Choose “Save as PDF” in your browser.</span></div>
+   <div class="sa-chart-period" aria-label="Chart date range">
+    <button class="sa-btn" id="saChartPrev" type="button" aria-label="Show previous 30 days">‹ Previous</button>
+    <div><strong id="saChartPeriodLabel">Latest 30 days</strong><span id="saChartPeriodHint">Select or drag across a graph to inspect a day</span></div>
+    <button class="sa-btn" id="saChartNext" type="button" aria-label="Show next 30 days" disabled>Next ›</button>
+    <button class="sa-btn sa-chart-today" id="saChartToday" type="button">Today</button>
+   </div>
    <div class="sa-chart-grid">
     <div class="sa-card sa-chart-card"><div class="sa-chart-heading"><strong>Views over time</strong><span>Daily viewing sessions · last 30 days</span></div><div id="saChartViews" class="sa-chart">Loading chart…</div></div>
     <div class="sa-card sa-chart-card"><div class="sa-chart-heading"><strong>Unique viewers</strong><span>Distinct viewers per day · last 30 days</span></div><div id="saChartUnique" class="sa-chart">Loading chart…</div></div>
@@ -58859,6 +58902,9 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  'use strict';
  const $=id=>document.getElementById(id);
  let creatorUserId=null;
+ let creatorTimelineRows=[];
+ let creatorTimelineOffset=0;
+ const CREATOR_CHART_WINDOW=30;
  let editingScheduleId=null;
  let editingExistingFileUrl=null;
  let editingExistingMediaType=null;
@@ -58905,42 +58951,239 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    }
    if(!creatorUserId){alert('Your login session is not available yet. Please reopen Settings, or sign out and sign in again if the problem continues.');return;}
    if(!(await hasAccess())){alert('An active, verified SocialApp Premium subscription is required.'); if(typeof window.openPremiumScreen==='function')window.openPremiumScreen();return;}
-   updateScheduleTimezone(); show(); await Promise.all([loadAnalytics(),loadStyle(),loadSchedules()]);
+   updateScheduleTimezone(); show();
+   try{
+    await Promise.allSettled([loadAnalytics(),loadStyle(),loadSchedules()]);
+   }catch(error){
+    console.error('Creator Studio initialization failed:',error);
+    const host=$('saCreatorAnalytics');
+    if(host){const note=document.createElement('p');note.style.cssText='padding:12px;border:1px solid #8057a0;border-radius:12px;color:#f0dfff';note.textContent='Some Creator Studio data could not load. The studio is still open; check your connection and retry.';host.prepend(note);}
+   }
  }
- function chartSvg(values,label,color){
+ function creatorDayLabel(day,full=false){
+  if(!day)return '';
+  const d=new Date(String(day).slice(0,10)+'T12:00:00Z');
+  if(Number.isNaN(d.getTime()))return String(day).slice(0,10);
+  return d.toLocaleDateString(undefined,full?{weekday:'long',month:'short',day:'numeric'}:{weekday:'short'});
+ }
+ function attachCreatorScrubber(host,rows,metricKeys){
+  const svg=host?.querySelector('svg');if(!svg||!rows?.length)return;
+  const line=svg.querySelector('.sa-scrub-line'),dot=svg.querySelector('.sa-scrub-dot'),tip=svg.querySelector('.sa-scrub-tip'),tipText=svg.querySelector('.sa-scrub-text');
+  const points=svg.querySelectorAll('.sa-data-point');
+  if(!line||!dot||!tip||!tipText)return;
+  const left=42,right=14,plotW=640-left-right;
+  const move=event=>{
+   const rect=svg.getBoundingClientRect();
+   if(!rect.width)return;
+   const x=(event.clientX-rect.left)/rect.width*640;
+   const index=Math.max(0,Math.min(rows.length-1,Math.round((x-left)/Math.max(1,plotW/(rows.length-1)))));
+   const point=points[index];if(!point)return;
+   const px=Number(point.getAttribute('cx')),py=Number(point.getAttribute('cy'));
+   line.setAttribute('x1',px);line.setAttribute('x2',px);line.setAttribute('y1','16');line.setAttribute('y2','176');
+   dot.setAttribute('cx',px);dot.setAttribute('cy',py);
+   line.style.opacity='1';dot.style.opacity='1';tip.style.opacity='1';
+   const row=rows[index],day=creatorDayLabel(row.day,true);
+   const metrics=metricKeys.map(m=>`${m.label}: ${Math.max(0,Number(row[m.key])||0).toLocaleString()}`).join('   ·   ');
+   tipText.textContent=`${day}  |  ${metrics}`;
+   const tipWidth=Math.min(350,Math.max(190,tipText.getComputedTextLength()+24));
+   const tx=Math.max(8,Math.min(640-tipWidth-8,px-tipWidth/2));
+   tip.setAttribute('transform',`translate(${tx},${Math.max(20,py-48)})`);
+   const bg=tip.querySelector('rect');if(bg)bg.setAttribute('width',tipWidth);
+  };
+  svg.addEventListener('pointerdown',e=>{svg.setPointerCapture?.(e.pointerId);move(e);});
+  svg.addEventListener('pointermove',move,{passive:true});
+  svg.addEventListener('click',move);
+  svg.setAttribute('tabindex','0');svg.setAttribute('aria-label','Interactive chart. Drag or tap to inspect each day.');
+  svg.addEventListener('keydown',e=>{
+   if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;
+   e.preventDefault();
+   const current=Number(svg.dataset.selectedIndex||0);
+   const next=Math.max(0,Math.min(rows.length-1,current+(e.key==='ArrowRight'?1:-1)));
+   svg.dataset.selectedIndex=String(next);
+   const point=points[next];if(point){const r=svg.getBoundingClientRect();move({clientX:r.left+Number(point.getAttribute('cx'))/640*r.width});}
+  });
+  const originalMove=move;
+  const wrapped=event=>{const rect=svg.getBoundingClientRect();const x=(event.clientX-rect.left)/rect.width*640;svg.dataset.selectedIndex=String(Math.max(0,Math.min(rows.length-1,Math.round((x-left)/Math.max(1,plotW/(rows.length-1))))));originalMove(event);};
+  svg.removeEventListener('pointermove',move);svg.addEventListener('pointermove',wrapped,{passive:true});
+  svg.removeEventListener('pointerdown',move);svg.addEventListener('pointerdown',e=>{svg.setPointerCapture?.(e.pointerId);wrapped(e);});
+  svg.removeEventListener('click',move);svg.addEventListener('click',wrapped);
+  const now=new Date(),todayKey=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+   let initialIndex=rows.findIndex(r=>String(r.day||'').slice(0,10)===todayKey);
+   if(initialIndex<0)initialIndex=rows.length-1;
+   const initialPoint=points[initialIndex];
+   if(initialPoint){const rect=svg.getBoundingClientRect();svg.dataset.selectedIndex=String(initialIndex);wrapped({clientX:rect.left+Number(initialPoint.getAttribute('cx'))/640*rect.width});}
+ }
+ function chartSvg(values,labels,color){
   const nums=(values||[]).map(v=>Math.max(0,Number(v)||0));
   const w=640,h=210,left=42,right=14,top=16,bottom=34,plotW=w-left-right,plotH=h-top-bottom;
   const max=Math.max(1,...nums),step=nums.length>1?plotW/(nums.length-1):plotW;
   const coords=nums.map((v,i)=>({x:left+i*step,y:top+plotH-(v/max)*plotH,v}));
-  const points=coords.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
   const curve=coords.length>1?coords.map((p,i)=>i===0?`M ${p.x} ${p.y}`:`L ${p.x} ${p.y}`).join(' '):(coords.length?`M ${coords[0].x} ${coords[0].y}`:'');
   const area=coords.length?`${curve} L ${coords[coords.length-1].x} ${top+plotH} L ${left} ${top+plotH} Z`:'';
   const gid='saGrad'+String(color).replace(/[^a-z0-9]/gi,'');
   const grid=[0,.5,1].map(t=>{const y=top+plotH-t*plotH;return `<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="#ffffff" stroke-opacity=".075" stroke-dasharray="3 7"/><text x="${left-10}" y="${y+4}" fill="#8f829e" font-size="11" text-anchor="end">${Math.round(max*t)}</text>`}).join('');
-  const ticks=[0,Math.floor((nums.length-1)/2),Math.max(0,nums.length-1)].filter((v,i,a)=>a.indexOf(v)===i&&nums.length).map(i=>`<text x="${coords[i].x}" y="${h-8}" fill="#9588a2" font-size="11" text-anchor="${i===0?'start':i===nums.length-1?'end':'middle'}">${label[i]||''}</text>`).join('');
-  const dots=coords.map((p,i)=>`<circle cx="${p.x}" cy="${p.y}" r="7" fill="${color}" opacity=".13"/><circle cx="${p.x}" cy="${p.y}" r="3.5" fill="#21172b" stroke="${color}" stroke-width="2"><title>${label[i]||''}: ${p.v.toLocaleString()}</title></circle>`).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${nums.length} daily data points"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity=".32"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#${gid})"/><path d="${curve}" fill="none" stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}${ticks}</svg>`;
+  const ticks=[0,Math.floor((nums.length-1)/2),Math.max(0,nums.length-1)].filter((v,i,a)=>a.indexOf(v)===i&&nums.length).map(i=>`<text x="${coords[i].x}" y="${h-8}" fill="#9588a2" font-size="11" text-anchor="${i===0?'start':i===nums.length-1?'end':'middle'}">${labels[i]||''}</text>`).join('');
+  const dots=coords.map((p,i)=>`<circle class="sa-data-point" cx="${p.x}" cy="${p.y}" r="3.5" fill="#21172b" stroke="${color}" stroke-width="2"><title>${labels[i]||''}: ${p.v.toLocaleString()}</title></circle>`).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Interactive daily chart"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity=".32"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#${gid})"/><path class="sa-main-line" d="${curve}" fill="none" stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}<line class="sa-scrub-line" x1="${left}" x2="${left}" y1="16" y2="176" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 4" opacity="0" pointer-events="none"/><circle class="sa-scrub-dot" cx="${left}" cy="${top+plotH}" r="6" fill="${color}" stroke="#fff" stroke-width="2" opacity="0" pointer-events="none"/><g class="sa-scrub-tip" opacity="0" pointer-events="none"><rect x="0" y="-19" width="210" height="28" rx="8" fill="#120d1b" stroke="${color}" stroke-opacity=".7"/><text class="sa-scrub-text" x="10" y="0" fill="#fff" font-size="11" font-weight="650">Select a day</text></g>${ticks}</svg>`;
  }
  function renderCreatorLineChart(id,rows,key,color){
   const host=$(id);if(!host)return;
   if(!rows?.length){host.textContent='No daily data available yet.';return;}
-  host.innerHTML=chartSvg(rows.map(r=>r[key]),rows.map(r=>String(r.day||'').slice(5)),color);
+  host.innerHTML=chartSvg(rows.map(r=>r[key]),rows.map(r=>creatorDayLabel(r.day)),color);
+  attachCreatorScrubber(host,rows,[{key,label:key==='total_views'?'Views':key==='unique_viewers'?'Unique viewers':'Followers'}]);
  }
  function renderCreatorEngagement(rows){
   const host=$('saChartEngagement');if(!host)return;
   if(!rows?.length){host.textContent='No engagement data available yet.';return;}
   const likes=rows.map(r=>Math.max(0,Number(r.likes)||0)),comments=rows.map(r=>Math.max(0,Number(r.comments)||0));
   const max=Math.max(1,...likes,...comments),w=640,h=210,left=35,right=10,top=16,bottom=34,plotH=h-top-bottom,group=(w-left-right)/rows.length,bw=Math.max(2,Math.min(8,group*.3));
-  const bars=rows.map((r,i)=>{const x=left+i*group+group/2;const lh=likes[i]/max*plotH,ch=comments[i]/max*plotH;return `<rect x="${x-bw-2}" y="${top+plotH-lh}" width="${bw}" height="${lh}" rx="${Math.min(4,bw/2)}" fill="#b477ff"><title>${r.day}: ${likes[i]} likes</title></rect><rect x="${x+2}" y="${top+plotH-ch}" width="${bw}" height="${ch}" rx="${Math.min(4,bw/2)}" fill="#42d6bb"><title>${r.day}: ${comments[i]} comments</title></rect>`}).join('');
+  const bars=rows.map((r,i)=>{const x=left+i*group+group/2;const lh=likes[i]/max*plotH,ch=comments[i]/max*plotH;return `<rect class="sa-engagement-point" data-index="${i}" x="${x-bw-2}" y="${top+plotH-lh}" width="${bw}" height="${lh}" rx="${Math.min(4,bw/2)}" fill="#b477ff"><title>${r.day}: ${likes[i]} likes</title></rect><rect class="sa-engagement-point" data-index="${i}" x="${x+2}" y="${top+plotH-ch}" width="${bw}" height="${ch}" rx="${Math.min(4,bw/2)}" fill="#42d6bb"><title>${r.day}: ${comments[i]} comments</title></rect>`}).join('');
   const grid=[0,.5,1].map(t=>{const y=top+plotH-t*plotH;return `<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="#ffffff" stroke-opacity=".075" stroke-dasharray="3 7"/>`}).join('');
-  const ticks=[0,Math.floor((rows.length-1)/2),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>`<text x="${left+i*group+group/2}" y="${h-8}" fill="#9588a2" font-size="11" text-anchor="middle">${String(rows[i].day||'').slice(5)}</text>`).join('');
-  host.innerHTML=`<div class="sa-chart-legend"><span><i style="background:#b477ff"></i>Likes</span><span><i style="background:#42d6bb"></i>Comments</span></div><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Daily likes and comments">${grid}${bars}${ticks}</svg>`;
+  const ticks=[0,Math.floor((rows.length-1)/2),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>`<text x="${left+i*group+group/2}" y="${h-8}" fill="#9588a2" font-size="11" text-anchor="middle">${creatorDayLabel(rows[i].day)}</text>`).join('');
+  const cx=i=>left+i*group+group/2;
+  host.innerHTML=`<div class="sa-chart-legend"><span><i style="background:#b477ff"></i>Likes</span><span><i style="background:#42d6bb"></i>Comments</span></div><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Interactive daily likes and comments"><g>${grid}${bars}</g><line class="sa-eng-scrub-line" x1="${cx(0)}" x2="${cx(0)}" y1="16" y2="176" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 4" opacity="0" pointer-events="none"/><g class="sa-eng-scrub-tip" opacity="0" pointer-events="none"><rect x="0" y="-19" width="230" height="28" rx="8" fill="#120d1b" stroke="#b477ff"/><text x="10" y="0" fill="#fff" font-size="11" font-weight="650">Select a day</text></g>${ticks}</svg>`;
+  const svg=host.querySelector('svg'),line=svg.querySelector('.sa-eng-scrub-line'),tip=svg.querySelector('.sa-eng-scrub-tip'),tipText=tip.querySelector('text');
+  const selectDay=e=>{const rect=svg.getBoundingClientRect();if(!rect.width)return;const x=(e.clientX-rect.left)/rect.width*w;const i=Math.max(0,Math.min(rows.length-1,Math.round((x-left)/Math.max(1,group))));const px=cx(i);line.setAttribute('x1',px);line.setAttribute('x2',px);line.style.opacity='1';tip.style.opacity='1';tipText.textContent=`${creatorDayLabel(rows[i].day,true)}  |  ${likes[i]} likes  ·  ${comments[i]} comments`;tip.setAttribute('transform',`translate(${Math.max(8,Math.min(w-238,px-115))},${top+8})`);};
+  svg.addEventListener('pointerdown',e=>{svg.setPointerCapture?.(e.pointerId);selectDay(e);});svg.addEventListener('pointermove',selectDay,{passive:true});svg.addEventListener('click',selectDay);svg.setAttribute('tabindex','0');svg.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();const i=Math.max(0,Math.min(rows.length-1,Number(svg.dataset.dayIndex||0)+(e.key==='ArrowRight'?1:-1)));svg.dataset.dayIndex=String(i);const r=svg.getBoundingClientRect();selectDay({clientX:r.left+cx(i)/w*r.width});});
  }
  function renderCreatorTopChart(posts,viewsByPost,likesFor){
   const host=$('saChartTopPosts');if(!host)return;host.innerHTML='';
   if(!posts?.length){host.textContent='No posts found yet.';return;}
   const max=Math.max(1,...posts.map(p=>viewsByPost.get(String(p.id))||0));
   posts.forEach((post,i)=>{const views=viewsByPost.get(String(post.id))||0;const row=document.createElement('div');row.className='sa-top-row';const left=document.createElement('div');const title=document.createElement('div');title.className='sa-top-title';title.textContent=`${i+1}. ${(post.content||'[Media post]').slice(0,90)}`;const track=document.createElement('div');track.className='sa-top-track';const fill=document.createElement('div');fill.className='sa-top-fill';fill.style.width=(views/max*100)+'%';track.appendChild(fill);left.append(title,track);const value=document.createElement('div');value.className='sa-top-value';value.textContent=views.toLocaleString();row.append(left,value);host.appendChild(row);});
+ }
+ function creatorGoalKey(){return 'socialapp_creator_goals_'+String(creatorUserId||'');}
+ function safeText(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+ function renderCreatorGoals(followers,views){
+  let goals={};try{goals=JSON.parse(localStorage.getItem(creatorGoalKey())||'{}')||{};}catch(e){}
+  if($('saGoalFollowers'))$('saGoalFollowers').value=goals.followers||'';
+  if($('saGoalViews'))$('saGoalViews').value=goals.views||'';
+  const items=[{label:'Followers',target:Number(goals.followers)||0,current:Number(followers)||0},{label:'30-day views',target:Number(goals.views)||0,current:Number(views)||0}].filter(x=>x.target>0);
+  const host=$('saGoalProgress');if(!host)return;
+  if(!items.length){host.textContent='Set a follower or views target to track your progress.';return;}
+  host.innerHTML=items.map(x=>{const pct=Math.min(100,Math.round(x.current/x.target*100));return `<div class="sa-goal-row"><div><span>${x.label}: ${x.current.toLocaleString()} / ${x.target.toLocaleString()}</span><strong>${pct}%</strong></div><div class="sa-goal-track"><div class="sa-goal-fill" style="width:${pct}%"></div></div></div>`;}).join('');
+ }
+ function saveCreatorGoals(){
+  const followers=Math.max(0,Number($('saGoalFollowers')?.value)||0),views=Math.max(0,Number($('saGoalViews')?.value)||0);
+  try{localStorage.setItem(creatorGoalKey(),JSON.stringify({followers,views}));message('saGoalProgress','Goals saved on this device.');}
+  catch(e){message('saGoalProgress','Could not save goals in this browser.');}
+ }
+ function renderAudienceInsights(rows){
+  const host=$('saAudienceInsights');if(!host)return;
+  if(!rows?.length){host.textContent='Audience timeline is unavailable. Apply the secure analytics timeline migration to enable these insights.';return;}
+  const best=[...rows].sort((a,b)=>(Number(b.total_views)||0)-(Number(a.total_views)||0))[0];
+  const totalViews=rows.reduce((n,r)=>n+(Number(r.total_views)||0),0);
+  const totalUnique=rows.reduce((n,r)=>n+(Number(r.unique_viewers)||0),0);
+  const days=rows.length;
+  const activity=best?new Date(String(best.day).slice(0,10)+'T12:00:00Z').toLocaleDateString(undefined,{weekday:'long'}):'—';
+  host.innerHTML=`<div class="sa-insight-metric"><span>Best day by viewing sessions</span><strong>${safeText(activity)}</strong></div><div class="sa-insight-metric"><span>Viewing sessions in period</span><strong>${totalViews.toLocaleString()}</strong></div><div class="sa-insight-metric"><span>Daily unique-viewer counts summed</span><strong>${totalUnique.toLocaleString()}</strong></div><div class="sa-insight-metric"><span>Days in report</span><strong>${days}</strong></div><p style="font-size:11px;color:#a99ab7;margin:9px 0 0">Daily unique counts are not deduplicated across the full period. Hour-of-day activity is not currently supplied by the timeline, so no best posting time is guessed.</p>`;
+ }
+ function renderPostPerformance(posts,viewsByPost,likesFor){
+  const host=$('saPostPerformance');if(!host)return;
+  if(!posts?.length){host.textContent='Publish posts to see performance comparisons.';return;}
+  host.innerHTML=posts.slice(0,5).map((p,i)=>{const views=Number(viewsByPost.get(String(p.id))||0),likes=Number(likesFor(p)||0);const comments=Number(p.comments_count||0);const title=(p.content||'[Media post]').slice(0,74);return `<div class="sa-insight-metric"><span>${i+1}. ${safeText(title)}<br><small style="color:#a99ab7">${views.toLocaleString()} views · ${likes.toLocaleString()} likes${comments?' · '+comments.toLocaleString()+' comments':''}</small></span><strong>${views.toLocaleString()}</strong></div>`;}).join('');
+ }
+ async function exportCreatorReport(){
+  const button=$('saExportCreatorReport');
+  const original=button?.textContent||'↓ Export creator report (PDF)';
+  if(button){button.disabled=true;button.textContent='Preparing PDF…';}
+  const ids=['saStatPosts','saStatLikes','saStatComments','saStatFollowers','saStatViews','saStatReach'];
+  const labels=['Published posts','Total likes','Comments received','Current followers','Viewing sessions','Unique viewers'];
+  const stats=ids.map((id,i)=>[labels[i],$(id)?.textContent?.trim()||'—']);
+  const audience=$('saAudienceInsights')?.innerText?.trim()||'Not available';
+  const posts=$('saPostPerformance')?.innerText?.trim()||'Not available';
+  const goals=$('saGoalProgress')?.innerText?.trim()||'No creator goals set';
+  const range=$('saChartPeriodLabel')?.textContent?.trim()||'Latest available period';
+  const rows=creatorTimelineRows||[];
+  const end=Math.max(0,rows.length-creatorTimelineOffset),begin=Math.max(0,end-CREATOR_CHART_WINDOW);
+  const visible=rows.slice(begin,end);
+  const safeFile='SocialApp-Creator-Report-'+new Date().toISOString().slice(0,10)+'.pdf';
+  try{
+   if(!window.jspdf?.jsPDF){
+    await new Promise((resolve,reject)=>{
+     const script=document.createElement('script');
+     script.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js';
+     script.onload=resolve;script.onerror=()=>reject(new Error('PDF library could not be loaded.'));
+     document.head.appendChild(script);
+    });
+   }
+   const JsPDF=window.jspdf?.jsPDF;
+   if(!JsPDF)throw new Error('PDF generator is unavailable.');
+   const doc=new JsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+   const pageW=doc.internal.pageSize.getWidth(),pageH=doc.internal.pageSize.getHeight();
+   const margin=16,contentW=pageW-margin*2;let y=20;
+   const addPageIfNeeded=(needed=8)=>{if(y+needed>pageH-17){doc.addPage();y=20;}};
+   const heading=(title)=>{addPageIfNeeded(13);doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(92,43,145);doc.text(title,margin,y);y+=8;};
+   const paragraph=(value,size=9)=>{
+    doc.setFont('helvetica','normal');doc.setFontSize(size);doc.setTextColor(55,48,62);
+    const lines=doc.splitTextToSize(String(value||'—').replace(/\s+/g,' '),contentW);
+    lines.forEach(line=>{addPageIfNeeded(5);doc.text(line,margin,y);y+=4.7;});y+=2;
+   };
+   doc.setFillColor(35,20,52);doc.rect(0,0,pageW,39,'F');
+   doc.setFont('helvetica','bold');doc.setFontSize(20);doc.setTextColor(255,255,255);doc.text('SocialApp Creator Report',margin,19);
+   doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(220,204,237);doc.text('Generated '+new Date().toLocaleString(),margin,28);
+   y=49;heading('Account overview');
+   stats.forEach(([label,value])=>{
+    addPageIfNeeded(9);doc.setFont('helvetica','normal');doc.setFontSize(9);doc.setTextColor(70,60,78);doc.text(label,margin,y);
+    doc.setFont('helvetica','bold');doc.setTextColor(35,25,45);doc.text(String(value).slice(0,55),pageW-margin,y,{align:'right'});doc.setDrawColor(225,219,231);doc.line(margin,y+2,pageW-margin,y+2);y+=8;
+   });
+   y+=4;heading('Analytics timeline');paragraph('Selected window: '+range);
+   if(visible.length){
+    const daily=visible.slice(-30);
+    const headers=['Date','Views','Unique','Likes','Comments','Followers'];
+    const widths=[31,27,27,25,27,31];
+    const drawRow=(cells,isHeader=false)=>{
+     addPageIfNeeded(8);let x=margin;
+     if(isHeader){doc.setFillColor(239,232,247);doc.rect(margin,y-5,contentW,7,'F');}
+     doc.setFont('helvetica',isHeader?'bold':'normal');doc.setFontSize(7.5);doc.setTextColor(isHeader?80:65,isHeader?48:58,isHeader?112:75);
+     cells.forEach((cell,i)=>{doc.text(String(cell??'—').slice(0,18),x+1,y);x+=widths[i];});y+=7;
+    };
+    drawRow(headers,true);
+    daily.forEach(r=>drawRow([String(r.day||'').slice(0,10),r.total_views??0,r.unique_viewers??0,r.likes??0,r.comments??0,r.followers_total??'—']));
+   }else paragraph('Daily timeline data is not available for this report.');
+   y+=3;heading('Audience insights');paragraph(audience);
+   heading('Post performance');paragraph(posts);
+   heading('Creator goals');paragraph(goals);
+   addPageIfNeeded(15);y+=4;doc.setFontSize(8);doc.setTextColor(115,105,122);
+   doc.text('Private aggregate creator analytics. This report does not include viewer identities.',margin,y);
+   const pageCount=doc.getNumberOfPages();
+   for(let page=1;page<=pageCount;page++){doc.setPage(page);doc.setFontSize(8);doc.setTextColor(130,120,138);doc.text('SocialApp · '+page+' / '+pageCount,pageW-margin,pageH-9,{align:'right'});}
+   doc.save(safeFile);
+   if(button)button.textContent='✓ PDF downloaded';
+  }catch(error){
+   console.error('Creator PDF export failed:',error);
+   // Keep a usable export path when a browser blocks the PDF library CDN.
+   const text=['SOCIALAPP CREATOR REPORT','Generated: '+new Date().toLocaleString(),'Selected window: '+range,'',...stats.map(x=>x.join(': ')),'','AUDIENCE INSIGHTS',audience,'','POST PERFORMANCE',posts,'','CREATOR GOALS',goals,'','Daily timeline',...visible.map(r=>[r.day,r.total_views,r.unique_viewers,r.likes,r.comments,r.followers_total].join(' | '))].join('\n');
+   const blob=new Blob([text],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=safeFile.replace(/\.pdf$/,'.txt');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);
+   alert('A PDF could not be generated because the PDF library was unavailable. A report text file has been downloaded instead. Check your connection and try PDF export again.');
+  }finally{if(button){button.disabled=false;setTimeout(()=>{button.textContent=original;},1800);}}
+ }
+
+ function renderCreatorTimelineWindow(){
+  const rows=creatorTimelineRows||[];
+  const end=Math.max(0,rows.length-creatorTimelineOffset);
+  const start=Math.max(0,end-CREATOR_CHART_WINDOW);
+  const visible=rows.slice(start,end);
+  const label=$('saChartPeriodLabel'),hint=$('saChartPeriodHint');
+  if(label){
+   if(visible.length){
+    const first=creatorDayLabel(visible[0].day,true),last=creatorDayLabel(visible[visible.length-1].day,true);
+    label.textContent=first===last?first:first+' — '+last;
+   }else label.textContent='No daily data';
+  }
+  if(hint)hint.textContent=creatorTimelineOffset===0?'Latest available days · Today is highlighted when present':'Historical window · drag or tap a graph to inspect a day';
+  const prev=$('saChartPrev'),next=$('saChartNext');
+  if(prev)prev.disabled=start===0;
+  if(next)next.disabled=creatorTimelineOffset===0;
+  renderCreatorLineChart('saChartViews',visible,'total_views','#a855f7');
+  renderCreatorLineChart('saChartUnique',visible,'unique_viewers','#42c6b1');
+  renderCreatorEngagement(visible);
+  renderCreatorLineChart('saChartFollowers',visible,'followers_total','#e5a84b');
+ }
+ function shiftCreatorChartWindow(direction){
+  const maxOffset=Math.max(0,Math.floor(Math.max(0,creatorTimelineRows.length-1)/CREATOR_CHART_WINDOW)*CREATOR_CHART_WINDOW);
+  creatorTimelineOffset=Math.max(0,Math.min(maxOffset,creatorTimelineOffset+direction*CREATOR_CHART_WINDOW));
+  renderCreatorTimelineWindow();
  }
  async function loadAnalytics(){
   const sb=client(); if(!sb||!creatorUserId)return;
@@ -58988,7 +59231,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    // creator's own posts, likes, comments, view events and follower records.
    let timelineRows=[];
    try{
-    const {data,error}=await sb.rpc('get_creator_analytics_timeline',{p_days:30});
+    const {data,error}=await sb.rpc('get_creator_analytics_timeline',{p_days:90});
     if(error)throw error;
     timelineRows=Array.isArray(data)?data:[];
    }catch(timelineError){
@@ -59043,11 +59286,13 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     return new Date(b.created_at||0)-new Date(a.created_at||0);
    }).slice(0,5);
 
-   renderCreatorLineChart('saChartViews',timelineRows,'total_views','#a855f7');
-   renderCreatorLineChart('saChartUnique',timelineRows,'unique_viewers','#42c6b1');
-   renderCreatorEngagement(timelineRows);
-   renderCreatorLineChart('saChartFollowers',timelineRows,'followers_total','#e5a84b');
+   creatorTimelineRows=timelineRows.slice().sort((a,b)=>String(a.day).localeCompare(String(b.day)));
+   creatorTimelineOffset=0;
+   renderCreatorTimelineWindow();
    renderCreatorTopChart(topPosts,viewsByPost,likesFor);
+   renderAudienceInsights(timelineRows);
+   renderPostPerformance(topPosts,viewsByPost,likesFor);
+   renderCreatorGoals(followersR.count??0,Number(creatorViewTotals.total_views||0));
    const host=$('saCreatorTopPosts');
    host.innerHTML='';
    for(const post of topPosts){
@@ -59265,14 +59510,14 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  // Refresh statuses while Creator Studio is open on the Schedule tab.
  // Silent refreshes avoid showing a loading message every time.
  setInterval(()=>{
-  const modal=$('saCreatorStudio');
+  const modal=document.getElementById('saCreatorStudio');
   const panel=$('saCreatorSchedule');
   if(modal?.style.display==='block'&&panel?.style.display!=='none'&&document.visibilityState==='visible'){
    loadSchedules(true);
   }
  },30000);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-sa-tab]');if(!b)return;const key=b.dataset.saTab;['Analytics','Appearance','Schedule'].forEach(x=>{const panel=$('saCreator'+x);if(panel)panel.style.display=(x.toLowerCase()===key)?'block':'none';});if(key==='schedule'){const field=$('saScheduleAt');if(field){const min=new Date(Date.now()+60000);const pad=n=>String(n).padStart(2,'0');field.min=min.getFullYear()+'-'+pad(min.getMonth()+1)+'-'+pad(min.getDate())+'T'+pad(min.getHours())+':'+pad(min.getMinutes());}}});
- $('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saScheduleSave').addEventListener('click',saveSchedule);$('saScheduleCancelEdit').addEventListener('click',()=>{resetScheduleEditor();message('saScheduleMsg','Stopped editing.');});$('saScheduleRemoveMedia').addEventListener('change',e=>{if(e.target.checked){$('saScheduleMedia').value='';clearSchedulePreview();$('saScheduleMediaInfo').textContent='Existing attachment will be removed when you save.';}else if(editingExistingFileUrl){$('saScheduleMediaInfo').textContent='Keeping the current attachment unless you choose a replacement.';showExistingSchedulePreview();}});$('saScheduleMedia').addEventListener('change',()=>{const f=$('saScheduleMedia').files?.[0];if(f){if(!f.type.startsWith('image/')&&!f.type.startsWith('video/')){message('saScheduleMsg','Choose a valid image or video file.');return;}schedulePreviewObjectUrl=URL.createObjectURL(f);renderSchedulePreview(schedulePreviewObjectUrl,f.type.startsWith('video/')?'video':'image','Preview before publishing · '+f.name);$('saScheduleRemoveMedia').checked=false;$('saScheduleMediaInfo').textContent='Selected: '+f.name+' ('+Math.max(1,Math.round(f.size/1024/1024))+' MB)';}else if(editingExistingFileUrl&&!$('saScheduleRemoveMedia').checked){showExistingSchedulePreview();}else clearSchedulePreview();});
+ $('saChartPrev')?.addEventListener('click',()=>shiftCreatorChartWindow(1));$('saChartNext')?.addEventListener('click',()=>shiftCreatorChartWindow(-1));$('saChartToday')?.addEventListener('click',()=>{creatorTimelineOffset=0;renderCreatorTimelineWindow();});$('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saSaveGoals')?.addEventListener('click',saveCreatorGoals);$('saExportCreatorReport')?.addEventListener('click',exportCreatorReport);$('saScheduleSave').addEventListener('click',saveSchedule);$('saScheduleCancelEdit').addEventListener('click',()=>{resetScheduleEditor();message('saScheduleMsg','Stopped editing.');});$('saScheduleRemoveMedia').addEventListener('change',e=>{if(e.target.checked){$('saScheduleMedia').value='';clearSchedulePreview();$('saScheduleMediaInfo').textContent='Existing attachment will be removed when you save.';}else if(editingExistingFileUrl){$('saScheduleMediaInfo').textContent='Keeping the current attachment unless you choose a replacement.';showExistingSchedulePreview();}});$('saScheduleMedia').addEventListener('change',()=>{const f=$('saScheduleMedia').files?.[0];if(f){if(!f.type.startsWith('image/')&&!f.type.startsWith('video/')){message('saScheduleMsg','Choose a valid image or video file.');return;}schedulePreviewObjectUrl=URL.createObjectURL(f);renderSchedulePreview(schedulePreviewObjectUrl,f.type.startsWith('video/')?'video':'image','Preview before publishing · '+f.name);$('saScheduleRemoveMedia').checked=false;$('saScheduleMediaInfo').textContent='Selected: '+f.name+' ('+Math.max(1,Math.round(f.size/1024/1024))+' MB)';}else if(editingExistingFileUrl&&!$('saScheduleRemoveMedia').checked){showExistingSchedulePreview();}else clearSchedulePreview();});
  window.openSocialAppCreatorStudio=open;
  function injectButton(){
    const screen=$('profileSettingsScreen');
@@ -59297,6 +59542,20 @@ window.reportComment=id=>window.submitUserReport("comment",id);
  }
  const obs=new MutationObserver(injectButton);obs.observe(document.documentElement,{childList:true,subtree:true});setInterval(injectButton,1500);injectButton();
 })();
+  // Creator Studio-only error boundary: keep the main SocialApp usable and surface
+  // recoverable errors inside the open studio instead of leaving an empty overlay.
+  window.addEventListener('error',function(event){
+   const modal=document.getElementById('saCreatorStudio');
+   if(!modal||modal.style.display!=='block')return;
+   console.error('Creator Studio runtime error:',event.error||event.message);
+   const panel=document.getElementById('saCreatorAnalytics');
+   if(panel&&!panel.querySelector('[data-sa-runtime-warning]')){
+    const warning=document.createElement('div');warning.dataset.saRuntimeWarning='1';
+    warning.style.cssText='margin:10px 0;padding:11px 13px;border:1px solid #a56b42;border-radius:12px;background:#2a1b13;color:#ffe0c7;font-size:13px';
+    warning.textContent='A Creator Studio component encountered an error. You can close the studio and continue using SocialApp; retry after refreshing if needed.';
+    panel.prepend(warning);
+   }
+  });
 </script>
 
 
