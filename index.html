@@ -58761,7 +58761,49 @@ window.reportComment=id=>window.submitUserReport("comment",id);
 #saScheduleMediaPreview img,#saScheduleMediaPreview video{display:block;width:100%;max-height:340px;object-fit:contain;border-radius:10px;background:#050408}
 #saScheduleMediaPreview .sa-preview-caption{font-size:12px;color:#cdb5e4;margin:8px 2px 0;overflow-wrap:anywhere}
 #saCreatorStudio label{font-size:13px;font-weight:650;color:#e2d5ed}
+
+#saCreatorStudio .sa-stat span{display:block;color:#b9a9c8;font-size:12px;font-weight:650;letter-spacing:.2px}
+#saCreatorStudio .sa-stat strong{font-size:25px;line-height:1.2;font-variant-numeric:tabular-nums}
+#saCreatorStudio .sa-chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px}
+#saCreatorStudio .sa-chart-card{min-width:0;overflow:hidden}
+#saCreatorStudio .sa-chart-heading{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+#saCreatorStudio .sa-chart-heading strong{font-size:15px;color:#fff}
+#saCreatorStudio .sa-chart-heading span{font-size:11px;color:#a99ab7}
+#saCreatorStudio .sa-chart{width:100%;min-height:175px;overflow:hidden;color:#a99ab7;font-size:12px}
+#saCreatorStudio .sa-chart svg{display:block;width:100%;height:auto;overflow:visible}
+#saCreatorStudio .sa-chart-footnote{font-size:11px;line-height:1.5;color:#8f849b;margin:12px 2px}
+#saCreatorStudio .sa-top-row{display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:9px;align-items:center;margin:13px 0}
+#saCreatorStudio .sa-top-title{font-size:12px;color:#e8e0ef;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#saCreatorStudio .sa-top-track{height:8px;border-radius:99px;background:#30263a;overflow:hidden;margin-top:6px}
+#saCreatorStudio .sa-top-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#7130b5,#bd7cff)}
+#saCreatorStudio .sa-top-value{text-align:right;font-size:12px;color:#d7c2ed;font-variant-numeric:tabular-nums}
+@media(max-width:520px){#saCreatorStudio .sa-chart-grid{grid-template-columns:1fr}#saCreatorStudio .sa-chart{min-height:150px}#saCreatorStudio .sa-stat strong{font-size:22px}}
 @media(max-width:520px){#saCreatorStudio{padding:11px}#saCreatorStudio .sa-card{padding:13px}#saCreatorStudio .sa-grid{gap:8px}#saCreatorStudio .sa-stat{padding:11px}#saCreatorStudio .sa-btn{padding:11px 13px}}
+
+/* Creator Studio analytics — modern glass cards and refined chart styling */
+#saCreatorStudio{--sa-violet:#a970f5;--sa-mint:#42d6bb;--sa-ink:#100d17;--sa-panel:#1b1524;--sa-line:rgba(255,255,255,.075)}
+#saCreatorStudio .sa-chart-grid{gap:12px;margin-top:14px}
+#saCreatorStudio .sa-card.sa-chart-card,#saCreatorStudio .sa-chart-grid .sa-card{position:relative;background:linear-gradient(145deg,rgba(42,30,57,.96),rgba(24,18,34,.98));border:1px solid rgba(190,145,235,.13);border-radius:19px;padding:17px;box-shadow:0 12px 30px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.035)}
+#saCreatorStudio .sa-chart-card:before{content:"";position:absolute;inset:0 18px auto;height:1px;background:linear-gradient(90deg,transparent,rgba(190,145,235,.28),transparent);pointer-events:none}
+#saCreatorStudio .sa-chart-heading{gap:5px;margin-bottom:12px}
+#saCreatorStudio .sa-chart-heading strong{font-size:14px;font-weight:750;letter-spacing:.1px;color:#f7f1ff}
+#saCreatorStudio .sa-chart-heading span{font-size:11px;color:#a99bb7;letter-spacing:.15px}
+#saCreatorStudio .sa-chart{min-height:180px;color:#a99bb7;font-size:12px}
+#saCreatorStudio .sa-chart svg{filter:drop-shadow(0 5px 10px rgba(0,0,0,.12))}
+#saCreatorStudio .sa-chart-legend{display:flex;gap:16px;align-items:center;margin:0 0 8px 4px;color:#c6b9d2;font-size:11px;font-weight:600}
+#saCreatorStudio .sa-chart-legend span{display:inline-flex;align-items:center;gap:6px}
+#saCreatorStudio .sa-chart-legend i{display:inline-block;width:8px;height:8px;border-radius:3px}
+#saCreatorStudio .sa-top-chart{padding:2px 0 4px}
+#saCreatorStudio .sa-top-row{grid-template-columns:minmax(0,1fr) 54px;gap:12px;margin:15px 0}
+#saCreatorStudio .sa-top-title{font-size:12px;font-weight:600;color:#eee5f8}
+#saCreatorStudio .sa-top-track{height:9px;border-radius:99px;background:rgba(255,255,255,.075);margin-top:8px}
+#saCreatorStudio .sa-top-fill{background:linear-gradient(90deg,#7541c8 0%,#b477ff 55%,#e0b9ff 100%);box-shadow:0 0 14px rgba(164,104,235,.28);transition:width .55s cubic-bezier(.2,.8,.2,1)}
+#saCreatorStudio .sa-top-value{font-size:12px;font-weight:750;color:#e0c9ff}
+#saCreatorStudio .sa-stat{position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(43,31,57,.98),rgba(27,20,38,.98));border:1px solid rgba(190,145,235,.12);border-radius:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,.035)}
+#saCreatorStudio .sa-stat strong{display:block;margin-top:7px;color:#fff;font-weight:800;letter-spacing:-.7px}
+#saCreatorStudio .sa-stat span{color:#b9a9c8;font-size:11px;letter-spacing:.25px}
+#saCreatorStudio .sa-chart-footnote{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.025);color:#94869f}
+@media(max-width:520px){#saCreatorStudio .sa-chart-grid{grid-template-columns:1fr;gap:10px}#saCreatorStudio .sa-card.sa-chart-card,#saCreatorStudio .sa-chart-grid .sa-card{padding:14px;border-radius:16px}#saCreatorStudio .sa-chart{min-height:155px}#saCreatorStudio .sa-chart svg{width:100%}#saCreatorStudio .sa-top-row{grid-template-columns:minmax(0,1fr) 48px}}
 </style>
 <div id="saCreatorStudio" role="dialog" aria-modal="true" aria-label="Premium Creator Studio">
  <div class="sa-shell">
@@ -58769,9 +58811,15 @@ window.reportComment=id=>window.submitUserReport("comment",id);
   <div class="sa-tabs"><button data-sa-tab="analytics">📊 Analytics</button><button data-sa-tab="appearance">🎨 Profile style</button><button data-sa-tab="schedule">🗓️ Schedule post</button></div>
   <section id="saCreatorAnalytics">
    <p style="color:#c7bacf">Your account performance from available SocialApp records. Views are only shown if your database records them.</p>
-   <div class="sa-grid"><div class="sa-stat">Your posts<strong id="saStatPosts">—</strong></div><div class="sa-stat">Likes recorded<strong id="saStatLikes">—</strong></div><div class="sa-stat">Comments received<strong id="saStatComments">—</strong></div><div class="sa-stat">Followers<strong id="saStatFollowers">—</strong></div><div class="sa-stat">Total views<strong id="saStatViews">—</strong></div><div class="sa-stat">Unique viewers<strong id="saStatReach">—</strong></div></div>
-   <div class="sa-card"><strong>Top-performing posts</strong><div id="saCreatorTopPosts" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
-   <p style="font-size:12px;color:#9c8fa6">This first version reports counts from accessible posts, follows, and comments. It does not invent reach or views where tracking columns are unavailable.</p>
+   <div class="sa-grid"><div class="sa-stat"><span>Published posts</span><strong id="saStatPosts">—</strong></div><div class="sa-stat"><span>Total likes</span><strong id="saStatLikes">—</strong></div><div class="sa-stat"><span>Comments received</span><strong id="saStatComments">—</strong></div><div class="sa-stat"><span>Current followers</span><strong id="saStatFollowers">—</strong></div><div class="sa-stat"><span>Viewing sessions</span><strong id="saStatViews">—</strong></div><div class="sa-stat"><span>Unique viewers</span><strong id="saStatReach">—</strong></div></div>
+   <div class="sa-chart-grid">
+    <div class="sa-card sa-chart-card"><div class="sa-chart-heading"><strong>Views over time</strong><span>Daily viewing sessions · last 30 days</span></div><div id="saChartViews" class="sa-chart">Loading chart…</div></div>
+    <div class="sa-card sa-chart-card"><div class="sa-chart-heading"><strong>Unique viewers</strong><span>Distinct viewers per day · last 30 days</span></div><div id="saChartUnique" class="sa-chart">Loading chart…</div></div>
+    <div class="sa-card sa-chart-card"><div class="sa-chart-heading"><strong>Engagement</strong><span>Likes and comments per day · last 30 days</span></div><div id="saChartEngagement" class="sa-chart">Loading chart…</div></div>
+    <div class="sa-card sa-chart-card"><div class="sa-chart-heading"><strong>Follower growth</strong><span>Total followers over time · last 30 days</span></div><div id="saChartFollowers" class="sa-chart">Loading chart…</div></div>
+   </div>
+   <div class="sa-card"><div class="sa-chart-heading"><strong>Top-performing posts</strong><span>Ranked by total viewing sessions</span></div><div id="saChartTopPosts" class="sa-top-chart">Loading…</div><div id="saCreatorTopPosts" style="margin-top:12px;color:#d8cce0"></div></div>
+   <p class="sa-chart-footnote">Analytics are private to your account. Daily charts use the secure Creator Studio analytics function and do not expose viewer identities.</p>
   </section>
   <section id="saCreatorAppearance" style="display:none">
    <div class="sa-card"><h3 style="margin-top:0">Profile accent</h3><label for="saCreatorColor">Choose your profile accent color</label><input id="saCreatorColor" type="color" value="#8a2be2" style="height:54px;padding:5px"><label for="saCreatorBanner">Profile banner image URL</label><input id="saCreatorBanner" type="url" placeholder="https://…"><button class="sa-btn" id="saCreatorSaveStyle">Save appearance</button><p id="saCreatorStyleMsg" style="color:#c7bacf"></p></div>
@@ -58859,6 +58907,41 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if(!(await hasAccess())){alert('An active, verified SocialApp Premium subscription is required.'); if(typeof window.openPremiumScreen==='function')window.openPremiumScreen();return;}
    updateScheduleTimezone(); show(); await Promise.all([loadAnalytics(),loadStyle(),loadSchedules()]);
  }
+ function chartSvg(values,label,color){
+  const nums=(values||[]).map(v=>Math.max(0,Number(v)||0));
+  const w=640,h=210,left=42,right=14,top=16,bottom=34,plotW=w-left-right,plotH=h-top-bottom;
+  const max=Math.max(1,...nums),step=nums.length>1?plotW/(nums.length-1):plotW;
+  const coords=nums.map((v,i)=>({x:left+i*step,y:top+plotH-(v/max)*plotH,v}));
+  const points=coords.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const curve=coords.length>1?coords.map((p,i)=>i===0?`M ${p.x} ${p.y}`:`L ${p.x} ${p.y}`).join(' '):(coords.length?`M ${coords[0].x} ${coords[0].y}`:'');
+  const area=coords.length?`${curve} L ${coords[coords.length-1].x} ${top+plotH} L ${left} ${top+plotH} Z`:'';
+  const gid='saGrad'+String(color).replace(/[^a-z0-9]/gi,'');
+  const grid=[0,.5,1].map(t=>{const y=top+plotH-t*plotH;return `<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="#ffffff" stroke-opacity=".075" stroke-dasharray="3 7"/><text x="${left-10}" y="${y+4}" fill="#8f829e" font-size="11" text-anchor="end">${Math.round(max*t)}</text>`}).join('');
+  const ticks=[0,Math.floor((nums.length-1)/2),Math.max(0,nums.length-1)].filter((v,i,a)=>a.indexOf(v)===i&&nums.length).map(i=>`<text x="${coords[i].x}" y="${h-8}" fill="#9588a2" font-size="11" text-anchor="${i===0?'start':i===nums.length-1?'end':'middle'}">${label[i]||''}</text>`).join('');
+  const dots=coords.map((p,i)=>`<circle cx="${p.x}" cy="${p.y}" r="7" fill="${color}" opacity=".13"/><circle cx="${p.x}" cy="${p.y}" r="3.5" fill="#21172b" stroke="${color}" stroke-width="2"><title>${label[i]||''}: ${p.v.toLocaleString()}</title></circle>`).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${nums.length} daily data points"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity=".32"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>${grid}<path d="${area}" fill="url(#${gid})"/><path d="${curve}" fill="none" stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>${dots}${ticks}</svg>`;
+ }
+ function renderCreatorLineChart(id,rows,key,color){
+  const host=$(id);if(!host)return;
+  if(!rows?.length){host.textContent='No daily data available yet.';return;}
+  host.innerHTML=chartSvg(rows.map(r=>r[key]),rows.map(r=>String(r.day||'').slice(5)),color);
+ }
+ function renderCreatorEngagement(rows){
+  const host=$('saChartEngagement');if(!host)return;
+  if(!rows?.length){host.textContent='No engagement data available yet.';return;}
+  const likes=rows.map(r=>Math.max(0,Number(r.likes)||0)),comments=rows.map(r=>Math.max(0,Number(r.comments)||0));
+  const max=Math.max(1,...likes,...comments),w=640,h=210,left=35,right=10,top=16,bottom=34,plotH=h-top-bottom,group=(w-left-right)/rows.length,bw=Math.max(2,Math.min(8,group*.3));
+  const bars=rows.map((r,i)=>{const x=left+i*group+group/2;const lh=likes[i]/max*plotH,ch=comments[i]/max*plotH;return `<rect x="${x-bw-2}" y="${top+plotH-lh}" width="${bw}" height="${lh}" rx="${Math.min(4,bw/2)}" fill="#b477ff"><title>${r.day}: ${likes[i]} likes</title></rect><rect x="${x+2}" y="${top+plotH-ch}" width="${bw}" height="${ch}" rx="${Math.min(4,bw/2)}" fill="#42d6bb"><title>${r.day}: ${comments[i]} comments</title></rect>`}).join('');
+  const grid=[0,.5,1].map(t=>{const y=top+plotH-t*plotH;return `<line x1="${left}" y1="${y}" x2="${w-right}" y2="${y}" stroke="#ffffff" stroke-opacity=".075" stroke-dasharray="3 7"/>`}).join('');
+  const ticks=[0,Math.floor((rows.length-1)/2),rows.length-1].filter((v,i,a)=>a.indexOf(v)===i).map(i=>`<text x="${left+i*group+group/2}" y="${h-8}" fill="#9588a2" font-size="11" text-anchor="middle">${String(rows[i].day||'').slice(5)}</text>`).join('');
+  host.innerHTML=`<div class="sa-chart-legend"><span><i style="background:#b477ff"></i>Likes</span><span><i style="background:#42d6bb"></i>Comments</span></div><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Daily likes and comments">${grid}${bars}${ticks}</svg>`;
+ }
+ function renderCreatorTopChart(posts,viewsByPost,likesFor){
+  const host=$('saChartTopPosts');if(!host)return;host.innerHTML='';
+  if(!posts?.length){host.textContent='No posts found yet.';return;}
+  const max=Math.max(1,...posts.map(p=>viewsByPost.get(String(p.id))||0));
+  posts.forEach((post,i)=>{const views=viewsByPost.get(String(post.id))||0;const row=document.createElement('div');row.className='sa-top-row';const left=document.createElement('div');const title=document.createElement('div');title.className='sa-top-title';title.textContent=`${i+1}. ${(post.content||'[Media post]').slice(0,90)}`;const track=document.createElement('div');track.className='sa-top-track';const fill=document.createElement('div');fill.className='sa-top-fill';fill.style.width=(views/max*100)+'%';track.appendChild(fill);left.append(title,track);const value=document.createElement('div');value.className='sa-top-value';value.textContent=views.toLocaleString();row.append(left,value);host.appendChild(row);});
+ }
  async function loadAnalytics(){
   const sb=client(); if(!sb||!creatorUserId)return;
   ['saStatPosts','saStatLikes','saStatComments','saStatFollowers','saStatViews','saStatReach'].forEach(id=>$(id).textContent='…');
@@ -58900,6 +58983,16 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    }catch(viewError){
     viewsAvailable=false;
     console.warn('Creator aggregate view analytics are unavailable:',viewError);
+   }
+   // The timeline RPC is owner-scoped and aggregates only the signed-in
+   // creator's own posts, likes, comments, view events and follower records.
+   let timelineRows=[];
+   try{
+    const {data,error}=await sb.rpc('get_creator_analytics_timeline',{p_days:30});
+    if(error)throw error;
+    timelineRows=Array.isArray(data)?data:[];
+   }catch(timelineError){
+    console.warn('Creator timeline analytics are unavailable. Apply the Creator Studio timeline SQL migration.',timelineError);
    }
    // Count comments ON the creator's posts, not comments authored by the creator.
    // Batch IDs to keep PostgREST URL/query sizes reasonable.
@@ -58950,12 +59043,13 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     return new Date(b.created_at||0)-new Date(a.created_at||0);
    }).slice(0,5);
 
+   renderCreatorLineChart('saChartViews',timelineRows,'total_views','#a855f7');
+   renderCreatorLineChart('saChartUnique',timelineRows,'unique_viewers','#42c6b1');
+   renderCreatorEngagement(timelineRows);
+   renderCreatorLineChart('saChartFollowers',timelineRows,'followers_total','#e5a84b');
+   renderCreatorTopChart(topPosts,viewsByPost,likesFor);
    const host=$('saCreatorTopPosts');
    host.innerHTML='';
-   const heading=document.createElement('div');
-   heading.textContent='Top posts by likes';
-   heading.style.cssText='font-size:13px;color:#cdb5e4;margin-bottom:4px;font-weight:700';
-   host.appendChild(heading);
    for(const post of topPosts){
     const row=document.createElement('div');
     row.style.cssText='padding:10px 0;border-bottom:1px solid #38264b';
@@ -58976,6 +59070,7 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    if($('saStatViews').textContent==='…')$('saStatViews').textContent='—';
    if($('saStatReach').textContent==='…')$('saStatReach').textContent='—';
    $('saCreatorTopPosts').textContent='Some analytics could not be loaded. Check the relevant table permissions and try again.';
+   ['saChartViews','saChartUnique','saChartEngagement','saChartFollowers','saChartTopPosts'].forEach(id=>{const el=$(id);if(el)el.textContent='Chart unavailable. Refresh Creator Studio to retry.';});
   }
  }
  async function loadStyle(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_creator_settings').select('accent_color,banner_url').eq('user_id',creatorUserId).maybeSingle();if(error)throw error;if(data){$('saCreatorColor').value=data.accent_color||'#8a2be2';$('saCreatorBanner').value=data.banner_url||'';}}catch(e){console.warn('Could not load creator style',e);}}
