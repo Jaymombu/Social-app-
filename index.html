@@ -59623,17 +59623,20 @@ https://instagram.com/yourname"></textarea>
   const name=profile.name||window.currentUser?.user_metadata?.name||window.currentUser?.user_metadata?.full_name||'SocialApp Creator';
   const avatar=profile.avatar_url?await portfolioMediaForExport('avatars',profile.avatar_url,'image'):'';
   const linkHtml=data.links.map(url=>'<a href="'+portfolioEscape(url)+'" target="_blank" rel="noopener noreferrer">'+portfolioEscape(new URL(url).hostname)+'</a>').join(' · ');
+  const appBase=location.origin+location.pathname;
+  const profileHref=appBase+'?socialapp_profile='+encodeURIComponent(profile.id||'');
   const postCards=[];
   for(const p of featured){
    const media=p.file_url?await portfolioMediaForExport('posts_media',p.file_url,p.media_type):'';
    const isVideo=p.media_type==='video';
    const mediaHtml=media?(isVideo?'<video controls playsinline preload="metadata" src="'+portfolioEscape(media)+'" style="width:100%;max-height:420px;border-radius:12px;background:#000"></video>':'<img loading="lazy" src="'+portfolioEscape(media)+'" alt="Featured creator post" style="width:100%;max-height:420px;object-fit:cover;border-radius:12px">'):'';
    const content=p.content?portfolioEscape(p.content).replace(/\n/g,'<br>'):(media?'':'Media unavailable in this export');
-   postCards.push('<article>'+mediaHtml+(content?'<p>'+content+'</p>':'')+'<small>'+portfolioEscape(p.created_at?new Date(p.created_at).toLocaleDateString():'SocialApp post')+'</small></article>');
+   const postHref=appBase+'?socialapp_post='+encodeURIComponent(p.id)+'&socialapp_owner='+encodeURIComponent(profile.id||'');
+   postCards.push('<a class="post-link" href="'+portfolioEscape(postHref)+'"><article>'+mediaHtml+(content?'<p>'+content+'</p>':'')+'<small>'+portfolioEscape(p.created_at?new Date(p.created_at).toLocaleDateString():'SocialApp post')+'</small><span class="open-label">Open original post in SocialApp →</span></article></a>');
   }
-  const avatarHtml=avatar?'<img src="'+portfolioEscape(avatar)+'" alt="Creator profile" style="width:88px;height:88px;border-radius:50%;object-fit:cover;margin-bottom:12px">':'';
+  const avatarHtml=avatar?'<a href="'+portfolioEscape(profileHref)+'"><img src="'+portfolioEscape(avatar)+'" alt="Open creator profile" style="width:88px;height:88px;border-radius:50%;object-fit:cover;margin-bottom:12px"></a>':'';
   const verified=profile.verified===true?'<span class="verified">✓ Verified</span>':'';
-  const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+portfolioEscape(data.title||name)+'</title><style>*{box-sizing:border-box}body{margin:0;background:#100d16;color:#f7f2fb;font:16px system-ui;line-height:1.6}.wrap{max-width:760px;margin:auto;padding:32px 20px}header{padding:30px;border-radius:20px;background:linear-gradient(135deg,#48206b,#17111f);border:1px solid #70449a}h1{margin:0 0 8px}article{padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523;overflow:hidden}article img,article video{display:block}a{color:#d5aaff;margin-right:12px}small{color:#bdaacb}.verified{display:inline-block;color:#c8a4ff;border:1px solid #70449a;border-radius:20px;padding:1px 8px;font-size:12px}.foot{margin-top:32px;color:#9d8ca9;font-size:12px}</style></head><body><main class="wrap"><header>'+avatarHtml+'<div style="color:#d5aaff;font-size:13px">'+portfolioEscape(name)+' '+verified+'</div><h1>'+portfolioEscape(data.title||'Creator portfolio')+'</h1><p style="white-space:pre-wrap">'+portfolioEscape(data.bio).replace(/\n/g,'<br>')+'</p>'+linkHtml+'</header><h2>Featured content</h2>'+(postCards.join('\n')||'<p>No featured public posts selected.</p>')+'<p class="foot">Creator portfolio exported from SocialApp. Public featured content only.</p></main></body></html>';
+  const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+portfolioEscape(data.title||name)+'</title><style>*{box-sizing:border-box}body{margin:0;background:#100d16;color:#f7f2fb;font:16px system-ui;line-height:1.6}.wrap{max-width:760px;margin:auto;padding:32px 20px}header{padding:30px;border-radius:20px;background:linear-gradient(135deg,#48206b,#17111f);border:1px solid #70449a}h1{margin:0 0 8px}article{padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523;overflow:hidden}.post-link{display:block;color:inherit;text-decoration:none}.open-label{display:block;color:#d5aaff;font-size:13px;margin-top:10px}article img,article video{display:block}a{color:#d5aaff;margin-right:12px}small{color:#bdaacb}.verified{display:inline-block;color:#c8a4ff;border:1px solid #70449a;border-radius:20px;padding:1px 8px;font-size:12px}.foot{margin-top:32px;color:#9d8ca9;font-size:12px}</style></head><body><main class="wrap"><header>'+avatarHtml+'<a href="'+portfolioEscape(profileHref)+'" style="color:#d5aaff;font-size:13px;text-decoration:none">'+portfolioEscape(name)+' '+verified+' · View SocialApp profile</a><h1>'+portfolioEscape(data.title||'Creator portfolio')+'</h1><p style="white-space:pre-wrap">'+portfolioEscape(data.bio).replace(/\n/g,'<br>')+'</p>'+linkHtml+'</header><h2>Featured content</h2>'+(postCards.join('\n')||'<p>No featured public posts selected.</p>')+'<p class="foot">Creator portfolio exported from SocialApp. Public featured content only.</p></main></body></html>';
   const blob=new Blob([html],{type:'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='SocialApp-Creator-Portfolio.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);
   message('saPortfolioMessage','Portfolio exported. Images and smaller videos are embedded in the file; very large videos use a secure link that expires after 7 days.');
  }
@@ -59909,6 +59912,21 @@ https://instagram.com/yourname"></textarea>
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const profile=data.profile||{};
   root.innerHTML='<div style="max-width:820px;margin:24px auto"><header style="padding:28px;border:1px solid #68418a;border-radius:22px;background:linear-gradient(135deg,#48206b,#17111f)">'+(profile.avatar_url?'<img src="'+esc(profile.avatar_url)+'" alt="Creator" style="width:88px;height:88px;border-radius:50%;object-fit:cover">':'')+'<div style="color:#d5aaff;font-size:13px">'+esc(profile.name)+(profile.verified?' · ✓ Verified':'')+'</div><h1 style="margin:8px 0">'+esc(data.title||'Creator portfolio')+'</h1><p style="white-space:pre-wrap">'+esc(data.bio)+'</p>'+(Array.isArray(data.links)?data.links.map(u=>'<a href="'+esc(u)+'" target="_blank" rel="noopener noreferrer" style="color:#d5aaff;margin-right:12px">'+esc(new URL(u).hostname)+'</a>').join(''):'')+'</header><h2>Featured posts</h2>'+(data.posts||[]).map(p=>'<article style="padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523">'+(p.media_url?(p.media_type==='video'?'<video controls src="'+esc(p.media_url)+'" style="width:100%;max-height:460px;border-radius:12px"></video>':'<img src="'+esc(p.media_url)+'" alt="Featured post" style="width:100%;max-height:460px;object-fit:cover;border-radius:12px">'):'')+'<p style="white-space:pre-wrap">'+esc(p.content)+'</p><small style="color:#bdaacb">'+(p.created_at?new Date(p.created_at).toLocaleDateString():'')+'</small></article>').join('')+'</div>';
  }catch(e){console.error('Public portfolio failed:',e);root.innerHTML='<div style="max-width:600px;margin:15vh auto;text-align:center"><h2>Portfolio unavailable</h2><p>'+String(e.message||'Please try again later.')+'</p><a href="'+location.origin+location.pathname+'" style="color:#d5aaff">Open SocialApp</a></div>';}
+})();
+</script>
+
+<script id="socialapp-portfolio-deep-links">
+(function(){
+ const q=new URLSearchParams(location.search),profileId=q.get('socialapp_profile'),postId=q.get('socialapp_post');
+ if(!profileId&&!postId)return;let tries=0;const timer=setInterval(async()=>{
+  if(++tries>100){clearInterval(timer);return;}
+  if(typeof window.openProfile!=='function'||typeof window.openComments!=='function')return;
+  clearInterval(timer);try{
+   if(postId)await window.openComments(postId,null,true);
+   else await window.openProfile(profileId,'Creator',{source:'portfolio'});
+   const u=new URL(location.href);['socialapp_profile','socialapp_post','socialapp_owner'].forEach(k=>u.searchParams.delete(k));history.replaceState(history.state,'',u.pathname+u.search+u.hash);
+  }catch(e){console.error('Portfolio deep link failed:',e);}
+ },250);
 })();
 </script>
 </body>
