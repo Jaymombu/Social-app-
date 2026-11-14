@@ -18,27 +18,29 @@
 (function(){
   try {
     const q = new URLSearchParams(location.search);
-    if (q.has('socialapp_profile') || q.has('socialapp_post')) {
-      document.documentElement.classList.add('socialapp-direct-opening');
-    }
+    const hasPortfolioTarget = q.has('socialapp_profile') || q.has('socialapp_post');
+    if (!hasPortfolioTarget) return;
+    document.documentElement.classList.add('socialapp-direct-opening');
+    // A portfolio URL is authoritative. Do not let an old saved Profile/Chat
+    // route race the portfolio route and open a second profile on startup.
+    window.__socialAppPortfolioRoute = true;
+    try { sessionStorage.removeItem('appNavigationState'); } catch(e) {}
+    try { localStorage.removeItem('socialAppLastScreenState'); } catch(e) {}
+    try { localStorage.removeItem('socialAppNavigationState'); } catch(e) {}
   } catch(e) {}
 })();
 </script>
 <style id="socialAppDirectOpenStyle">
-  /* Never hide the document itself: that created a completely blank page
-     because this file did not reliably mount #saDirectOpenWait. */
+  /* Never hide html/body: the old rule hid the loader too and produced a blank page. */
   html.socialapp-direct-opening #app,
   html.socialapp-direct-opening #topBar,
-  html.socialapp-direct-opening #homeScreen {
-    visibility: hidden !important;
-  }
+  html.socialapp-direct-opening #homeScreen { visibility:hidden !important; }
   #saDirectOpenWait{display:none;position:fixed;inset:0;z-index:2147483647;background:#100d16;color:#f7f2fb;align-items:center;justify-content:center;flex-direction:column;gap:14px;font:16px system-ui;text-align:center;padding:24px}
   html.socialapp-direct-opening #saDirectOpenWait{display:flex;visibility:visible!important}
 </style>
 <script id="socialAppDirectOpenWaitMount">
 (function(){
- const q=new URLSearchParams(location.search);
- if(!q.has('socialapp_profile')&&!q.has('socialapp_post'))return;
+ if(!window.__socialAppPortfolioRoute)return;
  function mount(){if(document.getElementById('saDirectOpenWait'))return;const n=document.createElement('div');n.id='saDirectOpenWait';n.innerHTML='<div style="width:32px;height:32px;border:3px solid #69458a;border-top-color:#fff;border-radius:50%;animation:saDirectSpin .8s linear infinite"></div><div>Opening creator profile…</div><style>@keyframes saDirectSpin{to{transform:rotate(360deg)}}</style>';document.body.appendChild(n);}
  if(document.body)mount();else document.addEventListener('DOMContentLoaded',mount,{once:true});
 })();
@@ -55,9 +57,9 @@
 <script>
 (function () {
   try {
-    let raw = sessionStorage.getItem("appNavigationState");
-    if (!raw) raw = localStorage.getItem("socialAppLastScreenState");
-    if (!raw) raw = localStorage.getItem("socialAppNavigationState");
+    let raw = window.__socialAppPortfolioRoute ? null : sessionStorage.getItem("appNavigationState");
+    if (!window.__socialAppPortfolioRoute && !raw) raw = localStorage.getItem("socialAppLastScreenState");
+    if (!window.__socialAppPortfolioRoute && !raw) raw = localStorage.getItem("socialAppNavigationState");
 
     let saved = null;
     try { saved = raw ? JSON.parse(raw) : null; } catch (e) {}
@@ -51424,17 +51426,6 @@ function appendReplies(data) {
 
 async function openExactPostFromNotification(postId, options = {}) {
 
-    if (options.portfolio === true && !options.__singleFlightInner) {
-        const requestKey = String(postId) + ":" + String(options.ownerId || "");
-        window.__portfolioPostOpenPromises ||= new Map();
-        const existing = window.__portfolioPostOpenPromises.get(requestKey);
-        if (existing) return existing;
-        const task = openExactPostFromNotification(postId, { ...options, __singleFlightInner: true });
-        window.__portfolioPostOpenPromises.set(requestKey, task);
-        try { return await task; }
-        finally { if (window.__portfolioPostOpenPromises.get(requestKey) === task) window.__portfolioPostOpenPromises.delete(requestKey); }
-    }
-
     console.log("🎯 OPENING EXACT POST:", postId);
 
     // Portfolio links must open the creator profile first, then locate and
@@ -60015,25 +60006,32 @@ https://instagram.com/yourname"></textarea>
 (function(){
  const q=new URLSearchParams(location.search),profileId=q.get('socialapp_profile'),postId=q.get('socialapp_post'),ownerId=q.get('socialapp_owner');
  if(!profileId&&!postId)return;
- const key='sa_portfolio_open_once:'+location.pathname+':'+(postId||profileId);
- try{if(sessionStorage.getItem(key)==='done')return;sessionStorage.setItem(key,'running');}catch(e){}
- let started=false,tries=0;
+ const key='sa_portfolio_route:'+location.pathname+':'+(postId||profileId);
+ if(window.__socialAppPortfolioRouteStarted)return;
+ window.__socialAppPortfolioRouteStarted=true;
+ const clean=new URL(location.href);['socialapp_profile','socialapp_post','socialapp_owner'].forEach(k=>clean.searchParams.delete(k));
+ try{history.replaceState({appScreen:'app',portfolioRoute:true},'',clean.pathname+clean.search+clean.hash);}catch(e){}
+ let attempts=0,started=false;
  const timer=setInterval(async()=>{
   if(started)return;
-  if(++tries>240){clearInterval(timer);document.documentElement.classList.remove('socialapp-direct-opening');document.getElementById('saDirectOpenWait')?.remove();try{sessionStorage.removeItem(key);}catch(e){}showError('SocialApp could not finish opening this item. Please refresh and try again.');return;}
-  if(!window.supabase||typeof window.supabase.from!=='function'||typeof window.openProfile!=='function'||!window.__appStartComplete)return;
+  if(++attempts>240){clearInterval(timer);release();notice('SocialApp could not finish opening this portfolio item. Refresh and try again.');return;}
+  if(!window.supabase||typeof window.supabase.from!=='function'||typeof window.openExactSocialAppPost!=='function'||!window.__appStartComplete)return;
   started=true;clearInterval(timer);
   try{
-   let ok=false;
-   if(postId){ok=await window.openExactSocialAppPost(postId,{portfolio:true,ownerId:ownerId||null});}
-   else ok=await window.openProfile(profileId,'Creator',{source:'portfolio',returnSource:'home',tab:'posts'});
-   if(!ok)throw new Error('The requested creator or featured post could not be loaded.');
+   let ok;
+   if(postId){
+    if(!ownerId)throw new Error('This portfolio link is missing its creator ID. Export the portfolio again.');
+    ok=await window.openExactSocialAppPost(postId,{portfolio:true,ownerId});
+   }else{
+    ok=await window.openProfile(profileId,'Creator',{source:'portfolio',returnSource:'home',tab:'posts'});
+   }
+   if(ok===false)throw new Error('The creator profile or exact public post could not be loaded.');
    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-   document.documentElement.classList.remove('socialapp-direct-opening');document.getElementById('saDirectOpenWait')?.remove();
-   try{sessionStorage.setItem(key,'done');}catch(e){}
-  }catch(error){console.error('Portfolio direct navigation failed:',error);document.documentElement.classList.remove('socialapp-direct-opening');document.getElementById('saDirectOpenWait')?.remove();try{sessionStorage.removeItem(key);}catch(e){}showError(error?.message||'Could not open this SocialApp item.');}
+   release();
+  }catch(e){console.error('SocialApp portfolio route failed:',e);release();notice(e?.message||'Could not open this SocialApp item.');}
  },100);
- function showError(message){const n=document.createElement('div');n.style.cssText='position:fixed;z-index:2147483647;bottom:20px;left:12px;right:12px;padding:12px;background:#321b3e;color:white;border-radius:10px;text-align:center';n.textContent=message;document.body.appendChild(n);}
+ function release(){document.documentElement.classList.remove('socialapp-direct-opening');document.getElementById('saDirectOpenWait')?.remove();window.__socialAppPortfolioRoute=false;}
+ function notice(message){const n=document.createElement('div');n.style.cssText='position:fixed;z-index:2147483647;bottom:20px;left:12px;right:12px;padding:12px;background:#321b3e;color:white;border-radius:10px;text-align:center';n.textContent=message;document.body.appendChild(n);}
 })();
 </script>
 </body>
