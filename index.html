@@ -14,6 +14,25 @@
 
 <!-- Prevent a Home/Profile flash before Android/Chrome restores the saved screen.
      This runs in <head> before the first page paint. -->
+<script id="socialAppDirectOpenEarly">
+(function(){
+  try {
+    const q = new URLSearchParams(location.search);
+    if (q.has('socialapp_profile') || q.has('socialapp_post')) {
+      document.documentElement.classList.add('socialapp-direct-opening');
+    }
+  } catch(e) {}
+})();
+</script>
+<style id="socialAppDirectOpenStyle">
+  html.socialapp-direct-opening,
+  html.socialapp-direct-opening body {
+    visibility: hidden !important;
+  }
+  html.socialapp-direct-opening #saDirectOpenWait {
+    visibility: visible !important;
+  }
+</style>
 <style id="socialAppEarlyRestoreStyle">
   /* Keep the entire document invisible during a real browser refresh.
      This prevents the normal Home shell from being painted before the
@@ -59935,7 +59954,7 @@ https://instagram.com/yourname"></textarea>
  let attempts=0,finished=false;
  const timer=setInterval(async()=>{
   if(finished){clearInterval(timer);return;}
-  if(++attempts>200){finished=true;clearInterval(timer);try{sessionStorage.removeItem(key);}catch(e){}showError('SocialApp is taking too long to open. Please refresh and try again.');return;}
+  if(++attempts>200){finished=true;clearInterval(timer);document.documentElement.classList.remove('socialapp-direct-opening');try{sessionStorage.removeItem(key);}catch(e){}showError('SocialApp is taking too long to open. Please refresh and try again.');return;}
   const sb=window.supabase;
   const startup=window.__appStartPromise;
   const startupReady=window.__appStarted===true && !!document.getElementById('posts') && (!startup || (typeof startup.then==='function' && window.__appStartComplete===true));
@@ -59943,8 +59962,9 @@ https://instagram.com/yourname"></textarea>
   if(!sb||typeof sb.from!=='function'||!startupReady||!fnReady)return;
   finished=true;clearInterval(timer);
   try{
-   const app=document.getElementById('app');if(app)app.style.display='';
    document.body.style.overflow='';
+   // Keep the page hidden while the app initializes and the destination is
+   // loaded. Reveal only after the requested profile/post is on screen.
    if(postId){
     const opened=await window.openExactSocialAppPost(postId,{portfolio:true,ownerId:ownerId||null});
     if(opened===false)throw new Error('The linked public post could not be opened.');
@@ -59952,7 +59972,14 @@ https://instagram.com/yourname"></textarea>
     const opened=await window.openProfile(profileId,'Creator',{source:'portfolio',returnSource:'home'});
     if(opened===false)throw new Error('The creator profile could not be opened.');
    }
-  }catch(e){console.error('SocialApp portfolio navigation failed:',e);try{sessionStorage.removeItem(key);}catch(_){}showError('Could not open this SocialApp item. Please return to the portfolio and try again.');}
+   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   document.documentElement.classList.remove('socialapp-direct-opening');
+  }catch(e){
+   document.documentElement.classList.remove('socialapp-direct-opening');
+   console.error('SocialApp portfolio navigation failed:',e);
+   try{sessionStorage.removeItem(key);}catch(_){}
+   showError('Could not open this SocialApp item. Please return to the portfolio and try again.');
+  }
  },100);
  function showError(message){const notice=document.createElement('div');notice.style.cssText='position:fixed;z-index:2147483647;bottom:20px;left:12px;right:12px;padding:12px;background:#321b3e;color:white;border-radius:10px;text-align:center';notice.textContent=message;document.body.appendChild(notice);}
 })();
