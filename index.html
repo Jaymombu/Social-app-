@@ -25,16 +25,44 @@
 })();
 </script>
 <style id="socialAppDirectOpenStyle">
-  html.socialapp-direct-opening body > :not(#profileScreen):not(#saDirectOpenNotice) {
+  html.socialapp-direct-opening body > :not(#profileScreen):not(#saDirectOpenNotice):not(#saDirectOpenWait) {
     visibility: hidden !important;
   }
-  html.socialapp-direct-opening #profileScreen {
-    visibility: visible !important;
-  }
+  html.socialapp-direct-opening #profileScreen,
   html.socialapp-direct-opening #profileScreen * {
     visibility: visible !important;
   }
+  #saDirectOpenWait {
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:2147483647;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    gap:14px;
+    background:#100d16;
+    color:#f7f2fb;
+    font:16px system-ui;
+    text-align:center;
+    padding:24px;
+  }
+  html.socialapp-direct-opening #saDirectOpenWait { display:flex; visibility:visible !important; }
 </style>
+<script id="socialAppDirectOpenWaitLayer">
+(function(){
+ try {
+  if(!new URLSearchParams(location.search).has('socialapp_profile') && !new URLSearchParams(location.search).has('socialapp_post')) return;
+  const mount=()=>{
+   if(document.getElementById('saDirectOpenWait')) return;
+   const n=document.createElement('div'); n.id='saDirectOpenWait';
+   n.innerHTML='<div style="width:34px;height:34px;border:3px solid #69458a;border-top-color:#fff;border-radius:50%;animation:saDirectSpin .8s linear infinite"></div><div>Opening creator profile…</div><style>@keyframes saDirectSpin{to{transform:rotate(360deg)}}</style>';
+   (document.body||document.documentElement).appendChild(n);
+  };
+  if(document.body) mount(); else document.addEventListener('DOMContentLoaded',mount,{once:true});
+ } catch(e) {}
+})();
+</script>
 <style id="socialAppEarlyRestoreStyle">
   /* Keep the entire document invisible during a real browser refresh.
      This prevents the normal Home shell from being painted before the
@@ -60009,6 +60037,8 @@ https://instagram.com/yourname"></textarea>
  const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  function fail(message,error){
   document.documentElement.classList.remove('socialapp-direct-opening');
+  const wait=document.getElementById('saDirectOpenWait'); if(wait)wait.remove();
+  const app=document.getElementById('app'); if(app)app.style.visibility='';
   console.error('SocialApp portfolio deep-link failed:',error||message);
   try{sessionStorage.removeItem(key);}catch(_){}
   let n=document.getElementById('saDirectOpenNotice');
@@ -60019,10 +60049,13 @@ https://instagram.com/yourname"></textarea>
   if(finished){clearInterval(timer);return;}
   if(++attempts>300){finished=true;clearInterval(timer);fail('SocialApp could not finish opening this profile. Please refresh and try again.');return;}
   const sb=window.supabase;
-  const ready=window.__appStarted===true&&window.__appStartComplete===true&&!!document.getElementById('posts');
+  // Do not depend on internal startup flags that can remain false during
+  // auth restoration. Wait for the actual capabilities needed to navigate.
+  const ready=!!document.body&&!!document.getElementById('profileScreen');
   if(!sb||typeof sb.from!=='function'||!ready||typeof window.openProfile!=='function')return;
   finished=true;clearInterval(timer);
   try{
+   if(window.__appStartPromise) await window.__appStartPromise;
    // Always navigate to the creator profile first, including post links.
    let destinationProfileId=profileId||ownerId;
    if(postId){
@@ -60064,6 +60097,7 @@ https://instagram.com/yourname"></textarea>
    }
    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
    document.documentElement.classList.remove('socialapp-direct-opening');
+   const wait=document.getElementById('saDirectOpenWait'); if(wait)wait.remove();
   }catch(error){fail('Could not open the creator profile or featured post: '+(error?.message||'Unknown error'),error);}
  },100);
 })();
