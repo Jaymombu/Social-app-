@@ -71,25 +71,32 @@
     const screen = saved?.screen ||
       (knownScreens.has(hashScreen) ? hashScreen : "app");
 
-    // Preserve the exact secondary screen before any later script can
-    // initialize the navigation controller to Home. This snapshot is the
-    // authoritative destination for a real browser refresh.
-    if (saved?.screen && saved.screen !== "app") {
-      window.__socialAppSavedNavigation = saved;
-    }
-
     const navigationType =
       (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]?.type) ||
       "";
+    const browserDestroyedPage = document.wasDiscarded === true || navigationType === "reload";
 
-    // Hide the first paint when Chrome/Android reconstructed or reloaded the
-    // document. This applies to Home as well as secondary screens, so the
-    // transient startup shell cannot flash before the saved state is ready.
-    // Only hide the first paint when this document is genuinely being
-    // reconstructed/reloaded. A saved secondary-screen value alone is not
-    // proof that the live page was destroyed.
-    if (document.wasDiscarded === true || navigationType === "reload") {
+    if (browserDestroyedPage) {
+      // Chrome/Android may discard the document and later reconstruct it.
+      // A reconstructed document is a fresh SocialApp launch, not a request
+      // to replay an old Profile/Chat/overlay into a new runtime. Clear only
+      // transient navigation snapshots; authentication and app data remain.
+      window.__socialAppForceFreshStart = true;
+      window.__socialAppSavedNavigation = null;
+      try {
+        sessionStorage.removeItem("appNavigationState");
+        localStorage.removeItem("socialAppLastScreenState");
+        localStorage.removeItem("socialAppNavigationState");
+      } catch (storageError) {}
+      try {
+        history.replaceState({ appScreen: "app", data: {}, scrollY: 0 }, "",
+          location.pathname + location.search + "#app");
+      } catch (historyError) {}
       document.documentElement.classList.add("socialapp-restoring");
+    } else if (saved?.screen && saved.screen !== "app") {
+      // A live/frozen document may resume without reconstruction. Preserve
+      // its last secondary screen only in that case.
+      window.__socialAppSavedNavigation = saved;
     }
   } catch (e) {}
 })();
@@ -28372,6 +28379,9 @@ window.openProfile = async function (
     name,
     navigationOptions = {}
 ) {
+    if (navigationOptions.portfolioDirect !== true) {
+        window.__portfolioOpenToken = (window.__portfolioOpenToken || 0) + 1;
+    }
     // Capture Home BEFORE changing navigation state or awaiting Supabase.
     // This makes Profile → Back/Close return to the exact feed position.
     if (history.state?.appScreen === "app" &&
@@ -51424,103 +51434,98 @@ async function openExactPostFromNotification(postId, options = {}) {
 
     console.log("🎯 OPENING EXACT POST:", postId);
 
-    // Portfolio links must open the creator profile first, then locate and
-    // highlight that exact post inside the creator's Posts tab. Do not send
-    // portfolio visitors to the Home feed or the comments screen.
+    // Portfolio links must resolve to one creator profile, then wait for the
+    // complete Posts-tab render before scrolling/highlighting the exact card.
     if (options.portfolio === true && options.ownerId) {
+        const requestedPostId = String(postId);
+        const requestedOwnerId = String(options.ownerId);
         const { data: portfolioPost, error: portfolioPostError } = await supabase
-            .from("posts")
-            .select("*")
-            .eq("id", postId)
-            .maybeSingle();
-
-        if (portfolioPostError || !portfolioPost ||
-            String(portfolioPost.user_id) !== String(options.ownerId)) {
-            console.error("❌ Portfolio post is unavailable or does not belong to this creator:", portfolioPostError);
+            .from("posts").select("*").eq("id", requestedPostId).maybeSingle();
+        if (portfolioPostError || !portfolioPost || String(portfolioPost.user_id) !== requestedOwnerId) {
+            console.error("Portfolio target validation failed:", portfolioPostError);
             return false;
         }
 
-        const { data: creator } = await supabase
-            .from("profiles")
-            .select("id,name")
-            .eq("id", options.ownerId)
-            .maybeSingle();
+        const { data: creator, error: creatorError } = await supabase
+            .from("profiles").select("id,name").eq("id", requestedOwnerId).maybeSingle();
+        if (creatorError || !creator) return false;
 
+        // One request token prevents a late portfolio navigation from taking
+        // control after the user has already opened another screen/profile.
+        const requestToken = (window.__portfolioOpenToken || 0) + 1;
+        window.__portfolioOpenToken = requestToken;
         const profileOpened = await window.openProfile(
-            options.ownerId,
-            creator?.name || "Creator",
-            { source: "portfolio", returnSource: "home", tab: "posts" }
+            requestedOwnerId,
+            creator.name || "Creator",
+            { source: "home", returnSource: "home", sourceData: {}, tab: "posts", portfolioDirect: true }
         );
-        if (profileOpened === false) return false;
+        if (profileOpened === false || requestToken !== window.__portfolioOpenToken) return false;
 
-        // openProfile awaits its initial Posts-tab load. Wait briefly for the
-        // exact card to be mounted in that profile before scrolling/highlighting.
-        let profilePost = null;
-        const exactCardSelector = `[id="post-${CSS.escape(String(postId))}"]`;
-        for (let attempt = 0; attempt < 80; attempt++) {
-            const profileContainer = document.getElementById("profilePosts");
-            // IMPORTANT: search inside the profile tab, never document-wide.
-            // The same post may also exist in the hidden Home feed.
-            const candidate = profileContainer?.querySelector(exactCardSelector) || null;
-            if (candidate) {
-                profilePost = candidate;
-                break;
-            }
-            await new Promise(resolve => setTimeout(resolve, 100));
+        const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+        let profileScreen = null;
+        for (let attempt = 0; attempt < 100; attempt++) {
+            profileScreen = document.getElementById("profileScreen");
+            if (profileScreen && String(profileScreen.dataset.userId || "") === requestedOwnerId &&
+                getComputedStyle(profileScreen).display !== "none" &&
+                getComputedStyle(profileScreen).visibility !== "hidden" &&
+                window.appNavigation?.current?.screen === "profileScreen") break;
+            await wait(100);
         }
-
-        // Recheck the profile container after the normal profile loader has
-        // completed. Do not append a second copy: duplicate IDs can cause the
-        // Home card to be selected instead of the profile card.
-        if (!profilePost) {
-            const profileContainer = document.getElementById("profilePosts");
-            profilePost = profileContainer?.querySelector(exactCardSelector) || null;
-        }
-
-        if (!profilePost) {
-            const profileContainer = document.getElementById("profilePosts");
-            // Last-moment scoped check prevents appending a duplicate if the
-            // normal profile query finished between the polling loop and here.
-            profilePost = profileContainer?.querySelector(exactCardSelector) || null;
-            if (!profilePost && profileContainer && typeof renderPostElement === "function") {
-                try {
-                    const { data: postProfile, error: postProfileError } = await supabase
-                        .from("profiles")
-                        .select("id,name,username,avatar_url,verified")
-                        .eq("id", options.ownerId)
-                        .maybeSingle();
-                    if (postProfileError) throw postProfileError;
-
-                    portfolioPost.profiles = postProfile || null;
-                    portfolioPost.name = postProfile?.name || creator?.name || "Creator";
-                    portfolioPost.username = postProfile?.username || "";
-                    portfolioPost.avatar_url = postProfile?.avatar_url || "";
-                    portfolioPost.verified = postProfile?.verified === true;
-                    if (portfolioPost.file_url && typeof window.getAuthorizedStorageUrl === "function") {
-                        portfolioPost.file_url = await window.getAuthorizedStorageUrl("posts_media", portfolioPost.file_url);
-                    }
-
-                    const exactCard = renderPostElement(portfolioPost);
-                    if (exactCard) {
-                        const homeCopy = document.querySelector(`#posts ${exactCardSelector}`);
-                        if (homeCopy) homeCopy.remove();
-                        profileContainer.appendChild(exactCard);
-                        profilePost = exactCard;
-                    }
-                } catch (fallbackError) {
-                    console.error("❌ Could not render the validated portfolio post directly:", fallbackError);
-                }
-            }
-        }
-
-        if (!profilePost) {
-            console.error("❌ Exact portfolio post was not rendered in the creator profile:", postId);
+        if (!profileScreen || String(profileScreen.dataset.userId || "") !== requestedOwnerId ||
+            window.appNavigation?.current?.screen !== "profileScreen" || requestToken !== window.__portfolioOpenToken) {
+            console.error("Portfolio navigation did not settle on the requested creator profile.");
             return false;
         }
 
-        profilePost.scrollIntoView({ behavior: "smooth", block: "center" });
+        // openProfile normally loads the Posts tab itself. If the expected
+        // post is not in that completed render, make one controlled reload.
+        let profileContainer = document.getElementById("profilePosts");
+        let profilePost = profileContainer?.querySelector(`[id="post-${CSS.escape(requestedPostId)}"]`) || null;
+        if (!profilePost) {
+            await window.loadProfilePosts(requestedOwnerId);
+            if (requestToken !== window.__portfolioOpenToken) return false;
+            profileContainer = document.getElementById("profilePosts");
+            profilePost = profileContainer?.querySelector(`[id="post-${CSS.escape(requestedPostId)}"]`) || null;
+        }
+        if (!profilePost || !profileContainer?.contains(profilePost)) {
+            console.error("Exact post missing from the completed creator Posts tab:", requestedPostId);
+            return false;
+        }
+
+        // Wait for all card media to settle (including lazy images) before
+        // moving the viewport. Do not create a fallback duplicate card.
+        const media = [...profilePost.querySelectorAll("img,video")];
+        await Promise.all(media.map(async element => {
+            if (element.tagName === "IMG") {
+                if (!element.complete) await Promise.race([
+                    new Promise(resolve => element.addEventListener("load", resolve, { once: true })),
+                    new Promise(resolve => element.addEventListener("error", resolve, { once: true })),
+                    wait(7000)
+                ]);
+                if (element.complete && element.naturalWidth > 0 && typeof element.decode === "function") {
+                    try { await Promise.race([element.decode(), wait(2500)]); } catch (e) {}
+                }
+            } else if (element.readyState < 2) {
+                await Promise.race([
+                    new Promise(resolve => element.addEventListener("loadeddata", resolve, { once: true })),
+                    new Promise(resolve => element.addEventListener("error", resolve, { once: true })),
+                    wait(7000)
+                ]);
+            }
+        }));
+
+        // Revalidate immediately before highlighting: the user may have
+        // navigated elsewhere while media was loading.
+        if (requestToken !== window.__portfolioOpenToken ||
+            window.appNavigation?.current?.screen !== "profileScreen" ||
+            String(document.getElementById("profileScreen")?.dataset.userId || "") !== requestedOwnerId ||
+            !profileContainer.contains(profilePost) || !profilePost.isConnected) return false;
+
+        profilePost.scrollIntoView({ behavior: "auto", block: "center" });
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        if (requestToken !== window.__portfolioOpenToken || !profilePost.isConnected) return false;
         highlightExactPost(profilePost);
-        console.log("✅ Creator profile opened and exact portfolio post highlighted:", postId);
+        console.log("Portfolio profile and fully rendered exact post are ready:", requestedPostId);
         return true;
     }
 
