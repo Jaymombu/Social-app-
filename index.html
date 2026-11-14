@@ -7433,11 +7433,15 @@ window.loadStories = async function (forceRefresh = false) {
       const latestStory =
         group.stories[0];
 
+      const safeStoryName = String(group.name || "User").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
+      const safeStoryAvatar = String(group.avatar || "").replace(/[&"']/g, ch => ({"&":"&amp;",'"':"&quot;","'":"&#39;"}[ch]));
+      const safeStoryMedia = String(latestStory.media_url || "").replace(/[&"']/g, ch => ({"&":"&amp;",'"':"&quot;","'":"&#39;"}[ch]));
       html += `
 
         <div
   class="story-card"
-  onclick="openStory(${index})"
+  data-story-group-index="${index}"
+  role="button" tabindex="0" aria-label="Open ${safeStoryName} story"
 
   style="
     opacity:${seen ? "0.82" : "1"};
@@ -7452,7 +7456,7 @@ window.loadStories = async function (forceRefresh = false) {
           <!-- BACKGROUND -->
           <img
             class="story-bg"
-            src="${latestStory.media_url}"
+            src="${safeStoryMedia}"
           >
 
           <!-- OVERLAY -->
@@ -7469,13 +7473,13 @@ window.loadStories = async function (forceRefresh = false) {
             <span class="story-avatar-wrap">
               <img
                 class="story-avatar"
-                src="${group.avatar}"
+                src="${safeStoryAvatar}"
               >
               ${latestStory.online === true ? '<span class="online-indicator" aria-label="Online"></span>' : ''}
             </span>
 
             <div class="story-username">
-              ${group.name}
+              ${safeStoryName}
             </div>
 
           </div>
@@ -7491,6 +7495,14 @@ window.loadStories = async function (forceRefresh = false) {
     <button id="storyBtn" class="add-story-card" type="button" aria-label="Add Story">Add Story</button>
     ${html}
   `;
+
+  storiesBar.querySelectorAll("[data-story-group-index]").forEach(card => {
+    const open = () => window.openStory(Number(card.dataset.storyGroupIndex));
+    card.addEventListener("click", open);
+    card.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(); }
+    });
+  });
 
   const storyBtnInBar = document.getElementById("storyBtn");
   if (storyBtnInBar) {
@@ -8106,6 +8118,9 @@ window.pauseStory = function() {
 
   const video =
     document.getElementById("storyVideo");
+  if (video) video.addEventListener("error", () => {
+    container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story video could not be played. Check its storage URL and format.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
+  }, { once:true });
 
   if (video) {
     video.pause();
@@ -8700,14 +8715,23 @@ setTimeout(() => {
 
 }, 50);
 
-// IMAGE
-if (story.media_type === "image") {
+// IMAGE — treat missing/legacy image media_type as image unless the
+// stored type or URL clearly identifies a video. Never leave Loading visible
+// forever if a storage URL is invalid or a media request fails.
+const storyMediaUrl = String(story.media_url || "").trim();
+const storyType = String(story.media_type || "").toLowerCase();
+const storyIsVideo = storyType === "video" || /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(storyMediaUrl);
+if (!storyMediaUrl) {
+  container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story has no media URL.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
+  return;
+}
+if (!storyIsVideo) {
 
   const img = new Image();
-
-  img.src = story.media_url;
-
-  img.onload = () => {
+  let imageSettled = false;
+  const renderStoryImage = () => {
+    if (imageSettled) return;
+    imageSettled = true;
 
     container.innerHTML = `
 
@@ -8743,13 +8767,16 @@ keepUIVisible();
     window.storyStartTime = Date.now();
 
     window.storyTimer =
-      setTimeout(() => {
-
-        nextStory();
-
-      }, 5000);
-
+      setTimeout(() => { nextStory(); }, 5000);
   };
+  img.onload = renderStoryImage;
+  img.onerror = () => {
+    if (imageSettled) return;
+    imageSettled = true;
+    container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story image could not be loaded. Check the story storage URL and bucket access.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
+  };
+  img.src = storyMediaUrl;
+  if (img.complete && img.naturalWidth > 0) renderStoryImage();
 
 }
 
@@ -8760,7 +8787,7 @@ else {
 
     <video
       id="storyVideo"
-      src="${story.media_url}"
+      src="${storyMediaUrl}"
       autoplay
       playsinline
       ${window.storyMuted ? "muted" : ""}
@@ -58471,23 +58498,9 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    <div class="sa-card"><strong>Selected date</strong><div id="saCalendarDayDetails" style="margin-top:9px;color:#d8cce0">Choose a date to see its posts.</div></div>
   </section>
   <section id="saCreatorStories" style="display:none">
-   <div class="sa-card">
-    <h3 style="margin-top:0">Story performance</h3>
-    <p style="color:#ad9ab9;font-size:13px">Review views on your existing stories. Counts come from SocialApp story-view records; viewer identities are not displayed here.</p>
-    <div id="saCreatorStoryAnalytics" style="color:#d8cce0">Loading your stories…</div>
-    <button class="sa-btn" id="saCreatorStoriesRefresh" type="button" style="margin-top:12px">Refresh story insights</button>
-   </div>
-   <div class="sa-card">
-    <h3 style="margin-top:0">Highlight collections</h3>
-    <p style="color:#ad9ab9;font-size:13px">Group your existing stories into persistent collections on your Creator Studio. Select stories below and create a collection.</p>
-    <label for="saStoryHighlightTitle">Collection name</label>
-    <input id="saStoryHighlightTitle" maxlength="50" placeholder="e.g. Behind the scenes">
-    <div id="saStoryHighlightPicker" style="margin:12px 0;color:#d8cce0">Load your stories to choose items.</div>
-    <button class="sa-btn" id="saStoryHighlightCreate" type="button">Create highlight collection</button>
-    <p id="saStoryHighlightMessage" style="color:#c7bacf;font-size:12px" aria-live="polite"></p>
-   </div>
+   <div class="sa-card"><h3 style="margin-top:0">Story performance</h3><p style="color:#ad9ab9;font-size:13px">Views for your existing stories, using SocialApp story-view records.</p><div id="saCreatorStoryAnalytics" style="color:#d8cce0">Loading your stories…</div><button class="sa-btn" id="saCreatorStoriesRefresh" type="button" style="margin-top:12px">Refresh story insights</button></div>
+   <div class="sa-card"><h3 style="margin-top:0">Highlight collections</h3><p style="color:#ad9ab9;font-size:13px">Group existing stories into named collections.</p><label for="saStoryHighlightTitle">Collection name</label><input id="saStoryHighlightTitle" maxlength="50" placeholder="e.g. Behind the scenes"><div id="saStoryHighlightPicker" style="margin:12px 0;color:#d8cce0">Load your stories to choose items.</div><button class="sa-btn" id="saStoryHighlightCreate" type="button">Create highlight collection</button><p id="saStoryHighlightMessage" style="color:#c7bacf;font-size:12px" aria-live="polite"></p></div>
    <div class="sa-card"><strong>Your highlight collections</strong><div id="saStoryHighlightList" style="margin-top:10px;color:#d8cce0">Loading…</div></div>
-   <p style="font-size:12px;color:#9c8fa6">Advanced story publishing styles and longer story limits are not enabled by this collection manager. Existing story creation, audio, image/video playback, replies and reactions remain unchanged.</p>
   </section>
   <section id="saCreatorPortfolio" style="display:none">
    <div class="sa-card">
@@ -59278,31 +59291,25 @@ https://instagram.com/yourname"></textarea>
  }
  async function loadCreatorStories(){
   const sb=client();if(!sb||!creatorUserId)return;
-  const analytics=$('saCreatorStoryAnalytics'),picker=$('saStoryHighlightPicker');
-  if(analytics)analytics.textContent='Loading your stories…';
-  if(picker)picker.textContent='Loading stories…';
+  const analytics=$("saCreatorStoryAnalytics"),picker=$("saStoryHighlightPicker");
+  if(analytics)analytics.textContent="Loading your stories…";
+  if(picker)picker.textContent="Loading stories…";
   try{
-   const {data:stories,error}=await sb.from('stories').select('id,media_url,media_type,created_at').eq('user_id',creatorUserId).order('created_at',{ascending:false}).limit(100);
+   const {data:stories,error}=await sb.from("stories").select("id,media_url,media_type,created_at").eq("user_id",creatorUserId).order("created_at",{ascending:false}).limit(100);
    if(error)throw error;creatorStoryRows=stories||[];
-   let views=[];
-   if(creatorStoryRows.length){const ids=creatorStoryRows.map(x=>x.id);const result=await sb.from('story_views').select('story_id').in('story_id',ids);if(result.error)throw result.error;views=result.data||[];}
+   let views=[];if(creatorStoryRows.length){const result=await sb.from("story_views").select("story_id").in("story_id",creatorStoryRows.map(x=>x.id));if(result.error)throw result.error;views=result.data||[];}
    const counts=new Map();views.forEach(v=>counts.set(String(v.story_id),(counts.get(String(v.story_id))||0)+1));
-   if(analytics){if(!creatorStoryRows.length)analytics.textContent='No stories found yet. Publish a story from Home to see its performance here.';else analytics.innerHTML=creatorStoryRows.map(st=>{const count=counts.get(String(st.id))||0;const date=st.created_at?new Date(st.created_at).toLocaleDateString():'';const type=st.media_type==='video'?'Video':'Image';return `<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #38264b"><span style="min-width:0;overflow-wrap:anywhere">${type} · ${date}</span><strong style="white-space:nowrap">${count.toLocaleString()} views</strong></div>`;}).join('');}
-   if(picker){picker.innerHTML='';if(!creatorStoryRows.length)picker.textContent='No stories available to add.';else creatorStoryRows.forEach(st=>{const label=document.createElement('label');label.style.cssText='display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #38264b';const cb=document.createElement('input');cb.type='checkbox';cb.value=String(st.id);cb.style.width='18px';cb.style.flex='0 0 auto';const text=document.createElement('span');text.textContent=(st.media_type==='video'?'Video':'Image')+' · '+(st.created_at?new Date(st.created_at).toLocaleDateString():'Story');label.append(cb,text);picker.append(label);});}
+   if(analytics)analytics.innerHTML=creatorStoryRows.length?creatorStoryRows.map(st=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #38264b"><span>${st.media_type==="video"?"Video":"Image"} · ${st.created_at?new Date(st.created_at).toLocaleDateString():""}</span><strong>${(counts.get(String(st.id))||0).toLocaleString()} views</strong></div>`).join(""):"No stories found yet.";
+   if(picker){picker.innerHTML="";if(!creatorStoryRows.length)picker.textContent="No stories available to add.";else creatorStoryRows.forEach(st=>{const label=document.createElement("label");label.style.cssText="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #38264b";const cb=document.createElement("input");cb.type="checkbox";cb.value=String(st.id);cb.style.width="18px";cb.style.flex="0 0 auto";const t=document.createElement("span");t.textContent=(st.media_type==="video"?"Video":"Image")+" · "+(st.created_at?new Date(st.created_at).toLocaleDateString():"Story");label.append(cb,t);picker.append(label);});}
    await loadCreatorStoryHighlights();
-  }catch(e){console.error('Creator Stories load failed:',e);if(analytics)analytics.textContent='Could not load story analytics. Check stories/story_views read policies.';if(picker)picker.textContent='Could not load stories. Check your connection and try again.';}
+  }catch(e){console.error("Creator Stories load failed:",e);if(analytics)analytics.textContent="Could not load story analytics. Check story/story-view table access policies.";if(picker)picker.textContent="Could not load stories.";}
  }
  async function loadCreatorStoryHighlights(){
-  const sb=client(),host=$('saStoryHighlightList');if(!sb||!host||!creatorUserId)return;
-  host.textContent='Loading collections…';
-  try{const {data,error}=await sb.from('premium_story_highlights').select('id,title,story_ids,created_at').eq('user_id',creatorUserId).order('created_at',{ascending:false});if(error)throw error;
-   if(!data?.length){host.textContent='No highlight collections yet.';return;}
-   host.innerHTML='';data.forEach(item=>{const row=document.createElement('div');row.style.cssText='padding:11px 0;border-bottom:1px solid #38264b;display:flex;justify-content:space-between;gap:10px;align-items:center';const info=document.createElement('div');const title=document.createElement('strong');title.textContent=item.title;const meta=document.createElement('div');meta.style.cssText='font-size:12px;color:#ad9ab9;margin-top:4px';meta.textContent=(Array.isArray(item.story_ids)?item.story_ids.length:0)+' stories';info.append(title,meta);const del=document.createElement('button');del.type='button';del.className='sa-btn';del.textContent='Delete';del.style.cssText='padding:7px 10px;background:#49303a';del.addEventListener('click',async()=>{if(!confirm('Delete this highlight collection? The original stories will not be deleted.'))return;const {error}=await sb.from('premium_story_highlights').delete().eq('id',item.id).eq('user_id',creatorUserId);if(error){message('saStoryHighlightMessage',error.message);return;}await loadCreatorStoryHighlights();});row.append(info,del);host.append(row);});
-  }catch(e){console.error('Highlight collections unavailable:',e);host.textContent='Apply the Advanced Stories SQL migration, then refresh this panel.';}
+  const sb=client(),host=$("saStoryHighlightList");if(!sb||!host||!creatorUserId)return;host.textContent="Loading collections…";
+  try{const {data,error}=await sb.from("premium_story_highlights").select("id,title,story_ids,created_at").eq("user_id",creatorUserId).order("created_at",{ascending:false});if(error)throw error;if(!data?.length){host.textContent="No highlight collections yet.";return;}host.innerHTML="";data.forEach(item=>{const row=document.createElement("div");row.style.cssText="padding:11px 0;border-bottom:1px solid #38264b;display:flex;justify-content:space-between;gap:10px;align-items:center";const info=document.createElement("div"),title=document.createElement("strong"),meta=document.createElement("div");title.textContent=item.title;meta.style.cssText="font-size:12px;color:#ad9ab9;margin-top:4px";meta.textContent=(Array.isArray(item.story_ids)?item.story_ids.length:0)+" stories";info.append(title,meta);const del=document.createElement("button");del.type="button";del.className="sa-btn";del.textContent="Delete";del.addEventListener("click",async()=>{if(!confirm("Delete this collection? Original stories will remain."))return;const {error}=await sb.from("premium_story_highlights").delete().eq("id",item.id).eq("user_id",creatorUserId);if(error){message("saStoryHighlightMessage",error.message);return;}await loadCreatorStoryHighlights();});row.append(info,del);host.append(row);});}catch(e){console.warn(e);host.textContent="Apply the premium_story_highlights SQL migration, then refresh.";}
  }
  async function createCreatorStoryHighlight(){
-  const sb=client();if(!sb||!creatorUserId)return;
-  try{if(!(await hasAccess()))throw new Error('An active, verified Premium subscription is required.');const title=$('saStoryHighlightTitle')?.value.trim();const ids=[...($('saStoryHighlightPicker')?.querySelectorAll('input[type="checkbox"]:checked')||[])].map(x=>x.value);if(!title)throw new Error('Enter a collection name.');if(!ids.length)throw new Error('Select at least one story.');if(ids.length>30)throw new Error('A collection can contain up to 30 stories.');const {error}=await sb.from('premium_story_highlights').insert({user_id:creatorUserId,title,story_ids:ids});if(error)throw error;$('saStoryHighlightTitle').value='';$('saStoryHighlightPicker').querySelectorAll('input[type="checkbox"]').forEach(x=>x.checked=false);message('saStoryHighlightMessage','Highlight collection created. Original stories were not changed.');await loadCreatorStoryHighlights();}catch(e){message('saStoryHighlightMessage',e.message||'Could not create collection. Apply the SQL migration and retry.');}
+  const sb=client();if(!sb||!creatorUserId)return;try{if(!(await hasAccess()))throw new Error("An active, verified Premium subscription is required.");const title=$("saStoryHighlightTitle")?.value.trim();const ids=[...($("saStoryHighlightPicker")?.querySelectorAll('input[type="checkbox"]:checked')||[])].map(x=>x.value);if(!title)throw new Error("Enter a collection name.");if(!ids.length)throw new Error("Select at least one story.");if(ids.length>30)throw new Error("A collection can contain up to 30 stories.");const {error}=await sb.from("premium_story_highlights").insert({user_id:creatorUserId,title,story_ids:ids});if(error)throw error;$("saStoryHighlightTitle").value="";message("saStoryHighlightMessage","Highlight collection created.");await loadCreatorStoryHighlights();}catch(e){message("saStoryHighlightMessage",e.message||"Could not create collection.");}
  }
  function updateScheduleTimezone(){
   const label=$('saScheduleTimezone');
@@ -59334,7 +59341,7 @@ https://instagram.com/yourname"></textarea>
    if(!btn){
      btn=document.createElement('button');btn.id='saCreatorOpenButton';btn.type='button';
      btn.style.cssText='width:100%;margin:0 0 16px;padding:15px;border:1px solid #6e3e91;border-radius:14px;background:linear-gradient(135deg,#28123d,#17111f);color:#fff;text-align:left;font-size:16px;font-weight:750;cursor:pointer;box-sizing:border-box;display:block';
-     btn.innerHTML='👑 &nbsp; Premium Creator Studio <span style="float:right">›</span><div style="font-size:12px;font-weight:400;color:#c4a2e9;margin-top:5px">Analytics · Profile style · Stories · Scheduled posts</div>';
+     btn.innerHTML='👑 &nbsp; Premium Creator Studio <span style="float:right">›</span><div style="font-size:12px;font-weight:400;color:#c4a2e9;margin-top:5px">Analytics · Profile style · Scheduled posts</div>';
      btn.addEventListener('click',open);
    }
    // Put it at the top of the Settings content, immediately below the sticky
