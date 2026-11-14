@@ -70,6 +70,7 @@
       sessionStorage.removeItem("socialAppPreviousDocumentEnded");
       localStorage.removeItem("socialAppLastScreenState");
       localStorage.removeItem("socialAppNavigationState");
+      sessionStorage.removeItem("socialAppPreviousDocumentEnded");
     } catch (storageError) {}
 
     // Establish Home as the only browser-history root for this new document.
@@ -6781,149 +6782,37 @@ async function initAuth() {
     console.log("No logged-in user yet");
   }
 
-  // A reconstructed/ended document must always start at Home. Do not read
-  // either the per-tab or durable secondary-screen snapshots in this case.
-  let savedNavigation = null;
-  if (window.__socialAppForceFreshStart !== true) {
-    savedNavigation = window.__socialAppSavedNavigation || null;
-    try {
-      if (!savedNavigation) {
-        savedNavigation = JSON.parse(
-          sessionStorage.getItem("appNavigationState") || "null"
-        );
-      }
-    } catch (e) {}
-
-    if (!savedNavigation?.screen || savedNavigation.screen === "app") {
-      try {
-        const durable = JSON.parse(
-          localStorage.getItem("socialAppLastScreenState") ||
-          localStorage.getItem("socialAppNavigationState") ||
-          "null"
-        );
-        if (durable?.screen &&
-            durable.screen !== "app" &&
-            (!durable.userId || String(durable.userId) === String(currentUser?.id || ""))) {
-          savedNavigation = durable;
-          sessionStorage.setItem("appNavigationState", JSON.stringify(durable));
-        }
-      } catch (e) {}
-    }
-  } else {
-    window.__socialAppSavedNavigation = null;
-    window.appNavigation && (window.appNavigation.stack = []);
-    window.appNavigation && (window.appNavigation.current = null);
-  }
-
-  let startupPromise = null;
-
-  if (!window.__appStarted) {
-    // If Chrome/Android reconstructed the document, keep the entire first
-    // paint hidden until startApp() has finished. This prevents a Home flash
-    // even when the saved destination itself is Home. This does not change
-    // startApp().
-    if (document.documentElement.classList.contains("socialapp-restoring")) {
-      window.__navigationRestorePending = true;
-    }
-    startupPromise = safeStart();
-  } else {
-    startupPromise = window.__appStartPromise || Promise.resolve();
-  }
-
-  // Wait for the normal app shell to finish before revealing the page.
-  // Then restore a secondary screen, if one was saved.
+  // Fresh-document policy: never replay a saved in-app screen. The browser's
+  // own BFCache preserves a surviving document naturally; a newly executed
+  // document always starts from Home. In-app Back continues to use the live
+  // JavaScript navigation stack and browser history created in this session.
   try {
-    await startupPromise;
+    sessionStorage.removeItem("appNavigationState");
+    localStorage.removeItem("socialAppLastScreenState");
+    localStorage.removeItem("socialAppNavigationState");
+  } catch (e) {}
 
-    const saved = savedNavigation;
+  window.__socialAppSavedNavigation = null;
+  window.__socialAppForceFreshStart = true;
+  window.__socialAppDocumentWasReconstructed = true;
+  if (window.appNavigation) {
+    window.appNavigation.stack = [];
+    window.appNavigation.current = null;
+    window.appNavigation.restoring = false;
+  }
 
-    // =====================================================
-    // KEEP THE SAVED SCREEN AS THE ONLY VISIBLE SCREEN
-    // DURING A REAL PAGE RELOAD
-    // =====================================================
-    // startApp() intentionally builds Home and restores the main top bar.
-    // We must not let that temporary Home shell become visible while a
-    // secondary screen (Profile, Comments, Chat, etc.) is being restored.
-    // Do this outside startApp() so the existing startApp() remains untouched.
-    const documentWasReconstructed =
-      window.__socialAppForceFreshStart === true;
-    window.__socialAppDocumentWasReconstructed = documentWasReconstructed;
+  try {
+    history.replaceState(
+      { appScreen: "app", data: {}, scrollY: 0, __socialAppFreshRoot: true },
+      "",
+      location.pathname + location.search + "#app"
+    );
+  } catch (e) {}
 
-    // When Android destroys the document, start the app normally from a clean
-    // document instead of replaying an old secondary screen into a new runtime.
-    // When the original document survives/frozen-restores, it already owns the
-    // current screen and no navigation replay is needed.
-    const restoringSecondaryScreen =
-      !documentWasReconstructed && !!saved?.screen && saved.screen !== "app";
-
-    if (restoringSecondaryScreen) {
-      const startupHome = document.getElementById("app");
-      if (startupHome) {
-        startupHome.style.setProperty("display", "none", "important");
-        startupHome.style.setProperty("visibility", "hidden", "important");
-        startupHome.style.setProperty("opacity", "0", "important");
-        startupHome.style.setProperty("pointer-events", "none", "important");
-      }
-
-      const startupTopBar = document.getElementById("topBar");
-      if (startupTopBar) {
-        startupTopBar.style.setProperty("display", "none", "important");
-        startupTopBar.style.setProperty("visibility", "hidden", "important");
-        startupTopBar.style.setProperty("opacity", "0", "important");
-        startupTopBar.style.setProperty("pointer-events", "none", "important");
-      }
-    }
-
-    if (restoringSecondaryScreen &&
-        typeof window.restoreNavigationAfterReload === "function") {
-      await window.restoreNavigationAfterReload();
-
-      // Final guard: secondary screens must be visible WITHOUT Home or the
-      // main top bar underneath/above them. This also prevents Explore and
-      // Following from appearing during the first rendered frame.
-      const restoredHome = document.getElementById("app");
-      if (restoredHome) {
-        restoredHome.style.setProperty("display", "none", "important");
-        restoredHome.style.setProperty("visibility", "hidden", "important");
-        restoredHome.style.setProperty("opacity", "0", "important");
-        restoredHome.style.setProperty("pointer-events", "none", "important");
-      }
-
-      // The main top bar is screen-specific. Search and Inbox normally show
-      // it; Profile, Comments, Chat, Notifications and full-screen viewers
-      // normally hide it. Do not blanket-hide it after restoration.
-      const restoredTopBar = document.getElementById("topBar");
-      const screensWithVisibleTopBar = new Set([
-        "searchScreen",
-        "inboxScreen"
-      ]);
-
-      if (restoredTopBar) {
-        if (screensWithVisibleTopBar.has(saved.screen)) {
-          restoredTopBar.style.removeProperty("display");
-          restoredTopBar.style.removeProperty("visibility");
-          restoredTopBar.style.removeProperty("opacity");
-          restoredTopBar.style.removeProperty("pointer-events");
-          restoredTopBar.style.removeProperty("z-index");
-          if (typeof window.restoreTopBar === "function") {
-            window.restoreTopBar();
-          }
-        } else {
-          restoredTopBar.style.setProperty("display", "none", "important");
-          restoredTopBar.style.setProperty("visibility", "hidden", "important");
-          restoredTopBar.style.setProperty("opacity", "0", "important");
-          restoredTopBar.style.setProperty("pointer-events", "none", "important");
-        }
-      }
-
-      // Let the restored screen's own fixed layout settle before the first
-      // visible frame.
-      await new Promise(resolve => requestAnimationFrame(() =>
-        requestAnimationFrame(resolve)
-      ));
-    }
-  } catch (restoreError) {
-    console.warn("⚠️ STARTUP NAVIGATION RESTORE FAILED:", restoreError);
+  try {
+    await safeStart();
+  } catch (startupError) {
+    console.error("SocialApp startup failed:", startupError);
   } finally {
     document.documentElement.classList.remove("socialapp-restoring");
     window.__navigationRestorePending = false;
@@ -51849,37 +51738,9 @@ window.getNavigationData = function () {
 
 
 window.syncNavigationSession = function (state) {
-
-    if (!state?.screen) return;
-
-    try {
-        const serialized = JSON.stringify(state);
-
-        // sessionStorage is the primary per-tab navigation store.
-        sessionStorage.setItem(
-            "appNavigationState",
-            serialized
-        );
-
-        // Android/Chrome can discard the page while it is in the background.
-        // Keep a second copy so a reconstructed document can restore the
-        // exact screen instead of starting from Home again.
-        localStorage.setItem(
-            "socialAppNavigationState",
-            serialized
-        );
-        // Durable last destination used if Android destroys the Chrome
-        // document and the per-tab session copy is stale or unavailable.
-        localStorage.setItem(
-            "socialAppLastScreenState",
-            serialized
-        );
-    } catch (error) {
-        console.warn(
-            "⚠️ NAVIGATION SESSION SAVE FAILED:",
-            error
-        );
-    }
+    // Intentionally do not persist screen state. Only the current live
+    // document owns its navigation stack; a new document starts at Home.
+    return;
 };
 
 
@@ -51890,59 +51751,8 @@ window.syncNavigationSession = function (state) {
 // prevent the OS from doing that, but we can persist the exact app screen and
 // scroll position so the reconstructed page returns to where the user left it.
 window.persistNavigationBeforeBackground = function () {
-    try {
-        const current = window.appNavigation?.current;
-        if (!current?.screen) return;
-
-        let scrollY = Number(current.scrollY) || 0;
-        try {
-            const scrollState =
-                typeof window.getNavigationScrollState === "function"
-                    ? window.getNavigationScrollState(current.screen)
-                    : null;
-            if (scrollState && Number.isFinite(Number(scrollState.scrollY))) {
-                scrollY = Number(scrollState.scrollY) || 0;
-            }
-        } catch (e) {}
-
-        const snapshot = {
-            ...current,
-            data: { ...(current.data || {}) },
-            // Persist the in-app Back path as well as the visible screen.
-            // Android can discard the document while the tab is backgrounded;
-            // without this mirror, the restored screen may be the only history
-            // entry and the next Back action exits the app.
-            stack: Array.isArray(window.appNavigation?.stack)
-                ? window.appNavigation.stack.map(item => ({
-                    ...item,
-                    data: { ...(item?.data || {}) }
-                  }))
-                : [],
-            scrollY,
-            timestamp: Date.now(),
-            userId: session?.user?.id || currentUser?.id || null
-        };
-
-        window.appNavigation.current = snapshot;
-        const serialized = JSON.stringify(snapshot);
-        sessionStorage.setItem("appNavigationState", serialized);
-        localStorage.setItem("socialAppNavigationState", serialized);
-        localStorage.setItem("socialAppLastScreenState", serialized);
-
-        // Keep the current browser entry synchronized as well.
-        if (history.state?.appScreen) {
-            history.replaceState(
-                {
-                    ...history.state,
-                    scrollY
-                },
-                "",
-                location.href
-            );
-        }
-    } catch (error) {
-        console.warn("⚠️ BACKGROUND NAVIGATION SAVE FAILED:", error);
-    }
+    // No cross-document screen restoration: retain state only in live memory.
+    return;
 };
 
 document.addEventListener("visibilitychange", () => {
@@ -52712,166 +52522,21 @@ window.hidePhotoGalleryForNavigation = function () {
 // =====================================================
 
 window.initializeAppNavigation = function () {
+    if (window.appNavigation.initialized === true) return;
+    window.appNavigation.initialized = true;
+    window.appNavigation.stack = [];
+    window.appNavigation.current = null;
+    window.appNavigation.restoring = false;
 
-    if (
-        window.appNavigation.initialized ===
-        true
-    ) {
-        return;
-    }
-
-    window.appNavigation.initialized =
-        true;
-
-    // During a real refresh the head script captured the screen before this
-    // controller was initialized. Never replace that saved destination with
-    // the Home root. This is what prevents the Home/Explore/Following shell
-    // from becoming the navigation state during startup.
-    const preservedRefreshState =
-        window.__socialAppForceFreshStart === true
-            ? null
-            : window.__socialAppSavedNavigation;
-
-    if (window.__socialAppForceFreshStart === true) {
-        window.appNavigation.stack = [];
-        window.appNavigation.current = null;
-        try {
-            history.replaceState(
-                { appScreen: "app", data: {}, scrollY: 0, __socialAppFreshRoot: true },
-                "",
-                location.pathname + location.search + "#app"
-            );
-        } catch (freshHistoryError) {}
-    }
-
-    if (preservedRefreshState?.screen &&
-        preservedRefreshState.screen !== "app") {
-
-        const restoredScreen = preservedRefreshState.screen;
-        const restoredData = preservedRefreshState.data || {};
-        const restoredScrollY = Number(preservedRefreshState.scrollY) || 0;
-        const savedStack = Array.isArray(preservedRefreshState.stack)
-            ? preservedRefreshState.stack.filter(item => item?.screen && item.screen !== restoredScreen)
-            : [];
-        const browserAlreadyHasCurrent =
-            history.state?.appScreen === restoredScreen;
-
-        window.appNavigation.stack = savedStack.map(item => ({
-            screen: item.screen,
-            data: { ...(item.data || {}) },
-            scrollY: Number(item.scrollY) || 0,
-            timestamp: Number(item.timestamp) || Date.now()
-        }));
-
-        // If Android reconstructed the page without its in-app browser-history
-        // chain, rebuild a safe internal path: Home -> saved prior screens ->
-        // current screen. Back then returns through SocialApp instead of
-        // immediately leaving the app. Do not rebuild when the current history
-        // entry already matches the saved screen, since that chain may be intact.
-        if (!browserAlreadyHasCurrent) {
-            try {
-                history.replaceState(
-                    { appScreen: "app", data: {}, scrollY: Number(window.homeScrollY) || 0,
-                      __socialAppHistoryRoot: true },
-                    "",
-                    "#app"
-                );
-                const chain = window.appNavigation.stack;
-                for (const item of chain) {
-                    history.pushState(
-                        { appScreen: item.screen, data: item.data || {}, scrollY: Number(item.scrollY) || 0,
-                          __socialAppRestoredHistory: true },
-                        "",
-                        "#" + item.screen
-                    );
-                }
-                history.pushState(
-                    { appScreen: restoredScreen, data: restoredData, scrollY: restoredScrollY,
-                      __socialAppRestoredHistory: true },
-                    "",
-                    "#" + restoredScreen
-                );
-            } catch (historyError) {
-                console.warn("⚠️ INTERNAL HISTORY REBUILD FAILED:", historyError);
-                history.replaceState(
-                    { appScreen: restoredScreen, data: restoredData, scrollY: restoredScrollY },
-                    "",
-                    "#" + restoredScreen
-                );
-            }
-        } else {
-            history.replaceState(
-                { ...history.state, appScreen: restoredScreen, data: restoredData, scrollY: restoredScrollY },
-                "",
-                "#" + restoredScreen
-            );
-        }
-
-        const restoredCurrentState = window.setCurrentNavigationState(
-            restoredScreen,
-            restoredData,
-            restoredScrollY
-        );
-        if (restoredCurrentState) {
-            restoredCurrentState.stack = window.appNavigation.stack.map(item => ({
-                ...item,
-                data: { ...(item.data || {}) }
-            }));
-            window.syncNavigationSession?.(restoredCurrentState);
-        }
-
-        console.log(
-            "🧭 NAVIGATION INITIALIZED FROM REFRESH SNAPSHOT →",
-            restoredScreen,
-            "saved prior screens:", window.appNavigation.stack.length
-        );
-
-        return;
-    }
-
-    const state =
-        history.state;
-
-    if (
-        !state ||
-        !state.appScreen
-    ) {
-
-        const homeState = {
-            appScreen: "app",
-            data: {},
-            scrollY: 0
-        };
-
-        history.replaceState(
-            homeState,
-            "",
-            "#app"
-        );
-
-        window.setCurrentNavigationState(
-            "app",
-            {},
-            0
-        );
-
-        console.log(
-            "🧭 NAVIGATION INITIALIZED → HOME"
-        );
-
-        return;
-    }
-
-    window.setCurrentNavigationState(
-        state.appScreen,
-        state.data || {},
-        state.scrollY || 0
-    );
-
-    console.log(
-        "🧭 NAVIGATION INITIALIZED:",
-        window.appNavigation.current
-    );
+    const homeState = {
+        appScreen: "app",
+        data: {},
+        scrollY: 0,
+        __socialAppFreshRoot: true
+    };
+    try { history.replaceState(homeState, "", location.pathname + location.search + "#app"); } catch (e) {}
+    window.setCurrentNavigationState("app", {}, 0);
+    console.log("🧭 NAVIGATION INITIALIZED → FRESH HOME");
 };
 
 
@@ -56181,280 +55846,9 @@ window.addEventListener(
 // RELOAD RESTORE
 // =====================================================
 
-window.restoreNavigationAfterReload =
-    async function () {
-
-        let saved = null;
-
-        try {
-
-            saved =
-                JSON.parse(
-                    sessionStorage.getItem(
-                        "appNavigationState"
-                    ) ||
-                    localStorage.getItem(
-                        "socialAppNavigationState"
-                    )
-                );
-
-        } catch (error) {
-
-            console.warn(
-                "⚠️ SAVED NAVIGATION INVALID:",
-                error
-            );
-        }
-
-
-        if (!saved?.screen) {
-
-            console.log(
-                "🏠 NO SAVED NAVIGATION"
-            );
-
-            return;
-        }
-
-
-        console.log(
-            "🔄 RELOAD → RESTORE:",
-            saved
-        );
-
-
-        window.appNavigation.restoring =
-            true;
-
-        if (Array.isArray(saved.stack)) {
-            window.appNavigation.stack = saved.stack
-                .filter(item => item?.screen && item.screen !== saved.screen)
-                .map(item => ({
-                    screen: item.screen,
-                    data: { ...(item.data || {}) },
-                    scrollY: Number(item.scrollY) || 0,
-                    timestamp: Number(item.timestamp) || Date.now()
-                }));
-        }
-
-        try {
-
-            /*
-             * Special case:
-             *
-             * The page was reloaded while an
-             * overlay was open.
-             */
-            if (
-                saved.screen ===
-                    "mediaViewer"
-            ) {
-
-                /*
-                 * We need the media viewer's
-                 * underlying screen to exist
-                 * before opening the media again.
-                 */
-                const sourceScreen =
-                    saved.data?.sourceScreen ||
-                    saved.data?.source ||
-                    "app";
-
-                const sourceData =
-                    saved.data?.sourceData ||
-                    {};
-
-                if (
-                    sourceScreen !==
-                    "app"
-                ) {
-
-                    await window.restoreNavigationState({
-                        screen:
-                            sourceScreen,
-
-                        data:
-                            sourceData,
-
-                        scrollY:
-                            0
-                    });
-                }
-
-                /*
-                 * Now restore the actual viewer.
-                 */
-                if (
-                    saved.data?.url &&
-                    typeof window.openMedia ===
-                        "function"
-                ) {
-
-                    /*
-                     * openMedia() sees the current
-                     * history state as mediaViewer,
-                     * so it replaces rather than pushes.
-                     */
-                    window.openMedia(
-                        saved.data.url,
-                        saved.data.type ||
-                            "image"
-                    );
-                }
-
-                return;
-            }
-
-
-            if (
-                saved.screen ===
-                    "photoGallery"
-            ) {
-
-                const sourceScreen =
-                    saved.data?.sourceScreen ||
-                    saved.data?.source ||
-                    "app";
-
-                const sourceData =
-                    saved.data?.sourceData ||
-                    {};
-
-                /*
-                 * Restore the profile underneath
-                 * the gallery first.
-                 */
-                if (
-                    sourceScreen !==
-                    "app"
-                ) {
-
-                    await window.restoreNavigationState({
-                        screen:
-                            sourceScreen,
-
-                        data:
-                            sourceData,
-
-                        scrollY:
-                            0
-                    });
-                }
-
-                /*
-                 * The gallery data may not yet be
-                 * loaded. If profile loading created
-                 * the gallery, restore its index.
-                 */
-                if (
-                    Number.isInteger(
-                        Number(
-                            saved.data?.index
-                        )
-                    )
-                ) {
-
-                    window.profileGalleryIndex =
-                        Number(
-                            saved.data.index
-                        );
-                }
-
-                /*
-                 * Re-create the gallery without
-                 * pushing another history entry.
-                 */
-                if (
-                    typeof window.renderPhotoGallery ===
-                    "function"
-                ) {
-
-                    let overlay =
-                        document.getElementById(
-                            "photoGallery"
-                        );
-
-                    if (!overlay) {
-
-                        overlay =
-                            document.createElement(
-                                "div"
-                            );
-
-                        overlay.id =
-                            "photoGallery";
-
-                        overlay.style.cssText = `
-                            position:fixed;
-                            inset:0;
-                            width:100vw;
-                            height:100vh;
-                            display:flex;
-                            align-items:center;
-                            justify-content:center;
-                            background:#000;
-                            z-index:2147483646;
-                            overflow:hidden;
-                            visibility:visible;
-                            opacity:1;
-                            pointer-events:auto;
-                            touch-action:none;
-                        `;
-
-                        document.body.appendChild(
-                            overlay
-                        );
-                    }
-
-                    try {
-
-                        if (
-                            typeof window.lockBackground ===
-                            "function"
-                        ) {
-
-                            window.lockBackground();
-
-                        } else {
-
-                            document.body.style.overflow =
-                                "hidden";
-                        }
-
-                    } catch (error) {}
-
-                    window.renderPhotoGallery();
-                }
-
-                return;
-            }
-
-
-            /*
-             * Normal screen reload.
-             */
-            await window.restoreNavigationState(
-                saved
-            );
-
-        } catch (error) {
-
-            console.error(
-                "❌ RELOAD RESTORE FAILED:",
-                error
-            );
-
-            window.hideMediaViewerForNavigation();
-
-            window.hidePhotoGalleryForNavigation();
-
-            await window.goHome(false);
-
-        } finally {
-
-            window.appNavigation.restoring =
-                false;
-        }
+window.restoreNavigationAfterReload = async function () {
+        // Disabled by design. Reloaded/recreated documents start at Home.
+        return false;
     };
 
 
