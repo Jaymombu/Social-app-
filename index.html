@@ -51416,6 +51416,59 @@ async function openExactPostFromNotification(postId, options = {}) {
 
     console.log("🎯 OPENING EXACT POST:", postId);
 
+    // Portfolio links must open the creator profile first, then locate and
+    // highlight that exact post inside the creator's Posts tab. Do not send
+    // portfolio visitors to the Home feed or the comments screen.
+    if (options.portfolio === true && options.ownerId) {
+        const { data: portfolioPost, error: portfolioPostError } = await supabase
+            .from("posts")
+            .select("id,user_id")
+            .eq("id", postId)
+            .maybeSingle();
+
+        if (portfolioPostError || !portfolioPost ||
+            String(portfolioPost.user_id) !== String(options.ownerId)) {
+            console.error("❌ Portfolio post is unavailable or does not belong to this creator:", portfolioPostError);
+            return false;
+        }
+
+        const { data: creator } = await supabase
+            .from("profiles")
+            .select("id,name")
+            .eq("id", options.ownerId)
+            .maybeSingle();
+
+        const profileOpened = await window.openProfile(
+            options.ownerId,
+            creator?.name || "Creator",
+            { source: "portfolio", returnSource: "home", tab: "posts" }
+        );
+        if (profileOpened === false) return false;
+
+        // openProfile awaits its initial Posts-tab load. Wait briefly for the
+        // exact card to be mounted in that profile before scrolling/highlighting.
+        let profilePost = null;
+        for (let attempt = 0; attempt < 60; attempt++) {
+            const profileContainer = document.getElementById("profilePosts");
+            const candidate = document.getElementById(`post-${postId}`);
+            if (profileContainer && candidate && profileContainer.contains(candidate)) {
+                profilePost = candidate;
+                break;
+            }
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        if (!profilePost) {
+            console.error("❌ Exact portfolio post was not rendered in the creator profile:", postId);
+            return false;
+        }
+
+        profilePost.scrollIntoView({ behavior: "smooth", block: "center" });
+        highlightExactPost(profilePost);
+        console.log("✅ Creator profile opened and exact portfolio post highlighted:", postId);
+        return true;
+    }
+
     // ------------------------------------------
     // REMEMBER WE CAME FROM NOTIFICATIONS
     // ------------------------------------------
