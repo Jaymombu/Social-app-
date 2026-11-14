@@ -51445,13 +51445,25 @@ async function openExactPostFromNotification(postId, options = {}) {
         );
         if (profileOpened === false) return false;
 
-        // openProfile awaits its initial Posts-tab load. Wait briefly for the
-        // exact card to be mounted in that profile before scrolling/highlighting.
+        // Explicitly load the creator's Posts tab after the profile shell is
+        // mounted. openProfile may return before its tab's asynchronous query
+        // has finished, especially on a cold start or for logged-out visitors.
+        if (typeof window.loadProfilePosts !== "function") {
+            console.error("❌ Profile posts loader is unavailable.");
+            return false;
+        }
+        await window.loadProfilePosts(options.ownerId);
+
+        // Wait for the exact post card inside the visible profile, never the
+        // Home feed card or comments screen.
         let profilePost = null;
-        for (let attempt = 0; attempt < 60; attempt++) {
+        for (let attempt = 0; attempt < 100; attempt++) {
             const profileContainer = document.getElementById("profilePosts");
             const candidate = document.getElementById(`post-${postId}`);
-            if (profileContainer && candidate && profileContainer.contains(candidate)) {
+            const profileIsTarget =
+                document.getElementById("profileScreen")?.dataset.userId === String(options.ownerId) &&
+                document.getElementById("profileScreen")?.style.display !== "none";
+            if (profileIsTarget && profileContainer && candidate && profileContainer.contains(candidate)) {
                 profilePost = candidate;
                 break;
             }
@@ -51665,12 +51677,18 @@ function highlightExactPost(postElement) {
     postElement.style.transform =
         "scale(1.01)";
 
+    postElement.dataset.socialAppPortfolioHighlighted = "1";
+    postElement.style.outline = "3px solid #ff3040";
+    postElement.style.outlineOffset = "4px";
+    postElement.style.borderRadius = "12px";
     setTimeout(() => {
-
+        if (postElement.dataset.socialAppPortfolioHighlighted !== "1") return;
         postElement.style.boxShadow = "";
         postElement.style.transform = "";
-
-    }, 2500);
+        postElement.style.outline = "";
+        postElement.style.outlineOffset = "";
+        delete postElement.dataset.socialAppPortfolioHighlighted;
+    }, 6000);
 }
 
 // =====================================================
