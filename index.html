@@ -50,65 +50,46 @@
     visibility: hidden !important;
   }
 </style>
-<script>
+<script id="socialAppFreshDocumentPolicy">
 (function () {
+  // A new document is not the same thing as a surviving page. Browsers do
+  // not reliably fire pagehide/beforeunload when Android discards a tab, and
+  // navigation timing may still say "back_forward". Therefore never replay
+  // persisted in-app navigation into a newly-created document.
+  // A genuine BFCache return does not execute this head script again: its
+  // original DOM and JavaScript heap survive, so its exact screen is kept.
   try {
-    let raw = sessionStorage.getItem("appNavigationState");
-    if (!raw) raw = localStorage.getItem("socialAppLastScreenState");
-    if (!raw) raw = localStorage.getItem("socialAppNavigationState");
+    window.__socialAppForceFreshStart = true;
+    window.__socialAppSavedNavigation = null;
+    window.__socialAppDocumentWasReconstructed = true;
 
-    let saved = null;
-    try { saved = raw ? JSON.parse(raw) : null; } catch (e) {}
-
-    const hashScreen = (location.hash || "").replace(/^#/, "");
-    const knownScreens = new Set([
-      "profileScreen", "chatScreen", "inboxScreen",
-      "notificationsScreen", "searchScreen", "storyViewer",
-      "commentsScreen", "mediaViewer", "photoGallery",
-      "adminPanelScreen"
-    ]);
-
-    const screen = saved?.screen ||
-      (knownScreens.has(hashScreen) ? hashScreen : "app");
-
-    const navigationType =
-      (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]?.type) ||
-      "";
-    // pagehide/beforeunload leave a per-tab marker before the browser removes
-    // this document. On the next document load, treat that as a fresh launch
-    // even when Android reports the navigation type as "back_forward" or
-    // does not expose document.wasDiscarded.
-    let previousDocumentEnded = false;
+    // Remove every persisted secondary-screen snapshot. Keep authentication,
+    // user data, preferences, and any portfolio deep-link query parameters.
     try {
-      previousDocumentEnded = sessionStorage.getItem("socialAppPreviousDocumentEnded") === "1";
+      sessionStorage.removeItem("appNavigationState");
       sessionStorage.removeItem("socialAppPreviousDocumentEnded");
-    } catch (markerError) {}
-    const browserDestroyedPage = previousDocumentEnded ||
-      document.wasDiscarded === true || navigationType === "reload";
+      localStorage.removeItem("socialAppLastScreenState");
+      localStorage.removeItem("socialAppNavigationState");
+    } catch (storageError) {}
 
-    if (browserDestroyedPage) {
-      // Chrome/Android may discard the document and later reconstruct it.
-      // A reconstructed document is a fresh SocialApp launch, not a request
-      // to replay an old Profile/Chat/overlay into a new runtime. Clear only
-      // transient navigation snapshots; authentication and app data remain.
-      window.__socialAppForceFreshStart = true;
-      window.__socialAppSavedNavigation = null;
-      try {
-        sessionStorage.removeItem("appNavigationState");
-        localStorage.removeItem("socialAppLastScreenState");
-        localStorage.removeItem("socialAppNavigationState");
-      } catch (storageError) {}
-      try {
-        history.replaceState({ appScreen: "app", data: {}, scrollY: 0 }, "",
-          location.pathname + location.search + "#app");
-      } catch (historyError) {}
-      document.documentElement.classList.add("socialapp-restoring");
-    } else if (saved?.screen && saved.screen !== "app") {
-      // A live/frozen document may resume without reconstruction. Preserve
-      // its last secondary screen only in that case.
-      window.__socialAppSavedNavigation = saved;
-    }
-  } catch (e) {}
+    // Establish Home as the only browser-history root for this new document.
+    // Preserve query parameters because portfolio links use them to open a
+    // specific creator/post after the normal app shell has started.
+    try {
+      history.replaceState(
+        { appScreen: "app", data: {}, scrollY: 0, __socialAppFreshRoot: true },
+        "",
+        location.pathname + location.search + "#app"
+      );
+    } catch (historyError) {}
+
+    // Hide first paint until the normal Home shell is ready; do not restore
+    // any previous Profile/Chat/Notifications/overlay screen.
+    document.documentElement.classList.add("socialapp-restoring");
+  } catch (error) {
+    // Fail open to the ordinary app startup rather than leaving a blank page.
+    window.__socialAppForceFreshStart = true;
+  }
 })();
 </script>
 <script>
@@ -6864,9 +6845,8 @@ async function initAuth() {
     // We must not let that temporary Home shell become visible while a
     // secondary screen (Profile, Comments, Chat, etc.) is being restored.
     // Do this outside startApp() so the existing startApp() remains untouched.
-    const navigationEntry = performance.getEntriesByType?.("navigation")?.[0];
     const documentWasReconstructed =
-      document.wasDiscarded === true || navigationEntry?.type === "reload";
+      window.__socialAppForceFreshStart === true;
     window.__socialAppDocumentWasReconstructed = documentWasReconstructed;
 
     // When Android destroys the document, start the app normally from a clean
