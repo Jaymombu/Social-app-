@@ -25,11 +25,13 @@
 })();
 </script>
 <style id="socialAppDirectOpenStyle">
-  html.socialapp-direct-opening,
-  html.socialapp-direct-opening body {
+  html.socialapp-direct-opening body > :not(#profileScreen):not(#saDirectOpenNotice) {
     visibility: hidden !important;
   }
-  html.socialapp-direct-opening #saDirectOpenWait {
+  html.socialapp-direct-opening #profileScreen {
+    visibility: visible !important;
+  }
+  html.socialapp-direct-opening #profileScreen * {
     visibility: visible !important;
   }
 </style>
@@ -51445,25 +51447,13 @@ async function openExactPostFromNotification(postId, options = {}) {
         );
         if (profileOpened === false) return false;
 
-        // Explicitly load the creator's Posts tab after the profile shell is
-        // mounted. openProfile may return before its tab's asynchronous query
-        // has finished, especially on a cold start or for logged-out visitors.
-        if (typeof window.loadProfilePosts !== "function") {
-            console.error("❌ Profile posts loader is unavailable.");
-            return false;
-        }
-        await window.loadProfilePosts(options.ownerId);
-
-        // Wait for the exact post card inside the visible profile, never the
-        // Home feed card or comments screen.
+        // openProfile awaits its initial Posts-tab load. Wait briefly for the
+        // exact card to be mounted in that profile before scrolling/highlighting.
         let profilePost = null;
-        for (let attempt = 0; attempt < 100; attempt++) {
+        for (let attempt = 0; attempt < 60; attempt++) {
             const profileContainer = document.getElementById("profilePosts");
             const candidate = document.getElementById(`post-${postId}`);
-            const profileIsTarget =
-                document.getElementById("profileScreen")?.dataset.userId === String(options.ownerId) &&
-                document.getElementById("profileScreen")?.style.display !== "none";
-            if (profileIsTarget && profileContainer && candidate && profileContainer.contains(candidate)) {
+            if (profileContainer && candidate && profileContainer.contains(candidate)) {
                 profilePost = candidate;
                 break;
             }
@@ -51677,18 +51667,12 @@ function highlightExactPost(postElement) {
     postElement.style.transform =
         "scale(1.01)";
 
-    postElement.dataset.socialAppPortfolioHighlighted = "1";
-    postElement.style.outline = "3px solid #ff3040";
-    postElement.style.outlineOffset = "4px";
-    postElement.style.borderRadius = "12px";
     setTimeout(() => {
-        if (postElement.dataset.socialAppPortfolioHighlighted !== "1") return;
+
         postElement.style.boxShadow = "";
         postElement.style.transform = "";
-        postElement.style.outline = "";
-        postElement.style.outlineOffset = "";
-        delete postElement.dataset.socialAppPortfolioHighlighted;
-    }, 6000);
+
+    }, 2500);
 }
 
 // =====================================================
@@ -60018,41 +60002,70 @@ https://instagram.com/yourname"></textarea>
  const target=postId||profileId;
  const key='socialapp_portfolio_deeplink_done:'+location.pathname+':'+target;
  try{if(sessionStorage.getItem(key)==='1')return;sessionStorage.setItem(key,'1');}catch(e){}
- // Consume the link once so app navigation/history cannot reload the target.
  const cleanUrl=new URL(location.href);
  ['socialapp_profile','socialapp_post','socialapp_owner'].forEach(k=>cleanUrl.searchParams.delete(k));
  history.replaceState(history.state||{},'',cleanUrl.pathname+cleanUrl.search+cleanUrl.hash);
  let attempts=0,finished=false;
+ const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+ function fail(message,error){
+  document.documentElement.classList.remove('socialapp-direct-opening');
+  console.error('SocialApp portfolio deep-link failed:',error||message);
+  try{sessionStorage.removeItem(key);}catch(_){}
+  let n=document.getElementById('saDirectOpenNotice');
+  if(!n){n=document.createElement('div');n.id='saDirectOpenNotice';n.style.cssText='position:fixed;z-index:2147483647;bottom:20px;left:12px;right:12px;padding:12px;background:#321b3e;color:white;border-radius:10px;text-align:center';document.body.appendChild(n);}
+  n.textContent=message;
+ }
  const timer=setInterval(async()=>{
   if(finished){clearInterval(timer);return;}
-  if(++attempts>200){finished=true;clearInterval(timer);document.documentElement.classList.remove('socialapp-direct-opening');try{sessionStorage.removeItem(key);}catch(e){}showError('SocialApp is taking too long to open. Please refresh and try again.');return;}
+  if(++attempts>300){finished=true;clearInterval(timer);fail('SocialApp could not finish opening this profile. Please refresh and try again.');return;}
   const sb=window.supabase;
-  const startup=window.__appStartPromise;
-  const startupReady=window.__appStarted===true && !!document.getElementById('posts') && (!startup || (typeof startup.then==='function' && window.__appStartComplete===true));
-  const fnReady=postId?typeof window.openExactSocialAppPost==='function':typeof window.openProfile==='function';
-  if(!sb||typeof sb.from!=='function'||!startupReady||!fnReady)return;
+  const ready=window.__appStarted===true&&window.__appStartComplete===true&&!!document.getElementById('posts');
+  if(!sb||typeof sb.from!=='function'||!ready||typeof window.openProfile!=='function')return;
   finished=true;clearInterval(timer);
   try{
-   document.body.style.overflow='';
-   // Keep the page hidden while the app initializes and the destination is
-   // loaded. Reveal only after the requested profile/post is on screen.
+   // Always navigate to the creator profile first, including post links.
+   let destinationProfileId=profileId||ownerId;
    if(postId){
-    const opened=await window.openExactSocialAppPost(postId,{portfolio:true,ownerId:ownerId||null});
-    if(opened===false)throw new Error('The linked public post could not be opened.');
-   }else{
-    const opened=await window.openProfile(profileId,'Creator',{source:'portfolio',returnSource:'home'});
-    if(opened===false)throw new Error('The creator profile could not be opened.');
+    const {data:post,error}=await sb.from('posts').select('id,user_id').eq('id',postId).maybeSingle();
+    if(error||!post)throw error||new Error('Featured post is unavailable or not public.');
+    if(ownerId&&String(post.user_id)!==String(ownerId))throw new Error('Featured post does not belong to this creator.');
+    destinationProfileId=post.user_id;
+   }
+   if(!destinationProfileId)throw new Error('Creator profile ID is missing from this portfolio link.');
+   const {data:creator,error:creatorError}=await sb.from('profiles').select('id,name').eq('id',destinationProfileId).maybeSingle();
+   if(creatorError)throw creatorError;
+   const opened=await window.openProfile(destinationProfileId,creator?.name||'Creator',{source:'portfolio',returnSource:'home',tab:'posts'});
+   if(opened===false)throw new Error('SocialApp refused to open this creator profile.');
+   // Confirm the correct profile is actually the visible destination.
+   let screen=document.getElementById('profileScreen');
+   for(let i=0;i<100;i++){
+    screen=document.getElementById('profileScreen');
+    if(screen&&String(screen.dataset.userId||'')===String(destinationProfileId)&&getComputedStyle(screen).display!=='none')break;
+    await sleep(100);
+   }
+   if(!screen||String(screen.dataset.userId||'')!==String(destinationProfileId))throw new Error('Creator profile did not finish rendering.');
+   if(postId){
+    if(typeof window.loadProfilePosts!=='function')throw new Error('Creator Posts tab is unavailable.');
+    await window.loadProfilePosts(destinationProfileId);
+    let card=null;
+    for(let i=0;i<100;i++){
+     const container=document.getElementById('profilePosts');
+     const candidate=document.getElementById('post-'+postId);
+     if(container&&candidate&&container.contains(candidate)){card=candidate;break;}
+     await sleep(100);
+    }
+    if(!card)throw new Error('The exact post is not available in this creator profile. Check its public visibility and profile Posts permissions.');
+    card.scrollIntoView({behavior:'instant',block:'center'});
+    card.style.setProperty('outline','4px solid #ff3040','important');
+    card.style.setProperty('outline-offset','4px','important');
+    card.style.setProperty('box-shadow','0 0 0 8px rgba(255,48,64,.22)','important');
+    card.style.setProperty('border-radius','12px','important');
+    card.setAttribute('data-socialapp-portfolio-highlight','true');
    }
    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
    document.documentElement.classList.remove('socialapp-direct-opening');
-  }catch(e){
-   document.documentElement.classList.remove('socialapp-direct-opening');
-   console.error('SocialApp portfolio navigation failed:',e);
-   try{sessionStorage.removeItem(key);}catch(_){}
-   showError('Could not open this SocialApp item. Please return to the portfolio and try again.');
-  }
+  }catch(error){fail('Could not open the creator profile or featured post: '+(error?.message||'Unknown error'),error);}
  },100);
- function showError(message){const notice=document.createElement('div');notice.style.cssText='position:fixed;z-index:2147483647;bottom:20px;left:12px;right:12px;padding:12px;background:#321b3e;color:white;border-radius:10px;text-align:center';notice.textContent=message;document.body.appendChild(notice);}
 })();
 </script>
 </body>
