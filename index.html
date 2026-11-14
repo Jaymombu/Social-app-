@@ -74,7 +74,17 @@
     const navigationType =
       (performance.getEntriesByType && performance.getEntriesByType("navigation")[0]?.type) ||
       "";
-    const browserDestroyedPage = document.wasDiscarded === true || navigationType === "reload";
+    // pagehide/beforeunload leave a per-tab marker before the browser removes
+    // this document. On the next document load, treat that as a fresh launch
+    // even when Android reports the navigation type as "back_forward" or
+    // does not expose document.wasDiscarded.
+    let previousDocumentEnded = false;
+    try {
+      previousDocumentEnded = sessionStorage.getItem("socialAppPreviousDocumentEnded") === "1";
+      sessionStorage.removeItem("socialAppPreviousDocumentEnded");
+    } catch (markerError) {}
+    const browserDestroyedPage = previousDocumentEnded ||
+      document.wasDiscarded === true || navigationType === "reload";
 
     if (browserDestroyedPage) {
       // Chrome/Android may discard the document and later reconstruct it.
@@ -6790,34 +6800,38 @@ async function initAuth() {
     console.log("No logged-in user yet");
   }
 
-  // Read the saved destination before starting Home. If Android/Chrome
-  // reconstructed the document while another screen was open, mark the
-  // restore as pending so startup can restore that screen immediately.
-  // Use the head-level snapshot first. It was captured before any startup
-  // code had a chance to replace the saved destination with Home.
-  let savedNavigation = window.__socialAppSavedNavigation || null;
-  try {
-    if (!savedNavigation) {
-      savedNavigation = JSON.parse(
-        sessionStorage.getItem("appNavigationState") || "null"
-      );
-    }
-  } catch (e) {}
-
-  if (!savedNavigation?.screen || savedNavigation.screen === "app") {
+  // A reconstructed/ended document must always start at Home. Do not read
+  // either the per-tab or durable secondary-screen snapshots in this case.
+  let savedNavigation = null;
+  if (window.__socialAppForceFreshStart !== true) {
+    savedNavigation = window.__socialAppSavedNavigation || null;
     try {
-      const durable = JSON.parse(
-        localStorage.getItem("socialAppLastScreenState") ||
-        localStorage.getItem("socialAppNavigationState") ||
-        "null"
-      );
-      if (durable?.screen &&
-          durable.screen !== "app" &&
-          (!durable.userId || String(durable.userId) === String(currentUser?.id || ""))) {
-        savedNavigation = durable;
-        sessionStorage.setItem("appNavigationState", JSON.stringify(durable));
+      if (!savedNavigation) {
+        savedNavigation = JSON.parse(
+          sessionStorage.getItem("appNavigationState") || "null"
+        );
       }
     } catch (e) {}
+
+    if (!savedNavigation?.screen || savedNavigation.screen === "app") {
+      try {
+        const durable = JSON.parse(
+          localStorage.getItem("socialAppLastScreenState") ||
+          localStorage.getItem("socialAppNavigationState") ||
+          "null"
+        );
+        if (durable?.screen &&
+            durable.screen !== "app" &&
+            (!durable.userId || String(durable.userId) === String(currentUser?.id || ""))) {
+          savedNavigation = durable;
+          sessionStorage.setItem("appNavigationState", JSON.stringify(durable));
+        }
+      } catch (e) {}
+    }
+  } else {
+    window.__socialAppSavedNavigation = null;
+    window.appNavigation && (window.appNavigation.stack = []);
+    window.appNavigation && (window.appNavigation.current = null);
   }
 
   let startupPromise = null;
@@ -51953,12 +51967,26 @@ window.persistNavigationBeforeBackground = function () {
 
 document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
+        // Keep a snapshot while the live document is merely backgrounded.
+        // Do NOT mark this as destroyed: switching apps/tabs should not force
+        // a fresh launch unless the document is actually unloaded.
         window.persistNavigationBeforeBackground?.();
     }
 });
 
-window.addEventListener("pagehide", () => {
+window.addEventListener("pagehide", event => {
     window.persistNavigationBeforeBackground?.();
+    // A page entering BFCache is still alive and must retain its current
+    // screen. A non-persisted page is being unloaded/discarded; the next
+    // document in this tab must start at Home instead of replaying this screen.
+    if (!event.persisted) {
+        try { sessionStorage.setItem("socialAppPreviousDocumentEnded", "1"); } catch (e) {}
+    }
+});
+
+window.addEventListener("beforeunload", () => {
+    // Backup for browsers that fire beforeunload but omit pagehide on discard.
+    try { sessionStorage.setItem("socialAppPreviousDocumentEnded", "1"); } catch (e) {}
 });
 
 window.addEventListener("pageshow", event => {
@@ -51967,6 +51995,9 @@ window.addEventListener("pageshow", event => {
     // Replaying restoreNavigationAfterReload here would rebuild the screen,
     // discard transient state, and can corrupt the Back stack.
     if (event.persisted) {
+        // The old document survived in BFCache; cancel any beforeunload marker
+        // so a later navigation does not mistake this live page for a discard.
+        try { sessionStorage.removeItem("socialAppPreviousDocumentEnded"); } catch (e) {}
         window.__socialAppDocumentWasReconstructed = false;
         return;
     }
@@ -52717,7 +52748,21 @@ window.initializeAppNavigation = function () {
     // the Home root. This is what prevents the Home/Explore/Following shell
     // from becoming the navigation state during startup.
     const preservedRefreshState =
-        window.__socialAppSavedNavigation;
+        window.__socialAppForceFreshStart === true
+            ? null
+            : window.__socialAppSavedNavigation;
+
+    if (window.__socialAppForceFreshStart === true) {
+        window.appNavigation.stack = [];
+        window.appNavigation.current = null;
+        try {
+            history.replaceState(
+                { appScreen: "app", data: {}, scrollY: 0, __socialAppFreshRoot: true },
+                "",
+                location.pathname + location.search + "#app"
+            );
+        } catch (freshHistoryError) {}
+    }
 
     if (preservedRefreshState?.screen &&
         preservedRefreshState.screen !== "app") {
