@@ -59622,6 +59622,7 @@ https://instagram.com/yourname"></textarea>
   const data=await saveCreatorPortfolio(true);if(!data)return;
   const featured=creatorPortfolioPosts.filter(p=>data.featured.includes(String(p.id))&&String(p.visibility||'public').toLowerCase()==='public');
   const profile=creatorPortfolioProfile||{};
+  if(!profile.id){message('saPortfolioMessage','Could not identify your SocialApp profile. Reload Creator Studio, then export again.');return;}
   const name=profile.name||window.currentUser?.user_metadata?.name||window.currentUser?.user_metadata?.full_name||'SocialApp Creator';
   const avatar=profile.avatar_url?await portfolioMediaForExport('avatars',profile.avatar_url,'image'):'';
   const linkHtml=data.links.map(url=>'<a href="'+portfolioEscape(url)+'" target="_blank" rel="noopener noreferrer">'+portfolioEscape(new URL(url).hostname)+'</a>').join(' · ');
@@ -59939,17 +59940,28 @@ https://instagram.com/yourname"></textarea>
  const timer=setInterval(async()=>{
   if(finished){clearInterval(timer);return;}
   if(++attempts>120){finished=true;clearInterval(timer);try{sessionStorage.removeItem(key);}catch(e){}console.warn('SocialApp portfolio link timed out waiting for app startup.');return;}
+  // The navigation functions are declared before the module-based Supabase
+  // client and app startup are necessarily ready. Wait for all three.
+  const clientReady=!!window.supabase && typeof window.supabase.from==='function';
+  const appReady=!!document.getElementById('app');
   const canOpenPost=typeof window.openExactSocialAppPost==='function';
   const canOpenProfile=typeof window.openProfile==='function';
-  if(postId?!canOpenPost:!canOpenProfile)return;
+  if(!clientReady||!appReady||(postId?!canOpenPost:!canOpenProfile))return;
   finished=true;clearInterval(timer);
   try{
+   // Make sure the main app is visible before routing into the target.
+   const app=document.getElementById('app');
+   if(app)app.style.display='';
    if(postId){
     await window.openExactSocialAppPost(postId,{portfolio:true,ownerId:params.get('socialapp_owner')||null});
    }else{
     await window.openProfile(profileId,'Creator',{source:'portfolio',returnSource:'home'});
    }
-  }catch(e){console.error('SocialApp portfolio navigation failed:',e);try{sessionStorage.removeItem(key);}catch(_){} }
+  }catch(e){
+   console.error('SocialApp portfolio navigation failed:',e);
+   try{sessionStorage.removeItem(key);}catch(_){}
+   const notice=document.createElement('div');notice.style.cssText='position:fixed;z-index:2147483647;bottom:20px;left:12px;right:12px;padding:12px;background:#321b3e;color:white;border-radius:10px;text-align:center';notice.textContent='Could not open this SocialApp item. Please return to the portfolio and try again.';document.body.appendChild(notice);
+  }
  },250);
 })();
 </script>
