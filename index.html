@@ -25,42 +25,22 @@
 })();
 </script>
 <style id="socialAppDirectOpenStyle">
-  html.socialapp-direct-opening body > :not(#profileScreen):not(#saDirectOpenNotice):not(#saDirectOpenWait) {
+  /* Never hide the document itself: that created a completely blank page
+     because this file did not reliably mount #saDirectOpenWait. */
+  html.socialapp-direct-opening #app,
+  html.socialapp-direct-opening #topBar,
+  html.socialapp-direct-opening #homeScreen {
     visibility: hidden !important;
   }
-  html.socialapp-direct-opening #profileScreen,
-  html.socialapp-direct-opening #profileScreen * {
-    visibility: visible !important;
-  }
-  #saDirectOpenWait {
-    display:none;
-    position:fixed;
-    inset:0;
-    z-index:2147483647;
-    align-items:center;
-    justify-content:center;
-    flex-direction:column;
-    gap:14px;
-    background:#100d16;
-    color:#f7f2fb;
-    font:16px system-ui;
-    text-align:center;
-    padding:24px;
-  }
-  html.socialapp-direct-opening #saDirectOpenWait { display:flex; visibility:visible !important; }
+  #saDirectOpenWait{display:none;position:fixed;inset:0;z-index:2147483647;background:#100d16;color:#f7f2fb;align-items:center;justify-content:center;flex-direction:column;gap:14px;font:16px system-ui;text-align:center;padding:24px}
+  html.socialapp-direct-opening #saDirectOpenWait{display:flex;visibility:visible!important}
 </style>
-<script id="socialAppDirectOpenWaitLayer">
+<script id="socialAppDirectOpenWaitMount">
 (function(){
- try {
-  if(!new URLSearchParams(location.search).has('socialapp_profile') && !new URLSearchParams(location.search).has('socialapp_post')) return;
-  const mount=()=>{
-   if(document.getElementById('saDirectOpenWait')) return;
-   const n=document.createElement('div'); n.id='saDirectOpenWait';
-   n.innerHTML='<div style="width:34px;height:34px;border:3px solid #69458a;border-top-color:#fff;border-radius:50%;animation:saDirectSpin .8s linear infinite"></div><div>Opening creator profile…</div><style>@keyframes saDirectSpin{to{transform:rotate(360deg)}}</style>';
-   (document.body||document.documentElement).appendChild(n);
-  };
-  if(document.body) mount(); else document.addEventListener('DOMContentLoaded',mount,{once:true});
- } catch(e) {}
+ const q=new URLSearchParams(location.search);
+ if(!q.has('socialapp_profile')&&!q.has('socialapp_post'))return;
+ function mount(){if(document.getElementById('saDirectOpenWait'))return;const n=document.createElement('div');n.id='saDirectOpenWait';n.innerHTML='<div style="width:32px;height:32px;border:3px solid #69458a;border-top-color:#fff;border-radius:50%;animation:saDirectSpin .8s linear infinite"></div><div>Opening creator profile…</div><style>@keyframes saDirectSpin{to{transform:rotate(360deg)}}</style>';document.body.appendChild(n);}
+ if(document.body)mount();else document.addEventListener('DOMContentLoaded',mount,{once:true});
 })();
 </script>
 <style id="socialAppEarlyRestoreStyle">
@@ -51444,6 +51424,17 @@ function appendReplies(data) {
 
 async function openExactPostFromNotification(postId, options = {}) {
 
+    if (options.portfolio === true && !options.__singleFlightInner) {
+        const requestKey = String(postId) + ":" + String(options.ownerId || "");
+        window.__portfolioPostOpenPromises ||= new Map();
+        const existing = window.__portfolioPostOpenPromises.get(requestKey);
+        if (existing) return existing;
+        const task = openExactPostFromNotification(postId, { ...options, __singleFlightInner: true });
+        window.__portfolioPostOpenPromises.set(requestKey, task);
+        try { return await task; }
+        finally { if (window.__portfolioPostOpenPromises.get(requestKey) === task) window.__portfolioPostOpenPromises.delete(requestKey); }
+    }
+
     console.log("🎯 OPENING EXACT POST:", postId);
 
     // Portfolio links must open the creator profile first, then locate and
@@ -60022,84 +60013,27 @@ https://instagram.com/yourname"></textarea>
 
 <script id="socialapp-portfolio-deep-links">
 (function(){
- const params=new URLSearchParams(location.search);
- const profileId=params.get('socialapp_profile');
- const postId=params.get('socialapp_post');
- const ownerId=params.get('socialapp_owner');
+ const q=new URLSearchParams(location.search),profileId=q.get('socialapp_profile'),postId=q.get('socialapp_post'),ownerId=q.get('socialapp_owner');
  if(!profileId&&!postId)return;
- const target=postId||profileId;
- const key='socialapp_portfolio_deeplink_done:'+location.pathname+':'+target;
- try{if(sessionStorage.getItem(key)==='1')return;sessionStorage.setItem(key,'1');}catch(e){}
- const cleanUrl=new URL(location.href);
- ['socialapp_profile','socialapp_post','socialapp_owner'].forEach(k=>cleanUrl.searchParams.delete(k));
- history.replaceState(history.state||{},'',cleanUrl.pathname+cleanUrl.search+cleanUrl.hash);
- let attempts=0,finished=false;
- const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
- function fail(message,error){
-  document.documentElement.classList.remove('socialapp-direct-opening');
-  const wait=document.getElementById('saDirectOpenWait'); if(wait)wait.remove();
-  const app=document.getElementById('app'); if(app)app.style.visibility='';
-  console.error('SocialApp portfolio deep-link failed:',error||message);
-  try{sessionStorage.removeItem(key);}catch(_){}
-  let n=document.getElementById('saDirectOpenNotice');
-  if(!n){n=document.createElement('div');n.id='saDirectOpenNotice';n.style.cssText='position:fixed;z-index:2147483647;bottom:20px;left:12px;right:12px;padding:12px;background:#321b3e;color:white;border-radius:10px;text-align:center';document.body.appendChild(n);}
-  n.textContent=message;
- }
+ const key='sa_portfolio_open_once:'+location.pathname+':'+(postId||profileId);
+ try{if(sessionStorage.getItem(key)==='done')return;sessionStorage.setItem(key,'running');}catch(e){}
+ let started=false,tries=0;
  const timer=setInterval(async()=>{
-  if(finished){clearInterval(timer);return;}
-  if(++attempts>300){finished=true;clearInterval(timer);fail('SocialApp could not finish opening this profile. Please refresh and try again.');return;}
-  const sb=window.supabase;
-  // Do not depend on internal startup flags that can remain false during
-  // auth restoration. Wait for the actual capabilities needed to navigate.
-  const ready=!!document.body&&!!document.getElementById('profileScreen');
-  if(!sb||typeof sb.from!=='function'||!ready||typeof window.openProfile!=='function')return;
-  finished=true;clearInterval(timer);
+  if(started)return;
+  if(++tries>240){clearInterval(timer);document.documentElement.classList.remove('socialapp-direct-opening');document.getElementById('saDirectOpenWait')?.remove();try{sessionStorage.removeItem(key);}catch(e){}showError('SocialApp could not finish opening this item. Please refresh and try again.');return;}
+  if(!window.supabase||typeof window.supabase.from!=='function'||typeof window.openProfile!=='function'||!window.__appStartComplete)return;
+  started=true;clearInterval(timer);
   try{
-   if(window.__appStartPromise) await window.__appStartPromise;
-   // Always navigate to the creator profile first, including post links.
-   let destinationProfileId=profileId||ownerId;
-   if(postId){
-    const {data:post,error}=await sb.from('posts').select('id,user_id').eq('id',postId).maybeSingle();
-    if(error||!post)throw error||new Error('Featured post is unavailable or not public.');
-    if(ownerId&&String(post.user_id)!==String(ownerId))throw new Error('Featured post does not belong to this creator.');
-    destinationProfileId=post.user_id;
-   }
-   if(!destinationProfileId)throw new Error('Creator profile ID is missing from this portfolio link.');
-   const {data:creator,error:creatorError}=await sb.from('profiles').select('id,name').eq('id',destinationProfileId).maybeSingle();
-   if(creatorError)throw creatorError;
-   const opened=await window.openProfile(destinationProfileId,creator?.name||'Creator',{source:'portfolio',returnSource:'home',tab:'posts'});
-   if(opened===false)throw new Error('SocialApp refused to open this creator profile.');
-   // Confirm the correct profile is actually the visible destination.
-   let screen=document.getElementById('profileScreen');
-   for(let i=0;i<100;i++){
-    screen=document.getElementById('profileScreen');
-    if(screen&&String(screen.dataset.userId||'')===String(destinationProfileId)&&getComputedStyle(screen).display!=='none')break;
-    await sleep(100);
-   }
-   if(!screen||String(screen.dataset.userId||'')!==String(destinationProfileId))throw new Error('Creator profile did not finish rendering.');
-   if(postId){
-    if(typeof window.loadProfilePosts!=='function')throw new Error('Creator Posts tab is unavailable.');
-    await window.loadProfilePosts(destinationProfileId);
-    let card=null;
-    for(let i=0;i<100;i++){
-     const container=document.getElementById('profilePosts');
-     const candidate=document.getElementById('post-'+postId);
-     if(container&&candidate&&container.contains(candidate)){card=candidate;break;}
-     await sleep(100);
-    }
-    if(!card)throw new Error('The exact post is not available in this creator profile. Check its public visibility and profile Posts permissions.');
-    card.scrollIntoView({behavior:'instant',block:'center'});
-    card.style.setProperty('outline','4px solid #ff3040','important');
-    card.style.setProperty('outline-offset','4px','important');
-    card.style.setProperty('box-shadow','0 0 0 8px rgba(255,48,64,.22)','important');
-    card.style.setProperty('border-radius','12px','important');
-    card.setAttribute('data-socialapp-portfolio-highlight','true');
-   }
+   let ok=false;
+   if(postId){ok=await window.openExactSocialAppPost(postId,{portfolio:true,ownerId:ownerId||null});}
+   else ok=await window.openProfile(profileId,'Creator',{source:'portfolio',returnSource:'home',tab:'posts'});
+   if(!ok)throw new Error('The requested creator or featured post could not be loaded.');
    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-   document.documentElement.classList.remove('socialapp-direct-opening');
-   const wait=document.getElementById('saDirectOpenWait'); if(wait)wait.remove();
-  }catch(error){fail('Could not open the creator profile or featured post: '+(error?.message||'Unknown error'),error);}
+   document.documentElement.classList.remove('socialapp-direct-opening');document.getElementById('saDirectOpenWait')?.remove();
+   try{sessionStorage.setItem(key,'done');}catch(e){}
+  }catch(error){console.error('Portfolio direct navigation failed:',error);document.documentElement.classList.remove('socialapp-direct-opening');document.getElementById('saDirectOpenWait')?.remove();try{sessionStorage.removeItem(key);}catch(e){}showError(error?.message||'Could not open this SocialApp item.');}
  },100);
+ function showError(message){const n=document.createElement('div');n.style.cssText='position:fixed;z-index:2147483647;bottom:20px;left:12px;right:12px;padding:12px;background:#321b3e;color:white;border-radius:10px;text-align:center';n.textContent=message;document.body.appendChild(n);}
 })();
 </script>
 </body>
