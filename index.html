@@ -6931,7 +6931,11 @@ function safeStart() {
   // Keep the exact startApp() implementation untouched, but expose its
   // completion promise so startup restoration can wait before revealing the
   // page.
-  window.__appStartPromise = Promise.resolve().then(() => startApp());
+  window.__appStartComplete = false;
+  window.__appStartPromise = Promise.resolve().then(() => startApp()).then(result => {
+    window.__appStartComplete = true;
+    return result;
+  });
 
   return window.__appStartPromise;
 
@@ -51443,7 +51447,7 @@ async function openExactPostFromNotification(postId, options = {}) {
 
         highlightExactPost(postElement);
 
-        return;
+        return true;
     }
 
     // ------------------------------------------
@@ -51470,7 +51474,12 @@ async function openExactPostFromNotification(postId, options = {}) {
             error
         );
 
-        return;
+        return false;
+    }
+
+    if (options.ownerId && String(post.user_id) !== String(options.ownerId)) {
+        console.error("❌ Portfolio post owner does not match the linked creator.");
+        return false;
     }
 
     // ------------------------------------------
@@ -51545,39 +51554,25 @@ async function openExactPostFromNotification(postId, options = {}) {
     renderFeed(window.postsState);
 
     // ------------------------------------------
-    // FIND EXACT POST AFTER RENDER
+    // WAIT UNTIL THE EXACT POST IS IN THE DOM,
+    // THEN SCROLL TO IT AND HIGHLIGHT IT.
     // ------------------------------------------
 
-    requestAnimationFrame(() => {
+    let exactPost = document.getElementById(`post-${postId}`);
+    for (let attempt = 0; !exactPost && attempt < 40; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        exactPost = document.getElementById(`post-${postId}`);
+    }
 
-        const exactPost =
-            document.getElementById(
-                `post-${postId}`
-            );
+    if (!exactPost) {
+        console.error("❌ EXACT POST STILL NOT FOUND:", postId);
+        return false;
+    }
 
-        if (!exactPost) {
-
-            console.error(
-                "❌ EXACT POST STILL NOT FOUND:",
-                postId
-            );
-
-            return;
-        }
-
-        console.log(
-            "🎯 FOUND EXACT LIKED POST:",
-            exactPost.id
-        );
-
-        exactPost.scrollIntoView({
-            behavior: "smooth",
-            block: "center"
-        });
-
-        highlightExactPost(exactPost);
-
-    });
+    console.log("🎯 FOUND EXACT POST:", exactPost.id);
+    exactPost.scrollIntoView({ behavior: "smooth", block: "center" });
+    highlightExactPost(exactPost);
+    return true;
 }
 
 window.openExactSocialAppPost = (postId, options = {}) => openExactPostFromNotification(postId, options);
@@ -59583,7 +59578,7 @@ https://instagram.com/yourname"></textarea>
  }
  async function loadCreatorPortfolio(){
   const sb=client(),uid=currentId();let data={};
-  try{if(uid&&sb){const {data:row,error}=await sb.from('creator_portfolios').select('slug,title,bio,links,featured_post_ids,is_published').eq('user_id',uid).maybeSingle();if(error)throw error;if(row)data={slug:row.slug,title:row.title,bio:row.bio,links:row.links||[],featured:(row.featured_post_ids||[]).map(String),published:row.is_published};const {data:profile}=await sb.from('profiles').select('name,username,avatar_url,verified').eq('id',uid).maybeSingle();creatorPortfolioProfile=profile||null;}}
+  try{if(uid&&sb){const {data:row,error}=await sb.from('creator_portfolios').select('slug,title,bio,links,featured_post_ids,is_published').eq('user_id',uid).maybeSingle();if(error)throw error;if(row)data={slug:row.slug,title:row.title,bio:row.bio,links:row.links||[],featured:(row.featured_post_ids||[]).map(String),published:row.is_published};const {data:profile,error:profileError}=await sb.from('profiles').select('id,name,username,avatar_url,verified').eq('id',uid).maybeSingle();if(profileError)throw profileError;creatorPortfolioProfile=profile?{...profile,id:profile.id||uid}:{id:uid,name:'SocialApp Creator',avatar_url:null,verified:false};}}
   catch(e){console.warn('Could not load cloud portfolio:',e);try{data=JSON.parse(localStorage.getItem(portfolioStorageKey())||'{}');}catch(_){}message('saPortfolioMessage','Cloud portfolio unavailable. Check that the SQL migration has been run.');}
   $('saPortfolioSlug').value=data.slug||'';$('saPortfolioPublish').checked=!!data.published;$('saPortfolioTitle').value=data.title||'';$('saPortfolioBio').value=data.bio||'';$('saPortfolioLinks').value=(data.links||[]).join('\n');creatorPortfolioFeatured=Array.isArray(data.featured)?data.featured.slice(0,6):[];renderCreatorPortfolioPreview(readPortfolioForm());
  }
@@ -59621,8 +59616,8 @@ https://instagram.com/yourname"></textarea>
  async function exportCreatorPortfolio(){
   const data=await saveCreatorPortfolio(true);if(!data)return;
   const featured=creatorPortfolioPosts.filter(p=>data.featured.includes(String(p.id))&&String(p.visibility||'public').toLowerCase()==='public');
-  const profile=creatorPortfolioProfile||{};
-  if(!profile.id){message('saPortfolioMessage','Could not identify your SocialApp profile. Reload Creator Studio, then export again.');return;}
+  const profile={...(creatorPortfolioProfile||{}),id:creatorPortfolioProfile?.id||currentId()||''};
+  if(!profile.id){message('saPortfolioMessage','Could not identify your SocialApp profile. Sign in again, reopen Creator Studio, and retry export.');return;}
   const name=profile.name||window.currentUser?.user_metadata?.name||window.currentUser?.user_metadata?.full_name||'SocialApp Creator';
   const avatar=profile.avatar_url?await portfolioMediaForExport('avatars',profile.avatar_url,'image'):'';
   const linkHtml=data.links.map(url=>'<a href="'+portfolioEscape(url)+'" target="_blank" rel="noopener noreferrer">'+portfolioEscape(new URL(url).hostname)+'</a>').join(' · ');
@@ -59928,41 +59923,38 @@ https://instagram.com/yourname"></textarea>
  const params=new URLSearchParams(location.search);
  const profileId=params.get('socialapp_profile');
  const postId=params.get('socialapp_post');
+ const ownerId=params.get('socialapp_owner');
  if(!profileId&&!postId)return;
- const key='socialapp_portfolio_deeplink_done:'+location.pathname+':'+(postId||profileId);
+ const target=postId||profileId;
+ const key='socialapp_portfolio_deeplink_done:'+location.pathname+':'+target;
  try{if(sessionStorage.getItem(key)==='1')return;sessionStorage.setItem(key,'1');}catch(e){}
- // Remove the one-shot route BEFORE opening a screen. If app initialization
- // or navigation causes a refresh, the same deep link cannot fire repeatedly.
+ // Consume the link once so app navigation/history cannot reload the target.
  const cleanUrl=new URL(location.href);
  ['socialapp_profile','socialapp_post','socialapp_owner'].forEach(k=>cleanUrl.searchParams.delete(k));
  history.replaceState(history.state||{},'',cleanUrl.pathname+cleanUrl.search+cleanUrl.hash);
  let attempts=0,finished=false;
  const timer=setInterval(async()=>{
   if(finished){clearInterval(timer);return;}
-  if(++attempts>120){finished=true;clearInterval(timer);try{sessionStorage.removeItem(key);}catch(e){}console.warn('SocialApp portfolio link timed out waiting for app startup.');return;}
-  // The navigation functions are declared before the module-based Supabase
-  // client and app startup are necessarily ready. Wait for all three.
-  const clientReady=!!window.supabase && typeof window.supabase.from==='function';
-  const appReady=!!document.getElementById('app');
-  const canOpenPost=typeof window.openExactSocialAppPost==='function';
-  const canOpenProfile=typeof window.openProfile==='function';
-  if(!clientReady||!appReady||(postId?!canOpenPost:!canOpenProfile))return;
+  if(++attempts>200){finished=true;clearInterval(timer);try{sessionStorage.removeItem(key);}catch(e){}showError('SocialApp is taking too long to open. Please refresh and try again.');return;}
+  const sb=window.supabase;
+  const startup=window.__appStartPromise;
+  const startupReady=window.__appStarted===true && !!document.getElementById('posts') && (!startup || (typeof startup.then==='function' && window.__appStartComplete===true));
+  const fnReady=postId?typeof window.openExactSocialAppPost==='function':typeof window.openProfile==='function';
+  if(!sb||typeof sb.from!=='function'||!startupReady||!fnReady)return;
   finished=true;clearInterval(timer);
   try{
-   // Make sure the main app is visible before routing into the target.
-   const app=document.getElementById('app');
-   if(app)app.style.display='';
+   const app=document.getElementById('app');if(app)app.style.display='';
+   document.body.style.overflow='';
    if(postId){
-    await window.openExactSocialAppPost(postId,{portfolio:true,ownerId:params.get('socialapp_owner')||null});
+    const opened=await window.openExactSocialAppPost(postId,{portfolio:true,ownerId:ownerId||null});
+    if(opened===false)throw new Error('The linked public post could not be opened.');
    }else{
-    await window.openProfile(profileId,'Creator',{source:'portfolio',returnSource:'home'});
+    const opened=await window.openProfile(profileId,'Creator',{source:'portfolio',returnSource:'home'});
+    if(opened===false)throw new Error('The creator profile could not be opened.');
    }
-  }catch(e){
-   console.error('SocialApp portfolio navigation failed:',e);
-   try{sessionStorage.removeItem(key);}catch(_){}
-   const notice=document.createElement('div');notice.style.cssText='position:fixed;z-index:2147483647;bottom:20px;left:12px;right:12px;padding:12px;background:#321b3e;color:white;border-radius:10px;text-align:center';notice.textContent='Could not open this SocialApp item. Please return to the portfolio and try again.';document.body.appendChild(notice);
-  }
- },250);
+  }catch(e){console.error('SocialApp portfolio navigation failed:',e);try{sessionStorage.removeItem(key);}catch(_){}showError('Could not open this SocialApp item. Please return to the portfolio and try again.');}
+ },100);
+ function showError(message){const notice=document.createElement('div');notice.style.cssText='position:fixed;z-index:2147483647;bottom:20px;left:12px;right:12px;padding:12px;background:#321b3e;color:white;border-radius:10px;text-align:center';notice.textContent=message;document.body.appendChild(notice);}
 })();
 </script>
 </body>
