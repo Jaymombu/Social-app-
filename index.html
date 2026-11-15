@@ -8237,8 +8237,35 @@ async function showStory(isDirectOpen = false) {
     return;
   }
 
-  const story =
-  window.storyList[window.storyIndex];
+  let story = window.storyList[window.storyIndex];
+
+  // The stories feed can contain a stale/partial cached object. The database
+  // may have media_url even when the in-memory card object does not. Re-fetch
+  // the authoritative row by ID before declaring that media is missing.
+  const storyHasMedia = value => Boolean(String(
+    value?.media_url || value?.image_url || value?.file_url || value?.media || value?.url || ""
+  ).trim());
+  if (story?.id && !storyHasMedia(story)) {
+    try {
+      const { data: freshStory, error: freshStoryError } = await supabase
+        .from("stories")
+        .select("*")
+        .eq("id", story.id)
+        .maybeSingle();
+      if (freshStoryError) {
+        console.warn("Could not refresh story media metadata:", freshStoryError);
+      } else if (freshStory) {
+        Object.assign(story, freshStory);
+        window.storyList[window.storyIndex] = story;
+        if (window.currentGroup?.stories) {
+          const groupIndex = window.currentGroup.stories.findIndex(item => String(item.id) === String(story.id));
+          if (groupIndex >= 0) Object.assign(window.currentGroup.stories[groupIndex], freshStory);
+        }
+      }
+    } catch (refreshError) {
+      console.warn("Story metadata refresh failed:", refreshError);
+    }
+  }
   
   const audio = document.getElementById("storyAudio");
 
@@ -8687,7 +8714,8 @@ const storyMediaUrl = await window.resolveStorageMediaUrl("stories", rawStoryMed
 const storyType = String(story.media_type || "").toLowerCase();
 const storyIsVideo = storyType === "video" || /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(storyMediaUrl);
 if (!storyMediaUrl) {
-  container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story has no media URL.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
+  console.error("Story media URL is still missing after refreshing the database row:", { storyId: story?.id, storyKeys: story ? Object.keys(story) : [] });
+  container.innerHTML = `<div style="color:white;padding:24px;text-align:center">This story record has no readable media URL.<br><small style="opacity:.65">Story ID: ${String(story?.id || "unknown")}</small><br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>`;
   return;
 }
 if (!storyIsVideo) {
