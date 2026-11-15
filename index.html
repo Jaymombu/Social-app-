@@ -3840,6 +3840,32 @@ body.dark #profileScrollContainer.profile-theme-surface #profilePostsTab{
   color:#fff !important;
 }
 
+/* Creator Studio appearance preferences, scoped to the viewed profile. */
+#profileScrollContainer.profile-theme-surface {
+  --profile-bg: #000;
+  --profile-surface: #151515;
+  --profile-border: #2d2d2d;
+}
+#profileScrollContainer.creator-profile-theme-violet { --profile-bg:#10091a; --profile-surface:#21132f; --profile-border:#51316d; }
+#profileScrollContainer.creator-profile-theme-ocean { --profile-bg:#07131d; --profile-surface:#102532; --profile-border:#24536b; }
+#profileScrollContainer.creator-profile-theme-forest { --profile-bg:#09150f; --profile-surface:#14271b; --profile-border:#31563b; }
+#profileScrollContainer.creator-profile-theme-sunset { --profile-bg:#1b0d0a; --profile-surface:#2b1712; --profile-border:#68402e; }
+#profileScrollContainer.creator-profile-theme-midnight { --profile-bg:#000; --profile-surface:#151515; --profile-border:#2d2d2d; }
+#profileScrollContainer #profileTabIndicator { background:var(--creator-accent,#8a2be2)!important; }
+#profileScrollContainer #profileSettingsButton,
+#profileScrollContainer #profileMessageButton,
+#profileScrollContainer #followBtn,
+#profileScrollContainer .profile-primary-action { border-color:var(--creator-accent,#8a2be2)!important; }
+#profileScrollContainer #profileMessageButton,
+#profileScrollContainer #followBtn:not([data-state="following"]):not([data-state="pending"]) { background:var(--creator-accent,#8a2be2)!important; }
+#profileScrollContainer.creator-profile-layout-featured #profilePosts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; align-items:start; }
+#profileScrollContainer.creator-profile-layout-featured #profilePosts > * { min-width:0; }
+#profileScrollContainer.creator-profile-layout-featured #profilePosts .post-card { margin:0!important; }
+#profileScrollContainer.creator-profile-layout-creator #profileAvatarImage { border:3px solid var(--creator-accent,#8a2be2); padding:3px; box-sizing:border-box; }
+#profileScrollContainer.creator-profile-layout-creator #profileTabs { border-color:var(--creator-accent,#8a2be2)!important; }
+#profileScrollContainer.creator-profile-layout-creator .profile-theme-content { background:linear-gradient(180deg,var(--creator-accent-soft,transparent),transparent 150px); }
+@media(max-width:520px){#profileScrollContainer.creator-profile-layout-featured #profilePosts{grid-template-columns:minmax(0,1fr);}}
+
 /* Theme profile action buttons while retaining the blue primary action. */
 body.light #profileScrollContainer.profile-theme-surface #profileSettingsButton{
   background:#eee !important;
@@ -28901,8 +28927,40 @@ window.openProfile = async function (
     }
 
     // =================================================
-    // PROFILE DATA
+    // CREATOR PROFILE APPEARANCE
+    // Load public appearance preferences for the profile owner.
+    // The database policy permits reading these display-only settings;
+    // editing remains restricted to the owner's active Premium account.
     // =================================================
+
+    let creatorAppearance = null;
+    try {
+        const { data: appearanceData, error: appearanceError } = await supabase
+            .from("premium_creator_settings")
+            .select("accent_color,banner_url,theme_preset,profile_layout")
+            .eq("user_id", userId)
+            .maybeSingle();
+        if (appearanceError) throw appearanceError;
+        creatorAppearance = appearanceData || null;
+    } catch (appearanceError) {
+        // Appearance is optional. A failed lookup must never prevent a
+        // profile from opening or change its normal profile visibility.
+        console.warn("Could not load creator profile appearance:", appearanceError);
+    }
+
+    const creatorAccent = /^#[0-9a-fA-F]{6}$/.test(creatorAppearance?.accent_color || "")
+        ? creatorAppearance.accent_color
+        : "#8a2be2";
+    const creatorTheme = ["midnight", "violet", "ocean", "forest", "sunset"].includes(creatorAppearance?.theme_preset)
+        ? creatorAppearance.theme_preset
+        : "midnight";
+    const creatorLayout = ["classic", "featured", "creator"].includes(creatorAppearance?.profile_layout)
+        ? creatorAppearance.profile_layout
+        : "classic";
+    const creatorBanner = /^https?:\/\//i.test(creatorAppearance?.banner_url || "")
+        ? creatorAppearance.banner_url
+        : null;
+    const profileBannerUrl = coverUrl || creatorBanner;
 
     const avatarUrl =
         profile.avatar_url &&
@@ -29028,8 +29086,12 @@ window.openProfile = async function (
 
 <div
     id="profileScrollContainer"
-    class="profile-theme-surface"
+    class="profile-theme-surface creator-profile-theme-${creatorTheme} creator-profile-layout-${creatorLayout}"
+    data-creator-theme="${creatorTheme}"
+    data-creator-layout="${creatorLayout}"
     style="
+        --creator-accent:${creatorAccent};
+        --creator-accent-soft:${creatorAccent}22;
         color:white;
         min-height:100%;
         height:100%;
@@ -29041,18 +29103,18 @@ window.openProfile = async function (
 >
 
     <div style="
-        height:200px;
-        background:#333;
+        height:${creatorLayout === "creator" ? "170px" : "200px"};
+        background:linear-gradient(135deg, ${creatorAccent}, #17121f);
         position:relative;
         overflow:hidden;
     ">
 
         ${
-            coverUrl
+            profileBannerUrl
                 ? `
         <img
             id="profileCoverImage"
-            src="${escapeHtml(coverUrl)}"
+            src="${escapeHtml(profileBannerUrl)}"
             alt="Cover Photo"
             style="
                 position:absolute;
@@ -29477,7 +29539,7 @@ ${escapeHtml(profile.bio)}
                     left:0;
                     height:2px;
                     width:33.333%;
-                    background:#1d9bf0;
+                    background:var(--creator-accent, #8a2be2);
                     transition:left .25s ease;
                 "
             ></div>
@@ -29741,7 +29803,7 @@ window.profileNavigationUserId =
 
     if (
         profileCoverImage &&
-        coverUrl &&
+        profileBannerUrl &&
         typeof window.openMedia ===
         "function"
     ) {
@@ -29755,11 +29817,11 @@ window.profileNavigationUserId =
 
                 console.log(
                     "🖼️ PROFILE COVER → MEDIA:",
-                    coverUrl
+                    profileCoverImage.currentSrc || profileCoverImage.src
                 );
 
                 window.openMedia(
-                    coverUrl,
+                    profileCoverImage.currentSrc || profileCoverImage.src,
                     "image"
                 );
             }
@@ -58584,8 +58646,14 @@ window.reportComment=id=>window.submitUserReport("comment",id);
    <p class="sa-chart-footnote">Analytics are private to your account. Daily charts use the secure Creator Studio analytics function and do not expose viewer identities.</p>
   </section>
   <section id="saCreatorAppearance" style="display:none">
-   <div class="sa-card"><h3 style="margin-top:0">Profile accent</h3><label for="saCreatorColor">Choose your profile accent color</label><input id="saCreatorColor" type="color" value="#8a2be2" style="height:54px;padding:5px"><label for="saCreatorBanner">Profile banner image URL</label><input id="saCreatorBanner" type="url" placeholder="https://…"><button class="sa-btn" id="saCreatorSaveStyle">Save appearance</button><p id="saCreatorStyleMsg" style="color:#c7bacf"></p></div>
-   <p style="font-size:12px;color:#9c8fa6">Appearance preferences are saved to the Premium creator settings table and can persist across logins.</p>
+   <div class="sa-card"><h3 style="margin-top:0">Profile appearance</h3>
+    <label for="saCreatorColor">Accent colour</label><input id="saCreatorColor" type="color" value="#8a2be2" style="height:54px;padding:5px">
+    <label for="saCreatorTheme">Profile theme</label><select id="saCreatorTheme" style="width:100%;padding:12px;border-radius:10px;background:#211a2b;color:#fff;border:1px solid #59436b"><option value="midnight">Midnight</option><option value="violet">Violet</option><option value="ocean">Ocean</option><option value="forest">Forest</option><option value="sunset">Sunset</option></select>
+    <label for="saCreatorLayout">Profile layout</label><select id="saCreatorLayout" style="width:100%;padding:12px;border-radius:10px;background:#211a2b;color:#fff;border:1px solid #59436b"><option value="classic">Classic profile</option><option value="featured">Featured content first</option><option value="creator">Creator portfolio layout</option></select>
+    <label for="saCreatorBanner">Profile banner image URL</label><input id="saCreatorBanner" type="url" placeholder="https://…" autocomplete="url">
+    <button class="sa-btn" id="saCreatorSaveStyle">Save appearance</button><p id="saCreatorStyleMsg" style="color:#c7bacf"></p>
+   </div>
+   <p style="font-size:12px;color:#9c8fa6">Your accent, theme, layout and banner preferences are saved securely to your Premium creator settings and persist across logins. Theme and layout selections are stored for the profile-display integration.</p>
   </section>
   <section id="saCreatorSchedule" style="display:none">
    <div class="sa-card">
@@ -59124,8 +59192,21 @@ https://instagram.com/yourname"></textarea>
    ['saChartViews','saChartUnique','saChartEngagement','saChartFollowers','saChartTopPosts'].forEach(id=>{const el=$(id);if(el)el.textContent='Chart unavailable. Refresh Creator Studio to retry.';});
   }
  }
- async function loadStyle(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_creator_settings').select('accent_color,banner_url').eq('user_id',creatorUserId).maybeSingle();if(error)throw error;if(data){$('saCreatorColor').value=data.accent_color||'#8a2be2';$('saCreatorBanner').value=data.banner_url||'';}}catch(e){console.warn('Could not load creator style',e);}}
- async function saveStyle(){const sb=client();if(!sb)return;message('saCreatorStyleMsg','Saving…');try{if(!(await hasAccess()))throw new Error('Premium subscription is not active.');const row={user_id:creatorUserId,accent_color:$('saCreatorColor').value,banner_url:$('saCreatorBanner').value.trim()||null,updated_at:new Date().toISOString()};const {error}=await sb.from('premium_creator_settings').upsert(row,{onConflict:'user_id'});if(error)throw error;message('saCreatorStyleMsg','Saved. Your preferences will be available on your next login.');}catch(e){message('saCreatorStyleMsg',e.message||'Could not save. Apply the SQL migration first.');}}
+ async function loadStyle(){const sb=client();if(!sb)return;try{const {data,error}=await sb.from('premium_creator_settings').select('accent_color,banner_url,theme_preset,profile_layout').eq('user_id',creatorUserId).maybeSingle();if(error)throw error;if(data){$('saCreatorColor').value=data.accent_color||'#8a2be2';$('saCreatorBanner').value=data.banner_url||'';$('saCreatorTheme').value=data.theme_preset||'midnight';$('saCreatorLayout').value=data.profile_layout||'classic';}}catch(e){console.warn('Could not load creator style',e);message('saCreatorStyleMsg','Could not load saved appearance. Check your connection and settings permissions.');}}
+ async function saveStyle(){const sb=client();if(!sb)return;message('saCreatorStyleMsg','Saving…');try{if(!(await hasAccess()))throw new Error('Premium subscription is not active.');const banner=$('saCreatorBanner').value.trim();if(banner){const parsed=new URL(banner);if(!['https:','http:'].includes(parsed.protocol))throw new Error('Use a valid HTTP or HTTPS banner image URL.');}const row={user_id:creatorUserId,accent_color:$('saCreatorColor').value,banner_url:banner||null,theme_preset:$('saCreatorTheme').value,profile_layout:$('saCreatorLayout').value,updated_at:new Date().toISOString()};const {error}=await sb.from('premium_creator_settings').upsert(row,{onConflict:'user_id'});if(error)throw error;
+  const liveProfile=document.getElementById('profileScrollContainer');
+  if(liveProfile && String(liveProfile.closest('#profileScreen')?.dataset.userId || '')===String(creatorUserId)){
+   const theme=['midnight','violet','ocean','forest','sunset'].includes(row.theme_preset)?row.theme_preset:'midnight';
+   const layout=['classic','featured','creator'].includes(row.profile_layout)?row.profile_layout:'classic';
+   liveProfile.className=liveProfile.className.replace(/creator-profile-theme-[\w-]+/g,'').replace(/creator-profile-layout-[\w-]+/g,'').trim()+' creator-profile-theme-'+theme+' creator-profile-layout-'+layout;
+   liveProfile.dataset.creatorTheme=theme;liveProfile.dataset.creatorLayout=layout;
+   liveProfile.style.setProperty('--creator-accent',row.accent_color);
+   liveProfile.style.setProperty('--creator-accent-soft',row.accent_color+'22');
+   const cover=document.getElementById('profileCoverImage');
+   if(cover && row.banner_url)cover.src=row.banner_url;
+   else if(!cover && row.banner_url){const header=liveProfile.firstElementChild;if(header){const img=document.createElement('img');img.id='profileCoverImage';img.alt='Cover Photo';img.src=row.banner_url;img.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;cursor:pointer';img.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();if(typeof window.openMedia==='function')window.openMedia(img.currentSrc||img.src,'image');});header.prepend(img);}}
+  }
+  message('saCreatorStyleMsg','Appearance saved and applied to your profile.');}catch(e){message('saCreatorStyleMsg',e.message||'Could not save appearance.');}}
  function clearSchedulePreview(){
   if(schedulePreviewObjectUrl){URL.revokeObjectURL(schedulePreviewObjectUrl);schedulePreviewObjectUrl=null;}
   const wrap=$('saScheduleMediaPreview'),content=$('saSchedulePreviewContent'),caption=$('saSchedulePreviewCaption');
