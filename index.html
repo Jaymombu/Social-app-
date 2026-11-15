@@ -5434,6 +5434,23 @@ body:not(.dark) #commentsScreen button[id^="threadBtn-"] {
 @media(max-width:380px){#topBar{height:64px !important;min-height:64px !important}#storiesWrapper{padding-top:74px !important;}#storyViewer.active #storyTopBar{right:68px !important;}}
 </style>
 
+
+<style id="socialapp-user-appearance-css">
+:root{--sa-accent:#8a2be2;--sa-screen-soft:#17121f;--sa-screen-contrast:#08070b;--primary-color:var(--sa-accent);--accent-color:var(--sa-accent);--theme-accent:var(--sa-accent)}
+body{--sa-card-radius:16px}
+body button[style*="#8a2be2"],body [style*="background:#8a2be2"],body [style*="background: #8a2be2"],body [style*="background-color:#8a2be2"]{background-color:var(--sa-accent)!important}
+body [style*="border-color:#8a2be2"],body [style*="border:1px solid #8a2be2"]{border-color:var(--sa-accent)!important}
+#profileScreen[data-sa-screen-style="soft"] #profileScrollContainer{--profile-bg:#17121f!important;--profile-surface:#211a2b!important;--profile-border:#49345b!important}
+#profileScreen[data-sa-screen-style="contrast"] #profileScrollContainer{--profile-bg:#08070b!important;--profile-surface:#111!important;--profile-border:#333!important}
+body[data-sa-density="compact"] .post-card{margin-bottom:8px!important}
+body[data-sa-density="comfortable"] .post-card{margin-bottom:14px!important}
+body[data-sa-card-style="square"] .post-card,body[data-sa-card-style="square"] .profile-post-card{border-radius:5px!important}
+body[data-sa-card-style="rounded"] .post-card,body[data-sa-card-style="rounded"] .profile-post-card{border-radius:16px}
+#app[data-sa-screen-style="soft"],#searchScreen[data-sa-screen-style="soft"],#profileScreen[data-sa-screen-style="soft"],#inboxScreen[data-sa-screen-style="soft"],#chatScreen[data-sa-screen-style="soft"],#notificationsScreen[data-sa-screen-style="soft"],#profileSettingsScreen[data-sa-screen-style="soft"]{background:#17121f!important}
+#app[data-sa-screen-style="contrast"],#searchScreen[data-sa-screen-style="contrast"],#profileScreen[data-sa-screen-style="contrast"],#inboxScreen[data-sa-screen-style="contrast"],#chatScreen[data-sa-screen-style="contrast"],#notificationsScreen[data-sa-screen-style="contrast"],#profileSettingsScreen[data-sa-screen-style="contrast"]{background:#08070b!important}
+#homeBtn,#searchBtn,#chatBtn,#notificationsBtn,#settingsThemeBtn{--sa-accent:var(--sa-accent)}
+</style>
+
 </head>
 <body class="dark">
   
@@ -6933,6 +6950,7 @@ async function initAuth() {
   if (currentUser) {
     console.log("USER LOADED:", currentUser.id);
     window.__schedulePrivacySettingsPrefetch?.(currentUser.id);
+    window.loadUserAppAppearance?.(currentUser.id);
 
     await loadUnreadCount();
     await loadNotifications();
@@ -7039,6 +7057,7 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
   if (currentUser) {
     console.log("SIGNED IN:", currentUser.id);
     window.__schedulePrivacySettingsPrefetch?.(currentUser.id);
+    window.loadUserAppAppearance?.(currentUser.id);
 
     const restricted = await window.checkAccountRestriction(currentUser.id);
     if (restricted !== false) return;
@@ -7357,6 +7376,53 @@ window.toggleTheme = function() {
 window.setTheme(
   localStorage.getItem("theme") || "dark"
 );
+
+// Per-account app appearance preferences (all signed-in users; not Premium-gated).
+window.applyUserAppAppearance = function(prefs = {}) {
+  const theme = ["dark","light"].includes(prefs.theme) ? prefs.theme : (localStorage.getItem("theme") || "dark");
+  const accent = /^#[0-9a-fA-F]{6}$/.test(prefs.accent_color || "") ? prefs.accent_color : "#8a2be2";
+  const density = ["comfortable","compact"].includes(prefs.density) ? prefs.density : "comfortable";
+  const cardStyle = ["rounded","square"].includes(prefs.card_style) ? prefs.card_style : "rounded";
+  const screens = prefs.screen_preferences && typeof prefs.screen_preferences === "object" ? prefs.screen_preferences : {};
+  window.setTheme(theme);
+  document.documentElement.style.setProperty("--sa-accent", accent);
+  document.body.dataset.saDensity = density;
+  document.body.dataset.saCardStyle = cardStyle;
+  const map = {home:"app",explore:"searchScreen",profile:"profileScreen",messages:"inboxScreen",notifications:"notificationsScreen",settings:"profileSettingsScreen"};
+  window.__socialAppScreenStyleMap = map;
+  window.__socialAppScreenPreferences = screens;
+  const applyScreenStyles = () => Object.entries(map).forEach(([key,id]) => { const el=document.getElementById(id); if(el) el.dataset.saScreenStyle=["soft","contrast"].includes(screens[key])?screens[key]:"default"; });
+  applyScreenStyles();
+  if (!window.__socialAppAppearanceObserver && document.body) {
+    window.__socialAppAppearanceObserver = new MutationObserver(() => {
+      const current=window.__socialAppScreenPreferences||{};
+      Object.entries(window.__socialAppScreenStyleMap||{}).forEach(([key,id])=>{const el=document.getElementById(id);if(el)el.dataset.saScreenStyle=["soft","contrast"].includes(current[key])?current[key]:"default";});
+    });
+    window.__socialAppAppearanceObserver.observe(document.body,{childList:true,subtree:true});
+  }
+  const meta=document.querySelector('meta[name="theme-color"]'); if(meta) meta.setAttribute("content",accent);
+  const controls = {saAppTheme:theme,saAppAccent:accent,saAppDensity:density,saAppCardStyle:cardStyle,saScreenHome:screens.home||"default",saScreenExplore:screens.explore||"default",saScreenProfile:screens.profile||"default",saScreenMessages:screens.messages||"default",saScreenNotifications:screens.notifications||"default",saScreenSettings:screens.settings||"default"};
+  Object.entries(controls).forEach(([id,value])=>{const el=document.getElementById(id);if(el)el.value=value;});
+  window.__socialAppAppearancePrefs={theme,accent_color:accent,density,card_style:cardStyle,screen_preferences:screens};
+};
+
+window.loadUserAppAppearance = async function(userId) {
+  if(!userId) return; const sb=typeof client==="function"?client():null; if(!sb)return;
+  try { const {data,error}=await sb.from("user_app_appearance").select("theme,accent_color,density,card_style,screen_preferences").eq("user_id",userId).maybeSingle(); if(error)throw error; if(data){window.applyUserAppAppearance(data);} else {window.applyUserAppAppearance({theme:localStorage.getItem("theme")||"dark"});} }
+  catch(e){console.warn("Could not load personal appearance preferences:",e);window.applyUserAppAppearance({theme:localStorage.getItem("theme")||"dark"});}
+};
+
+window.saveUserAppAppearance = async function() {
+  const userId=window.currentProfileSettingsUserId; const sb=typeof client==="function"?client():null; const msg=document.getElementById("saAppAppearanceMsg");
+  const say=t=>{if(msg)msg.textContent=t;}; if(!userId||!sb){say("Please sign in again to save these choices.");return;}
+  const get=id=>document.getElementById(id)?.value;
+  const screens={home:get("saScreenHome"),explore:get("saScreenExplore"),profile:get("saScreenProfile"),messages:get("saScreenMessages"),notifications:get("saScreenNotifications"),settings:get("saScreenSettings")};
+  const row={user_id:userId,theme:get("saAppTheme"),accent_color:get("saAppAccent"),density:get("saAppDensity"),card_style:get("saAppCardStyle"),screen_preferences:screens,updated_at:new Date().toISOString()};
+  if(!/^#[0-9a-fA-F]{6}$/.test(row.accent_color||"")){say("Choose a valid accent colour.");return;}
+  say("Saving your appearance…");
+  try{const {error}=await sb.from("user_app_appearance").upsert(row,{onConflict:"user_id"});if(error)throw error;window.applyUserAppAppearance(row);say("Saved. Your app appearance has been updated.");}
+  catch(e){console.error("Could not save app appearance:",e);say(e.message||"Could not save appearance. Please try again.");}
+};
 
 // =====================================================
 // STORIES
@@ -28960,8 +29026,6 @@ window.openProfile = async function (
     const creatorBanner = /^https?:\/\//i.test(creatorAppearance?.banner_url || "")
         ? creatorAppearance.banner_url
         : null;
-    const profileBannerUrl = coverUrl || creatorBanner;
-
     const avatarUrl =
         profile.avatar_url &&
         profile.avatar_url !== "null"
@@ -28974,6 +29038,8 @@ window.openProfile = async function (
         profile.cover_url !== "null"
             ? profile.cover_url
             : null;
+
+    const profileBannerUrl = coverUrl || creatorBanner;
 
 
     const profileName =
@@ -35749,6 +35815,8 @@ window.openProfileSettings = async function (addHistory = true) {
             settingsScreen.style.opacity = "1";
             settingsScreen.style.pointerEvents = "auto";
         }
+        window.currentProfileSettingsUserId = userId;
+        window.loadUserAppAppearance?.(userId);
         return true;
     }
 
@@ -36052,6 +36120,26 @@ window.openProfileSettings = async function (addHistory = true) {
                 </div>
 
 
+                <!-- PERSONAL APP APPEARANCE: available to every signed-in account -->
+                <div style="font-size:13px;color:#888;font-weight:700;margin:24px 4px 10px;text-transform:uppercase;">Personal appearance &amp; display</div>
+                <div style="background:#111;border-radius:14px;padding:14px;border:1px solid #29202f;display:grid;gap:12px;">
+                    <div><label for="saAppTheme" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">App theme</label><select id="saAppTheme" style="width:100%;padding:12px;border-radius:10px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="dark">Dark</option><option value="light">Light</option></select></div>
+                    <div><label for="saAppAccent" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">App accent colour</label><input id="saAppAccent" type="color" value="#8a2be2" style="width:100%;height:44px;border:1px solid #59436b;border-radius:10px;background:#211a2b;padding:4px;"></div>
+                    <div><label for="saAppDensity" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">Screen spacing</label><select id="saAppDensity" style="width:100%;padding:12px;border-radius:10px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div>
+                    <div><label for="saAppCardStyle" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">Post card shape</label><select id="saAppCardStyle" style="width:100%;padding:12px;border-radius:10px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="rounded">Rounded</option><option value="square">Square</option></select></div>
+                    <div style="font-size:13px;font-weight:700;color:#ddd;margin-top:2px;">Individual screen backgrounds</div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                        <div><label for="saScreenHome" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Home</label><select id="saScreenHome" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
+                        <div><label for="saScreenExplore" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Explore</label><select id="saScreenExplore" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
+                        <div><label for="saScreenProfile" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Profiles</label><select id="saScreenProfile" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
+                        <div><label for="saScreenMessages" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Messages</label><select id="saScreenMessages" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
+                        <div><label for="saScreenNotifications" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Notifications</label><select id="saScreenNotifications" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
+                        <div><label for="saScreenSettings" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Settings</label><select id="saScreenSettings" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
+                    </div>
+                    <button type="button" id="saSaveAppAppearance" style="width:100%;padding:13px;border:0;border-radius:11px;background:#8a2be2;color:#fff;font-weight:700;font-size:15px;">Save appearance choices</button>
+                    <div id="saAppAppearanceMsg" role="status" style="font-size:12px;color:#c9a7e8;min-height:16px;"></div>
+                </div>
+
                 <!-- LOGOUT -->
                 <div style="
                     margin-top:28px;
@@ -36251,6 +36339,12 @@ window.openProfileSettings = async function (addHistory = true) {
     }
 
     // -------------------------------------------------
+    // PERSONAL APP APPEARANCE (available to all logged-in users)
+    // -------------------------------------------------
+    const saveAppAppearanceBtn = document.getElementById("saSaveAppAppearance");
+    if (saveAppAppearanceBtn) saveAppAppearanceBtn.onclick = () => window.saveUserAppAppearance();
+
+    // -------------------------------------------------
     // LOGOUT
     // -------------------------------------------------
 
@@ -36274,6 +36368,7 @@ window.openProfileSettings = async function (addHistory = true) {
     // -------------------------------------------------
 
     window.currentProfileSettingsUserId = userId;
+    window.loadUserAppAppearance?.(userId);
 
     console.log("✅ PROFILE SETTINGS OPEN");
 };
