@@ -5446,6 +5446,34 @@ body[data-sa-density="compact"] .post-card{margin-bottom:8px!important}
 body[data-sa-density="comfortable"] .post-card{margin-bottom:14px!important}
 body[data-sa-card-style="square"] .post-card,body[data-sa-card-style="square"] .profile-post-card{border-radius:5px!important}
 body[data-sa-card-style="rounded"] .post-card,body[data-sa-card-style="rounded"] .profile-post-card{border-radius:16px}
+/* Make personal appearance preferences visibly affect the real app surfaces. */
+body[data-sa-density="compact"] #app .home-composer,
+body[data-sa-density="compact"] #app .post-card,
+body[data-sa-density="compact"] #posts > div,
+body[data-sa-density="compact"] #storiesBar > div{padding-top:8px!important;padding-bottom:8px!important}
+body[data-sa-density="comfortable"] #app .home-composer,
+body[data-sa-density="comfortable"] #app .post-card{padding-top:16px!important;padding-bottom:16px!important}
+body[data-sa-card-style="square"] #app .home-composer,
+body[data-sa-card-style="square"] #app #posts > div,
+body[data-sa-card-style="square"] #app #storiesBar > div,
+body[data-sa-card-style="square"] #profileScreen .profile-post-card{border-radius:4px!important}
+body[data-sa-card-style="rounded"] #app .home-composer,
+body[data-sa-card-style="rounded"] #app #posts > div,
+body[data-sa-card-style="rounded"] #app #storiesBar > div,
+body[data-sa-card-style="rounded"] #profileScreen .profile-post-card{border-radius:18px!important}
+#app[data-sa-screen-style="soft"],#searchScreen[data-sa-screen-style="soft"],#profileScreen[data-sa-screen-style="soft"],#inboxScreen[data-sa-screen-style="soft"],#chatScreen[data-sa-screen-style="soft"],#notificationsScreen[data-sa-screen-style="soft"],#profileSettingsScreen[data-sa-screen-style="soft"]{background:#eee8f5!important;color:#211a2b!important}
+#app[data-sa-screen-style="soft"] .home-composer,#app[data-sa-screen-style="soft"] .post-card,#searchScreen[data-sa-screen-style="soft"] .search-card,#profileSettingsScreen[data-sa-screen-style="soft"] .settings-section{background:#f8f5fb!important;border-color:#d8cce5!important}
+#app[data-sa-screen-style="contrast"],#searchScreen[data-sa-screen-style="contrast"],#profileScreen[data-sa-screen-style="contrast"],#inboxScreen[data-sa-screen-style="contrast"],#chatScreen[data-sa-screen-style="contrast"],#notificationsScreen[data-sa-screen-style="contrast"],#profileSettingsScreen[data-sa-screen-style="contrast"]{background:#08070b!important;color:#fff!important}
+#app[data-sa-screen-style="contrast"] .home-composer,#app[data-sa-screen-style="contrast"] .post-card,#searchScreen[data-sa-screen-style="contrast"] .search-card,#profileSettingsScreen[data-sa-screen-style="contrast"] .settings-section{background:#111!important;border-color:#39313f!important;color:#fff!important}
+/* Audience controls must remain readable in both light and dark themes. */
+#postVisibilityChoices{color:var(--text-color,#222)!important}
+#postAccountVisibilityBadge{color:#fff!important;background:#333!important;border-color:#666!important;min-height:40px;box-sizing:border-box}
+body.light #postAccountVisibilityBadge{color:#171717!important;background:#f1f1f1!important;border-color:#bdbdbd!important}
+#postVisibilityPremiumLabel{color:#fff!important;background:#241333!important;border-color:#8a2be2!important;min-height:40px;box-sizing:border-box}
+body.light #postVisibilityPremiumLabel{color:#32164d!important;background:#f2e8fb!important;border-color:#8a2be2!important}
+#postVisibilityPremiumLabel span{color:inherit!important;font-weight:700!important}
+#postVisibilityPremium{width:18px!important;height:18px!important;accent-color:var(--sa-accent,#8a2be2)!important;flex:0 0 auto}
+#postAudienceHint{color:var(--text-color,#555)!important}
 #app[data-sa-screen-style="soft"],#searchScreen[data-sa-screen-style="soft"],#profileScreen[data-sa-screen-style="soft"],#inboxScreen[data-sa-screen-style="soft"],#chatScreen[data-sa-screen-style="soft"],#notificationsScreen[data-sa-screen-style="soft"],#profileSettingsScreen[data-sa-screen-style="soft"]{background:#17121f!important}
 #app[data-sa-screen-style="contrast"],#searchScreen[data-sa-screen-style="contrast"],#profileScreen[data-sa-screen-style="contrast"],#inboxScreen[data-sa-screen-style="contrast"],#chatScreen[data-sa-screen-style="contrast"],#notificationsScreen[data-sa-screen-style="contrast"],#profileSettingsScreen[data-sa-screen-style="contrast"]{background:#08070b!important}
 #homeBtn,#searchBtn,#chatBtn,#notificationsBtn,#settingsThemeBtn{--sa-accent:var(--sa-accent)}
@@ -7407,7 +7435,7 @@ window.applyUserAppAppearance = function(prefs = {}) {
 };
 
 window.loadUserAppAppearance = async function(userId) {
-  if(!userId) return; const sb=typeof client==="function"?client():null; if(!sb)return;
+  if(!userId) return; const sb=window.supabase||null; if(!sb)return;
   try { const {data,error}=await sb.from("user_app_appearance").select("theme,accent_color,density,card_style,screen_preferences").eq("user_id",userId).maybeSingle(); if(error)throw error; if(data){window.applyUserAppAppearance(data);} else {window.applyUserAppAppearance({theme:localStorage.getItem("theme")||"dark"});} }
   catch(e){console.warn("Could not load personal appearance preferences:",e);window.applyUserAppAppearance({theme:localStorage.getItem("theme")||"dark"});}
 };
@@ -7438,10 +7466,18 @@ window.openAppAppearanceSettings = async function() {
     document.body.appendChild(screen);
     screen.querySelector('#saAppearanceBack').onclick=()=>{screen.style.display='none';const settings=document.getElementById('profileSettingsScreen');if(settings)settings.style.display='block';};
     screen.querySelector('#saSaveAppAppearance').onclick=()=>window.saveUserAppAppearance();
+    screen.querySelectorAll('select,input[type="color"]').forEach(control=>{
+      control.addEventListener('change',()=>{
+        const get=id=>document.getElementById(id)?.value;
+        const preview={theme:get('saAppTheme')||'dark',accent_color:get('saAppAccent')||'#8a2be2',density:get('saAppDensity')||'comfortable',card_style:get('saAppCardStyle')||'rounded',screen_preferences:{home:get('saScreenHome')||'default',explore:get('saScreenExplore')||'default',profile:get('saScreenProfile')||'default',messages:get('saScreenMessages')||'default',notifications:get('saScreenNotifications')||'default',settings:get('saScreenSettings')||'default'}};
+        window.applyUserAppAppearance(preview);
+      });
+    });
   }
   const settings=document.getElementById('profileSettingsScreen');if(settings)settings.style.display='none';
   screen.style.display='block';
-  const sb=typeof client==='function'?client():null;
+  let sb=window.supabase||null;
+  if(!sb){for(let i=0;i<100&&!sb;i++){await new Promise(resolve=>setTimeout(resolve,100));sb=window.supabase||null;}}
   let activeId=null;
   if(sb){try{const {data,error}=await sb.auth.getUser();if(!error)activeId=data?.user?.id||null;}catch(e){console.warn('Could not verify app appearance session',e);}}
   activeId=activeId||window.currentProfileSettingsUserId||currentUser?.id||session?.user?.id||null;
@@ -7449,9 +7485,19 @@ window.openAppAppearanceSettings = async function() {
 };
 
 window.saveUserAppAppearance = async function() {
-  const sb=typeof client==="function"?client():null; const msg=document.getElementById("saAppAppearanceMsg");
+  const msg=document.getElementById("saAppAppearanceMsg");
   const say=t=>{if(msg)msg.textContent=t;};
-  if(!sb){say("Connection unavailable. Please try again.");return;}
+  say("Connecting to SocialApp…");
+  let sb=window.supabase||null;
+  // The app client is initialized asynchronously; don't mistake startup timing for a lost connection.
+  for(let i=0;i<100&&!sb;i++){
+    await new Promise(resolve=>setTimeout(resolve,100));
+    sb=window.supabase||null;
+  }
+  if(!sb || !sb.auth || typeof sb.auth.getUser!=="function"){
+    say("Supabase connection is not ready. Refresh the app and try again.");
+    return;
+  }
   say("Checking your signed-in account…");
   try {
     const {data:authData,error:authError}=await sb.auth.getUser();
@@ -7464,9 +7510,15 @@ window.saveUserAppAppearance = async function() {
     const row={user_id:userId,theme:get("saAppTheme")||"dark",accent_color:get("saAppAccent")||"#8a2be2",density:get("saAppDensity")||"comfortable",card_style:get("saAppCardStyle")||"rounded",screen_preferences:screens,updated_at:new Date().toISOString()};
     if(!/^#[0-9a-fA-F]{6}$/.test(row.accent_color)){say("Choose a valid accent colour.");return;}
     say("Saving your appearance…");
-    const {error}=await sb.from("user_app_appearance").upsert(row,{onConflict:"user_id"});if(error)throw error;
-    window.applyUserAppAppearance(row);say("Saved. Your app appearance has been updated.");
-  } catch(e) { console.error("Could not save app appearance:",e);say(e.message||"Could not save appearance. Please try again."); }
+    const {error}=await sb.from("user_app_appearance").upsert(row,{onConflict:"user_id"});
+    if(error)throw error;
+    window.applyUserAppAppearance(row);
+    say("Saved. Your app appearance has been updated.");
+  } catch(e) {
+    console.error("Could not save app appearance:",e);
+    const detail=e?.message||e?.details||"Unknown error";
+    say("Could not save appearance: "+detail);
+  }
 };
 
 // =====================================================
