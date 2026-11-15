@@ -8274,6 +8274,16 @@ window.pauseStory = function() {
   }
 };
 
+window.updateStoryMuteButton = function () {
+  const btn = document.getElementById("storyMuteBtn");
+  if (!btn) return;
+  btn.innerHTML = window.storyMuted
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l8 4Z"/><path d="m17 9 5 6m0-6-5 6"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="M16 9a5 5 0 0 1 0 6M19 6a9 9 0 0 1 0 12"/></svg>';
+  btn.setAttribute("aria-label", window.storyMuted ? "Unmute story" : "Mute story");
+  btn.setAttribute("title", window.storyMuted ? "Unmute" : "Mute");
+};
+
 window.resumeStory = function() {
 
   if (!window.storyPaused) return;
@@ -8291,10 +8301,7 @@ window.resumeStory = function() {
   const btn =
     document.getElementById("storyMuteBtn");
 
-  if (btn) {
-    btn.textContent =
-      window.storyMuted ? "🔇" : "🔊";
-  }
+  window.updateStoryMuteButton();
 
   const audio =
     document.getElementById("storyAudio");
@@ -8563,11 +8570,7 @@ if (video) {
 
 // UPDATE BUTTON UI
 const btn = document.getElementById("storyMuteBtn");
-if (btn) {
-  btn.innerHTML = window.storyMuted
-    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="m17 9 5 6m0-6-5 6"/></svg>'
-    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="M16 9a5 5 0 0 1 0 6M19 6a9 9 0 0 1 0 12"/></svg>' ;
-}
+window.updateStoryMuteButton();
 
   // HOLD RELEASE
   
@@ -8964,11 +8967,7 @@ keepUIVisible();
 
 const btn = document.getElementById("storyMuteBtn");
 
-if (btn) {
-  btn.innerHTML = window.storyMuted
-    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="m17 9 5 6m0-6-5 6"/></svg>'
-    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="M16 9a5 5 0 0 1 0 6M19 6a9 9 0 0 1 0 12"/></svg>' ;
-}
+window.updateStoryMuteButton();
 
   const video =
     document.getElementById("storyVideo");
@@ -9663,9 +9662,7 @@ if (audio && audio.src) {
 
   const btn = document.getElementById("storyMuteBtn");
 
-  if (btn) {
-    btn.textContent = window.storyMuted ? "🔇" : "🔊";
-  }
+  window.updateStoryMuteButton();
 
 };
 
