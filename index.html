@@ -5033,7 +5033,7 @@ body.dark #chatMessages .chat-reply-media-preview > div[style*="background:rgba(
 }
 .avatar-wrap .online-indicator,.story-avatar-wrap .online-indicator,.chat-avatar-wrap .online-indicator,.profile-avatar-wrap .online-indicator{
   position:absolute !important;
-  right:1px !important;
+  right:6px !important;
   bottom:1px !important;
   width:11px !important;
   height:11px !important;
@@ -6868,6 +6868,7 @@ window.showAccountRestrictedScreen = function () {
 
     document.getElementById("restrictedLogoutBtn")?.addEventListener("click", async () => {
       try {
+        await window.updateOnlineStatus?.(false);
         await supabase.auth.signOut();
       } finally {
         window.__accountRestricted = false;
@@ -7279,6 +7280,9 @@ supabase.auth.onAuthStateChange(async (event, newSession) => {
 });
 
 window.logout = async function () {
+  // Mark offline before ending the authenticated session.
+  try { await window.updateOnlineStatus?.(false); }
+  catch (presenceError) { console.warn("Logout presence update failed:", presenceError); }
   const { error } = await supabase.auth.signOut();
 
   if (error) {
@@ -42955,24 +42959,7 @@ try {
 // APP CLOSE / PAGE EXIT
 // =====================================================
 
-window.addEventListener("beforeunload", () => {
-
-  try {
-
-    if (typeof updateOnlineStatus === "function") {
-      updateOnlineStatus(false);
-    }
-
-  } catch (err) {
-
-    console.log(
-      "beforeunload error:",
-      err
-    );
-
-  }
-
-});
+// Backgrounding/unloading is not logout; explicit logout clears presence.
 
 function createCommentsScreen() {
 
@@ -57046,7 +57033,7 @@ window.applyAvatarBadges = function(root=document){
 // =====================================================
 // The database flag is treated as online only while the heartbeat is fresh.
 // This prevents a stale `online=true` value from leaving a green dot behind.
-window.PRESENCE_TTL_MS = 60000;
+window.PRESENCE_TTL_MS = 5 * 60 * 1000; // tolerate Android background timer throttling
 window.presenceIsOnline = function(profile){
   if (!profile || profile.online !== true) return false;
   const last = profile.last_seen ? new Date(profile.last_seen).getTime() : 0;
@@ -57116,28 +57103,32 @@ window.refreshVisiblePresence = async function(){
 window.startPresenceHeartbeat = async function(){
   if (window.__presenceHeartbeatStarted) return;
   window.__presenceHeartbeatStarted = true;
-  const setOnline = async (online) => {
-    const {data:{session}} = await supabase.auth.getSession();
-    if (!session?.user?.id) return;
-    await supabase.from('profiles').update({online, last_seen:new Date().toISOString()}).eq('id',session.user.id);
-  };
-  await setOnline(true);
+
+  // Send the initial online update once the signed-in session is available.
+  await window.updateOnlineStatus(true);
+
+  // Attempt heartbeats while foregrounded or backgrounded. Android may throttle
+  // or suspend timers, so presenceIsOnline uses a five-minute freshness window.
   window.__presenceHeartbeat = setInterval(() => {
-    if (document.visibilityState === 'visible' && navigator.onLine !== false) setOnline(true);
-  }, 10000);
+    if (navigator.onLine !== false) window.updateOnlineStatus(true);
+  }, 20000);
+
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      setOnline(true);
-      window.refreshVisiblePresence();
-    } else setOnline(false);
+      window.updateOnlineStatus(true);
+      window.refreshVisiblePresence?.();
+    }
+    // Hiding the app or locking the phone is not an explicit logout.
   });
-  window.addEventListener('online', () => setOnline(true));
-  window.addEventListener('offline', () => setOnline(false));
-  window.addEventListener('pagehide', () => {
-    try { setOnline(false); } catch(e) {}
-  });
-  setInterval(() => window.refreshVisiblePresence(), 5000);
-  window.refreshVisiblePresence();
+
+  window.addEventListener('online', () => window.updateOnlineStatus(true));
+  // Temporary offline/network loss is not treated as logout.
+  window.addEventListener('offline', () => {});
+
+  // Do not set offline on pagehide/beforeunload: those events are unreliable
+  // on Android and can also occur during lifecycle transitions/navigation.
+  window.setInterval(() => window.refreshVisiblePresence?.(), 10000);
+  window.refreshVisiblePresence?.();
 };
 
 // Subscribe once: all visible avatar surfaces update immediately when a profile changes.
@@ -57154,19 +57145,7 @@ window.addEventListener("load", () => {
   setTimeout(() => { if (window.supabase) window.startPresenceHeartbeat?.(); }, 300);
 }, {once:true});
 
-window.addEventListener("beforeunload", async () => {
-
-  if (!currentUser) return;
-
-  await supabase
-    .from("profiles")
-    .update({
-      online: false,
-      last_seen: new Date()
-    })
-    .eq("id", currentUser.id);
-
-});
+// Presence is cleared by explicit logout; abandoned sessions age out via PRESENCE_TTL_MS.
 
 document.addEventListener("contextmenu", function(e) {
   e.preventDefault();
@@ -59612,7 +59591,91 @@ https://instagram.com/yourname"></textarea>
   }
   const avatarHtml=avatar?'<a href="'+portfolioEscape(profileHref)+'"><img src="'+portfolioEscape(avatar)+'" alt="Open creator profile" style="width:88px;height:88px;border-radius:50%;object-fit:cover;margin-bottom:12px"></a>':'';
   const verified=profile.verified===true?'<span class="verified">✓ Verified</span>':'';
-  const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+portfolioEscape(data.title||name)+'</title><style>*{box-sizing:border-box}body{margin:0;background:#100d16;color:#f7f2fb;font:16px system-ui;line-height:1.6}.wrap{max-width:760px;margin:auto;padding:32px 20px}header{padding:30px;border-radius:20px;background:linear-gradient(135deg,#48206b,#17111f);border:1px solid #70449a}h1{margin:0 0 8px}article{padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523;overflow:hidden}.post-link{display:block;color:inherit;text-decoration:none}.open-label{display:block;color:#d5aaff;font-size:13px;margin-top:10px}article img,article video{display:block}a{color:#d5aaff;margin-right:12px}small{color:#bdaacb}.verified{display:inline-block;color:#c8a4ff;border:1px solid #70449a;border-radius:20px;padding:1px 8px;font-size:12px}.foot{margin-top:32px;color:#9d8ca9;font-size:12px}</style></head><body><main class="wrap"><header>'+avatarHtml+'<a href="'+portfolioEscape(profileHref)+'" style="color:#d5aaff;font-size:13px;text-decoration:none">'+portfolioEscape(name)+' '+verified+' · View SocialApp profile</a><h1>'+portfolioEscape(data.title||'Creator portfolio')+'</h1><p style="white-space:pre-wrap">'+portfolioEscape(data.bio).replace(/\n/g,'<br>')+'</p>'+linkHtml+'</header><h2>Featured content</h2>'+(postCards.join('\n')||'<p>No featured public posts selected.</p>')+'<p class="foot">Creator portfolio exported from SocialApp. Public featured content only.</p></main></body></html>';
+  const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+portfolioEscape(data.title||name)+'</title><style>*{box-sizing:border-box}body{margin:0;background:#100d16;color:#f7f2fb;font:16px system-ui;line-height:1.6}.wrap{max-width:760px;margin:auto;padding:32px 20px}header{padding:30px;border-radius:20px;background:linear-gradient(135deg,#48206b,#17111f);border:1px solid #70449a}h1{margin:0 0 8px}article{padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523;overflow:hidden}.post-link{display:block;color:inherit;text-decoration:none}.open-label{display:block;color:#d5aaff;font-size:13px;margin-top:10px}article img,article video{display:block}a{color:#d5aaff;margin-right:12px}small{color:#bdaacb}.verified{display:inline-block;color:#c8a4ff;border:1px solid #70449a;border-radius:20px;padding:1px 8px;font-size:12px}.foot{margin-top:32px;color:#9d8ca9;font-size:12px}</style></head><body><main class="wrap"><header>'+avatarHtml+'<a href="'+portfolioEscape(profileHref)+'" style="color:#d5aaff;font-size:13px;text-decoration:none">'+portfolioEscape(name)+' '+verified+' · View SocialApp profile</a><h1>'+portfolioEscape(data.title||'Creator portfolio')+'</h1><p style="white-space:pre-wrap">'+portfolioEscape(data.bio).replace(/\n/g,'<br>')+'</p>'+linkHtml+'</header><h2>Featured content</h2>'+(postCards.join('\n')||'<p>No featured public posts selected.</p>')+'<p class="foot">Creator portfolio exported from SocialApp. Public featured content only.</p></main>
+<style id="socialapp-floating-post-cards-and-actions">
+/* Transparent post cards: match the page background; show only a subtle outline. */
+#app #posts .post-card,
+#profilePosts .post-card,
+#app .post-card{
+  box-sizing:border-box!important;
+  width:calc(100% - 24px)!important;
+  margin:14px 12px 22px!important;
+  padding:14px 14px 12px!important;
+  border:1px solid var(--home-border,rgba(128,128,128,.22))!important;
+  border-radius:20px!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  overflow:hidden!important;
+  transform:translateZ(0);
+}
+body.dark #app #posts .post-card,
+body.dark #profilePosts .post-card,
+body.dark #app .post-card{
+  background:transparent!important;
+  border-color:rgba(255,255,255,.18)!important;
+  box-shadow:none!important;
+}
+body.light #app #posts .post-card,
+body.light #profilePosts .post-card,
+body.light #app .post-card{
+  background:transparent!important;
+  border-color:rgba(35,25,48,.18)!important;
+  box-shadow:none!important;
+}
+/* Keep the media within the floating card's rounded inner edges. */
+#app #posts .post-card video,
+#app #posts .post-card img:not(.avatar),
+#profilePosts .post-card video,
+#profilePosts .post-card img:not(.avatar){
+  width:100%!important;max-width:100%!important;
+  margin-left:0!important;margin-right:0!important;
+  border-radius:14px!important;
+}
+/* Normalize every post action into one consistent, wrapping action row. */
+#app #posts .post-card .like-btn,
+#app #posts .post-card button[onclick*="openComments"],
+#app #posts .post-card button[onclick*="toggleSavePost"],
+#app #posts .post-card button[onclick*="reportPost"],
+#app #posts .post-card button[onclick*="deletePost"],
+#profilePosts .post-card .like-btn,
+#profilePosts .post-card button[onclick*="openComments"],
+#profilePosts .post-card button[onclick*="toggleSavePost"],
+#profilePosts .post-card button[onclick*="reportPost"],
+#profilePosts .post-card button[onclick*="deletePost"]{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  vertical-align:middle!important;
+  box-sizing:border-box!important;
+  min-height:40px!important;
+  height:40px!important;
+  margin:10px 7px 0 0!important;
+  padding:0 13px!important;
+  border:1px solid var(--home-border,rgba(128,128,128,.22))!important;
+  border-radius:12px!important;
+  font-size:13px!important;
+  font-weight:650!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+  position:static!important;
+}
+#app #posts .post-card .like-btn,
+#profilePosts .post-card .like-btn{background:rgba(255,77,109,.12)!important;color:#e84b68!important;border-color:rgba(232,75,104,.25)!important}
+#app #posts .post-card button[onclick*="openComments"],
+#app #posts .post-card button[onclick*="toggleSavePost"],
+#profilePosts .post-card button[onclick*="openComments"],
+#profilePosts .post-card button[onclick*="toggleSavePost"]{background:var(--home-surface-alt,#fff)!important;color:var(--text)!important}
+#app #posts .post-card button[onclick*="reportPost"],
+#profilePosts .post-card button[onclick*="reportPost"]{color:#d98218!important;background:rgba(217,130,24,.09)!important}
+#app #posts .post-card button[onclick*="deletePost"],
+#profilePosts .post-card button[onclick*="deletePost"]{color:#e34b55!important;background:rgba(227,75,85,.09)!important}
+@media(max-width:420px){
+ #app #posts .post-card,#profilePosts .post-card,#app .post-card{width:calc(100% - 20px)!important;margin:12px 10px 19px!important;padding:12px!important;border-radius:18px!important}
+ #app #posts .post-card .like-btn,#app #posts .post-card button[onclick*="openComments"],#app #posts .post-card button[onclick*="toggleSavePost"],#app #posts .post-card button[onclick*="reportPost"],#app #posts .post-card button[onclick*="deletePost"],#profilePosts .post-card .like-btn,#profilePosts .post-card button[onclick*="openComments"],#profilePosts .post-card button[onclick*="toggleSavePost"],#profilePosts .post-card button[onclick*="reportPost"],#profilePosts .post-card button[onclick*="deletePost"]{min-height:38px!important;height:38px!important;padding:0 10px!important;margin-right:5px!important;font-size:12px!important}
+}
+</style>
+
+</body></html>';
   const blob=new Blob([html],{type:'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='SocialApp-Creator-Portfolio.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);
   message('saPortfolioMessage','Portfolio exported. Images and smaller videos are embedded in the file; very large videos use a secure link that expires after 7 days.');
  }
@@ -59968,5 +60031,408 @@ https://instagram.com/yourname"></textarea>
  function showError(message){const notice=document.createElement('div');notice.style.cssText='position:fixed;z-index:2147483647;bottom:20px;left:12px;right:12px;padding:12px;background:#321b3e;color:white;border-radius:10px;text-align:center';notice.textContent=message;document.body.appendChild(notice);}
 })();
 </script>
+
+<style id="socialapp-floating-post-cards-and-actions">
+/* Transparent post cards: match the page background; show only a subtle outline. */
+#app #posts .post-card,
+#profilePosts .post-card,
+#app .post-card{
+  box-sizing:border-box!important;
+  width:calc(100% - 24px)!important;
+  margin:14px 12px 22px!important;
+  padding:14px 14px 12px!important;
+  border:1px solid var(--home-border,rgba(128,128,128,.22))!important;
+  border-radius:20px!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  overflow:hidden!important;
+  transform:translateZ(0);
+}
+body.dark #app #posts .post-card,
+body.dark #profilePosts .post-card,
+body.dark #app .post-card{
+  background:transparent!important;
+  border-color:rgba(255,255,255,.18)!important;
+  box-shadow:none!important;
+}
+body.light #app #posts .post-card,
+body.light #profilePosts .post-card,
+body.light #app .post-card{
+  background:transparent!important;
+  border-color:rgba(35,25,48,.18)!important;
+  box-shadow:none!important;
+}
+/* Keep the media within the floating card's rounded inner edges. */
+#app #posts .post-card video,
+#app #posts .post-card img:not(.avatar),
+#profilePosts .post-card video,
+#profilePosts .post-card img:not(.avatar){
+  width:100%!important;max-width:100%!important;
+  margin-left:0!important;margin-right:0!important;
+  border-radius:14px!important;
+}
+/* Normalize every post action into one consistent, wrapping action row. */
+#app #posts .post-card .like-btn,
+#app #posts .post-card button[onclick*="openComments"],
+#app #posts .post-card button[onclick*="toggleSavePost"],
+#app #posts .post-card button[onclick*="reportPost"],
+#app #posts .post-card button[onclick*="deletePost"],
+#profilePosts .post-card .like-btn,
+#profilePosts .post-card button[onclick*="openComments"],
+#profilePosts .post-card button[onclick*="toggleSavePost"],
+#profilePosts .post-card button[onclick*="reportPost"],
+#profilePosts .post-card button[onclick*="deletePost"]{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  vertical-align:middle!important;
+  box-sizing:border-box!important;
+  min-height:40px!important;
+  height:40px!important;
+  margin:10px 7px 0 0!important;
+  padding:0 13px!important;
+  border:1px solid var(--home-border,rgba(128,128,128,.22))!important;
+  border-radius:12px!important;
+  font-size:13px!important;
+  font-weight:650!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+  position:static!important;
+}
+#app #posts .post-card .like-btn,
+#profilePosts .post-card .like-btn{background:rgba(255,77,109,.12)!important;color:#e84b68!important;border-color:rgba(232,75,104,.25)!important}
+#app #posts .post-card button[onclick*="openComments"],
+#app #posts .post-card button[onclick*="toggleSavePost"],
+#profilePosts .post-card button[onclick*="openComments"],
+#profilePosts .post-card button[onclick*="toggleSavePost"]{background:var(--home-surface-alt,#fff)!important;color:var(--text)!important}
+#app #posts .post-card button[onclick*="reportPost"],
+#profilePosts .post-card button[onclick*="reportPost"]{color:#d98218!important;background:rgba(217,130,24,.09)!important}
+#app #posts .post-card button[onclick*="deletePost"],
+#profilePosts .post-card button[onclick*="deletePost"]{color:#e34b55!important;background:rgba(227,75,85,.09)!important}
+@media(max-width:420px){
+ #app #posts .post-card,#profilePosts .post-card,#app .post-card{width:calc(100% - 20px)!important;margin:12px 10px 19px!important;padding:12px!important;border-radius:18px!important}
+ #app #posts .post-card .like-btn,#app #posts .post-card button[onclick*="openComments"],#app #posts .post-card button[onclick*="toggleSavePost"],#app #posts .post-card button[onclick*="reportPost"],#app #posts .post-card button[onclick*="deletePost"],#profilePosts .post-card .like-btn,#profilePosts .post-card button[onclick*="openComments"],#profilePosts .post-card button[onclick*="toggleSavePost"],#profilePosts .post-card button[onclick*="reportPost"],#profilePosts .post-card button[onclick*="deletePost"]{min-height:38px!important;height:38px!important;padding:0 10px!important;margin-right:5px!important;font-size:12px!important}
+}
+</style>
+
+
+<style id="socialapp-profile-creator-theme-transparent-cards">
+/* Profile posts inherit the viewed creator's Creator Studio theme.
+   Keep the existing floating/transparent card design unchanged. */
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card,
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .profile-post-card{
+  box-sizing:border-box!important;
+  background:transparent!important;
+  background-color:transparent!important;
+  color:var(--profile-text,inherit)!important;
+  border:1px solid var(--profile-border,rgba(128,128,128,.22))!important;
+  border-radius:20px!important;
+  box-shadow:none!important;
+  overflow:hidden!important;
+}
+/* Theme-specific border accents come from the active Creator Studio preset. */
+#profileScreen #profileScrollContainer.profile-theme-surface.creator-profile-theme-violet #profilePosts .post-card,
+#profileScreen #profileScrollContainer.profile-theme-surface.creator-profile-theme-violet #profilePosts .profile-post-card{border-color:#51316d!important}
+#profileScreen #profileScrollContainer.profile-theme-surface.creator-profile-theme-ocean #profilePosts .post-card,
+#profileScreen #profileScrollContainer.profile-theme-surface.creator-profile-theme-ocean #profilePosts .profile-post-card{border-color:#24536b!important}
+#profileScreen #profileScrollContainer.profile-theme-surface.creator-profile-theme-forest #profilePosts .post-card,
+#profileScreen #profileScrollContainer.profile-theme-surface.creator-profile-theme-forest #profilePosts .profile-post-card{border-color:#31563b!important}
+#profileScreen #profileScrollContainer.profile-theme-surface.creator-profile-theme-sunset #profilePosts .post-card,
+#profileScreen #profileScrollContainer.profile-theme-surface.creator-profile-theme-sunset #profilePosts .profile-post-card{border-color:#68402e!important}
+#profileScreen #profileScrollContainer.profile-theme-surface.creator-profile-theme-midnight #profilePosts .post-card,
+#profileScreen #profileScrollContainer.profile-theme-surface.creator-profile-theme-midnight #profilePosts .profile-post-card{border-color:#2d2d2d!important}
+
+/* Keep media inside the same transparent floating card; do not change card layout. */
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card img:not(.avatar),
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card video,
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .profile-post-card img:not(.avatar),
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .profile-post-card video{
+  max-width:100%!important;
+  border-radius:14px!important;
+}
+
+/* Match the already-aligned action controls used by the home feed. */
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card .like-btn,
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="openComments"],
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="toggleSavePost"],
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="reportPost"],
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="deletePost"]{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  vertical-align:middle!important;
+  box-sizing:border-box!important;
+  min-height:40px!important;
+  height:40px!important;
+  margin:10px 7px 0 0!important;
+  padding:0 13px!important;
+  border-radius:12px!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+}
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card .like-btn{
+  background:rgba(255,77,109,.12)!important;color:#e84b68!important;border:1px solid rgba(232,75,104,.25)!important;
+}
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="openComments"],
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="toggleSavePost"]{
+  background:var(--profile-surface,transparent)!important;
+  color:var(--profile-text,inherit)!important;
+  border:1px solid var(--profile-border)!important;
+}
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="reportPost"]{
+  color:#d98218!important;background:rgba(217,130,24,.09)!important;border:1px solid rgba(217,130,24,.25)!important;
+}
+#profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="deletePost"]{
+  color:#e34b55!important;background:rgba(227,75,85,.09)!important;border:1px solid rgba(227,75,85,.25)!important;
+}
+@media(max-width:420px){
+  #profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card .like-btn,
+  #profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="openComments"],
+  #profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="toggleSavePost"],
+  #profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="reportPost"],
+  #profileScreen #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="deletePost"]{
+    min-height:38px!important;height:38px!important;padding:0 10px!important;margin-right:5px!important;font-size:12px!important;
+  }
+}
+</style>
+
+
+
+<style id="socialapp-light-mode-profile-contrast-fix">
+/* Creator profile presets use dark surfaces even when the app chrome is in light mode.
+   Keep the creator's selected background and existing transparent card geometry intact,
+   but use readable foreground colours throughout the profile. */
+body.light #profileScrollContainer.profile-theme-surface{
+  --profile-text:#f7f4fa!important;
+  --profile-muted:#d0cbd5!important;
+  --profile-subtle:#b7afbf!important;
+  color:#f7f4fa!important;
+}
+body.light #profileScrollContainer.profile-theme-surface #profileNameDisplay,
+body.light #profileScrollContainer.profile-theme-surface #profileNameDisplay *{color:#fff!important;}
+body.light #profileScrollContainer.profile-theme-surface #profileUsernameDisplay{
+  color:#72bdff!important;text-shadow:0 1px 2px rgba(0,0,0,.55)!important;
+}
+body.light #profileScrollContainer.profile-theme-surface #profileBioDisplay,
+body.light #profileScrollContainer.profile-theme-surface .profile-theme-content,
+body.light #profileScrollContainer.profile-theme-surface .profile-theme-muted,
+body.light #profileScrollContainer.profile-theme-surface .profile-theme-subtle{color:var(--profile-text)!important;}
+/* Primary profile actions */
+body.light #profileScrollContainer.profile-theme-surface #profileMessageButton,
+body.light #profileScrollContainer.profile-theme-surface #followBtn:not([data-state="following"]):not([data-state="pending"]),
+body.light #profileScrollContainer.profile-theme-surface #profileCreatorSubscribeButton{color:#fff!important;text-shadow:none!important;}
+body.light #profileScrollContainer.profile-theme-surface #profileReportButton{
+  color:#ffbd59!important;border-color:rgba(255,189,89,.65)!important;background:rgba(255,152,0,.12)!important;
+}
+body.light #profileScrollContainer.profile-theme-surface #profileSettingsButton{
+  background:#35313b!important;color:#fff!important;border-color:#62586c!important;
+}
+body.light #profileScrollContainer.profile-theme-surface #followBtn[data-state="following"],
+body.light #profileScrollContainer.profile-theme-surface #followBtn[data-state="pending"],
+body.light #profileScrollContainer.profile-theme-surface #followBtn.following{
+  background:#e8e3ed!important;color:#292330!important;border-color:#c9bfd2!important;
+}
+/* Tabs and post author names remain legible against the selected creator background. */
+body.light #profileScrollContainer.profile-theme-surface .profile-tab,
+body.light #profileScrollContainer.profile-theme-surface #profilePostsTab{color:#e9e2ef!important;}
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-author-name,
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-username,
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-header-name,
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-card,
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-card p,
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-card span:not(.verified-badge){color:#f7f4fa!important;}
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="openComments"],
+body.light #profileScrollContainer.profile-theme-surface #profilePosts .post-card button[onclick*="toggleSavePost"]{
+  color:#f7f4fa!important;background:rgba(255,255,255,.10)!important;border-color:rgba(255,255,255,.32)!important;
+}
+</style>
+
+
+
+<style id="socialapp-online-indicator-edge-alignment-fix">
+/* Anchor presence dots to the actual avatar image box, not the surrounding row. */
+.story-card .story-user .story-avatar-wrap{
+  position:relative !important;
+  display:block !important;
+  width:40px !important;
+  height:40px !important;
+  min-width:40px !important;
+  min-height:40px !important;
+  flex:0 0 40px !important;
+  padding:0 !important;
+  margin:0 !important;
+  line-height:0 !important;
+  overflow:visible !important;
+  vertical-align:top !important;
+}
+.story-card .story-user .story-avatar-wrap > .story-avatar{
+  display:block !important;
+  width:40px !important;
+  height:40px !important;
+  min-width:40px !important;
+  min-height:40px !important;
+  margin:0 !important;
+  box-sizing:border-box !important;
+}
+.story-card .story-user .story-avatar-wrap > .online-indicator{
+  position:absolute !important;
+  right:-3px !important;
+  bottom:-3px !important;
+  left:auto !important;
+  top:auto !important;
+  transform:none !important;
+  width:13px !important;
+  height:13px !important;
+  min-width:13px !important;
+  min-height:13px !important;
+  border:2px solid var(--avatar-online-border,#fff) !important;
+  border-radius:50% !important;
+  box-sizing:border-box !important;
+  z-index:20 !important;
+}
+.profile-avatar-wrap{
+  position:relative !important;
+  display:block !important;
+  width:120px !important;
+  height:120px !important;
+  min-width:120px !important;
+  min-height:120px !important;
+  flex:0 0 120px !important;
+  padding:0 !important;
+  margin:0 !important;
+  line-height:0 !important;
+  overflow:visible !important;
+  align-self:flex-start !important;
+}
+.profile-avatar-wrap > #profileAvatarImage{
+  display:block !important;
+  width:120px !important;
+  height:120px !important;
+  min-width:120px !important;
+  min-height:120px !important;
+  margin:0 !important;
+  box-sizing:border-box !important;
+}
+.profile-avatar-wrap > .online-indicator{
+  position:absolute !important;
+  right:-4px !important;
+  bottom:-4px !important;
+  left:auto !important;
+  top:auto !important;
+  transform:none !important;
+  width:18px !important;
+  height:18px !important;
+  min-width:18px !important;
+  min-height:18px !important;
+  border:3px solid var(--avatar-online-border,#fff) !important;
+  border-radius:50% !important;
+  box-sizing:border-box !important;
+  z-index:20 !important;
+}
+</style>
+
+<style id="socialapp-online-indicator-true-edge-centering-v2">
+/* Center each presence dot exactly on the avatar's lower-right perimeter.
+   The previous offsets left the dot visibly detached from the visible avatar edge. */
+.story-card .story-user .story-avatar-wrap{
+  position:relative !important;
+  display:inline-block !important;
+  vertical-align:middle !important;
+  overflow:visible !important;
+}
+.story-card .story-user .story-avatar-wrap > .story-avatar{
+  display:block !important;
+  border-radius:50% !important;
+}
+.story-card .story-user .story-avatar-wrap > .online-indicator{
+  position:absolute !important;
+  right:-6.5px !important;
+  bottom:-6.5px !important;
+  left:auto !important;
+  top:auto !important;
+  transform:none !important;
+  width:13px !important;
+  height:13px !important;
+  min-width:13px !important;
+  min-height:13px !important;
+  margin:0 !important;
+  box-sizing:border-box !important;
+  border:2px solid var(--avatar-online-border,#111) !important;
+  border-radius:50% !important;
+  z-index:30 !important;
+}
+.profile-avatar-wrap{
+  position:relative !important;
+  display:inline-block !important;
+  vertical-align:top !important;
+  overflow:visible !important;
+}
+.profile-avatar-wrap > #profileAvatarImage{
+  display:block !important;
+  border-radius:50% !important;
+}
+.profile-avatar-wrap > .online-indicator{
+  position:absolute !important;
+  right:-9px !important;
+  bottom:-9px !important;
+  left:auto !important;
+  top:auto !important;
+  transform:none !important;
+  width:18px !important;
+  height:18px !important;
+  min-width:18px !important;
+  min-height:18px !important;
+  margin:0 !important;
+  box-sizing:border-box !important;
+  border:3px solid var(--avatar-online-border,#111) !important;
+  border-radius:50% !important;
+  z-index:30 !important;
+}
+</style>
+
+<style id="socialapp-profile-big-online-indicator-circle-edge-fix">
+/* For a circular avatar, the lower-right circumference is diagonal.
+   Place the dot center on that circumference (about 85.4% across/down),
+   rather than at the rectangular image corner. */
+#profileScrollContainer .profile-avatar-wrap{
+  position:relative !important;
+  width:120px !important;
+  height:120px !important;
+  min-width:120px !important;
+  min-height:120px !important;
+  flex:0 0 120px !important;
+  display:block !important;
+  padding:0 !important;
+  margin:0 !important;
+  overflow:visible !important;
+  line-height:0 !important;
+}
+#profileScrollContainer .profile-avatar-wrap > #profileAvatarImage{
+  display:block !important;
+  width:120px !important;
+  height:120px !important;
+  min-width:120px !important;
+  min-height:120px !important;
+  margin:0 !important;
+  border-radius:50% !important;
+  box-sizing:border-box !important;
+}
+#profileScrollContainer .profile-avatar-wrap > .online-indicator{
+  position:absolute !important;
+  right:8px !important;
+  bottom:8px !important;
+  left:auto !important;
+  top:auto !important;
+  transform:none !important;
+  width:18px !important;
+  height:18px !important;
+  min-width:18px !important;
+  min-height:18px !important;
+  margin:0 !important;
+  border-radius:50% !important;
+  box-sizing:border-box !important;
+  z-index:50 !important;
+}
+</style>
 </body>
 </html>
