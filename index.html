@@ -8239,31 +8239,59 @@ async function showStory(isDirectOpen = false) {
 
   let story = window.storyList[window.storyIndex];
 
-  // The stories feed can contain a stale/partial cached object. The database
-  // may have media_url even when the in-memory card object does not. Re-fetch
-  // the authoritative row by ID before declaring that media is missing.
+  // Always reconcile the selected story with the authoritative row. The
+  // Home story cards can retain an older/partial object in memory even when
+  // the database row has a valid media_url. Prefer the exact ID, then fall
+  // back to matching feed/group caches if a transient read fails.
+  const storyIdForRefresh = String(story?.id || "");
+  let storyMetadataError = null;
   const storyHasMedia = value => Boolean(String(
-    value?.media_url || value?.image_url || value?.file_url || value?.media || value?.url || ""
+    value?.media_url || value?.mediaUrl || value?.image_url || value?.imageUrl ||
+    value?.file_url || value?.file_path || value?.storage_path || value?.media_path ||
+    value?.media || value?.url || ""
   ).trim());
-  if (story?.id && !storyHasMedia(story)) {
+  if (storyIdForRefresh) {
     try {
       const { data: freshStory, error: freshStoryError } = await supabase
         .from("stories")
-        .select("*")
-        .eq("id", story.id)
+        .select("id,user_id,media_url,media_type,audio_url,created_at")
+        .eq("id", storyIdForRefresh)
         .maybeSingle();
       if (freshStoryError) {
+        storyMetadataError = freshStoryError;
         console.warn("Could not refresh story media metadata:", freshStoryError);
       } else if (freshStory) {
         Object.assign(story, freshStory);
-        window.storyList[window.storyIndex] = story;
-        if (window.currentGroup?.stories) {
-          const groupIndex = window.currentGroup.stories.findIndex(item => String(item.id) === String(story.id));
-          if (groupIndex >= 0) Object.assign(window.currentGroup.stories[groupIndex], freshStory);
-        }
       }
     } catch (refreshError) {
+      storyMetadataError = refreshError;
       console.warn("Story metadata refresh failed:", refreshError);
+    }
+
+    if (!storyHasMedia(story)) {
+      const cachedCandidates = [
+        ...(Array.isArray(window.storyFeedCache) ? window.storyFeedCache : []),
+        ...(Array.isArray(window.currentGroup?.stories) ? window.currentGroup.stories : []),
+        ...(Array.isArray(window.storyGroups) ? window.storyGroups.flatMap(group => group?.stories || []) : [])
+      ];
+      const cachedMatch = cachedCandidates.find(item =>
+        String(item?.id || "") === storyIdForRefresh && storyHasMedia(item)
+      );
+      if (cachedMatch) Object.assign(story, cachedMatch);
+    }
+
+    // Keep every in-memory copy in sync so next/previous story navigation
+    // cannot switch back to the stale version of this same record.
+    if (window.storyList?.[window.storyIndex] && String(window.storyList[window.storyIndex].id) === storyIdForRefresh) {
+      Object.assign(window.storyList[window.storyIndex], story);
+    }
+    if (Array.isArray(window.storyFeedCache)) {
+      const cacheMatch = window.storyFeedCache.find(item => String(item?.id || "") === storyIdForRefresh);
+      if (cacheMatch) Object.assign(cacheMatch, story);
+    }
+    if (Array.isArray(window.currentGroup?.stories)) {
+      const groupMatch = window.currentGroup.stories.find(item => String(item?.id || "") === storyIdForRefresh);
+      if (groupMatch) Object.assign(groupMatch, story);
     }
   }
   
@@ -8709,13 +8737,19 @@ setTimeout(() => {
 // IMAGE — treat missing/legacy image media_type as image unless the
 // stored type or URL clearly identifies a video. Never leave Loading visible
 // forever if a storage URL is invalid or a media request fails.
-const rawStoryMediaUrl = String(story.media_url || story.image_url || story.file_url || story.media || story.url || "").trim();
+const rawStoryMediaUrl = String(
+  story.media_url || story.mediaUrl || story.image_url || story.imageUrl ||
+  story.file_url || story.file_path || story.storage_path || story.media_path ||
+  story.media || story.url || ""
+).trim();
 const storyMediaUrl = await window.resolveStorageMediaUrl("stories", rawStoryMediaUrl);
 const storyType = String(story.media_type || "").toLowerCase();
 const storyIsVideo = storyType === "video" || /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(storyMediaUrl);
 if (!storyMediaUrl) {
   console.error("Story media URL is still missing after refreshing the database row:", { storyId: story?.id, storyKeys: story ? Object.keys(story) : [] });
-  container.innerHTML = `<div style="color:white;padding:24px;text-align:center">This story record has no readable media URL.<br><small style="opacity:.65">Story ID: ${String(story?.id || "unknown")}</small><br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>`;
+  const safeStoryId = String(story?.id || "unknown").replace(/[&<>"']/g, "");
+  const readErrorText = storyMetadataError?.message ? String(storyMetadataError.message).replace(/[&<>"']/g, "") : "No media field was returned for this story.";
+  container.innerHTML = `<div style="color:white;padding:24px;text-align:center">This story record has no readable media URL.<br><small style="opacity:.75;display:block;margin-top:8px">Story ID: ${safeStoryId}</small><small style="opacity:.55;display:block;margin-top:6px">${readErrorText}</small><br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>`;
   return;
 }
 if (!storyIsVideo) {
