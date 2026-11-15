@@ -4891,8 +4891,8 @@ body.dark #chatMessages .chat-reply-media-preview > div[style*="background:rgba(
 }
 .avatar-wrap .online-indicator,.story-avatar-wrap .online-indicator,.chat-avatar-wrap .online-indicator,.profile-avatar-wrap .online-indicator{
   position:absolute !important;
-  right:1px !important;
-  bottom:1px !important;
+  right:5px !important;
+  bottom:5px !important;
   width:11px !important;
   height:11px !important;
   border-radius:50% !important;
@@ -7554,9 +7554,10 @@ document.getElementById("storyAudioInput")
 
     }
 
-    // GET PUBLIC URL
-    const publicUrl =
-      window.getCanonicalStorageUrl("stories", fileName);
+    // Store a stable Storage object reference. The stories bucket is private,
+    // so getPublicUrl() cannot be used for playback. The viewer signs this path
+    // at read time for the authenticated viewer.
+    const publicUrl = `storage://stories/${fileName}`;
       
       let audioUrl = "";
 
@@ -7572,8 +7573,7 @@ if (audioFile) {
 
   if (!audioUploadError) {
 
-  audioUrl =
-    window.getCanonicalStorageUrl("stories", audioName);
+  audioUrl = `storage://stories/${audioName}`;
 
 } else {
 
@@ -8119,7 +8119,7 @@ window.pauseStory = function() {
   const video =
     document.getElementById("storyVideo");
   if (video) video.addEventListener("error", () => {
-    container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story video could not be played. Check its storage URL and format.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
+    container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story video could not be played. The private Stories file could not be authorized or found. Check the stored media path and Stories Storage policies.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
   }, { once:true });
 
   if (video) {
@@ -8322,10 +8322,12 @@ loadStoryReplies(story.id);
 const storyAudio = document.getElementById("storyAudio");
 
 if (story.audio_url && storyAudio) {
-  storyAudio.src = story.audio_url;
-
-  if (!window.storyMuted) {
-    storyAudio.play().catch(() => {});
+  const authorizedAudioUrl = await window.resolveStorageMediaUrl("stories", story.audio_url);
+  if (authorizedAudioUrl) {
+    storyAudio.src = authorizedAudioUrl;
+    if (!window.storyMuted) storyAudio.play().catch(() => {});
+  } else {
+    console.warn("Story audio could not be authorized", story.id);
   }
 }
 
@@ -8718,7 +8720,8 @@ setTimeout(() => {
 // IMAGE — treat missing/legacy image media_type as image unless the
 // stored type or URL clearly identifies a video. Never leave Loading visible
 // forever if a storage URL is invalid or a media request fails.
-const storyMediaUrl = String(story.media_url || "").trim();
+const rawStoryMediaUrl = String(story.media_url || "").trim();
+const storyMediaUrl = await window.resolveStorageMediaUrl("stories", rawStoryMediaUrl);
 const storyType = String(story.media_type || "").toLowerCase();
 const storyIsVideo = storyType === "video" || /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(storyMediaUrl);
 if (!storyMediaUrl) {
@@ -8738,7 +8741,7 @@ if (!storyIsVideo) {
   <div style="
     position:absolute;
     inset:0;
-    background:url('${story.media_url}') center/cover;
+    background:url('${storyMediaUrl}') center/cover;
     filter:blur(40px);
     transform:scale(1.2);
     opacity:.45;
@@ -8746,7 +8749,7 @@ if (!storyIsVideo) {
 
   <!-- MAIN IMAGE -->
   <img
-    src="${story.media_url}"
+    src="${storyMediaUrl}"
 
     style="
       position:relative;
@@ -8773,7 +8776,7 @@ keepUIVisible();
   img.onerror = () => {
     if (imageSettled) return;
     imageSettled = true;
-    container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story image could not be loaded. Check the story storage URL and bucket access.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
+    container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story image could not be loaded. The private Stories file could not be authorized or found. Check the stored media path and Stories Storage policies.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
   };
   img.src = storyMediaUrl;
   if (img.complete && img.naturalWidth > 0) renderStoryImage();
