@@ -7412,16 +7412,61 @@ window.loadUserAppAppearance = async function(userId) {
   catch(e){console.warn("Could not load personal appearance preferences:",e);window.applyUserAppAppearance({theme:localStorage.getItem("theme")||"dark"});}
 };
 
+window.openAppAppearanceSettings = async function() {
+  let screen=document.getElementById("appAppearanceSettingsScreen");
+  if(!screen){
+    screen=document.createElement("section");screen.id="appAppearanceSettingsScreen";
+    screen.style.cssText="position:fixed;inset:0;z-index:1000001;display:none;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#000;color:#fff;box-sizing:border-box;padding-bottom:env(safe-area-inset-bottom,0px);";
+    screen.innerHTML=`
+      <header style="position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:12px;min-height:60px;padding:0 14px;background:#000;border-bottom:1px solid #252525;">
+        <button type="button" id="saAppearanceBack" aria-label="Back" style="width:40px;height:40px;border:0;border-radius:50%;background:#171717;color:#fff;font-size:24px;">‹</button>
+        <strong style="font-size:18px;">Personal appearance</strong>
+      </header>
+      <div style="padding:16px;display:grid;gap:14px;max-width:700px;margin:0 auto;">
+        <p style="margin:0;color:#aaa;font-size:13px;line-height:1.5;">Choose how SocialApp looks on your account. These preferences are private to your account.</p>
+        <div><label for="saAppTheme" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">App theme</label><select id="saAppTheme" style="width:100%;padding:12px;border-radius:10px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="dark">Dark</option><option value="light">Light</option></select></div>
+        <div><label for="saAppAccent" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">App accent colour</label><input id="saAppAccent" type="color" value="#8a2be2" style="width:100%;height:48px;border:1px solid #59436b;border-radius:10px;background:#211a2b;padding:4px;"></div>
+        <div><label for="saAppDensity" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">Screen spacing</label><select id="saAppDensity" style="width:100%;padding:12px;border-radius:10px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div>
+        <div><label for="saAppCardStyle" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">Post card shape</label><select id="saAppCardStyle" style="width:100%;padding:12px;border-radius:10px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="rounded">Rounded</option><option value="square">Square</option></select></div>
+        <div style="font-size:13px;font-weight:700;color:#ddd;margin-top:4px;">Individual screen backgrounds</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          ${[['Home','saScreenHome'],['Explore','saScreenExplore'],['Profiles','saScreenProfile'],['Messages','saScreenMessages'],['Notifications','saScreenNotifications'],['Settings','saScreenSettings']].map(([label,id])=>`<div><label for="${id}" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">${label}</label><select id="${id}" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>`).join('')}
+        </div>
+        <button type="button" id="saSaveAppAppearance" style="width:100%;padding:14px;border:0;border-radius:11px;background:#8a2be2;color:#fff;font-weight:700;font-size:15px;">Save appearance choices</button>
+        <div id="saAppAppearanceMsg" role="status" aria-live="polite" style="font-size:13px;color:#c9a7e8;min-height:20px;"></div>
+      </div>`;
+    document.body.appendChild(screen);
+    screen.querySelector('#saAppearanceBack').onclick=()=>{screen.style.display='none';const settings=document.getElementById('profileSettingsScreen');if(settings)settings.style.display='block';};
+    screen.querySelector('#saSaveAppAppearance').onclick=()=>window.saveUserAppAppearance();
+  }
+  const settings=document.getElementById('profileSettingsScreen');if(settings)settings.style.display='none';
+  screen.style.display='block';
+  const sb=typeof client==='function'?client():null;
+  let activeId=null;
+  if(sb){try{const {data,error}=await sb.auth.getUser();if(!error)activeId=data?.user?.id||null;}catch(e){console.warn('Could not verify app appearance session',e);}}
+  activeId=activeId||window.currentProfileSettingsUserId||currentUser?.id||session?.user?.id||null;
+  if(activeId){window.currentProfileSettingsUserId=activeId;await window.loadUserAppAppearance(activeId);}
+};
+
 window.saveUserAppAppearance = async function() {
-  const userId=window.currentProfileSettingsUserId; const sb=typeof client==="function"?client():null; const msg=document.getElementById("saAppAppearanceMsg");
-  const say=t=>{if(msg)msg.textContent=t;}; if(!userId||!sb){say("Please sign in again to save these choices.");return;}
-  const get=id=>document.getElementById(id)?.value;
-  const screens={home:get("saScreenHome"),explore:get("saScreenExplore"),profile:get("saScreenProfile"),messages:get("saScreenMessages"),notifications:get("saScreenNotifications"),settings:get("saScreenSettings")};
-  const row={user_id:userId,theme:get("saAppTheme"),accent_color:get("saAppAccent"),density:get("saAppDensity"),card_style:get("saAppCardStyle"),screen_preferences:screens,updated_at:new Date().toISOString()};
-  if(!/^#[0-9a-fA-F]{6}$/.test(row.accent_color||"")){say("Choose a valid accent colour.");return;}
-  say("Saving your appearance…");
-  try{const {error}=await sb.from("user_app_appearance").upsert(row,{onConflict:"user_id"});if(error)throw error;window.applyUserAppAppearance(row);say("Saved. Your app appearance has been updated.");}
-  catch(e){console.error("Could not save app appearance:",e);say(e.message||"Could not save appearance. Please try again.");}
+  const sb=typeof client==="function"?client():null; const msg=document.getElementById("saAppAppearanceMsg");
+  const say=t=>{if(msg)msg.textContent=t;};
+  if(!sb){say("Connection unavailable. Please try again.");return;}
+  say("Checking your signed-in account…");
+  try {
+    const {data:authData,error:authError}=await sb.auth.getUser();
+    if(authError)throw authError;
+    const userId=authData?.user?.id;
+    if(!userId){say("Your session has expired. Please sign in again.");return;}
+    window.currentProfileSettingsUserId=userId;
+    const get=id=>document.getElementById(id)?.value;
+    const screens={home:get("saScreenHome")||"default",explore:get("saScreenExplore")||"default",profile:get("saScreenProfile")||"default",messages:get("saScreenMessages")||"default",notifications:get("saScreenNotifications")||"default",settings:get("saScreenSettings")||"default"};
+    const row={user_id:userId,theme:get("saAppTheme")||"dark",accent_color:get("saAppAccent")||"#8a2be2",density:get("saAppDensity")||"comfortable",card_style:get("saAppCardStyle")||"rounded",screen_preferences:screens,updated_at:new Date().toISOString()};
+    if(!/^#[0-9a-fA-F]{6}$/.test(row.accent_color)){say("Choose a valid accent colour.");return;}
+    say("Saving your appearance…");
+    const {error}=await sb.from("user_app_appearance").upsert(row,{onConflict:"user_id"});if(error)throw error;
+    window.applyUserAppAppearance(row);say("Saved. Your app appearance has been updated.");
+  } catch(e) { console.error("Could not save app appearance:",e);say(e.message||"Could not save appearance. Please try again."); }
 };
 
 // =====================================================
@@ -36120,24 +36165,14 @@ window.openProfileSettings = async function (addHistory = true) {
                 </div>
 
 
-                <!-- PERSONAL APP APPEARANCE: available to every signed-in account -->
-                <div style="font-size:13px;color:#888;font-weight:700;margin:24px 4px 10px;text-transform:uppercase;">Personal appearance &amp; display</div>
-                <div style="background:#111;border-radius:14px;padding:14px;border:1px solid #29202f;display:grid;gap:12px;">
-                    <div><label for="saAppTheme" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">App theme</label><select id="saAppTheme" style="width:100%;padding:12px;border-radius:10px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="dark">Dark</option><option value="light">Light</option></select></div>
-                    <div><label for="saAppAccent" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">App accent colour</label><input id="saAppAccent" type="color" value="#8a2be2" style="width:100%;height:44px;border:1px solid #59436b;border-radius:10px;background:#211a2b;padding:4px;"></div>
-                    <div><label for="saAppDensity" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">Screen spacing</label><select id="saAppDensity" style="width:100%;padding:12px;border-radius:10px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></div>
-                    <div><label for="saAppCardStyle" style="display:block;font-size:13px;color:#bbb;margin-bottom:6px;">Post card shape</label><select id="saAppCardStyle" style="width:100%;padding:12px;border-radius:10px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="rounded">Rounded</option><option value="square">Square</option></select></div>
-                    <div style="font-size:13px;font-weight:700;color:#ddd;margin-top:2px;">Individual screen backgrounds</div>
-                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-                        <div><label for="saScreenHome" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Home</label><select id="saScreenHome" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
-                        <div><label for="saScreenExplore" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Explore</label><select id="saScreenExplore" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
-                        <div><label for="saScreenProfile" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Profiles</label><select id="saScreenProfile" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
-                        <div><label for="saScreenMessages" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Messages</label><select id="saScreenMessages" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
-                        <div><label for="saScreenNotifications" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Notifications</label><select id="saScreenNotifications" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
-                        <div><label for="saScreenSettings" style="display:block;font-size:12px;color:#bbb;margin-bottom:5px;">Settings</label><select id="saScreenSettings" class="sa-screen-choice" style="width:100%;padding:10px;border-radius:9px;background:#211a2b;color:#fff;border:1px solid #59436b;"><option value="default">Default</option><option value="soft">Soft</option><option value="contrast">Deep</option></select></div>
-                    </div>
-                    <button type="button" id="saSaveAppAppearance" style="width:100%;padding:13px;border:0;border-radius:11px;background:#8a2be2;color:#fff;font-weight:700;font-size:15px;">Save appearance choices</button>
-                    <div id="saAppAppearanceMsg" role="status" style="font-size:12px;color:#c9a7e8;min-height:16px;"></div>
+                <!-- PERSONAL APP APPEARANCE: dedicated sub-screen -->
+                <div style="font-size:13px;color:#888;font-weight:700;margin:24px 4px 10px;text-transform:uppercase;">Appearance &amp; display</div>
+                <div style="background:#111;border-radius:14px;overflow:hidden;border:1px solid #1d1d1d;">
+                    <button type="button" id="settingsAppearanceBtn" style="width:100%;min-height:58px;padding:0 16px;border:0;background:#111;color:#fff;display:flex;align-items:center;text-align:left;font-size:16px;cursor:pointer;">
+                        <span style="font-size:21px;width:36px;">🎨</span>
+                        <span style="flex:1;">Personal appearance &amp; display</span>
+                        <span style="color:#777;font-size:22px;">›</span>
+                    </button>
                 </div>
 
                 <!-- LOGOUT -->
@@ -36339,10 +36374,10 @@ window.openProfileSettings = async function (addHistory = true) {
     }
 
     // -------------------------------------------------
-    // PERSONAL APP APPEARANCE (available to all logged-in users)
+    // PERSONAL APP APPEARANCE opens as its own settings page.
     // -------------------------------------------------
-    const saveAppAppearanceBtn = document.getElementById("saSaveAppAppearance");
-    if (saveAppAppearanceBtn) saveAppAppearanceBtn.onclick = () => window.saveUserAppAppearance();
+    const appAppearanceBtn = document.getElementById("settingsAppearanceBtn");
+    if (appAppearanceBtn) appAppearanceBtn.onclick = () => window.openAppAppearanceSettings();
 
     // -------------------------------------------------
     // LOGOUT
