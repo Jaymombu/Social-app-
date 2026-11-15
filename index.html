@@ -924,7 +924,7 @@ linear-gradient(
   width:100%;
   height:100%;
 
-  object-fit:cover;
+  object-fit:contain;
 
   pointer-events:none;
 
@@ -3419,6 +3419,49 @@ body {
 #socialAuthCard{width:min(430px,100%);max-height:92vh;overflow:auto;padding:22px;box-sizing:border-box;border-radius:22px;background:#171717;color:#fff;border:1px solid rgba(255,255,255,.1);box-shadow:0 18px 60px rgba(0,0,0,.55)}
 #socialAuthCard h2{margin:0 0 7px;font-size:24px} #socialAuthCard .auth-subtitle{margin:0 0 18px;color:#aaa;font-size:14px;line-height:1.45} #socialAuthCard label{display:block;margin:12px 0 6px;font-size:13px;color:#bbb} #socialAuthCard input{width:100%;box-sizing:border-box;padding:12px 13px;border-radius:12px;border:1px solid #333;background:#0e0e0e;color:#fff;outline:none;font:inherit} #socialAuthCard input:focus{border-color:#1877f2}
 .auth-primary,.auth-secondary,.auth-link{width:100%;box-sizing:border-box;border:0;cursor:pointer;font:inherit}.auth-primary{margin-top:16px;padding:12px;border-radius:12px;background:#1877f2;color:#fff;font-weight:700}.auth-secondary{margin-top:10px;padding:11px;border-radius:12px;background:#292929;color:#fff;font-weight:600}.auth-link{margin-top:12px;padding:4px;background:transparent;color:#58a6ff;font-size:14px}.auth-divider{display:flex;align-items:center;gap:10px;margin:16px 0;color:#777;font-size:12px}.auth-divider:before,.auth-divider:after{content:"";height:1px;flex:1;background:#333}.auth-close-row{display:flex;justify-content:flex-end}.auth-close{border:0;background:transparent;color:#aaa;font-size:24px;cursor:pointer}.auth-error,.auth-success{display:none;margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px;line-height:1.4}.auth-error{background:rgba(220,50,50,.12);color:#ff8e8e}.auth-success{background:rgba(30,180,100,.12);color:#8ff0b7}.auth-contact{margin-top:18px;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);color:#888;font-size:12px;text-align:center}.auth-contact a{color:#58a6ff}
+
+/* STORY MEDIA SAFE-FIT: show the complete photo/video without cropping.
+   Keep the media inside the visible Android viewport and away from controls. */
+#storyViewer.active {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  max-width: 100vw !important;
+  max-height: 100dvh !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+#storyViewer.active #storyContent {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+#storyViewer.active #storyContent > img,
+#storyViewer.active #storyContent > video {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100vw !important;
+  max-height: 100% !important;
+  object-fit: contain !important;
+  object-position: center center !important;
+  margin: 0 auto !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+}
+#storyViewer.active #storyTopBar {
+  top: max(12px, env(safe-area-inset-top)) !important;
+}
+#storyViewer.active #storyReplyBar {
+  bottom: max(12px, env(safe-area-inset-bottom)) !important;
+}
+
 </style>
 
 <style id="story-navigation-final-fix">
@@ -7521,86 +7564,124 @@ window.loadStories = async function (forceRefresh = false) {
 };
 
 async function addStory() {
-  let uploadedPath = "";
-  try {
-    const input = document.getElementById("storyInput");
-    const file = input?.files?.[0];
-    const audioFile = document.getElementById("storyAudioInput")?.files?.[0];
-    if (!file) { alert("Choose an image or video first."); return; }
 
-    const { data: authData, error: authError } = await supabase.auth.getSession();
-    const activeSession = authData?.session;
-    if (authError || !activeSession?.user?.id) {
-      alert("Please sign in again before uploading a story.");
+  try {
+
+   const file =
+  document.getElementById("storyInput")
+  ?.files?.[0];
+  
+  const audioFile =
+document.getElementById("storyAudioInput")
+?.files?.[0];
+
+    if (!file) {
+      alert("Choose image first");
       return;
     }
 
-    const safeName = String(file.name || "story-media").replace(/[^a-zA-Z0-9._-]/g, "_");
-    const uniquePart = (window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    uploadedPath = `${activeSession.user.id}/${uniquePart}-${safeName}`;
+    const fileName =
+      Date.now() + "-" + file.name;
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from("stories")
-      .upload(uploadedPath, file, {
-        cacheControl: "3600",
-        contentType: file.type || undefined,
-        upsert: false
-      });
-    if (uploadError) throw new Error(`Story media upload failed: ${uploadError.message}`);
-    if (!uploadData?.path) throw new Error("Storage did not return the uploaded story path.");
-    uploadedPath = uploadData.path;
-
-    let audioUrl = "";
-    if (audioFile) {
-      const audioName = `${activeSession.user.id}/${uniquePart}-audio-${String(audioFile.name || "story-audio").replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const { data: audioData, error: audioError } = await supabase.storage
+    // UPLOAD TO STORAGE
+    const { error: uploadError } =
+      await supabase.storage
         .from("stories")
-        .upload(audioName, audioFile, { cacheControl: "3600", contentType: audioFile.type || undefined, upsert: false });
-      if (audioError) console.warn("Story audio upload failed:", audioError);
-      else if (audioData?.path) audioUrl = `storage://stories/${audioData.path}`;
+        .upload(fileName, file);
+
+    if (uploadError) {
+
+      console.log(uploadError);
+      alert("Upload failed");
+      return;
+
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("name,avatar_url")
-      .eq("id", activeSession.user.id)
-      .maybeSingle();
-    if (profileError) console.warn("Could not load story profile details:", profileError);
+    // Store the private bucket-relative path. The viewer creates a short-lived
+    // signed URL only when an authenticated user opens the story.
+    const publicUrl = `storage://stories/${fileName}`;
+      
+      let audioUrl = "";
 
-    const mediaType = String(file.type || "").startsWith("video/") ? "video" : "image";
-    const storedMediaUrl = `storage://stories/${uploadedPath}`;
-    const { data: inserted, error: dbError } = await supabase
+if (audioFile) {
+
+  const audioName =
+    Date.now() + "-audio-" + audioFile.name;
+
+  const { error: audioUploadError } =
+    await supabase.storage
       .from("stories")
-      .insert([{
-        user_id: activeSession.user.id,
-        name: profile?.name || activeSession.user.email || "User",
-        avatar_url: profile?.avatar_url || "",
-        media_url: storedMediaUrl,
-        media_type: mediaType,
-        audio_url: audioUrl
-      }])
-      .select("*")
-      .single();
+      .upload(audioName, audioFile);
 
-    if (dbError) throw new Error(`Story record could not be saved: ${dbError.message}`);
-    if (!inserted?.id || !String(inserted.media_url || "").trim()) {
-      throw new Error("Supabase saved the story without its media_url. No story was published; check the stories table columns/triggers.");
-    }
+  if (!audioUploadError) {
 
-    // Make the just-created row visible immediately, without reusing stale feed cache.
-    window.storyFeedCache = null;
-    if (input) input.value = "";
-    await window.loadStories(false);
-    alert("Story uploaded and published successfully.");
-  } catch (err) {
-    console.error("addStory failed:", err);
-    // Remove an orphaned media object if the database insert failed.
-    if (uploadedPath) {
-      try { await supabase.storage.from("stories").remove([uploadedPath]); }
-      catch (cleanupError) { console.warn("Could not clean up failed story upload:", cleanupError); }
-    }
-    alert(err?.message || "Could not publish the story. Please try again.");
+  audioUrl =
+    window.getCanonicalStorageUrl("stories", audioName);
+
+} else {
+
+  console.error(audioUploadError);
+
+}
+
   }
+
+
+    // FILE TYPE
+    const mediaType =
+      file.type.startsWith("video")
+        ? "video"
+        : "image";
+
+const { data: profile } =
+  await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", session.user.id)
+    .maybeSingle();
+
+// REPLACE OLD INSERT WITH THIS
+const { data: inserted, error: dbError } =
+  await supabase
+    .from("stories")
+    .insert([{
+      user_id: session.user.id,
+
+      name:
+        profile?.name ||
+        session.user.email,
+
+      avatar_url:
+        profile?.avatar_url || "",
+
+      media_url: publicUrl,
+      media_type: mediaType,
+
+      audio_url: audioUrl
+    }])
+    .select();
+
+console.log("INSERTED:", inserted);
+console.log("DB ERROR:", dbError);
+
+alert(JSON.stringify(inserted));
+alert(JSON.stringify(dbError));
+
+if (dbError) {
+  alert("DB insert failed");
+  return;
+}
+
+    alert("Story added");
+
+    loadStories();
+
+  } catch (err) {
+
+    console.log(err);
+
+  }
+
 }
 
 window.openStory = function(index){
@@ -8081,7 +8162,7 @@ window.pauseStory = function() {
   const video =
     document.getElementById("storyVideo");
   if (video) video.addEventListener("error", () => {
-    container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story video could not be played. The private Stories file could not be authorized or found. Check the stored media path and Stories Storage policies.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
+    container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story video could not be played. Check its storage URL and format.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
   }, { once:true });
 
   if (video) {
@@ -8237,63 +8318,8 @@ async function showStory(isDirectOpen = false) {
     return;
   }
 
-  let story = window.storyList[window.storyIndex];
-
-  // Always reconcile the selected story with the authoritative row. The
-  // Home story cards can retain an older/partial object in memory even when
-  // the database row has a valid media_url. Prefer the exact ID, then fall
-  // back to matching feed/group caches if a transient read fails.
-  const storyIdForRefresh = String(story?.id || "");
-  let storyMetadataError = null;
-  const storyHasMedia = value => Boolean(String(
-    value?.media_url || value?.mediaUrl || value?.image_url || value?.imageUrl ||
-    value?.file_url || value?.file_path || value?.storage_path || value?.media_path ||
-    value?.media || value?.url || ""
-  ).trim());
-  if (storyIdForRefresh) {
-    try {
-      const { data: freshStory, error: freshStoryError } = await supabase
-        .from("stories")
-        .select("id,user_id,media_url,media_type,audio_url,created_at")
-        .eq("id", storyIdForRefresh)
-        .maybeSingle();
-      if (freshStoryError) {
-        storyMetadataError = freshStoryError;
-        console.warn("Could not refresh story media metadata:", freshStoryError);
-      } else if (freshStory) {
-        Object.assign(story, freshStory);
-      }
-    } catch (refreshError) {
-      storyMetadataError = refreshError;
-      console.warn("Story metadata refresh failed:", refreshError);
-    }
-
-    if (!storyHasMedia(story)) {
-      const cachedCandidates = [
-        ...(Array.isArray(window.storyFeedCache) ? window.storyFeedCache : []),
-        ...(Array.isArray(window.currentGroup?.stories) ? window.currentGroup.stories : []),
-        ...(Array.isArray(window.storyGroups) ? window.storyGroups.flatMap(group => group?.stories || []) : [])
-      ];
-      const cachedMatch = cachedCandidates.find(item =>
-        String(item?.id || "") === storyIdForRefresh && storyHasMedia(item)
-      );
-      if (cachedMatch) Object.assign(story, cachedMatch);
-    }
-
-    // Keep every in-memory copy in sync so next/previous story navigation
-    // cannot switch back to the stale version of this same record.
-    if (window.storyList?.[window.storyIndex] && String(window.storyList[window.storyIndex].id) === storyIdForRefresh) {
-      Object.assign(window.storyList[window.storyIndex], story);
-    }
-    if (Array.isArray(window.storyFeedCache)) {
-      const cacheMatch = window.storyFeedCache.find(item => String(item?.id || "") === storyIdForRefresh);
-      if (cacheMatch) Object.assign(cacheMatch, story);
-    }
-    if (Array.isArray(window.currentGroup?.stories)) {
-      const groupMatch = window.currentGroup.stories.find(item => String(item?.id || "") === storyIdForRefresh);
-      if (groupMatch) Object.assign(groupMatch, story);
-    }
-  }
+  const story =
+  window.storyList[window.storyIndex];
   
   const audio = document.getElementById("storyAudio");
 
@@ -8339,12 +8365,10 @@ loadStoryReplies(story.id);
 const storyAudio = document.getElementById("storyAudio");
 
 if (story.audio_url && storyAudio) {
-  const authorizedAudioUrl = await window.resolveStorageMediaUrl("stories", story.audio_url);
-  if (authorizedAudioUrl) {
-    storyAudio.src = authorizedAudioUrl;
-    if (!window.storyMuted) storyAudio.play().catch(() => {});
-  } else {
-    console.warn("Story audio could not be authorized", story.id);
+  storyAudio.src = story.audio_url;
+
+  if (!window.storyMuted) {
+    storyAudio.play().catch(() => {});
   }
 }
 
@@ -8737,19 +8761,14 @@ setTimeout(() => {
 // IMAGE — treat missing/legacy image media_type as image unless the
 // stored type or URL clearly identifies a video. Never leave Loading visible
 // forever if a storage URL is invalid or a media request fails.
-const rawStoryMediaUrl = String(
-  story.media_url || story.mediaUrl || story.image_url || story.imageUrl ||
-  story.file_url || story.file_path || story.storage_path || story.media_path ||
-  story.media || story.url || ""
-).trim();
-const storyMediaUrl = await window.resolveStorageMediaUrl("stories", rawStoryMediaUrl);
+const rawStoryMediaUrl = String(story.media_url || story.image_url || story.file_url || "").trim();
+const storyMediaUrl = rawStoryMediaUrl
+  ? await window.resolveStorageMediaUrl("stories", rawStoryMediaUrl)
+  : "";
 const storyType = String(story.media_type || "").toLowerCase();
-const storyIsVideo = storyType === "video" || /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(storyMediaUrl);
+const storyIsVideo = storyType === "video" || /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(rawStoryMediaUrl);
 if (!storyMediaUrl) {
-  console.error("Story media URL is still missing after refreshing the database row:", { storyId: story?.id, storyKeys: story ? Object.keys(story) : [] });
-  const safeStoryId = String(story?.id || "unknown").replace(/[&<>"']/g, "");
-  const readErrorText = storyMetadataError?.message ? String(storyMetadataError.message).replace(/[&<>"']/g, "") : "No media field was returned for this story.";
-  container.innerHTML = `<div style="color:white;padding:24px;text-align:center">This story record has no readable media URL.<br><small style="opacity:.75;display:block;margin-top:8px">Story ID: ${safeStoryId}</small><small style="opacity:.55;display:block;margin-top:6px">${readErrorText}</small><br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>`;
+  container.innerHTML = '<div style="color:white;padding:24px;text-align:center">Story media could not be authorized or its file is missing.<br><small>Check the stories bucket object path and authenticated SELECT policy.</small><br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
   return;
 }
 if (!storyIsVideo) {
@@ -8765,7 +8784,7 @@ if (!storyIsVideo) {
   <div style="
     position:absolute;
     inset:0;
-    background:url('${storyMediaUrl}') center/cover;
+    background:url('${story.media_url}') center/cover;
     filter:blur(40px);
     transform:scale(1.2);
     opacity:.45;
@@ -8773,7 +8792,7 @@ if (!storyIsVideo) {
 
   <!-- MAIN IMAGE -->
   <img
-    src="${storyMediaUrl}"
+    src="${story.media_url}"
 
     style="
       position:relative;
@@ -8800,7 +8819,7 @@ keepUIVisible();
   img.onerror = () => {
     if (imageSettled) return;
     imageSettled = true;
-    container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story image could not be loaded. The private Stories file could not be authorized or found. Check the stored media path and Stories Storage policies.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
+    container.innerHTML = '<div style="color:white;padding:24px;text-align:center">This story image could not be loaded. Check the story storage URL and bucket access.<br><button type="button" onclick="closeStoryViewer()" style="margin-top:16px;padding:10px 16px">Close</button></div>';
   };
   img.src = storyMediaUrl;
   if (img.complete && img.naturalWidth > 0) renderStoryImage();
