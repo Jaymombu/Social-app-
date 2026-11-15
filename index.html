@@ -40,6 +40,79 @@
   html.socialapp-direct-opening #saDirectOpenWait {
     visibility: visible !important;
   }
+
+/* STORY CONTROLS: clear spacing, balanced alignment and consistent outline SVGs */
+#storyViewer.active #storyProgress{
+  top:max(14px, calc(env(safe-area-inset-top) + 8px)) !important;
+  left:14px !important; right:14px !important;
+  gap:5px !important; z-index:10000020 !important;
+}
+#storyViewer.active #storyTopBar{
+  top:max(42px, calc(env(safe-area-inset-top) + 30px)) !important;
+  left:16px !important; right:76px !important;
+  height:48px !important; min-height:48px !important;
+  gap:11px !important; padding:0 !important;
+}
+#storyViewer.active > button[type="button"]{
+  position:fixed !important;
+  top:max(42px, calc(env(safe-area-inset-top) + 30px)) !important;
+  right:16px !important; left:auto !important;
+  width:42px !important; height:42px !important;
+  display:flex !important; align-items:center !important; justify-content:center !important;
+  padding:0 !important; border:1px solid rgba(255,255,255,.22) !important;
+  border-radius:50% !important; background:rgba(18,18,18,.62) !important;
+  color:#fff !important; backdrop-filter:blur(10px) !important;
+}
+#storyViewer.active #storyMuteBtn{
+  right:16px !important; bottom:max(118px, calc(env(safe-area-inset-bottom) + 118px)) !important;
+  width:44px !important; height:44px !important;
+  border:1px solid rgba(255,255,255,.2) !important;
+  background:rgba(18,18,18,.62) !important; backdrop-filter:blur(10px) !important;
+}
+#storyViewer.active #storyReplyBar{
+  left:12px !important; right:12px !important;
+  bottom:max(12px, env(safe-area-inset-bottom)) !important;
+  min-height:54px !important; gap:6px !important; padding:6px !important;
+  border:1px solid rgba(255,255,255,.16) !important;
+  background:rgba(25,25,25,.78) !important;
+  box-sizing:border-box !important;
+}
+#storyViewer.active #storyReplyBar button{
+  flex:0 0 40px !important; width:40px !important; height:40px !important;
+  min-width:40px !important; padding:8px !important;
+  display:inline-flex !important; align-items:center !important; justify-content:center !important;
+  border:0 !important; border-radius:50% !important;
+  background:rgba(255,255,255,.08) !important; color:#fff !important;
+  font-size:0 !important; line-height:0 !important;
+}
+#storyViewer.active #storyReplyBar button[onclick="sendStoryReply()"]{
+  flex:0 0 42px !important; width:42px !important; min-width:42px !important;
+  height:40px !important; border-radius:13px !important; padding:9px !important;
+  background:#1877f2 !important;
+}
+#storyViewer.active #storyReplyBar button svg,
+#storyViewer.active #storyMuteBtn svg,
+#storyViewer.active > button[type="button"] svg{
+  display:block !important; width:22px !important; height:22px !important;
+  fill:none !important; stroke:currentColor !important; stroke-width:1.8 !important;
+  stroke-linecap:round !important; stroke-linejoin:round !important;
+  flex:0 0 auto !important;
+}
+#storyViewer.active #storyReplyBar button[onclick="sendStoryReply()"] svg{width:20px !important;height:20px !important}
+#storyViewer.active #storyReplyInput{
+  min-width:0 !important; height:40px !important; padding:0 12px !important;
+  flex:1 1 auto !important; border-radius:20px !important;
+  background:rgba(255,255,255,.08) !important;
+}
+#storyViewer.active #storyReplies{
+  bottom:max(76px, calc(env(safe-area-inset-bottom) + 76px)) !important;
+}
+@media (max-width:380px){
+ #storyViewer.active #storyReplyBar{gap:4px !important;padding:5px !important}
+ #storyViewer.active #storyReplyBar button{flex-basis:34px !important;width:34px !important;min-width:34px !important;height:38px !important;padding:7px !important}
+ #storyViewer.active #storyReplyBar button[onclick="sendStoryReply()"]{flex-basis:38px !important;width:38px !important;min-width:38px !important}
+}
+
 </style>
 <style id="socialAppEarlyRestoreStyle">
   /* Keep the entire document invisible during a real browser refresh.
@@ -5319,6 +5392,22 @@ body:not(.dark) #commentsScreen button[id^="threadBtn-"] {
   color: #626262 !important;
 }
 </style>
+
+<style id="story-topbar-spacing-and-control-alignment-v2">
+/* Give the fixed app bar a little more breathing room and keep Home content below it. */
+#topBar{height:66px !important; min-height:66px !important; padding-top:env(safe-area-inset-top, 0px) !important; box-sizing:border-box !important;}
+#storiesWrapper{padding-top:78px !important;}
+#topBar button{display:inline-flex !important;align-items:center !important;justify-content:center !important;}
+#topBar button svg{width:23px !important;height:23px !important;fill:none !important;stroke:currentColor !important;stroke-width:1.8 !important;stroke-linecap:round !important;stroke-linejoin:round !important;}
+#storyViewer.active #storyTopBar{top:max(54px, calc(env(safe-area-inset-top, 0px) + 42px)) !important;left:16px !important;right:76px !important;min-height:48px !important;gap:11px !important;padding:4px 0 !important;box-sizing:border-box !important;}
+#storyViewer.active #storyTopBar img{width:42px !important;height:42px !important;flex:0 0 42px !important;}
+#storyViewer.active > button[type="button"]{top:max(54px, calc(env(safe-area-inset-top, 0px) + 42px)) !important;right:14px !important;width:42px !important;height:42px !important;display:flex !important;align-items:center !important;justify-content:center !important;padding:9px !important;border:1px solid rgba(255,255,255,.22) !important;border-radius:50% !important;background:rgba(18,18,18,.62) !important;color:#fff !important;backdrop-filter:blur(10px) !important;}
+#storyViewer.active > button[type="button"] svg{width:21px !important;height:21px !important;fill:none !important;stroke:currentColor !important;stroke-width:2 !important;stroke-linecap:round !important;stroke-linejoin:round !important;}
+#storyViewer.active #storyReplyBar{display:flex !important;align-items:center !important;gap:6px !important;}
+#storyViewer.active #storyReplyBar button{flex-shrink:0 !important;}
+@media(max-width:380px){#topBar{height:64px !important;min-height:64px !important}#storiesWrapper{padding-top:74px !important;}#storyViewer.active #storyTopBar{right:68px !important;}}
+</style>
+
 </head>
 <body class="dark">
   
@@ -5777,7 +5866,7 @@ padding:8px;
     cursor:pointer;
   "
 >
-  ✕
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg>
 </button>
 
 </div>
@@ -6119,7 +6208,8 @@ padding:8px;
       cursor:pointer;
     "
   >
-    Send
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4Z"/></svg>
+    <span>Send</span>
   </button>
 
   <!-- REACTIONS INLINE -->
@@ -6136,7 +6226,7 @@ padding:8px;
       color:white;
     "
   >
-    ❤️
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.8c0 5.2-8.8 11-8.8 11S3.2 14 3.2 8.8A4.7 4.7 0 0 1 12 6.3a4.7 4.7 0 0 1 8.8 2.5Z"/></svg>
   </button>
 
   <button
@@ -6152,7 +6242,7 @@ padding:8px;
       color:white;
     "
   >
-    🔥
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22c4.4 0 7-3.1 7-7.1 0-2.8-1.5-5-4.3-7.9.1 2.4-.8 3.5-1.8 4.1C12.8 7 10.7 4.1 8 2c.6 4.5-3 7.2-3 12.3C5 18.7 7.8 22 12 22Z"/></svg>
   </button>
 
   <button
@@ -6168,7 +6258,7 @@ padding:8px;
       color:white;
     "
   >
-    😂
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.3 3 4 3 4-3 4-3M9 9h.01M15 9h.01"/></svg>
   </button>
 
   <button
@@ -6184,7 +6274,7 @@ padding:8px;
       color:white;
     "
   >
-    😍
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 9 1 1 1-1M14 9l1 1 1-1M8 14s1.5 3 4 3 4-3 4-3"/></svg>
   </button>
   
   </div>
@@ -6215,7 +6305,7 @@ padding:8px;
     font-size:26px;
   "
 >
-🔇
+<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="M16 9a5 5 0 0 1 0 6M19 6a9 9 0 0 1 0 12"/></svg>
 </button>
 
 <!-- CLOSE -->
@@ -6243,7 +6333,7 @@ padding:8px;
     pointer-events:auto;
   "
 >
-  ✕
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
 </button>
 
 </div>
@@ -7461,6 +7551,16 @@ window.loadStories = async function (forceRefresh = false) {
   window.storyGroups =
     Object.values(grouped);
 
+  // The stories bucket is private. Resolve the newest story's storage path
+  // into an authenticated, short-lived URL before using it in a card <img>.
+  await Promise.all(window.storyGroups.map(async group => {
+    const latest = group.stories?.[0];
+    const raw = String(latest?.media_url || latest?.image_url || latest?.file_url || "").trim();
+    group.cardMediaUrl = raw
+      ? await window.resolveStorageMediaUrl("stories", raw)
+      : "";
+  }));
+
   let html = "";
 
   // CREATE STORY CARDS
@@ -7478,7 +7578,7 @@ window.loadStories = async function (forceRefresh = false) {
 
       const safeStoryName = String(group.name || "User").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
       const safeStoryAvatar = String(group.avatar || "").replace(/[&"']/g, ch => ({"&":"&amp;",'"':"&quot;","'":"&#39;"}[ch]));
-      const safeStoryMedia = String(latestStory.media_url || "").replace(/[&"']/g, ch => ({"&":"&amp;",'"':"&quot;","'":"&#39;"}[ch]));
+      const safeStoryMedia = String(group.cardMediaUrl || "").replace(/[&"']/g, ch => ({"&":"&amp;",'"':"&quot;","'":"&#39;"}[ch]));
       html += `
 
         <div
@@ -7497,10 +7597,7 @@ window.loadStories = async function (forceRefresh = false) {
 >
 
           <!-- BACKGROUND -->
-          <img
-            class="story-bg"
-            src="${safeStoryMedia}"
-          >
+          ${safeStoryMedia ? `<img class="story-bg" src="${safeStoryMedia}" alt="${safeStoryName} story" loading="lazy" onerror="this.remove()">` : '<div class="story-bg story-bg-placeholder" aria-hidden="true"></div>'}
 
           <!-- OVERLAY -->
           <div class="story-overlay"></div>
@@ -8306,7 +8403,10 @@ function keepUIVisible() {
 
 async function showStory(isDirectOpen = false) {
 
-  if (!window.storyList?.length) {
+  const storyRenderToken = (window.__storyRenderToken || 0) + 1;
+  window.__storyRenderToken = storyRenderToken;
+
+  if (!window.storyList?.length || !window.__storyOpen) {
     console.log("No stories available in showStory");
     return;
   }
@@ -8365,10 +8465,12 @@ loadStoryReplies(story.id);
 const storyAudio = document.getElementById("storyAudio");
 
 if (story.audio_url && storyAudio) {
-  storyAudio.src = story.audio_url;
-
-  if (!window.storyMuted) {
-    storyAudio.play().catch(() => {});
+  const resolvedAudioUrl = await window.resolveStorageMediaUrl("stories", story.audio_url);
+  if (window.__storyRenderToken !== storyRenderToken || !window.__storyOpen) return;
+  if (resolvedAudioUrl) {
+    storyAudio.src = resolvedAudioUrl;
+    storyAudio.load();
+    if (!window.storyMuted) storyAudio.play().catch(() => {});
   }
 }
 
@@ -8462,7 +8564,9 @@ if (video) {
 // UPDATE BUTTON UI
 const btn = document.getElementById("storyMuteBtn");
 if (btn) {
-  btn.textContent = window.storyMuted ? "🔇" : "🔊";
+  btn.innerHTML = window.storyMuted
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="m17 9 5 6m0-6-5 6"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="M16 9a5 5 0 0 1 0 6M19 6a9 9 0 0 1 0 12"/></svg>' ;
 }
 
   // HOLD RELEASE
@@ -8765,6 +8869,7 @@ const rawStoryMediaUrl = String(story.media_url || story.image_url || story.file
 const storyMediaUrl = rawStoryMediaUrl
   ? await window.resolveStorageMediaUrl("stories", rawStoryMediaUrl)
   : "";
+if (window.__storyRenderToken !== storyRenderToken || !window.__storyOpen) return;
 const storyType = String(story.media_type || "").toLowerCase();
 const storyIsVideo = storyType === "video" || /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(rawStoryMediaUrl);
 if (!storyMediaUrl) {
@@ -8777,6 +8882,7 @@ if (!storyIsVideo) {
   let imageSettled = false;
   const renderStoryImage = () => {
     if (imageSettled) return;
+    if (window.__storyRenderToken !== storyRenderToken || !window.__storyOpen) return;
     imageSettled = true;
 
     container.innerHTML = `
@@ -8784,7 +8890,7 @@ if (!storyIsVideo) {
   <div style="
     position:absolute;
     inset:0;
-    background:url('${story.media_url}') center/cover;
+    background:url('${storyMediaUrl}') center/cover;
     filter:blur(40px);
     transform:scale(1.2);
     opacity:.45;
@@ -8792,7 +8898,7 @@ if (!storyIsVideo) {
 
   <!-- MAIN IMAGE -->
   <img
-    src="${story.media_url}"
+    src="${storyMediaUrl}"
 
     style="
       position:relative;
@@ -8859,7 +8965,9 @@ keepUIVisible();
 const btn = document.getElementById("storyMuteBtn");
 
 if (btn) {
-  btn.textContent = window.storyMuted ? "🔇" : "🔊";
+  btn.innerHTML = window.storyMuted
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="m17 9 5 6m0-6-5 6"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4Z"/><path d="M16 9a5 5 0 0 1 0 6M19 6a9 9 0 0 1 0 12"/></svg>' ;
 }
 
   const video =
@@ -8975,6 +9083,8 @@ video.addEventListener("click", e => {
   // WAIT FOR VIDEO
   video.onloadedmetadata = async () => {
 
+    if (window.__storyRenderToken !== storyRenderToken || !window.__storyOpen) return;
+
     try {
 
       await video.play();
@@ -8983,6 +9093,11 @@ video.addEventListener("click", e => {
 
       console.log(err);
 
+    }
+
+    if (window.__storyRenderToken !== storyRenderToken || !window.__storyOpen) {
+      try { video.pause(); } catch (e) {}
+      return;
     }
 
     clearTimeout(window.storyTimer);
@@ -9019,39 +9134,8 @@ window.storyStartTime =
 
 }
 
-const next =
-  window.storyList[
-    window.storyIndex + 1
-  ];
-
-if(next){
-
-  // IMAGE PRELOAD
-  if(next.media_type === "image"){
-
-    const preload =
-      new Image();
-
-    preload.src =
-      next.media_url;
-
-  }
-
-  // VIDEO PRELOAD
-  else{
-
-    const preloadVideo =
-      document.createElement("video");
-
-    preloadVideo.src =
-      next.media_url;
-
-    preloadVideo.preload =
-      "auto";
-
-  }
-
-}
+// The next story resolves its own signed URL when opened. Avoid preloading
+// raw storage:// paths, which browsers cannot display or play.
 
 }
 
@@ -9171,6 +9255,7 @@ window.closeStoryViewer = function () {
   if (window.__storyClosing) return;
   window.__storyClosing = true;
   window.__storyOpen = false;
+  window.__storyRenderToken = (window.__storyRenderToken || 0) + 1;
 
   if (window.storyViewChannel) {
     supabase.removeChannel(window.storyViewChannel);
@@ -9200,11 +9285,17 @@ window.closeStoryViewer = function () {
     } catch (e) {}
   }
 
+  // Stop and detach every media element inside the story surface. This also
+  // catches a video inserted late by an outstanding async URL-resolution task.
+  const content = document.getElementById("storyContent");
+  if (content) {
+    content.querySelectorAll("video,audio").forEach(media => {
+      try { media.pause(); media.currentTime = 0; media.removeAttribute("src"); media.querySelectorAll("source").forEach(source => source.removeAttribute("src")); media.load?.(); } catch (e) {}
+    });
+  }
   const audio = document.getElementById("storyAudio");
   if (audio) {
-    audio.pause();
-    audio.currentTime = 0;
-    audio.src = "";
+    try { audio.pause(); audio.currentTime = 0; audio.removeAttribute("src"); audio.load(); } catch (e) {}
   }
 
   const viewersPanel = document.getElementById("storyViewersPanel");
@@ -9224,7 +9315,6 @@ window.closeStoryViewer = function () {
   const replyInput = document.getElementById("storyReplyInput");
   if (replyInput) replyInput.value = "";
 
-  const content = document.getElementById("storyContent");
   if (content) content.innerHTML = "";
 
   document.body.style.overflow = "";
