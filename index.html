@@ -4891,8 +4891,8 @@ body.dark #chatMessages .chat-reply-media-preview > div[style*="background:rgba(
 }
 .avatar-wrap .online-indicator,.story-avatar-wrap .online-indicator,.chat-avatar-wrap .online-indicator,.profile-avatar-wrap .online-indicator{
   position:absolute !important;
-  right:5px !important;
-  bottom:5px !important;
+  right:1px !important;
+  bottom:1px !important;
   width:11px !important;
   height:11px !important;
   border-radius:50% !important;
@@ -7521,124 +7521,86 @@ window.loadStories = async function (forceRefresh = false) {
 };
 
 async function addStory() {
-
+  let uploadedPath = "";
   try {
+    const input = document.getElementById("storyInput");
+    const file = input?.files?.[0];
+    const audioFile = document.getElementById("storyAudioInput")?.files?.[0];
+    if (!file) { alert("Choose an image or video first."); return; }
 
-   const file =
-  document.getElementById("storyInput")
-  ?.files?.[0];
-  
-  const audioFile =
-document.getElementById("storyAudioInput")
-?.files?.[0];
-
-    if (!file) {
-      alert("Choose image first");
+    const { data: authData, error: authError } = await supabase.auth.getSession();
+    const activeSession = authData?.session;
+    if (authError || !activeSession?.user?.id) {
+      alert("Please sign in again before uploading a story.");
       return;
     }
 
-    const fileName =
-      Date.now() + "-" + file.name;
+    const safeName = String(file.name || "story-media").replace(/[^a-zA-Z0-9._-]/g, "_");
+    const uniquePart = (window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    uploadedPath = `${activeSession.user.id}/${uniquePart}-${safeName}`;
 
-    // UPLOAD TO STORAGE
-    const { error: uploadError } =
-      await supabase.storage
-        .from("stories")
-        .upload(fileName, file);
-
-    if (uploadError) {
-
-      console.log(uploadError);
-      alert("Upload failed");
-      return;
-
-    }
-
-    // Store a stable Storage object reference. The stories bucket is private,
-    // so getPublicUrl() cannot be used for playback. The viewer signs this path
-    // at read time for the authenticated viewer.
-    const publicUrl = `storage://stories/${fileName}`;
-      
-      let audioUrl = "";
-
-if (audioFile) {
-
-  const audioName =
-    Date.now() + "-audio-" + audioFile.name;
-
-  const { error: audioUploadError } =
-    await supabase.storage
+    const { data: uploadData, error: uploadError } = await supabase.storage
       .from("stories")
-      .upload(audioName, audioFile);
+      .upload(uploadedPath, file, {
+        cacheControl: "3600",
+        contentType: file.type || undefined,
+        upsert: false
+      });
+    if (uploadError) throw new Error(`Story media upload failed: ${uploadError.message}`);
+    if (!uploadData?.path) throw new Error("Storage did not return the uploaded story path.");
+    uploadedPath = uploadData.path;
 
-  if (!audioUploadError) {
+    let audioUrl = "";
+    if (audioFile) {
+      const audioName = `${activeSession.user.id}/${uniquePart}-audio-${String(audioFile.name || "story-audio").replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { data: audioData, error: audioError } = await supabase.storage
+        .from("stories")
+        .upload(audioName, audioFile, { cacheControl: "3600", contentType: audioFile.type || undefined, upsert: false });
+      if (audioError) console.warn("Story audio upload failed:", audioError);
+      else if (audioData?.path) audioUrl = `storage://stories/${audioData.path}`;
+    }
 
-  audioUrl = `storage://stories/${audioName}`;
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("name,avatar_url")
+      .eq("id", activeSession.user.id)
+      .maybeSingle();
+    if (profileError) console.warn("Could not load story profile details:", profileError);
 
-} else {
+    const mediaType = String(file.type || "").startsWith("video/") ? "video" : "image";
+    const storedMediaUrl = `storage://stories/${uploadedPath}`;
+    const { data: inserted, error: dbError } = await supabase
+      .from("stories")
+      .insert([{
+        user_id: activeSession.user.id,
+        name: profile?.name || activeSession.user.email || "User",
+        avatar_url: profile?.avatar_url || "",
+        media_url: storedMediaUrl,
+        media_type: mediaType,
+        audio_url: audioUrl
+      }])
+      .select("*")
+      .single();
 
-  console.error(audioUploadError);
+    if (dbError) throw new Error(`Story record could not be saved: ${dbError.message}`);
+    if (!inserted?.id || !String(inserted.media_url || "").trim()) {
+      throw new Error("Supabase saved the story without its media_url. No story was published; check the stories table columns/triggers.");
+    }
 
-}
-
-  }
-
-
-    // FILE TYPE
-    const mediaType =
-      file.type.startsWith("video")
-        ? "video"
-        : "image";
-
-const { data: profile } =
-  await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", session.user.id)
-    .maybeSingle();
-
-// REPLACE OLD INSERT WITH THIS
-const { data: inserted, error: dbError } =
-  await supabase
-    .from("stories")
-    .insert([{
-      user_id: session.user.id,
-
-      name:
-        profile?.name ||
-        session.user.email,
-
-      avatar_url:
-        profile?.avatar_url || "",
-
-      media_url: publicUrl,
-      media_type: mediaType,
-
-      audio_url: audioUrl
-    }])
-    .select();
-
-console.log("INSERTED:", inserted);
-console.log("DB ERROR:", dbError);
-
-alert(JSON.stringify(inserted));
-alert(JSON.stringify(dbError));
-
-if (dbError) {
-  alert("DB insert failed");
-  return;
-}
-
-    alert("Story added");
-
-    loadStories();
-
+    // Make the just-created row visible immediately, without reusing stale feed cache.
+    window.storyFeedCache = null;
+    if (input) input.value = "";
+    await window.loadStories(false);
+    alert("Story uploaded and published successfully.");
   } catch (err) {
-
-    console.log(err);
-
+    console.error("addStory failed:", err);
+    // Remove an orphaned media object if the database insert failed.
+    if (uploadedPath) {
+      try { await supabase.storage.from("stories").remove([uploadedPath]); }
+      catch (cleanupError) { console.warn("Could not clean up failed story upload:", cleanupError); }
+    }
+    alert(err?.message || "Could not publish the story. Please try again.");
   }
-
 }
 
 window.openStory = function(index){
@@ -8720,7 +8682,7 @@ setTimeout(() => {
 // IMAGE — treat missing/legacy image media_type as image unless the
 // stored type or URL clearly identifies a video. Never leave Loading visible
 // forever if a storage URL is invalid or a media request fails.
-const rawStoryMediaUrl = String(story.media_url || "").trim();
+const rawStoryMediaUrl = String(story.media_url || story.image_url || story.file_url || story.media || story.url || "").trim();
 const storyMediaUrl = await window.resolveStorageMediaUrl("stories", rawStoryMediaUrl);
 const storyType = String(story.media_type || "").toLowerCase();
 const storyIsVideo = storyType === "video" || /\.(mp4|webm|mov|m4v)(?:[?#]|$)/i.test(storyMediaUrl);
