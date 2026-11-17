@@ -38206,29 +38206,28 @@ window.__prefetchPrivacySettings = function (requestedUserId, force = false) {
     cache.userId = uid;
     cache.value = null;
     cache.promise = (async () => {
-        const [pr, pm, ad, latest] = await Promise.all([
+        const [pr, pm, pi, ad, own] = await Promise.all([
             supabase.from("profiles").select("private_profile, post_privacy_mode, show_online, show_last_seen, allow_messages, allow_followers, creator_subscription_price_kes, creator_subscription_duration_days, creator_subscription_payout_phone").eq("id", uid).single(),
             supabase.rpc("has_verified_paid_premium_subscription"),
+            supabase.rpc("has_premium_privacy_indicator"),
             supabase.rpc("admin_api", { p_action: "whoami", p_payload: {} }),
-            supabase.from("premium_subscriptions").select("status, verified_at, started_at, expires_at, created_at").eq("user_id", uid).order("created_at", { ascending: false }).limit(1).maybeSingle()
+            (async () => { const n = new Date().toISOString(); return supabase.from("premium_subscriptions").select("status, verified_at, started_at, expires_at").eq("user_id", uid).eq("status", "active").not("verified_at", "is", null).lte("started_at", n).gt("expires_at", n).limit(1); })()
         ]);
         const av = Array.isArray(ad?.data) ? ad.data[0] : ad?.data;
         const isAdmin = !ad?.error && (av?.is_admin === true || av?.is_admin === "true" || av?.isAdmin === true || av?.isAdmin === "true" || av?.whoami?.is_admin === true);
         const pv = Array.isArray(pm?.data) ? pm.data[0] : pm?.data;
         const raw = pv && typeof pv === "object" ? (pv.has_verified_paid_premium_subscription ?? pv.has_verified_paid_premium_subscription_1 ?? pv.active) : pv;
         const rpcPremium = raw === true || raw === "true" || raw === 1 || raw === "1";
-        const sub = latest?.data || null;
-        const now = Date.now();
-        const startsAt = sub?.started_at ? new Date(sub.started_at).getTime() : NaN;
-        const expiresAt = sub?.expires_at ? new Date(sub.expires_at).getTime() : NaN;
-        const rowPremium = !latest?.error && sub?.status === "active" && !!sub?.verified_at &&
-            Number.isFinite(startsAt) && startsAt <= now && Number.isFinite(expiresAt) && expiresAt > now;
-        const subscriptionState = rowPremium ? "active" :
-            (sub?.status === "pending" ? "pending" :
-            (sub ? ((Number.isFinite(expiresAt) && expiresAt <= now) || sub.status === "expired" ? "expired" : "inactive") : "none"));
-        // Paid access is based only on verified, unexpired payment; admin access is separate.
-        const hasPaidPremium = !pm?.error ? rpcPremium : rowPremium;
-        const value = { userId: uid, profile: pr?.data || null, profileError: pr?.error || null, isAdmin, hasPremium: isAdmin || hasPaidPremium, hasPaidPremium, subscriptionState, subscription: sub, premiumKnown: !ad?.error || !pm?.error || !latest?.error };
+        const piv = Array.isArray(pi?.data) ? pi.data[0] : pi?.data;
+        const indicatorRaw = piv && typeof piv === "object"
+            ? (piv.has_premium_privacy_indicator ?? piv.active ?? piv.is_active)
+            : piv;
+        const rpcIndicator = indicatorRaw === true || indicatorRaw === "true" || indicatorRaw === 1 || indicatorRaw === "1";
+        const rowPremium = !own?.error && Array.isArray(own?.data) && own.data.length > 0;
+        // The indicator represents Premium entitlement: verified paid subscribers
+        // OR the server-authorized administrator exemption. It does not create
+        // a paid subscription or change payment/post authorization logic.
+        const value = { userId: uid, profile: pr?.data || null, profileError: pr?.error || null, isAdmin, hasPremium: isAdmin || rpcIndicator || rpcPremium || rowPremium, premiumKnown: isAdmin || !pi?.error || !pm?.error || !own?.error };
         cache.value = value; cache.loadedAt = Date.now(); cache.promise = null;
         return value;
     })().catch(e => { console.warn("Privacy background preload failed:", e); cache.promise = null; return null; });
@@ -38305,8 +38304,8 @@ window.openPrivacySettings = async function (addHistory = true) {
     // LOAD CURRENT PRIVACY SETTINGS
     // =================================================
 
-    // Always re-check on opening so an expired plan restores the renewal entry immediately.
-    let privacyPrefetched = await window.__prefetchPrivacySettings(userId, true);
+    let privacyPrefetched = await window.__prefetchPrivacySettings(userId);
+    if (!privacyPrefetched) privacyPrefetched = await window.__prefetchPrivacySettings(userId, true);
     const profile = privacyPrefetched?.profile || null;
     const error = privacyPrefetched?.profileError || null;
 
@@ -38722,18 +38721,11 @@ window.openPrivacySettings = async function (addHistory = true) {
                 </div>
                 ` : ""}
 
-                <!-- SOCIALAPP PREMIUM: keep the renewal entry visible for every account. -->
+                <!-- SOCIALAPP PREMIUM -->
                 <div style="margin-top:20px;padding:16px;border:1px solid #49316a;border-radius:14px;background:linear-gradient(135deg,#211337,#111018);">
                     <div style="font-size:16px;font-weight:800;margin-bottom:6px;">SocialApp Premium</div>
-                    <div style="font-size:13px;line-height:1.5;color:#c8c0d6;margin-bottom:10px;">Private account mode requires an active Premium subscription. Monthly KSh 200 · Yearly KSh 2,000.</div>
-                    <div style="font-size:12px;line-height:1.5;color:${privacyIsAdministrator ? "#a7f3c0" : (privacyPrefetched?.subscriptionState === "active" ? "#a7f3c0" : (privacyPrefetched?.subscriptionState === "expired" ? "#ffd28a" : "#c8c0d6"))};margin-bottom:12px;">
-                      ${privacyIsAdministrator ? "Administrator access is enabled." :
-                        (privacyPrefetched?.subscriptionState === "active" ? "Your verified Premium subscription is active." :
-                        (privacyPrefetched?.subscriptionState === "expired" ? "Your Premium subscription has expired. Choose a plan below to renew access." :
-                        (privacyPrefetched?.subscriptionState === "pending" ? "A payment is pending verification. Check its status before starting another payment." :
-                        "No active Premium subscription. Choose a plan to subscribe.")))}
-                    </div>
-                    <button type="button" id="openSocialAppPremiumFromPrivacy" style="width:100%;padding:12px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:800;">${privacyIsAdministrator ? "Premium access details" : (privacyPrefetched?.subscriptionState === "expired" ? "Renew Premium" : (privacyPrefetched?.subscriptionState === "active" ? "Manage Premium" : "View Premium plans"))}</button>
+                    <div style="font-size:13px;line-height:1.5;color:#c8c0d6;margin-bottom:12px;">Private account mode requires an active Premium subscription. Monthly KSh 200 · Yearly KSh 2,000.</div>
+                    <button type="button" id="openSocialAppPremiumFromPrivacy" style="width:100%;padding:12px;border:0;border-radius:10px;background:#8a2be2;color:#fff;font-weight:800;">View Premium plans</button>
                 </div>
 
                 <!-- SAVE -->
@@ -39246,6 +39238,14 @@ window.openPremiumScreen = async function () {
       </div>
       <div style="font-size:12px;color:#aaa;line-height:1.6;margin-bottom:18px;">Your Premium access activates only after the payment provider confirms payment to SocialApp's server. Never share your M-Pesa PIN or card security code in chat.</div>
       <div id="socialPremiumStatus" role="status" style="display:${active ? 'block' : 'none'};padding:12px;border-radius:10px;background:#12301e;color:#a7f3c0;margin-bottom:14px;">Your Premium subscription is active.</div>
+      <div id="socialPremiumRecovery" style="display:none;padding:15px;border:1px solid #6b5428;border-radius:14px;background:#211b10;margin:0 0 16px;">
+        <div style="font-weight:800;color:#ffe0a3;margin-bottom:7px;">Already paid but Premium did not activate?</div>
+        <div id="socialPremiumRecoveryInfo" style="font-size:13px;line-height:1.5;color:#ddd;margin-bottom:10px;">We found a pending M-Pesa checkout for this account.</div>
+        <label for="socialPremiumReceipt" style="display:block;font-size:13px;color:#ddd;margin-bottom:6px;">M-Pesa receipt code from your confirmation SMS</label>
+        <input id="socialPremiumReceipt" type="text" autocomplete="off" autocapitalize="characters" placeholder="e.g. ABC123XYZ" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #62543b;border-radius:10px;background:#111;color:#fff;font-size:16px;margin-bottom:10px;">
+        <button id="socialPremiumRecoverBtn" type="button" style="width:100%;padding:13px;border:0;border-radius:10px;background:#a36b16;color:#fff;font-weight:800;">Verify my completed payment</button>
+        <div id="socialPremiumRecoveryStatus" role="status" style="display:none;margin-top:10px;font-size:13px;line-height:1.5;color:#ffe0a3;"></div>
+      </div>
       <button id="socialPremiumContinue" style="width:100%;padding:15px;border:0;border-radius:12px;background:#8a2be2;color:#fff;font-weight:800;font-size:16px;">${active ? 'Manage subscription' : 'Continue to payment'}</button>
       <div style="font-size:11px;color:#777;text-align:center;margin-top:12px;">Payment checkout requires the SocialApp payment Edge Function and provider credentials to be configured.</div>
     </section>`;
@@ -39278,6 +39278,118 @@ window.openPremiumScreen = async function () {
   const close = () => screen.remove();
   screen.querySelector("#socialPremiumClose")?.addEventListener("click", close);
   screen.addEventListener("click", e => { if (e.target === screen) close(); });
+
+  // Offer recovery only when this signed-in account has an unfinished M-Pesa
+  // attempt. The attempt ID is loaded from the database, never supplied by the UI.
+  const recoveryPanel = screen.querySelector("#socialPremiumRecovery");
+  const recoveryInfo = screen.querySelector("#socialPremiumRecoveryInfo");
+  const recoveryStatus = screen.querySelector("#socialPremiumRecoveryStatus");
+  const recoveryButton = screen.querySelector("#socialPremiumRecoverBtn");
+  let recoverableAttempt = null;
+  try {
+    const { data: pendingAttempts, error: pendingAttemptsError } = await supabase
+      .from("premium_payment_attempts")
+      .select("id, plan_code, amount_kes, created_at, status, payment_method")
+      .eq("user_id", session.user.id)
+      .eq("payment_method", "mpesa")
+      .in("status", ["initiated", "pending"])
+      .order("created_at", { ascending: false })
+      .limit(1);
+    if (pendingAttemptsError) throw pendingAttemptsError;
+    recoverableAttempt = Array.isArray(pendingAttempts) ? pendingAttempts[0] : null;
+    if (recoverableAttempt && recoveryPanel) {
+      recoveryPanel.style.display = "block";
+      if (recoveryInfo) {
+        const planLabel = recoverableAttempt.plan_code === "yearly" ? "Yearly" : "Monthly";
+        recoveryInfo.textContent = `We found an unfinished ${planLabel} M-Pesa checkout for KSh ${Number(recoverableAttempt.amount_kes || 0).toLocaleString("en-KE")}. Enter the receipt code from the successful M-Pesa SMS to check that exact checkout. Do not make another payment.`;
+      }
+    }
+  } catch (recoveryLookupError) {
+    console.warn("Pending Premium payment lookup failed:", recoveryLookupError);
+  }
+
+  recoveryButton?.addEventListener("click", async () => {
+    if (!recoverableAttempt?.id || recoveryButton.disabled) return;
+    const receiptInput = screen.querySelector("#socialPremiumReceipt");
+    const receipt = String(receiptInput?.value || "").trim().toUpperCase();
+    if (!/^[A-Z0-9]{8,12}$/.test(receipt)) {
+      if (recoveryStatus) {
+        recoveryStatus.style.display = "block";
+        recoveryStatus.textContent = "Enter the receipt code exactly as shown in your M-Pesa confirmation SMS.";
+      }
+      receiptInput?.focus();
+      return;
+    }
+
+    recoveryButton.disabled = true;
+    recoveryButton.textContent = "Checking with M-Pesa…";
+    if (recoveryStatus) {
+      recoveryStatus.style.display = "block";
+      recoveryStatus.textContent = "Checking the saved checkout with Daraja. This does not start a new payment.";
+    }
+
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!authData?.user?.id || authData.user.id !== session.user.id) {
+        throw new Error("Your login session changed. Sign in to the same account that made the payment.");
+      }
+
+      const { data: recoveryData, error: recoveryError } = await supabase.functions.invoke(
+        "recover-premium-payment",
+        { body: { payment_attempt_id: recoverableAttempt.id, mpesa_receipt: receipt } }
+      );
+      if (recoveryError) {
+        let detail = recoveryError.message || "The payment recovery service could not be reached.";
+        try {
+          const context = recoveryError.context;
+          if (context && typeof context.json === "function") {
+            const body = await context.json();
+            if (body?.error || body?.message) detail = body.error || body.message;
+          }
+        } catch (_) {}
+        throw new Error(detail);
+      }
+      if (!recoveryData || recoveryData.success !== true) {
+        throw new Error(recoveryData?.message || recoveryData?.error || "Daraja has not confirmed this checkout as paid.");
+      }
+
+      const { data: entitlement, error: entitlementError } = await supabase.rpc("has_active_premium_subscription");
+      if (entitlementError) throw entitlementError;
+      const nowActive = entitlement === true || entitlement?.has_active_premium_subscription === true;
+      if (!nowActive) {
+        throw new Error("The checkout check completed, but SocialApp has not confirmed an active subscription yet. Please wait briefly and check again.");
+      }
+
+      active = true;
+      if (recoveryStatus) {
+        recoveryStatus.style.color = "#a7f3c0";
+        recoveryStatus.textContent = "Payment verified and Premium is now active.";
+      }
+      recoveryButton.textContent = "Premium activated";
+      recoveryPanel.style.borderColor = "#28613d";
+      const continueButton = screen.querySelector("#socialPremiumContinue");
+      if (continueButton) {
+        continueButton.textContent = "Manage subscription";
+        continueButton.disabled = false;
+      }
+      setTimeout(async () => {
+        if (!screen.isConnected) return;
+        screen.remove();
+        if (typeof window.openProfileSettings === "function") {
+          await window.openProfileSettings(false);
+        }
+      }, 1100);
+    } catch (recoveryError) {
+      console.error("Premium payment recovery failed:", recoveryError);
+      if (recoveryStatus) {
+        recoveryStatus.style.color = "#ffe0a3";
+        recoveryStatus.textContent = recoveryError?.message || "Could not verify this payment. Do not pay again yet; check the payment status first.";
+      }
+      recoveryButton.disabled = false;
+      recoveryButton.textContent = "Try verification again";
+    }
+  });
 
 screen.querySelector("#socialPremiumContinue")?.addEventListener("click", async () => {
   const status = screen.querySelector("#socialPremiumStatus");
@@ -57472,10 +57584,7 @@ function initAdminSystem(){
 
       if(error) throw error;
 
-      const row = Array.isArray(data) ? data[0] : data;
-      window.adminCache = row?.is_admin === true || row?.is_admin === "true" ||
-        row?.isAdmin === true || row?.isAdmin === "true" ||
-        row?.whoami?.is_admin === true || row?.whoami?.is_admin === "true";
+      window.adminCache = data?.is_admin === true;
       return window.adminCache;
     }catch(e){
       console.warn("STRICT ADMIN CHECK:",e);
@@ -59014,9 +59123,11 @@ window.reportComment=id=>window.submitUserReport("comment",id);
     <h3 style="margin-top:0">Creator portfolio</h3>
     <p style="color:#ad9ab9;font-size:13px">Build a creator introduction and choose public posts to feature. Your settings are saved on this device. Export a standalone HTML portfolio to share.</p>
     <label for="saPortfolioSlug">Public portfolio address (3–40 letters, numbers or hyphens)</label><input id="saPortfolioSlug" maxlength="40" placeholder="your-creator-name"><label style="display:flex;gap:8px;align-items:center;margin:10px 0"><input id="saPortfolioPublish" type="checkbox" style="width:18px;height:18px"> Publish portfolio publicly</label><label for="saPortfolioTitle">Portfolio headline</label><input id="saPortfolioTitle" maxlength="90" placeholder="e.g. Digital creator & storyteller">
-    <label for="saPortfolioBio">Creator introduction</label><textarea id="saPortfolioBio" rows="4" maxlength="1200" placeholder="Tell visitors who you are and what you create…"></textarea>
-    <label for="saPortfolioLinks">External links (one URL per line)</label><textarea id="saPortfolioLinks" rows="3" maxlength="1200" placeholder="https://your-website.com
-https://instagram.com/yourname"></textarea>
+    <label for="saPortfolioBio">Creator introduction</label><textarea id="saPortfolioBio" rows="5" maxlength="1200" placeholder="Tell visitors who you are, what you create, and what people can expect…"></textarea>
+    <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:5px"><span style="font-size:11px;color:#ad9ab9">Use short paragraphs for an easy-to-read introduction.</span><span id="saPortfolioBioCount" style="font-size:11px;color:#ad9ab9">0 / 1200</span></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:18px"><strong>Creator links</strong><button class="sa-btn" id="saPortfolioAddLink" type="button">+ Add link</button></div>
+    <p style="font-size:12px;color:#ad9ab9;margin:5px 0 8px">Give each link a clear label, such as Website, Instagram, YouTube or Contact. You can reorder links.</p>
+    <div id="saPortfolioLinkList" style="display:grid;gap:9px"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="sa-btn" id="saPortfolioSave" type="button">Save portfolio</button><button class="sa-btn" id="saPortfolioExport" type="button">Export shareable portfolio</button></div>
     <p id="saPortfolioMessage" style="color:#c7bacf;font-size:12px" aria-live="polite"></p>
    </div>
@@ -59062,45 +59173,15 @@ https://instagram.com/yourname"></textarea>
    return activeSession;
  }
  async function hasAccess(){
-  const sb=client(); if(!sb) return false;
-  try{
-   const activeSession=await syncAuthSession();
-   const uid=activeSession?.user?.id;
-   if(!uid) return false;
-
-   // Verify administrator access against the protected database API.
-   let admin=false;
+   const sb=client(); if(!sb) return false;
    try{
-    if(typeof window.isAdmin==='function') admin=(await window.isAdmin(true))===true;
-   }catch(e){console.warn('Shared administrator check failed:',e);}
-   if(!admin){
-    try{
-     const {data:adminData,error:adminError}=await sb.rpc('admin_api',{p_action:'whoami',p_payload:{}});
-     if(!adminError){
-      const row=Array.isArray(adminData)?adminData[0]:adminData;
-      admin=row?.is_admin===true||row?.is_admin==='true'||row?.isAdmin===true||row?.isAdmin==='true'||row?.whoami?.is_admin===true;
-     }
-    }catch(e){console.warn('Direct administrator verification failed:',e);}
-   }
-   if(admin===true) return true;
-
-   // Paid Premium must be verified and unexpired; never trust a cached UI flag.
-   const {data,error}=await sb.rpc('has_active_premium_subscription');
-   if(!error){
-    const row=Array.isArray(data)?data[0]:data;
-    const raw=row&&typeof row==='object'?(row.has_active_premium_subscription??row.active):row;
-    if(raw===true||raw==='true'||raw===1||raw==='1') return true;
-   }
-
-   // Safe fallback when the entitlement RPC is temporarily unavailable.
-   const now=new Date().toISOString();
-   const {data:rows,error:rowsError}=await sb.from('premium_subscriptions')
-    .select('status,verified_at,started_at,expires_at')
-    .eq('user_id',uid).eq('status','active')
-    .not('verified_at','is',null).lte('started_at',now).gt('expires_at',now).limit(1);
-   if(rowsError) throw rowsError;
-   return Array.isArray(rows)&&rows.length>0;
-  }catch(e){console.warn('Creator Studio access check failed:',e);return false;}
+     const activeSession=await syncAuthSession();
+     if(!activeSession?.user?.id) return false;
+     try{if(typeof window.isAdmin==='function' && await window.isAdmin(true)) return true;}catch(e){}
+     const {data,error}=await sb.rpc('has_active_premium_subscription');
+     if(error) throw error;
+     return data===true||data?.has_active_premium_subscription===true;
+   }catch(e){console.warn('Creator Studio Premium check failed',e);return false;}
  }
  function currentId(){return window.session?.user?.id||window.currentUser?.id||null;}
  function message(id,t){const el=$(id);if(el)el.textContent=t;}
@@ -59695,11 +59776,32 @@ https://instagram.com/yourname"></textarea>
  function portfolioSlug(value){return String(value||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);}
  function portfolioPublicUrl(slug){return location.origin+location.pathname+'?portfolio='+encodeURIComponent(slug);}
  function portfolioSafeUrl(value){try{const u=new URL(String(value).trim());return ['https:','http:'].includes(u.protocol)?u.href:null;}catch(e){return null;}}
- function readPortfolioForm(){return {slug:portfolioSlug($('saPortfolioSlug')?.value),published:!!$('saPortfolioPublish')?.checked,title:$('saPortfolioTitle')?.value.trim()||'',bio:$('saPortfolioBio')?.value.trim()||'',links:($('saPortfolioLinks')?.value||'').split(/\n+/).map(x=>portfolioSafeUrl(x)).filter(Boolean),featured:creatorPortfolioFeatured.slice(0,6)};}
+ function portfolioLinkRows(){return Array.from($('saPortfolioLinkList')?.querySelectorAll('[data-portfolio-link-row]')||[]).map(row=>({label:row.querySelector('[data-link-label]')?.value.trim()||'',url:row.querySelector('[data-link-url]')?.value.trim()||''}));}
+ function renderPortfolioLinks(links=[]){
+  const host=$('saPortfolioLinkList');if(!host)return;host.innerHTML='';
+  const normalized=(Array.isArray(links)?links:[]).map(item=>typeof item==='string'?{label:(()=>{try{return new URL(item).hostname.replace(/^www\./,'');}catch(e){return 'Website';}})(),url:item}:{label:String(item?.label||''),url:String(item?.url||'')}).slice(0,8);
+  if(!normalized.length)normalized.push({label:'',url:''});
+  normalized.forEach((item,index)=>{
+   const row=document.createElement('div');row.dataset.portfolioLinkRow='1';row.style.cssText='display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:7px;align-items:center;padding:9px;border:1px solid #49345b;border-radius:12px;background:rgba(255,255,255,.025)';
+   const label=document.createElement('input');label.type='text';label.maxLength=30;label.placeholder='Label';label.value=item.label;label.dataset.linkLabel='1';label.setAttribute('aria-label','Link label');
+   const url=document.createElement('input');url.type='url';url.placeholder='https://…';url.value=item.url;url.dataset.linkUrl='1';url.setAttribute('aria-label','Link URL');
+   [label,url].forEach(input=>input.style.cssText='min-width:0;width:100%;box-sizing:border-box;padding:10px;border-radius:9px;border:1px solid #59436b;background:#211a2b;color:#fff');
+   const controls=document.createElement('div');controls.style.cssText='display:flex;justify-content:flex-end;gap:3px;grid-column:1 / -1';
+   const move=(symbol,delta,aria)=>{const b=document.createElement('button');b.type='button';b.className='sa-btn';b.textContent=symbol;b.setAttribute('aria-label',aria);b.style.cssText='padding:7px 9px;min-width:30px';b.disabled=index+delta<0||index+delta>=normalized.length;b.addEventListener('click',()=>{const values=portfolioLinkRows();[values[index],values[index+delta]]=[values[index+delta],values[index]];renderPortfolioLinks(values);});controls.appendChild(b);};
+   move('↑',-1,'Move link up');move('↓',1,'Move link down');
+   const remove=document.createElement('button');remove.type='button';remove.className='sa-btn';remove.textContent='×';remove.setAttribute('aria-label','Remove link');remove.style.cssText='padding:7px 9px;min-width:30px';remove.addEventListener('click',()=>{const values=portfolioLinkRows();values.splice(index,1);renderPortfolioLinks(values);});controls.appendChild(remove);
+   row.append(label,url,controls);host.appendChild(row);
+  });
+ }
+ function readPortfolioForm(){return {slug:portfolioSlug($('saPortfolioSlug')?.value),published:!!$('saPortfolioPublish')?.checked,title:$('saPortfolioTitle')?.value.trim()||'',bio:$('saPortfolioBio')?.value.trim()||'',links:portfolioLinkRows().map(x=>({label:x.label,url:portfolioSafeUrl(x.url)})).filter(x=>x.url).slice(0,8),featured:creatorPortfolioFeatured.slice(0,6)};}
  async function saveCreatorPortfolio(silent=false){
   const data=readPortfolioForm(),sb=client(),uid=currentId();
   if(!uid||!sb){message('saPortfolioMessage','Sign in before saving your public portfolio.');return null;}
   if(data.slug.length<3){message('saPortfolioMessage','Choose a public address with at least 3 letters or numbers.');return null;}
+  const enteredLinks=portfolioLinkRows();
+  const invalidLink=enteredLinks.find(x=>(x.label||x.url)&&!portfolioSafeUrl(x.url));
+  if(invalidLink){message('saPortfolioMessage','Every creator link needs a valid http:// or https:// address.');return null;}
+  if(enteredLinks.some(x=>x.url&&!x.label)){message('saPortfolioMessage','Add a label for each creator link.');return null;}
   try{
    const {error}=await sb.from('creator_portfolios').upsert({user_id:uid,slug:data.slug,title:data.title,bio:data.bio,links:data.links,featured_post_ids:data.featured.map(Number),is_published:data.published,updated_at:new Date().toISOString()},{onConflict:'user_id'});
    if(error)throw error;
@@ -59708,11 +59810,12 @@ https://instagram.com/yourname"></textarea>
    message('saPortfolioMessage',data.published?'Portfolio published: '+url:'Portfolio saved as a draft. Turn on Publish to make it public.');return data;
   }catch(e){console.error('Portfolio save failed:',e);message('saPortfolioMessage',e.message||'Could not save portfolio. Check the SQL migration and table permissions.');return null;}
  }
+ function updatePortfolioBioCount(){const field=$('saPortfolioBio'),count=$('saPortfolioBioCount');if(count)count.textContent=(field?.value.length||0)+' / 1200';}
  async function loadCreatorPortfolio(){
   const sb=client(),uid=currentId();let data={};
   try{if(uid&&sb){const {data:row,error}=await sb.from('creator_portfolios').select('slug,title,bio,links,featured_post_ids,is_published').eq('user_id',uid).maybeSingle();if(error)throw error;if(row)data={slug:row.slug,title:row.title,bio:row.bio,links:row.links||[],featured:(row.featured_post_ids||[]).map(String),published:row.is_published};const {data:profile,error:profileError}=await sb.from('profiles').select('id,name,username,avatar_url,verified').eq('id',uid).maybeSingle();if(profileError)throw profileError;creatorPortfolioProfile=profile?{...profile,id:profile.id||uid}:{id:uid,name:'SocialApp Creator',avatar_url:null,verified:false};}}
   catch(e){console.warn('Could not load cloud portfolio:',e);try{data=JSON.parse(localStorage.getItem(portfolioStorageKey())||'{}');}catch(_){}message('saPortfolioMessage','Cloud portfolio unavailable. Check that the SQL migration has been run.');}
-  $('saPortfolioSlug').value=data.slug||'';$('saPortfolioPublish').checked=!!data.published;$('saPortfolioTitle').value=data.title||'';$('saPortfolioBio').value=data.bio||'';$('saPortfolioLinks').value=(data.links||[]).join('\n');creatorPortfolioFeatured=Array.isArray(data.featured)?data.featured.slice(0,6):[];renderCreatorPortfolioPreview(readPortfolioForm());
+  $('saPortfolioSlug').value=data.slug||'';$('saPortfolioPublish').checked=!!data.published;$('saPortfolioTitle').value=data.title||'';$('saPortfolioBio').value=data.bio||'';renderPortfolioLinks(data.links||[]);updatePortfolioBioCount();creatorPortfolioFeatured=Array.isArray(data.featured)?data.featured.slice(0,6):[];renderCreatorPortfolioPreview(readPortfolioForm());
  }
  function renderCreatorPortfolioPreview(data=readPortfolioForm()){
   const host=$('saPortfolioPreview');if(!host)return;host.innerHTML='';
@@ -59720,7 +59823,7 @@ https://instagram.com/yourname"></textarea>
   const bio=document.createElement('p');bio.style.cssText='white-space:pre-wrap;color:#d8cce0';bio.textContent=data.bio||'Your introduction will appear here.';host.append(h,bio);
   const chosen=creatorPortfolioPosts.filter(p=>data.featured.includes(String(p.id))&&p.visibility==='public');
   if(chosen.length){const heading=document.createElement('strong');heading.textContent='Featured posts';host.appendChild(heading);chosen.forEach(p=>{const item=document.createElement('div');item.style.cssText='padding:9px 0;border-top:1px solid #38264b;white-space:pre-wrap';item.textContent=(p.content||'[Post without text]').slice(0,240);host.appendChild(item);});}
-  if(creatorPortfolioProfile?.avatar_url){const avatar=document.createElement('img');avatar.src=creatorPortfolioProfile.avatar_url;avatar.alt='Creator profile';avatar.style.cssText='width:76px;height:76px;border-radius:50%;object-fit:cover;margin:0 0 12px';host.insertBefore(avatar,host.firstChild);}if(data.links.length){const links=document.createElement('div');links.style.cssText='display:flex;gap:10px;flex-wrap:wrap;margin-top:10px';data.links.forEach(url=>{const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=new URL(url).hostname;a.style.color='#c4a2e9';links.appendChild(a);});host.appendChild(links);}
+  if(creatorPortfolioProfile?.avatar_url){const avatar=document.createElement('img');avatar.src=creatorPortfolioProfile.avatar_url;avatar.alt='Creator profile';avatar.style.cssText='width:76px;height:76px;border-radius:50%;object-fit:cover;margin:0 0 12px';host.insertBefore(avatar,host.firstChild);}if(data.links.length){const links=document.createElement('div');links.style.cssText='display:flex;gap:10px;flex-wrap:wrap;margin-top:10px';data.links.forEach(item=>{const a=document.createElement('a');a.href=item.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=item.label||new URL(item.url).hostname;a.style.cssText='display:inline-flex;align-items:center;padding:7px 11px;border:1px solid #68428a;border-radius:20px;color:#d5aaff;text-decoration:none';links.appendChild(a);});host.appendChild(links);}
  }
  async function loadCreatorPortfolioPosts(){
   const host=$('saPortfolioPostList'),sb=client(),uid=currentId();if(!host)return;
@@ -59752,7 +59855,7 @@ https://instagram.com/yourname"></textarea>
   if(!profile.id){message('saPortfolioMessage','Could not identify your SocialApp profile. Sign in again, reopen Creator Studio, and retry export.');return;}
   const name=profile.name||window.currentUser?.user_metadata?.name||window.currentUser?.user_metadata?.full_name||'SocialApp Creator';
   const avatar=profile.avatar_url?await portfolioMediaForExport('avatars',profile.avatar_url,'image'):'';
-  const linkHtml=data.links.map(url=>'<a href="'+portfolioEscape(url)+'" target="_blank" rel="noopener noreferrer">'+portfolioEscape(new URL(url).hostname)+'</a>').join(' · ');
+  const linkHtml=data.links.map(item=>{const url=typeof item==='string'?item:item.url;const label=typeof item==='string'?new URL(item).hostname:(item.label||new URL(url).hostname);return '<a href="'+portfolioEscape(url)+'" target="_blank" rel="noopener noreferrer">'+portfolioEscape(label)+'</a>';}).join(' · ');
   const appBase=location.origin+location.pathname;
   const profileHref=appBase+'?socialapp_profile='+encodeURIComponent(profile.id||'');
   const postCards=[];
@@ -59766,7 +59869,8 @@ https://instagram.com/yourname"></textarea>
   }
   const avatarHtml=avatar?'<a href="'+portfolioEscape(profileHref)+'"><img src="'+portfolioEscape(avatar)+'" alt="Open creator profile" style="width:88px;height:88px;border-radius:50%;object-fit:cover;margin-bottom:12px"></a>':'';
   const verified=profile.verified===true?'<span class="verified">✓ Verified</span>':'';
-  const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+portfolioEscape(data.title||name)+'</title><style>*{box-sizing:border-box}body{margin:0;background:#100d16;color:#f7f2fb;font:16px system-ui;line-height:1.6}.wrap{max-width:760px;margin:auto;padding:32px 20px}header{padding:30px;border-radius:20px;background:linear-gradient(135deg,#48206b,#17111f);border:1px solid #70449a}h1{margin:0 0 8px}article{padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523;overflow:hidden}.post-link{display:block;color:inherit;text-decoration:none}.open-label{display:block;color:#d5aaff;font-size:13px;margin-top:10px}article img,article video{display:block}a{color:#d5aaff;margin-right:12px}small{color:#bdaacb}.verified{display:inline-block;color:#c8a4ff;border:1px solid #70449a;border-radius:20px;padding:1px 8px;font-size:12px}.foot{margin-top:32px;color:#9d8ca9;font-size:12px}</style></head><body><main class="wrap"><header>'+avatarHtml+'<a href="'+portfolioEscape(profileHref)+'" style="color:#d5aaff;font-size:13px;text-decoration:none">'+portfolioEscape(name)+' '+verified+' · View SocialApp profile</a><h1>'+portfolioEscape(data.title||'Creator portfolio')+'</h1><p style="white-space:pre-wrap">'+portfolioEscape(data.bio).replace(/\n/g,'<br>')+'</p>'+linkHtml+'</header><h2>Featured content</h2>'+(postCards.join('\n')||'<p>No featured public posts selected.</p>')+'<p class="foot">Creator portfolio exported from SocialApp. Public featured content only.</p></main></body></html>';
+  const html='<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+portfolioEscape(data.title||name)+'</title><style>*{box-sizing:border-box}body{margin:0;background:#100d16;color:#f7f2fb;font:16px system-ui;line-height:1.6}.wrap{max-width:760px;margin:auto;padding:32px 20px}header{padding:30px;border-radius:20px;background:linear-gradient(135deg,#48206b,#17111f);border:1px solid #70449a}h1{margin:0 0 8px}article{padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523;overflow:hidden}.post-link{display:block;color:inherit;text-decoration:none}.open-label{display:block;color:#d5aaff;font-size:13px;margin-top:10px}article img,article video{display:block}a{color:#d5aaff;margin-right:12px}small{color:#bdaacb}.verified{display:inline-block;color:#c8a4ff;border:1px solid #70449a;border-radius:20px;padding:1px 8px;font-size:12px}.foot{margin-top:32px;color:#9d8ca9;font-size:12px}</style></head><body><main class="wrap"><header>'+avatarHtml+'<a href="'+portfolioEscape(profileHref)+'" style="color:#d5aaff;font-size:13px;text-decoration:none">'+portfolioEscape(name)+' '+verified+' · View SocialApp profile</a><h1>'+portfolioEscape(data.title||'Creator portfolio')+'</h1><p style="white-space:pre-wrap">'+portfolioEscape(data.bio).replace(/\n/g,'<br>')+'</p>'+linkHtml+'</header><h2>Featured content</h2>'+(postCards.join('\n')||'<p>No featured public posts selected.</p>')+'<p class="foot">Creator portfolio exported from SocialApp. Public featured content only.</p></main>'+'</body></html>';
+
   const blob=new Blob([html],{type:'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='SocialApp-Creator-Portfolio.html';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2500);
   message('saPortfolioMessage','Portfolio exported. Images and smaller videos are embedded in the file; very large videos use a secure link that expires after 7 days.');
  }
@@ -59880,7 +59984,7 @@ https://instagram.com/yourname"></textarea>
  },30000);
  document.addEventListener('click',e=>{const b=e.target.closest('[data-sa-tab]');if(!b)return;const key=b.dataset.saTab;['Analytics','Appearance','Schedule','Calendar','Portfolio','Stories'].forEach(x=>{const panel=$('saCreator'+x);if(panel)panel.style.display=(x.toLowerCase()===key)?'block':'none';});if(key==='calendar'){renderCreatorCalendar();loadSchedules(true);}if(key==='portfolio'){loadCreatorPortfolio();}if(key==='stories'){loadCreatorStories();}if(key==='schedule'){const field=$('saScheduleAt');if(field){const min=new Date(Date.now()+60000);const pad=n=>String(n).padStart(2,'0');field.min=min.getFullYear()+'-'+pad(min.getMonth()+1)+'-'+pad(min.getDate())+'T'+pad(min.getHours())+':'+pad(min.getMinutes());}}});
  $('saCreatorStoriesRefresh')?.addEventListener('click',loadCreatorStories);$('saStoryHighlightCreate')?.addEventListener('click',createCreatorStoryHighlight);
- $('saPortfolioSave')?.addEventListener('click',()=>saveCreatorPortfolio());$('saPortfolioExport')?.addEventListener('click',exportCreatorPortfolio);$('saPortfolioLoadPosts')?.addEventListener('click',loadCreatorPortfolioPosts);['saPortfolioSlug','saPortfolioTitle','saPortfolioBio','saPortfolioLinks','saPortfolioPublish'].forEach(id=>$(id)?.addEventListener('input',()=>renderCreatorPortfolioPreview()));
+ $('saPortfolioSave')?.addEventListener('click',()=>saveCreatorPortfolio());$('saPortfolioExport')?.addEventListener('click',exportCreatorPortfolio);$('saPortfolioLoadPosts')?.addEventListener('click',loadCreatorPortfolioPosts);$('saPortfolioAddLink')?.addEventListener('click',()=>{const values=portfolioLinkRows();if(values.length>=8){message('saPortfolioMessage','You can add up to 8 creator links.');return;}values.push({label:'',url:''});renderPortfolioLinks(values);});['saPortfolioSlug','saPortfolioTitle','saPortfolioBio','saPortfolioPublish'].forEach(id=>$(id)?.addEventListener('input',()=>{if(id==='saPortfolioBio')updatePortfolioBioCount();renderCreatorPortfolioPreview();}));$('saPortfolioLinkList')?.addEventListener('input',()=>renderCreatorPortfolioPreview());
  $('saCalendarPrev')?.addEventListener('click',()=>shiftCreatorCalendar(-1));$('saCalendarNext')?.addEventListener('click',()=>shiftCreatorCalendar(1));$('saCalendarToday')?.addEventListener('click',()=>{creatorCalendarDate=new Date();renderCreatorCalendar();});$('saCalendarCreate')?.addEventListener('click',()=>document.querySelector('[data-sa-tab="schedule"]')?.click());document.querySelectorAll('#saCreatorStudio [data-calendar-mode]').forEach(btn=>btn.addEventListener('click',()=>{creatorCalendarMode=btn.dataset.calendarMode;renderCreatorCalendar();}));
  $('saChartPrev')?.addEventListener('click',()=>shiftCreatorChartWindow(1));$('saChartNext')?.addEventListener('click',()=>shiftCreatorChartWindow(-1));$('saChartToday')?.addEventListener('click',()=>{creatorTimelineOffset=0;renderCreatorTimelineWindow();});$('saCreatorClose').addEventListener('click',close);$('saCreatorSaveStyle').addEventListener('click',saveStyle);$('saSaveGoals')?.addEventListener('click',saveCreatorGoals);$('saExportCreatorReport')?.addEventListener('click',exportCreatorReport);$('saScheduleSave').addEventListener('click',saveSchedule);$('saScheduleCancelEdit').addEventListener('click',()=>{resetScheduleEditor();message('saScheduleMsg','Stopped editing.');});$('saScheduleRemoveMedia').addEventListener('change',e=>{if(e.target.checked){$('saScheduleMedia').value='';clearSchedulePreview();$('saScheduleMediaInfo').textContent='Existing attachment will be removed when you save.';}else if(editingExistingFileUrl){$('saScheduleMediaInfo').textContent='Keeping the current attachment unless you choose a replacement.';showExistingSchedulePreview();}});$('saScheduleMedia').addEventListener('change',()=>{const f=$('saScheduleMedia').files?.[0];if(f){if(!f.type.startsWith('image/')&&!f.type.startsWith('video/')){message('saScheduleMsg','Choose a valid image or video file.');return;}schedulePreviewObjectUrl=URL.createObjectURL(f);renderSchedulePreview(schedulePreviewObjectUrl,f.type.startsWith('video/')?'video':'image','Preview before publishing · '+f.name);$('saScheduleRemoveMedia').checked=false;$('saScheduleMediaInfo').textContent='Selected: '+f.name+' ('+Math.max(1,Math.round(f.size/1024/1024))+' MB)';}else if(editingExistingFileUrl&&!$('saScheduleRemoveMedia').checked){showExistingSchedulePreview();}else clearSchedulePreview();});
  window.openSocialAppCreatorStudio=open;
@@ -59922,89 +60026,6 @@ https://instagram.com/yourname"></textarea>
    }
   });
 </script>
-
-<style id="socialapp-floating-post-cards-and-actions">
-/* Transparent post cards: match the page background; show only a subtle outline. */
-#app #posts .post-card,
-#profilePosts .post-card,
-#app .post-card{
-  box-sizing:border-box!important;
-  width:calc(100% - 24px)!important;
-  margin:14px 12px 22px!important;
-  padding:14px 14px 12px!important;
-  border:1px solid var(--home-border,rgba(128,128,128,.22))!important;
-  border-radius:20px!important;
-  background:transparent!important;
-  box-shadow:none!important;
-  overflow:hidden!important;
-  transform:translateZ(0);
-}
-body.dark #app #posts .post-card,
-body.dark #profilePosts .post-card,
-body.dark #app .post-card{
-  background:transparent!important;
-  border-color:rgba(255,255,255,.18)!important;
-  box-shadow:none!important;
-}
-body.light #app #posts .post-card,
-body.light #profilePosts .post-card,
-body.light #app .post-card{
-  background:transparent!important;
-  border-color:rgba(35,25,48,.18)!important;
-  box-shadow:none!important;
-}
-/* Keep the media within the floating card's rounded inner edges. */
-#app #posts .post-card video,
-#app #posts .post-card img:not(.avatar),
-#profilePosts .post-card video,
-#profilePosts .post-card img:not(.avatar){
-  width:100%!important;max-width:100%!important;
-  margin-left:0!important;margin-right:0!important;
-  border-radius:14px!important;
-}
-/* Normalize every post action into one consistent, wrapping action row. */
-#app #posts .post-card .like-btn,
-#app #posts .post-card button[onclick*="openComments"],
-#app #posts .post-card button[onclick*="toggleSavePost"],
-#app #posts .post-card button[onclick*="reportPost"],
-#app #posts .post-card button[onclick*="deletePost"],
-#profilePosts .post-card .like-btn,
-#profilePosts .post-card button[onclick*="openComments"],
-#profilePosts .post-card button[onclick*="toggleSavePost"],
-#profilePosts .post-card button[onclick*="reportPost"],
-#profilePosts .post-card button[onclick*="deletePost"]{
-  display:inline-flex!important;
-  align-items:center!important;
-  justify-content:center!important;
-  vertical-align:middle!important;
-  box-sizing:border-box!important;
-  min-height:40px!important;
-  height:40px!important;
-  margin:10px 7px 0 0!important;
-  padding:0 13px!important;
-  border:1px solid var(--home-border,rgba(128,128,128,.22))!important;
-  border-radius:12px!important;
-  font-size:13px!important;
-  font-weight:650!important;
-  line-height:1!important;
-  white-space:nowrap!important;
-  position:static!important;
-}
-#app #posts .post-card .like-btn,
-#profilePosts .post-card .like-btn{background:rgba(255,77,109,.12)!important;color:#e84b68!important;border-color:rgba(232,75,104,.25)!important}
-#app #posts .post-card button[onclick*="openComments"],
-#app #posts .post-card button[onclick*="toggleSavePost"],
-#profilePosts .post-card button[onclick*="openComments"],
-#profilePosts .post-card button[onclick*="toggleSavePost"]{background:var(--home-surface-alt,#fff)!important;color:var(--text)!important}
-#app #posts .post-card button[onclick*="reportPost"],
-#profilePosts .post-card button[onclick*="reportPost"]{color:#d98218!important;background:rgba(217,130,24,.09)!important}
-#app #posts .post-card button[onclick*="deletePost"],
-#profilePosts .post-card button[onclick*="deletePost"]{color:#e34b55!important;background:rgba(227,75,85,.09)!important}
-@media(max-width:420px){
- #app #posts .post-card,#profilePosts .post-card,#app .post-card{width:calc(100% - 20px)!important;margin:12px 10px 19px!important;padding:12px!important;border-radius:18px!important}
- #app #posts .post-card .like-btn,#app #posts .post-card button[onclick*="openComments"],#app #posts .post-card button[onclick*="toggleSavePost"],#app #posts .post-card button[onclick*="reportPost"],#app #posts .post-card button[onclick*="deletePost"],#profilePosts .post-card .like-btn,#profilePosts .post-card button[onclick*="openComments"],#profilePosts .post-card button[onclick*="toggleSavePost"],#profilePosts .post-card button[onclick*="reportPost"],#profilePosts .post-card button[onclick*="deletePost"]{min-height:38px!important;height:38px!important;padding:0 10px!important;margin-right:5px!important;font-size:12px!important}
-}
-</style>
 
 
 <!-- SOCIALAPP POST VIEW TRACKING + SHARED VIEW COUNTS: Home, Profile and post detail. -->
@@ -60151,7 +60172,7 @@ body.light #app .post-card{
   if(!sb)throw new Error('Could not connect to SocialApp. Please refresh and try again.');
   const {data,error}=await sb.rpc('get_public_creator_portfolio',{p_slug:slug});if(error)throw error;if(!data)throw new Error('This creator portfolio was not found or is not public.');
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const profile=data.profile||{};
-  root.innerHTML='<div style="max-width:820px;margin:24px auto"><header style="padding:28px;border:1px solid #68418a;border-radius:22px;background:linear-gradient(135deg,#48206b,#17111f)">'+(profile.avatar_url?'<img src="'+esc(profile.avatar_url)+'" alt="Creator" style="width:88px;height:88px;border-radius:50%;object-fit:cover">':'')+'<div style="color:#d5aaff;font-size:13px">'+esc(profile.name)+(profile.verified?' · ✓ Verified':'')+'</div><h1 style="margin:8px 0">'+esc(data.title||'Creator portfolio')+'</h1><p style="white-space:pre-wrap">'+esc(data.bio)+'</p>'+(Array.isArray(data.links)?data.links.map(u=>'<a href="'+esc(u)+'" target="_blank" rel="noopener noreferrer" style="color:#d5aaff;margin-right:12px">'+esc(new URL(u).hostname)+'</a>').join(''):'')+'</header><h2>Featured posts</h2>'+(data.posts||[]).map(p=>'<article style="padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523">'+(p.media_url?(p.media_type==='video'?'<video controls src="'+esc(p.media_url)+'" style="width:100%;max-height:460px;border-radius:12px"></video>':'<img src="'+esc(p.media_url)+'" alt="Featured post" style="width:100%;max-height:460px;object-fit:cover;border-radius:12px">'):'')+'<p style="white-space:pre-wrap">'+esc(p.content)+'</p><small style="color:#bdaacb">'+(p.created_at?new Date(p.created_at).toLocaleDateString():'')+'</small></article>').join('')+'</div>';
+  root.innerHTML='<div style="max-width:820px;margin:24px auto"><header style="padding:28px;border:1px solid #68418a;border-radius:22px;background:linear-gradient(135deg,#48206b,#17111f)">'+(profile.avatar_url?'<img src="'+esc(profile.avatar_url)+'" alt="Creator" style="width:88px;height:88px;border-radius:50%;object-fit:cover">':'')+'<div style="color:#d5aaff;font-size:13px">'+esc(profile.name)+(profile.verified?' · ✓ Verified':'')+'</div><h1 style="margin:8px 0">'+esc(data.title||'Creator portfolio')+'</h1><p style="white-space:pre-wrap">'+esc(data.bio)+'</p>'+(Array.isArray(data.links)?data.links.map(item=>{const u=typeof item==='string'?item:item?.url;const label=typeof item==='string'?new URL(item).hostname:(item?.label||new URL(u).hostname);return u?'<a href="'+esc(u)+'" target="_blank" rel="noopener noreferrer" style="display:inline-flex;padding:7px 11px;margin:5px 7px 0 0;border:1px solid #68428a;border-radius:20px;color:#d5aaff;text-decoration:none">'+esc(label)+'</a>':'';}).join(''):'')+'</header><h2>Featured posts</h2>'+(data.posts||[]).map(p=>'<article style="padding:16px;margin:12px 0;border:1px solid #49345b;border-radius:14px;background:#1b1523">'+(p.media_url?(p.media_type==='video'?'<video controls src="'+esc(p.media_url)+'" style="width:100%;max-height:460px;border-radius:12px"></video>':'<img src="'+esc(p.media_url)+'" alt="Featured post" style="width:100%;max-height:460px;object-fit:cover;border-radius:12px">'):'')+'<p style="white-space:pre-wrap">'+esc(p.content)+'</p><small style="color:#bdaacb">'+(p.created_at?new Date(p.created_at).toLocaleDateString():'')+'</small></article>').join('')+'</div>';
  }catch(e){console.error('Public portfolio failed:',e);root.innerHTML='<div style="max-width:600px;margin:15vh auto;text-align:center"><h2>Portfolio unavailable</h2><p>'+String(e.message||'Please try again later.')+'</p><a href="'+location.origin+location.pathname+'" style="color:#d5aaff">Open SocialApp</a></div>';}
 })();
 </script>
@@ -60206,6 +60227,88 @@ body.light #app .post-card{
 })();
 </script>
 
+<style id="socialapp-floating-post-cards-and-actions">
+/* Transparent post cards: match the page background; show only a subtle outline. */
+#app #posts .post-card,
+#profilePosts .post-card,
+#app .post-card{
+  box-sizing:border-box!important;
+  width:calc(100% - 24px)!important;
+  margin:14px 12px 22px!important;
+  padding:14px 14px 12px!important;
+  border:1px solid var(--home-border,rgba(128,128,128,.22))!important;
+  border-radius:20px!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  overflow:hidden!important;
+  transform:translateZ(0);
+}
+body.dark #app #posts .post-card,
+body.dark #profilePosts .post-card,
+body.dark #app .post-card{
+  background:transparent!important;
+  border-color:rgba(255,255,255,.18)!important;
+  box-shadow:none!important;
+}
+body.light #app #posts .post-card,
+body.light #profilePosts .post-card,
+body.light #app .post-card{
+  background:transparent!important;
+  border-color:rgba(35,25,48,.18)!important;
+  box-shadow:none!important;
+}
+/* Keep the media within the floating card's rounded inner edges. */
+#app #posts .post-card video,
+#app #posts .post-card img:not(.avatar),
+#profilePosts .post-card video,
+#profilePosts .post-card img:not(.avatar){
+  width:100%!important;max-width:100%!important;
+  margin-left:0!important;margin-right:0!important;
+  border-radius:14px!important;
+}
+/* Normalize every post action into one consistent, wrapping action row. */
+#app #posts .post-card .like-btn,
+#app #posts .post-card button[onclick*="openComments"],
+#app #posts .post-card button[onclick*="toggleSavePost"],
+#app #posts .post-card button[onclick*="reportPost"],
+#app #posts .post-card button[onclick*="deletePost"],
+#profilePosts .post-card .like-btn,
+#profilePosts .post-card button[onclick*="openComments"],
+#profilePosts .post-card button[onclick*="toggleSavePost"],
+#profilePosts .post-card button[onclick*="reportPost"],
+#profilePosts .post-card button[onclick*="deletePost"]{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  vertical-align:middle!important;
+  box-sizing:border-box!important;
+  min-height:40px!important;
+  height:40px!important;
+  margin:10px 7px 0 0!important;
+  padding:0 13px!important;
+  border:1px solid var(--home-border,rgba(128,128,128,.22))!important;
+  border-radius:12px!important;
+  font-size:13px!important;
+  font-weight:650!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+  position:static!important;
+}
+#app #posts .post-card .like-btn,
+#profilePosts .post-card .like-btn{background:rgba(255,77,109,.12)!important;color:#e84b68!important;border-color:rgba(232,75,104,.25)!important}
+#app #posts .post-card button[onclick*="openComments"],
+#app #posts .post-card button[onclick*="toggleSavePost"],
+#profilePosts .post-card button[onclick*="openComments"],
+#profilePosts .post-card button[onclick*="toggleSavePost"]{background:var(--home-surface-alt,#fff)!important;color:var(--text)!important}
+#app #posts .post-card button[onclick*="reportPost"],
+#profilePosts .post-card button[onclick*="reportPost"]{color:#d98218!important;background:rgba(217,130,24,.09)!important}
+#app #posts .post-card button[onclick*="deletePost"],
+#profilePosts .post-card button[onclick*="deletePost"]{color:#e34b55!important;background:rgba(227,75,85,.09)!important}
+@media(max-width:420px){
+ #app #posts .post-card,#profilePosts .post-card,#app .post-card{width:calc(100% - 20px)!important;margin:12px 10px 19px!important;padding:12px!important;border-radius:18px!important}
+ #app #posts .post-card .like-btn,#app #posts .post-card button[onclick*="openComments"],#app #posts .post-card button[onclick*="toggleSavePost"],#app #posts .post-card button[onclick*="reportPost"],#app #posts .post-card button[onclick*="deletePost"],#profilePosts .post-card .like-btn,#profilePosts .post-card button[onclick*="openComments"],#profilePosts .post-card button[onclick*="toggleSavePost"],#profilePosts .post-card button[onclick*="reportPost"],#profilePosts .post-card button[onclick*="deletePost"]{min-height:38px!important;height:38px!important;padding:0 10px!important;margin-right:5px!important;font-size:12px!important}
+}
+</style>
 
 
 <style id="socialapp-profile-creator-theme-transparent-cards">
