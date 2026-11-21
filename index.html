@@ -6897,6 +6897,52 @@ window.resolveStorageMediaUrl = async function(bucket, value, fallback = "") {
   return url || fallback || "";
 };
 
+
+// TEMPORARY CHAT-MEDIA ACCESS TEST. Only appears when the page is opened
+// with ?chatMediaSecurityTest=1. Remove this block after the access audit.
+(function installChatMediaSecurityTest() {
+  if (new URLSearchParams(location.search).get("chatMediaSecurityTest") !== "1") return;
+
+  const objectPath = "603be00f-8c6c-4f1e-938f-f8a97a8123c9_1795281840022_71752.jpg";
+  const panel = document.createElement("section");
+  panel.id = "socialAppChatMediaSecurityTest";
+  panel.style.cssText = "position:fixed;left:12px;right:12px;bottom:18px;z-index:2147483647;padding:16px;border:1px solid #8a2be2;border-radius:14px;background:#17121f;color:#fff;font:14px system-ui;box-shadow:0 8px 30px #0009";
+  panel.innerHTML = '<div style="font-weight:700;margin-bottom:8px">SocialApp chat-media security test</div><div style="font-size:12px;opacity:.8;margin-bottom:12px">Checks whether the currently signed-in account can download a private chat image not shared with it.</div><button id="saRunChatMediaTest" type="button" style="padding:10px 14px;border:0;border-radius:9px;background:#8a2be2;color:white;font-weight:700">Test access as this account</button><div id="saChatMediaTestResult" role="status" style="margin-top:12px;white-space:pre-wrap">Ready. Run the test while Account C is logged in.</div><button id="saCloseChatMediaTest" type="button" style="margin-top:10px;padding:7px 10px;border:1px solid #777;border-radius:8px;background:transparent;color:#fff">Close test panel</button>';
+  const mount = () => { if (!document.getElementById(panel.id)) document.body.appendChild(panel); };
+  if (document.body) mount(); else document.addEventListener("DOMContentLoaded", mount, {once:true});
+
+  panel.addEventListener("click", async event => {
+    if (event.target?.id === "saCloseChatMediaTest") { panel.remove(); return; }
+    if (event.target?.id !== "saRunChatMediaTest") return;
+    const button = panel.querySelector("#saRunChatMediaTest");
+    const output = panel.querySelector("#saChatMediaTestResult");
+    button.disabled = true;
+    output.textContent = "Checking signed-in account and requesting the object…";
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+      if (!authData?.user?.id) {
+        output.textContent = "NOT TESTED: No authenticated account was found. Log in as Account C and retry.";
+        return;
+      }
+      const { data, error } = await supabase.storage.from("chat-media").download(objectPath);
+      if (error || !data) {
+        output.textContent = "ACCESS DENIED (expected for unrelated Account C)\n" +
+          "Account: " + authData.user.id + "\n" +
+          "Storage response: " + (error?.message || "No file returned");
+      } else {
+        output.textContent = "ACCESS GRANTED — SECURITY ISSUE\n" +
+          "Account: " + authData.user.id + "\n" +
+          "Account C downloaded an image that should not be shared with it. Review Storage SELECT policies.";
+      }
+    } catch (error) {
+      output.textContent = "TEST ERROR\n" + (error?.message || String(error));
+    } finally {
+      button.disabled = false;
+    }
+  });
+})();
+
 // =====================================================
 // GLOBAL DISPLAY-SIDE STORAGE SECURITY
 // =====================================================
