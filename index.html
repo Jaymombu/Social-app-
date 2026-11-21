@@ -39160,7 +39160,18 @@ Your creator subscription will activate only after the server verifies the payme
 // SOCIALAPP PREMIUM — SUBSCRIPTION UI (OUTSIDE startApp)
 // Payments remain pending until a trusted server verifies them.
 // =====================================================
-window.openPremiumScreen = async function () {
+window.openPremiumScreen = async function (navigationOptions = {}) {
+  // When browser Forward restores the Premium overlay, reconstruct the exact
+  // notification return context from its history payload as well.
+  if (navigationOptions.fromHistory === true &&
+      navigationOptions.historyData?.fromNotification === true) {
+    window.__premiumNotificationReturn = {
+      screen: "notificationsScreen",
+      listScrollTop: Number(navigationOptions.historyData.notificationListScrollTop) || 0,
+      capturedAt: Date.now()
+    };
+  }
+
   if (!session?.user) {
     alert("Please log in to manage SocialApp Premium.");
     return;
@@ -39251,6 +39262,52 @@ window.openPremiumScreen = async function () {
     </section>`;
   document.body.appendChild(screen);
 
+  // Premium checkout is a navigable overlay, not an untracked DOM modal.
+  // Give it its own history entry so Android/browser Back and the close button
+  // restore the exact source screen rather than falling through to Home.
+  if (navigationOptions.fromHistory !== true &&
+      history.state?.appScreen !== "premiumSubscriptionScreen") {
+    const sourceState = history.state?.appScreen
+      ? {
+          screen: history.state.appScreen,
+          data: { ...(history.state.data || {}) },
+          scrollY: Number(history.state.scrollY) || 0
+        }
+      : {
+          screen: window.appNavigation?.current?.screen || "app",
+          data: { ...(window.appNavigation?.current?.data || {}) },
+          scrollY: Number(window.appNavigation?.current?.scrollY) || 0
+        };
+    const premiumHistoryState = {
+      appScreen: "premiumSubscriptionScreen",
+      data: {
+        sourceScreen: sourceState.screen,
+        sourceData: sourceState.data,
+        sourceScrollY: sourceState.scrollY,
+        fromNotification: navigationOptions.fromNotification === true ||
+          window.__premiumNotificationReturn?.screen === "notificationsScreen",
+        notificationListScrollTop: Number(window.__premiumNotificationReturn?.listScrollTop) || 0
+      },
+      scrollY: 0
+    };
+    try {
+      history.pushState(premiumHistoryState, "", "#premiumSubscriptionScreen");
+      window.__premiumSourceState = sourceState;
+      if (typeof window.setCurrentNavigationState === "function") {
+        window.setCurrentNavigationState("premiumSubscriptionScreen", premiumHistoryState.data, 0);
+      } else if (window.appNavigation) {
+        window.appNavigation.current = {
+          screen: "premiumSubscriptionScreen",
+          data: premiumHistoryState.data,
+          scrollY: 0,
+          timestamp: Date.now()
+        };
+      }
+    } catch (historyError) {
+      console.warn("Premium screen history entry could not be created", historyError);
+    }
+  }
+
   // Reuse the subscriber's saved M-Pesa number when available. If they have
   // never saved one, fall back to phone data already attached to their Auth user.
   const premiumPhoneInput = screen.querySelector("#socialPremiumPhone");
@@ -39275,9 +39332,57 @@ window.openPremiumScreen = async function () {
     }
   }
 
-  const close = () => screen.remove();
+  const close = () => {
+    if (!screen.isConnected) return;
+
+    // If this modal owns the current browser entry, Back is the single source
+    // of truth for closing it. The main popstate controller restores the
+    // underlying screen and its scroll state. Avoid direct DOM removal here.
+    if (history.state?.appScreen === "premiumSubscriptionScreen" &&
+        !window.__premiumHistoryBackPending) {
+      window.__premiumHistoryBackPending = true;
+      try {
+        history.back();
+        return;
+      } catch (historyBackError) {
+        window.__premiumHistoryBackPending = false;
+        console.warn("Premium history Back failed; using direct close", historyBackError);
+      }
+    }
+
+    screen.remove();
+
+    // When Premium was opened from an expiry notification, return to that
+    // notification list (not Home) and restore its own scrolling surface.
+    const returnTarget = window.__premiumNotificationReturn;
+    if (returnTarget?.screen === "notificationsScreen") {
+      const notifications = document.getElementById("notificationsScreen");
+      const list = document.getElementById("notificationsList");
+      if (notifications) {
+        window.showScreen?.("notificationsScreen", "flex");
+        notifications.style.overflow = "hidden";
+        notifications.style.pointerEvents = "auto";
+      }
+      if (list) {
+        list.style.overflowY = "auto";
+        list.style.webkitOverflowScrolling = "touch";
+        list.scrollTop = Number(returnTarget.listScrollTop || 0);
+        requestAnimationFrame(() => {
+          list.scrollTop = Number(returnTarget.listScrollTop || 0);
+        });
+      }
+      window.__premiumNotificationReturn = null;
+      window.setActiveTopButton?.("notificationBtn");
+    }
+  };
   screen.querySelector("#socialPremiumClose")?.addEventListener("click", close);
   screen.addEventListener("click", e => { if (e.target === screen) close(); });
+  screen.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    }
+  });
 
 screen.querySelector("#socialPremiumContinue")?.addEventListener("click", async () => {
   const status = screen.querySelector("#socialPremiumStatus");
@@ -39410,7 +39515,13 @@ if (payment_method === "mpesa" && !phone_number) {
       status.textContent = "Payment verified and Premium activated. Returning to Settings…";
       active = true;
       await new Promise(resolve => setTimeout(resolve, 900));
-      screen.remove();
+      // Close through browser history so the source screen is restored cleanly.
+      if (history.state?.appScreen === "premiumSubscriptionScreen") {
+        window.__premiumHistoryBackPending = true;
+        try { history.back(); } catch (e) { screen.remove(); }
+      } else {
+        screen.remove();
+      }
       if (typeof window.openProfileSettings === "function") {
         await window.openProfileSettings(false);
       } else {
@@ -50252,9 +50363,16 @@ window.openNotification = async function(id) {
   }
 
   // PREMIUM EXPIRY: route directly to the Premium renewal/payment screen.
+  // Preserve Notifications as the return destination so closing checkout does
+  // not expose Home underneath or leave the feed in a stale scroll state.
   if (String(data.type || "").trim() === "premium_expired") {
+    window.__premiumNotificationReturn = {
+      screen: "notificationsScreen",
+      listScrollTop: Number(document.getElementById("notificationsList")?.scrollTop || 0),
+      capturedAt: Date.now()
+    };
     if (typeof window.openPremiumScreen === "function") {
-      await window.openPremiumScreen();
+      await window.openPremiumScreen({ fromNotification: true });
     } else {
       alert("Open Settings and choose SocialApp Premium to renew your subscription.");
     }
@@ -53881,6 +53999,25 @@ window.restoreNavigationState =
     }
 
     // =================================================
+    // PREMIUM SUBSCRIPTION OVERLAY
+    // =================================================
+    // Premium checkout participates in browser history. Restoring this state
+    // rebuilds the overlay without pushing a duplicate history entry.
+    if (screen === "premiumSubscriptionScreen") {
+        window.__premiumHistoryBackPending = false;
+        if (typeof window.openPremiumScreen === "function") {
+            await window.openPremiumScreen({
+                fromHistory: true,
+                historyData: data,
+                fromNotification: data.fromNotification === true
+            });
+            return true;
+        }
+        await restoreSource();
+        return false;
+    }
+
+    // =================================================
     // HOME
     // =================================================
 
@@ -56235,6 +56372,17 @@ window.addEventListener(
                 }
 
 
+                // A browser Back destination other than Premium closes the
+                // existing checkout overlay before the destination is restored.
+                let premiumNotificationReturn = null;
+                if (restoreState.screen !== "premiumSubscriptionScreen") {
+                    const premiumOverlay = document.getElementById("socialAppPremiumScreen");
+                    if (premiumOverlay) premiumOverlay.remove();
+                    window.__premiumHistoryBackPending = false;
+                    premiumNotificationReturn = window.__premiumNotificationReturn || null;
+                    window.__premiumNotificationReturn = null;
+                }
+
                 // ---------------------------------------------
                 // SYNCHRONIZE MIRROR STACK
                 // ---------------------------------------------
@@ -56273,6 +56421,27 @@ window.addEventListener(
                 await window.restoreNavigationState(
                     restoreState
                 );
+
+                // Premium checkout opened from an expiry notification returns
+                // to the same Notifications list and restores its inner scroller.
+                if (restoreState.screen === "notificationsScreen" &&
+                    premiumNotificationReturn?.screen === "notificationsScreen") {
+                    const notificationList = document.getElementById("notificationsList");
+                    const notificationScreen = document.getElementById("notificationsScreen");
+                    const savedListScroll = Number(premiumNotificationReturn.listScrollTop) || 0;
+                    if (notificationScreen) {
+                        notificationScreen.style.overflow = "hidden";
+                        notificationScreen.style.pointerEvents = "auto";
+                    }
+                    if (notificationList) {
+                        notificationList.style.overflowY = "auto";
+                        notificationList.style.webkitOverflowScrolling = "touch";
+                        notificationList.scrollTop = savedListScroll;
+                        requestAnimationFrame(() => { notificationList.scrollTop = savedListScroll; });
+                        setTimeout(() => { if (notificationList.isConnected) notificationList.scrollTop = savedListScroll; }, 80);
+                    }
+                    window.setActiveTopButton?.("notificationBtn");
+                }
 
                 // Destination is mounted; now it is safe to remove the old
                 // viewer without exposing a blank frame.
