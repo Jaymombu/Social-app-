@@ -39161,6 +39161,16 @@ Your creator subscription will activate only after the server verifies the payme
 // Payments remain pending until a trusted server verifies them.
 // =====================================================
 window.openPremiumScreen = async function (navigationOptions = {}) {
+  // For notification-driven checkout, cover the app immediately so Home never
+  // flashes while subscription status and plan data are loading.
+  let premiumOpeningCover = null;
+  if (navigationOptions.fromNotification === true && !document.getElementById("socialAppPremiumScreen")) {
+    premiumOpeningCover = document.createElement("div");
+    premiumOpeningCover.id = "socialAppPremiumOpeningCover";
+    premiumOpeningCover.style.cssText = "position:fixed;inset:0;z-index:2147483645;background:#09090d;";
+    document.body.appendChild(premiumOpeningCover);
+  }
+
   // When browser Forward restores the Premium overlay, reconstruct the exact
   // notification return context from its history payload as well.
   if (navigationOptions.fromHistory === true &&
@@ -39173,6 +39183,7 @@ window.openPremiumScreen = async function (navigationOptions = {}) {
   }
 
   if (!session?.user) {
+    premiumOpeningCover?.remove();
     alert("Please log in to manage SocialApp Premium.");
     return;
   }
@@ -39214,7 +39225,7 @@ window.openPremiumScreen = async function (navigationOptions = {}) {
 
   const screen = document.createElement("div");
   screen.id = "socialAppPremiumScreen";
-  screen.style.cssText = "position:fixed;inset:0;z-index:2147483646;display:flex;align-items:stretch;justify-content:center;background:rgba(0,0,0,.72);padding:0;box-sizing:border-box;color:#fff;font-family:Arial,sans-serif;";
+  screen.style.cssText = "position:fixed;inset:0;z-index:2147483646;display:flex;align-items:stretch;justify-content:center;background:#09090d;padding:0;box-sizing:border-box;color:#fff;font-family:Arial,sans-serif;";
   screen.innerHTML = `
     <section style="width:100%;max-width:560px;height:100%;overflow:auto;background:#09090d;color:#fff;padding:20px;box-sizing:border-box;">
       <header style="display:flex;align-items:center;gap:12px;margin-bottom:22px;">
@@ -39261,6 +39272,7 @@ window.openPremiumScreen = async function (navigationOptions = {}) {
       <div style="font-size:11px;color:#777;text-align:center;margin-top:12px;">Payment checkout requires the SocialApp payment Edge Function and provider credentials to be configured.</div>
     </section>`;
   document.body.appendChild(screen);
+  premiumOpeningCover?.remove();
 
   // Premium checkout is a navigable overlay, not an untracked DOM modal.
   // Give it its own history entry so Android/browser Back and the close button
