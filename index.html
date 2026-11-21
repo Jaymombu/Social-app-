@@ -39259,6 +39259,33 @@ window.openPremiumScreen = async function (navigationOptions = {}) {
     console.warn("Premium status could not be checked yet.", e);
   }
 
+  // ACTIVE SUBSCRIBERS MUST NEVER SEE CHECKOUT OR RECEIVE ANOTHER STK PROMPT.
+  // If Premium became active while this screen was open or before it was opened,
+  // close the overlay and return to the underlying screen immediately.
+  if (active) {
+    premiumOpeningCover?.remove();
+    const alreadyOpenPremium = document.getElementById("socialAppPremiumScreen");
+    if (alreadyOpenPremium) alreadyOpenPremium.remove();
+    if (history.state?.appScreen === "premiumSubscriptionScreen") {
+      window.__premiumHistoryBackPending = true;
+      try { history.back(); } catch (_) { window.__premiumHistoryBackPending = false; }
+    } else if (window.__premiumNotificationReturn?.screen === "notificationsScreen") {
+      const returnTarget = window.__premiumNotificationReturn;
+      const notifications = document.getElementById("notificationsScreen");
+      const list = document.getElementById("notificationsList");
+      if (notifications) window.showScreen?.("notificationsScreen", "flex");
+      if (list) {
+        list.style.overflowY = "auto";
+        list.style.webkitOverflowScrolling = "touch";
+        list.scrollTop = Number(returnTarget.listScrollTop || 0);
+        requestAnimationFrame(() => { list.scrollTop = Number(returnTarget.listScrollTop || 0); });
+      }
+      window.__premiumNotificationReturn = null;
+      window.setActiveTopButton?.("notificationBtn");
+    }
+    return;
+  }
+
   // Display the same editable prices/durations that the server uses for checkout.
   let monthlyPlan = { amount_kes: 200, duration_days: 30, active: true };
   let yearlyPlan = { amount_kes: 2000, duration_days: 365, active: true };
@@ -39377,16 +39404,10 @@ window.openPremiumScreen = async function (navigationOptions = {}) {
   }
   window.addEventListener("socialapp-premium-payment-confirmed", function premiumConfirmationUiHandler(event) {
     if (!screen.isConnected || event.detail?.userId !== session.user.id) return;
-    const pendingStatus = screen.querySelector("#socialPremiumStatus");
-    if (pendingStatus) {
-      pendingStatus.style.display = "block";
-      pendingStatus.style.background = "#12301e";
-      pendingStatus.style.color = "#a7f3c0";
-      pendingStatus.textContent = "Payment verified. Your Premium subscription is active.";
-    }
-    const continueButton = screen.querySelector("#socialPremiumContinue");
-    if (continueButton) { continueButton.disabled = false; continueButton.textContent = "Premium active"; }
-  });
+    // Verified activation ends checkout: close Premium and return to the source
+    // screen. This prevents a second STK prompt from being initiated.
+    close();
+  }, { once: true });
 
   // Premium checkout is a navigable overlay, not an untracked DOM modal.
   // Give it its own history entry so Android/browser Back and the close button
@@ -39524,6 +39545,19 @@ screen.querySelector("#socialPremiumContinue")?.addEventListener("click", async 
   const button = screen.querySelector("#socialPremiumContinue");
 
   if (!plan_code || !payment_method || !button || !status) return;
+
+  // Re-check server entitlement immediately before checkout. If the callback or
+  // recovery activated Premium, exit without creating or prompting another payment.
+  try {
+    const { data: currentEntitlement, error: entitlementError } = await supabase.rpc("has_active_premium_subscription");
+    if (!entitlementError && (currentEntitlement === true || currentEntitlement?.has_active_premium_subscription === true)) {
+      active = true;
+      close();
+      return;
+    }
+  } catch (entitlementCheckError) {
+    console.warn("Could not re-check Premium entitlement before checkout", entitlementCheckError);
+  }
 
   // A pending attempt must never create another STK prompt. Reopening checkout
   // offers recovery/status verification for the saved attempt only.
@@ -39673,18 +39707,7 @@ if (payment_method === "mpesa" && !phone_number) {
       status.textContent = "Payment verified and Premium activated.";
       active = true;
       if (screen.isConnected) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        if (history.state?.appScreen === "premiumSubscriptionScreen") {
-          window.__premiumHistoryBackPending = true;
-          try { history.back(); } catch (e) { screen.remove(); }
-        } else {
-          screen.remove();
-        }
-        if (typeof window.openProfileSettings === "function") {
-          await window.openProfileSettings(false);
-        } else {
-          alert("Premium is active. Open Settings to finish updating your privacy preference.");
-        }
+        close();
       }
     } else if (screen.isConnected) {
       status.style.background = "#302610";
@@ -45613,6 +45636,19 @@ async function loadMessages(chatUserId = currentChatUser, openToken = window.__c
     return msg.deleted_for_receiver !== true;
   });
 
+  // Private chat-media objects are rendered with short-lived signed URLs.
+  // This supports both new storage:// references and legacy Supabase URLs.
+  await Promise.all(visibleMessages.map(async msg => {
+    if (msg.media_url) {
+      msg.media_url = await window.getAuthorizedStorageUrl("chat-media", msg.media_url, 900);
+    }
+    if (msg.replied?.media_url) {
+      msg.replied.media_url = await window.getAuthorizedStorageUrl("chat-media", msg.replied.media_url, 900);
+    }
+  }));
+
+  if (chatLoadToken !== window.__chatLoadToken || currentChatUser !== chatUserAtLoad || openToken !== window.__chatOpenToken) return;
+
   if (!visibleMessages || visibleMessages.length === 0) {
     chat.innerHTML = `
       <div style="
@@ -46185,7 +46221,10 @@ min-height:14px;
 // Paint a newly inserted/realtime message immediately. The normal
 // loadMessages() call can still reconcile the complete server state later,
 // but the user never has to wait for that network round-trip to see the row.
-window.appendInstantChatMessage = function(msg) {
+window.appendInstantChatMessage = async function(msg) {
+  if (msg?.media_url) {
+    msg = { ...msg, media_url: await window.getAuthorizedStorageUrl("chat-media", msg.media_url, 900) };
+  }
   const me = currentUser?.id || window.currentUser?.id || session?.user?.id || null;
   if (!msg?.id || !me || !currentChatUser) return false;
   if (!isChatScreenVisible()) return false;
@@ -46564,7 +46603,7 @@ if (file && file.size > 50 * 1024 * 1024) {
   if (file) {
 
     fileName =
-  `${session.user.id}_${Date.now()}_${file.name}`;
+  `${session.user.id}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
 
     mediaType =
       file.type.startsWith("video")
@@ -46581,8 +46620,11 @@ if (file && file.size > 50 * 1024 * 1024) {
       return;
     }
 
+    // Store a bucket/path reference, never a public URL. The chat-media
+    // bucket will be private and media URLs will be signed only for authorized
+    // conversation participants when messages are rendered.
     mediaUrl =
-      window.getCanonicalStorageUrl("chat-media", fileName);
+      `storage://chat-media/${fileName}`;
   }
 
   // =====================
