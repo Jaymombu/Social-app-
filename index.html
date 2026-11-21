@@ -39157,6 +39157,61 @@ Your creator subscription will activate only after the server verifies the payme
 };
 
 // =====================================================
+// PREMIUM PAYMENT CONFIRMATION WATCHER
+// The M-Pesa callback activates Premium server-side. This watcher is independent
+// of the checkout overlay, so closing/backing out does not cancel confirmation.
+// localStorage is only a client-side resume hint; it never grants entitlement.
+// =====================================================
+window.__socialPremiumPaymentWatchers = window.__socialPremiumPaymentWatchers || {};
+window.__watchSocialPremiumPayment = async function (userId, paymentAttemptId, statusElement = null, screenElement = null) {
+  if (!userId || !paymentAttemptId) return false;
+  const watcherKey = String(userId);
+  if (window.__socialPremiumPaymentWatchers[watcherKey]) {
+    return window.__socialPremiumPaymentWatchers[watcherKey];
+  }
+  const pendingKey = `socialapp_premium_pending_${watcherKey}`;
+  const pending = { userId: watcherKey, paymentAttemptId: String(paymentAttemptId), startedAt: Date.now() };
+  try { localStorage.setItem(pendingKey, JSON.stringify(pending)); } catch (_) {}
+  const watcher = (async () => {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 300000) {
+      try {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError || sessionData?.session?.user?.id !== watcherKey) return false;
+        const { data: entitlement, error } = await supabase.rpc("has_active_premium_subscription");
+        if (!error && (entitlement === true || entitlement?.has_active_premium_subscription === true)) {
+          try { localStorage.removeItem(pendingKey); } catch (_) {}
+          window.dispatchEvent(new CustomEvent("socialapp-premium-payment-confirmed", {
+            detail: { userId: watcherKey, paymentAttemptId: String(paymentAttemptId) }
+          }));
+          if (statusElement?.isConnected) {
+            statusElement.style.display = "block";
+            statusElement.style.background = "#12301e";
+            statusElement.style.color = "#a7f3c0";
+            statusElement.textContent = "Payment verified. Your Premium subscription is active.";
+          }
+          return true;
+        }
+      } catch (watchError) {
+        console.warn("Premium payment confirmation check failed; retrying.", watchError);
+      }
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+    if (statusElement?.isConnected) {
+      statusElement.style.display = "block";
+      statusElement.style.background = "#302610";
+      statusElement.style.color = "#ffe0a3";
+      statusElement.textContent = "Payment is still being verified. You may safely close this screen. Do not pay again; reopen Premium later to check your status.";
+    }
+    // Keep the pending record so a later visit can resume checking.
+    return false;
+  })();
+  window.__socialPremiumPaymentWatchers[watcherKey] = watcher;
+  try { return await watcher; }
+  finally { delete window.__socialPremiumPaymentWatchers[watcherKey]; }
+};
+
+// =====================================================
 // SOCIALAPP PREMIUM — SUBSCRIPTION UI (OUTSIDE startApp)
 // Payments remain pending until a trusted server verifies them.
 // =====================================================
@@ -39269,10 +39324,69 @@ window.openPremiumScreen = async function (navigationOptions = {}) {
       <div style="font-size:12px;color:#aaa;line-height:1.6;margin-bottom:18px;">Your Premium access activates only after the payment provider confirms payment to SocialApp's server. Never share your M-Pesa PIN or card security code in chat.</div>
       <div id="socialPremiumStatus" role="status" style="display:${active ? 'block' : 'none'};padding:12px;border-radius:10px;background:#12301e;color:#a7f3c0;margin-bottom:14px;">Your Premium subscription is active.</div>
       <button id="socialPremiumContinue" style="width:100%;padding:15px;border:0;border-radius:12px;background:#8a2be2;color:#fff;font-weight:800;font-size:16px;">${active ? 'Manage subscription' : 'Continue to payment'}</button>
-      <div style="font-size:11px;color:#777;text-align:center;margin-top:12px;">Payment checkout requires the SocialApp payment Edge Function and provider credentials to be configured.</div>
+      <div style="font-size:11px;color:#777;text-align:center;margin-top:12px;">Payment confirmation is handled securely by SocialApp. You may close this screen while verification continues; do not pay again while a request is pending.</div>
     </section>`;
   document.body.appendChild(screen);
   premiumOpeningCover?.remove();
+
+  const premiumPendingKey = `socialapp_premium_pending_${session.user.id}`;
+  let premiumPendingPayment = null;
+  try { premiumPendingPayment = JSON.parse(localStorage.getItem(premiumPendingKey) || "null"); } catch (_) {}
+
+  // If local storage was cleared or checkout was reopened in another tab,
+  // restore the user's own pending attempt from the RLS-protected table.
+  if (!premiumPendingPayment?.paymentAttemptId || premiumPendingPayment.userId !== session.user.id) {
+    try {
+      const { data: pendingAttempt, error: pendingAttemptError } = await supabase
+        .from("premium_payment_attempts")
+        .select("id,status,created_at")
+        .eq("user_id", session.user.id)
+        .in("status", ["pending", "initiated"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!pendingAttemptError && pendingAttempt?.id) {
+        premiumPendingPayment = {
+          userId: session.user.id,
+          paymentAttemptId: pendingAttempt.id,
+          startedAt: new Date(pendingAttempt.created_at || Date.now()).getTime()
+        };
+        try { localStorage.setItem(premiumPendingKey, JSON.stringify(premiumPendingPayment)); } catch (_) {}
+      }
+    } catch (pendingLookupError) {
+      console.warn("Could not restore pending Premium payment", pendingLookupError);
+    }
+  }
+
+  if (premiumPendingPayment?.paymentAttemptId && premiumPendingPayment.userId === session.user.id) {
+    const pendingStatus = screen.querySelector("#socialPremiumStatus");
+    if (pendingStatus) {
+      pendingStatus.style.display = "block";
+      pendingStatus.style.background = "#182033";
+      pendingStatus.style.color = "#dbeafe";
+      pendingStatus.textContent = "A previous M-Pesa request is still pending. Do not pay again. Use Check payment status to verify the existing request.";
+    }
+    const pendingContinueButton = screen.querySelector("#socialPremiumContinue");
+    if (pendingContinueButton) pendingContinueButton.textContent = "Check payment status";
+    window.__watchSocialPremiumPayment(session.user.id, premiumPendingPayment.paymentAttemptId, pendingStatus, screen).then(confirmed => {
+      if (confirmed && screen.isConnected) {
+        const continueButton = screen.querySelector("#socialPremiumContinue");
+        if (continueButton) { continueButton.disabled = false; continueButton.textContent = "Premium active"; }
+      }
+    }).catch(error => console.warn("Could not resume Premium payment verification", error));
+  }
+  window.addEventListener("socialapp-premium-payment-confirmed", function premiumConfirmationUiHandler(event) {
+    if (!screen.isConnected || event.detail?.userId !== session.user.id) return;
+    const pendingStatus = screen.querySelector("#socialPremiumStatus");
+    if (pendingStatus) {
+      pendingStatus.style.display = "block";
+      pendingStatus.style.background = "#12301e";
+      pendingStatus.style.color = "#a7f3c0";
+      pendingStatus.textContent = "Payment verified. Your Premium subscription is active.";
+    }
+    const continueButton = screen.querySelector("#socialPremiumContinue");
+    if (continueButton) { continueButton.disabled = false; continueButton.textContent = "Premium active"; }
+  });
 
   // Premium checkout is a navigable overlay, not an untracked DOM modal.
   // Give it its own history entry so Android/browser Back and the close button
@@ -39411,6 +39525,52 @@ screen.querySelector("#socialPremiumContinue")?.addEventListener("click", async 
 
   if (!plan_code || !payment_method || !button || !status) return;
 
+  // A pending attempt must never create another STK prompt. Reopening checkout
+  // offers recovery/status verification for the saved attempt only.
+  if (premiumPendingPayment?.paymentAttemptId && premiumPendingPayment.userId === session.user.id) {
+    button.disabled = true;
+    button.textContent = "Checking payment…";
+    status.style.display = "block";
+    status.style.background = "#182033";
+    status.style.color = "#dbeafe";
+    status.textContent = "Checking the existing M-Pesa payment. No new payment prompt will be sent.";
+    try {
+      const { data: recoveryData, error: recoveryError } = await supabase.functions.invoke(
+        "recover-premium-payment",
+        { body: { payment_attempt_id: premiumPendingPayment.paymentAttemptId } }
+      );
+      if (recoveryError || recoveryData?.success !== true || recoveryData?.activated !== true) {
+        const message = recoveryData?.error || recoveryData?.message || recoveryError?.message || "Daraja has not confirmed the payment yet.";
+        status.style.background = "#302610";
+        status.style.color = "#ffe0a3";
+        status.textContent = "Existing payment is still pending: " + message + " Do not pay again. Try checking again later.";
+      } else {
+        try { localStorage.removeItem(premiumPendingKey); } catch (_) {}
+        premiumPendingPayment = null;
+        active = true;
+        status.style.background = "#12301e";
+        status.style.color = "#a7f3c0";
+        status.textContent = "Payment verified. Your Premium subscription is active.";
+        window.dispatchEvent(new CustomEvent("socialapp-premium-payment-confirmed", {
+          detail: { userId: session.user.id, paymentAttemptId: recoveryData.payment_attempt_id || "recovered" }
+        }));
+        button.textContent = "Premium active";
+      }
+    } catch (recoveryError) {
+      status.style.background = "#302610";
+      status.style.color = "#ffe0a3";
+      status.textContent = "Could not check the existing payment right now. No new payment was sent. Please try again later.";
+      console.warn("Premium payment recovery check failed", recoveryError);
+    } finally {
+      if (button.isConnected) {
+        button.disabled = false;
+        if (premiumPendingPayment) button.textContent = "Check payment status";
+        else button.textContent = active ? "Premium active" : "Continue to payment";
+      }
+    }
+    return;
+  }
+
 if (payment_method === "mpesa") {
   const phoneDigits = String(phone_number || "").replace(/[\s+()-]/g, "");
   if (/^0[71]\d{8}$/.test(phoneDigits)) {
@@ -39494,55 +39654,42 @@ if (payment_method === "mpesa" && !phone_number) {
       data.customerMessage ||
       "M-Pesa payment request sent. Check your phone and follow the payment instructions. Premium activates only after payment is verified.";
 
-    // The STK Push response means only that a prompt was sent. Poll the
-    // server-backed entitlement RPC until the callback verifies and activates
-    // Premium. Only then return to Profile Settings.
+    // STK Push means only that the prompt was dispatched. Keep verification
+    // running independently from this overlay, so Android/browser Back or Close
+    // cannot cancel the confirmation check or the server-side activation.
     const checkoutSessionUserId = session?.user?.id;
     const checkoutAttemptId = data.paymentAttemptId;
-    const checkoutStartedAt = Date.now();
-    let premiumConfirmed = false;
-    status.textContent += " Waiting for verified payment confirmation…";
-    while (Date.now() - checkoutStartedAt < 240000) {
-      await new Promise(resolve => setTimeout(resolve, 4000));
-      if (!screen.isConnected) break;
-      const { data: freshSessionData, error: freshSessionError } = await supabase.auth.getSession();
-      if (freshSessionError || !freshSessionData?.session?.user ||
-          freshSessionData.session.user.id !== checkoutSessionUserId) {
-        status.style.background = "#302610";
-        status.style.color = "#ffe0a3";
-        status.textContent = "Payment may still be processing. Sign in again and check Premium status before retrying.";
-        break;
-      }
-      const { data: premiumNow, error: premiumCheckError } = await supabase.rpc("has_active_premium_subscription");
-      if (!premiumCheckError && (premiumNow === true || premiumNow?.has_active_premium_subscription === true)) {
-        premiumConfirmed = true;
-        break;
-      }
-      status.textContent = "Payment prompt sent. Waiting for SocialApp to verify payment… Do not pay again while this request is pending.";
+    if (!checkoutAttemptId) {
+      throw new Error("The payment service did not return a payment attempt ID. Check the payment attempt in your account before retrying.");
     }
+    status.textContent = "Payment prompt sent. Waiting for SocialApp to verify payment… You may close this screen; do not pay again while pending.";
+    const premiumConfirmed = await window.__watchSocialPremiumPayment(
+      checkoutSessionUserId, checkoutAttemptId, status, screen
+    );
 
     if (premiumConfirmed) {
       status.style.background = "#12301e";
       status.style.color = "#a7f3c0";
-      status.textContent = "Payment verified and Premium activated. Returning to Settings…";
+      status.textContent = "Payment verified and Premium activated.";
       active = true;
-      await new Promise(resolve => setTimeout(resolve, 900));
-      // Close through browser history so the source screen is restored cleanly.
-      if (history.state?.appScreen === "premiumSubscriptionScreen") {
-        window.__premiumHistoryBackPending = true;
-        try { history.back(); } catch (e) { screen.remove(); }
-      } else {
-        screen.remove();
-      }
-      if (typeof window.openProfileSettings === "function") {
-        await window.openProfileSettings(false);
-      } else {
-        alert("Premium is active. Open Settings to finish updating your privacy preference.");
+      if (screen.isConnected) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        if (history.state?.appScreen === "premiumSubscriptionScreen") {
+          window.__premiumHistoryBackPending = true;
+          try { history.back(); } catch (e) { screen.remove(); }
+        } else {
+          screen.remove();
+        }
+        if (typeof window.openProfileSettings === "function") {
+          await window.openProfileSettings(false);
+        } else {
+          alert("Premium is active. Open Settings to finish updating your privacy preference.");
+        }
       }
     } else if (screen.isConnected) {
       status.style.background = "#302610";
       status.style.color = "#ffe0a3";
-      status.textContent = "We have not received verified payment confirmation yet. Your Premium status has not been assumed. Check again in a moment before starting another payment.";
+      status.textContent = "Payment is still being verified. You may safely close this screen. Do not pay again; reopen Premium later to check your status.";
     }
 
     console.log("Premium payment initiated:", {
