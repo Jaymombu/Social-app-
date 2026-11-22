@@ -1,4 +1,4 @@
-const CACHE_NAME = "socialapp-v281";
+const CACHE_NAME = "socialapp-v282";
 
 const STATIC_ASSETS = [
   "/Social-app-/",
