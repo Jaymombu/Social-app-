@@ -48665,10 +48665,14 @@ window.enableViewOnceProtection = function(viewer){
     };
     const onVisibility = () => {
         if (document.visibilityState !== "visible") {
-            // Closing on background prevents the media from remaining visible
-            // in an app-switcher/recording transition where the browser allows it.
+            // Close fail-safe on background/app switching. Browser event timing
+            // varies and cannot block OS-level screen capture.
             try { window.closeMedia(); } catch(e) {}
         }
+    };
+    const onWindowBlur = () => {
+        // Best-effort close when focus leaves the browser window.
+        try { window.closeMedia(); } catch(e) {}
     };
     const onKey = (e) => {
         const key = String(e.key || "").toLowerCase();
@@ -48683,6 +48687,7 @@ window.enableViewOnceProtection = function(viewer){
     viewer.addEventListener("selectstart", block, true);
     document.addEventListener("keydown", onKey, true);
     document.addEventListener("visibilitychange", onVisibility, true);
+    window.addEventListener("blur", onWindowBlur, true);
 
     // Discourage long-press image saving and text selection.
     viewer.style.setProperty("-webkit-user-select", "none", "important");
@@ -48701,6 +48706,7 @@ window.enableViewOnceProtection = function(viewer){
         viewer.removeEventListener("selectstart", block, true);
         document.removeEventListener("keydown", onKey, true);
         document.removeEventListener("visibilitychange", onVisibility, true);
+        window.removeEventListener("blur", onWindowBlur, true);
         window.__viewOnceSecurityCleanup = null;
     };
 };
@@ -49180,6 +49186,36 @@ window.openMedia = function (
     viewer.appendChild(
         container
     );
+
+    // View Once watermark: repeated overlay discourages sharing and identifies
+    // captures. This is deterrence, not screenshot prevention.
+    if (options?.viewOnce === true) {
+        const watermark = document.createElement("div");
+        watermark.setAttribute("aria-hidden", "true");
+        watermark.style.cssText = `
+            position:absolute; inset:0; z-index:50; pointer-events:none;
+            overflow:hidden; display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+            grid-template-rows:repeat(4,minmax(0,1fr)); opacity:.28;
+        `;
+        const watermarkText = String(
+            window.currentUser?.username ||
+            window.currentUser?.user_name ||
+            window.currentUser?.email ||
+            "SocialApp recipient"
+        ).slice(0,48);
+        for (let i = 0; i < 8; i++) {
+            const mark = document.createElement("span");
+            mark.textContent = `SocialApp · View Once · ${watermarkText}`;
+            mark.style.cssText = `
+                display:flex; align-items:center; justify-content:center;
+                color:#fff; font-size:clamp(11px,2.8vw,16px); font-weight:700;
+                text-shadow:0 1px 3px #000,0 0 5px #000; text-align:center;
+                transform:rotate(-28deg); padding:4px; white-space:normal;
+            `;
+            watermark.appendChild(mark);
+        }
+        container.appendChild(watermark);
+    }
 
     // =================================================
     // IMAGE STATE
