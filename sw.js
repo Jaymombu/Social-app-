@@ -1,193 +1,142 @@
-const CACHE_NAME = "social-app-v278";
+const CACHE_NAME = "socialapp-v281";
 
-const urlsToCache = [
-  "./",
-  "./index.html",
-  "./manifest.json",
-  "./icon-192.png",
-  "./icon-512.png"
+const STATIC_ASSETS = [
+  "/Social-app-/",
+  "/Social-app-/index.html",
+  "/Social-app-/manifest.json"
 ];
 
-// INSTALL
+// Install service worker
 self.addEventListener("install", (event) => {
-
-  self.skipWaiting();
-
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => {
-        return cache.addAll(urlsToCache);
-      })
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(STATIC_ASSETS).catch(() => {
+        console.warn("Some static assets could not be cached.");
+      });
+    })
   );
 
+  self.skipWaiting();
 });
 
-// ACTIVATE
+// Activate service worker
 self.addEventListener("activate", (event) => {
-
   event.waitUntil(
-    caches.keys().then((keys) => {
-
+    caches.keys().then((cacheNames) => {
       return Promise.all(
-        keys.map((key) => {
-
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-
-        })
+        cacheNames
+          .filter((name) => name.startsWith("socialapp-") && name !== CACHE_NAME)
+          .map((name) => caches.delete(name))
       );
-
     })
   );
 
   self.clients.claim();
-
 });
 
-// FETCH
-self.addEventListener("fetch", (event) => {
-
-  const request = event.request;
+// Detect media requests
+function isMediaRequest(request) {
   const url = new URL(request.url);
 
-  // NEVER CACHE SUPABASE
-  if (url.hostname.includes("supabase")) {
-    event.respondWith(fetch(request));
-    return;
-  }
+  const mediaExtensions =
+    /\.(png|jpe?g|gif|webp|svg|mp4|webm|mov|mp3|wav|ogg|m4a|aac)$/i;
 
-  // NEVER INTERCEPT NON-GET REQUESTS
+  const mediaTypes = [
+    "image/",
+    "video/",
+    "audio/"
+  ];
+
+  return (
+    mediaExtensions.test(url.pathname) ||
+    mediaTypes.some((type) =>
+      (request.headers.get("accept") || "").includes(type)
+    );
+  );
+}
+
+// Detect Supabase requests
+function isSupabaseRequest(request) {
+  return request.url.includes(".supabase.co");
+}
+
+// Network-only requests for sensitive content
+async function networkOnly(request) {
+  try {
+    return await fetch(request, {
+      cache: "no-store"
+    });
+  } catch (error) {
+    return new Response(
+      "Media unavailable. Please reconnect to the internet.",
+      {
+        status: 503,
+        headers: {
+          "Content-Type": "text/plain",
+          "Cache-Control": "no-store"
+        }
+      }
+    );
+  }
+}
+
+// Handle requests
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+
+  // Only handle GET requests
   if (request.method !== "GET") {
     return;
   }
 
-  // NETWORK-FIRST FOR THE APP SHELL
-  const isAppShell =
-    request.mode === "navigate" ||
-    url.pathname.endsWith("/index.html") ||
-    url.pathname === new URL("./", self.location.href).pathname;
-
-  if (isAppShell) {
-
-    event.respondWith(
-
-      fetch(request)
-
-        .then((networkResponse) => {
-
-          if (networkResponse && networkResponse.ok) {
-
-            const responseClone =
-              networkResponse.clone();
-
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                cache.put(request, responseClone);
-              });
-
-          }
-
-          return networkResponse;
-
-        })
-
-        .catch(() => {
-
-          return caches.match(request)
-            .then((cachedResponse) => {
-
-              return cachedResponse ||
-                caches.match("./index.html");
-
-            });
-
-        })
-
-    );
-
+  // Never cache Supabase data, authentication or storage
+  if (isSupabaseRequest(request)) {
+    event.respondWith(networkOnly(request));
     return;
   }
 
-  // CACHE-FIRST FOR STATIC ASSETS
+  // Never cache images, videos or audio
+  if (isMediaRequest(request)) {
+    event.respondWith(networkOnly(request));
+    return;
+  }
+
+  // Static assets can use cache
   event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (
+          response &&
+          response.ok &&
+          response.type !== "opaque"
+        ) {
+          const responseClone = response.clone();
 
-    caches.match(request)
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseClone);
+          });
+        }
 
-      .then((cachedResponse) => {
+        return response;
+      })
+      .catch(async () => {
+        const cachedResponse = await caches.match(request);
 
         if (cachedResponse) {
           return cachedResponse;
         }
 
-        return fetch(request)
+        // Only fallback to app shell for navigation requests
+        if (request.mode === "navigate") {
+          return caches.match("/Social-app-/index.html");
+        }
 
-          .then((networkResponse) => {
-
-            if (networkResponse && networkResponse.ok) {
-
-              const responseClone =
-                networkResponse.clone();
-
-              caches.open(CACHE_NAME)
-                .then((cache) => {
-                  cache.put(request, responseClone);
-                });
-
-            }
-
-            return networkResponse;
-
-          })
-
-          .catch(() => {
-
-            return caches.match("./index.html");
-
-          });
-
+        return new Response("Offline", {
+          status: 503,
+          headers: {
+            "Content-Type": "text/plain"
+          }
+        });
       })
-
   );
-
-});
-
-// PUSH NOTIFICATIONS
-self.addEventListener("push", (event) => {
-
-  const data =
-    event.data ? event.data.json() : {};
-
-  event.waitUntil(
-
-    self.registration.showNotification(
-
-      data.title || "New notification",
-
-      {
-        body: data.body || "You have a new update",
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
-        data: data.data || {},
-        tag: "social-app",
-        renotify: true
-      }
-
-    )
-
-  );
-
-});
-
-// NOTIFICATION CLICK
-self.addEventListener("notificationclick", (event) => {
-
-  event.notification.close();
-
-  const data = event.notification.data;
-
-  event.waitUntil(
-    clients.openWindow("/")
-  );
-
 });
