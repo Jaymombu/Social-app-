@@ -49452,56 +49452,51 @@ window.openMedia = function (
         // =================================================
         // DOWNLOAD
         // =================================================
+        // Never render an app download control for View Once media.
+        // Normal chat/post/profile images retain their download button.
+        if (options?.viewOnce !== true) {
+            const downloadButton =
+                document.createElement("a");
 
-        const downloadButton =
-            document.createElement("a");
+            downloadButton.href = url;
+            downloadButton.download = "";
+            downloadButton.target = "_blank";
+            downloadButton.rel = "noopener noreferrer";
+            downloadButton.textContent = "⬇";
+            downloadButton.setAttribute(
+                "aria-label",
+                "Download image"
+            );
 
-        downloadButton.href = url;
+            downloadButton.style.cssText = `
+                position:absolute;
+                top:18px;
+                right:18px;
+                width:48px;
+                height:48px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                border-radius:50%;
+                background:rgba(20,20,20,.8);
+                color:#fff;
+                font-size:25px;
+                line-height:1;
+                text-decoration:none;
+                z-index:100;
+                cursor:pointer;
+                touch-action:manipulation;
+            `;
 
-        downloadButton.download = "";
+            downloadButton.addEventListener(
+                "click",
+                event => {
+                    event.stopPropagation();
+                }
+            );
 
-        downloadButton.target = "_blank";
-
-        downloadButton.rel =
-            "noopener noreferrer";
-
-        downloadButton.textContent = "⬇";
-
-        downloadButton.setAttribute(
-            "aria-label",
-            "Download image"
-        );
-
-        downloadButton.style.cssText = `
-            position:absolute;
-            top:18px;
-            right:18px;
-            width:48px;
-            height:48px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            border-radius:50%;
-            background:rgba(20,20,20,.8);
-            color:#fff;
-            font-size:25px;
-            line-height:1;
-            text-decoration:none;
-            z-index:100;
-            cursor:pointer;
-            touch-action:manipulation;
-        `;
-
-        downloadButton.addEventListener(
-            "click",
-            event => {
-                event.stopPropagation();
-            }
-        );
-
-        viewer.appendChild(
-            downloadButton
-        );
+            viewer.appendChild(downloadButton);
+        }
     }
 
     // =================================================
