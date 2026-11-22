@@ -45587,10 +45587,13 @@ async function loadMessages(chatUserId = currentChatUser, openToken = window.__c
       const type = target.dataset.chatMediaType === "video" ? "video" : "image";
 
       if (target.dataset.chatViewOnce === "true") {
-        if (target.dataset.chatViewOnceUsed === "true") return;
+        if (target.dataset.chatViewOnceUsed === "true" || target.dataset.chatViewOnceOpening === "true") return;
         const messageId = target.dataset.messageId || target.closest(".chatMessage")?.id;
-        if (messageId && url) {
-          consumeChatViewOnce(messageId, url, type);
+        if (messageId) {
+          target.dataset.chatViewOnceOpening = "true";
+          consumeChatViewOnce(messageId, type, target).finally(() => {
+            delete target.dataset.chatViewOnceOpening;
+          });
         }
         return;
       }
@@ -46509,39 +46512,77 @@ window.clearChatMedia = function(){
   document.getElementById("chatViewOnceClear")?.addEventListener("click", window.clearChatMedia);
 })();
 
-async function consumeChatViewOnce(messageId, url, type){
-  if (!messageId || !url) return false;
-  const me = currentUser?.id || window.currentUser?.id || session?.user?.id || null;
-  if (!me) return false;
-  const { data: row, error: readError } = await supabase
-    .from("messages")
-    .select("id,sender_id,receiver_id,file_name,media_url,media_type")
-    .eq("id", messageId)
-    .single();
-  if (readError || !row || !isChatViewOnceMessage(row) || isChatViewOnceUsed(row)) return false;
-  // Only the recipient consumes a view-once message. The sender's copy stays a
-  // closed "View once" placeholder and cannot consume it.
-  if (String(row.receiver_id) !== String(me) || String(row.sender_id) === String(me)) return false;
-
-  const originalName = cleanChatViewOnceFileName(row.file_name);
-  const { error } = await supabase
-    .from("messages")
-    .update({ file_name: CHAT_VIEW_ONCE_USED_PREFIX + originalName })
-    .eq("id", messageId)
-    .eq("receiver_id", me)
-    .eq("file_name", row.file_name);
-  if (error) {
-    console.warn("View once could not be consumed:", error.message);
+async function consumeChatViewOnce(messageId, type, target){
+  if (!messageId) return false;
+  const { data: { session: authSession }, error: sessionError } = await supabase.auth.getSession();
+  const accessToken = authSession?.access_token;
+  if (sessionError || !accessToken) {
+    alert("Please sign in again to open this View Once media.");
     return false;
   }
 
-  // Open only after the server-side consume succeeds, preventing a second
-  // device/session from opening the same view-once media at the same time.
-  if (typeof window.openMedia === "function") {
-    window.openMedia(url, type, { sourceScreen:"chatScreen", viewOnce:true });
+  try {
+    const response = await fetch(
+      "https://kixxdbkfvigunvxbvmfy.supabase.co/functions/v1/consume-view-once-media",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "apikey": "sb_publishable_wNYHEKrHg_MdxfXtECTzRw_14IREB0M",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ message_id: messageId })
+      }
+    );
+
+    if (!response.ok) {
+      let message = "This View Once media is unavailable or has already been opened.";
+      try {
+        const result = await response.json();
+        if (result?.error) message = result.error;
+      } catch (_) {}
+      alert(message);
+      if (response.status === 401 || response.status === 403 || response.status === 404 || response.status === 409) {
+        if (target) target.dataset.chatViewOnceUsed = "true";
+        setTimeout(() => loadMessages(currentChatUser, window.__chatOpenToken), 100);
+      }
+      return false;
+    }
+
+    const mediaBlob = await response.blob();
+    if (!mediaBlob.size) {
+      alert("The View Once media returned empty content.");
+      return false;
+    }
+
+    const objectUrl = URL.createObjectURL(mediaBlob);
+    // The object URL is kept only for this viewer session and revoked on close.
+    if (window.__chatViewOnceObjectUrl) {
+      try { URL.revokeObjectURL(window.__chatViewOnceObjectUrl); } catch (_) {}
+    }
+    window.__chatViewOnceObjectUrl = objectUrl;
+
+    if (typeof window.openMedia === "function") {
+      const opened = window.openMedia(objectUrl, type, { sourceScreen:"chatScreen", viewOnce:true });
+      if (opened === false) {
+        URL.revokeObjectURL(objectUrl);
+        window.__chatViewOnceObjectUrl = null;
+        return false;
+      }
+    } else {
+      URL.revokeObjectURL(objectUrl);
+      window.__chatViewOnceObjectUrl = null;
+      return false;
+    }
+
+    if (target) target.dataset.chatViewOnceUsed = "true";
+    setTimeout(() => loadMessages(currentChatUser, window.__chatOpenToken), 100);
+    return true;
+  } catch (error) {
+    console.error("View Once secure consume failed:", error);
+    alert("Could not securely open this View Once media. It may already have been consumed.");
+    return false;
   }
-  setTimeout(() => loadMessages(currentChatUser, window.__chatOpenToken), 100);
-  return true;
 }
 
 async function sendMessage() {
@@ -53053,6 +53094,10 @@ window.closeMedia = function () {
 
     if (typeof window.__viewOnceSecurityCleanup === "function") {
         try { window.__viewOnceSecurityCleanup(); } catch (e) {}
+    }
+    if (window.__chatViewOnceObjectUrl) {
+        try { URL.revokeObjectURL(window.__chatViewOnceObjectUrl); } catch (e) {}
+        window.__chatViewOnceObjectUrl = null;
     }
     // Safety fallback in case cleanup was already consumed.
     window.setNativeViewOnceSecurity(false);
