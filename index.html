@@ -48670,9 +48670,22 @@ window.enableViewOnceProtection = function(viewer){
             try { window.closeMedia(); } catch(e) {}
         }
     };
+    const closeForBackground = () => {
+        // Close and release View Once media as soon as the browser reports
+        // that this page is leaving the foreground or being suspended.
+        try { window.closeMedia(); } catch(e) {}
+    };
     const onWindowBlur = () => {
         // Best-effort close when focus leaves the browser window.
-        try { window.closeMedia(); } catch(e) {}
+        closeForBackground();
+    };
+    const onPageHide = () => {
+        // Covers page navigation / browser page dismissal where supported.
+        closeForBackground();
+    };
+    const onFreeze = () => {
+        // Chromium Page Lifecycle: release sensitive media before suspension.
+        closeForBackground();
     };
     const onKey = (e) => {
         const key = String(e.key || "").toLowerCase();
@@ -48688,6 +48701,8 @@ window.enableViewOnceProtection = function(viewer){
     document.addEventListener("keydown", onKey, true);
     document.addEventListener("visibilitychange", onVisibility, true);
     window.addEventListener("blur", onWindowBlur, true);
+    window.addEventListener("pagehide", onPageHide, true);
+    document.addEventListener("freeze", onFreeze, true);
 
     // Discourage long-press image saving and text selection.
     viewer.style.setProperty("-webkit-user-select", "none", "important");
@@ -48707,6 +48722,8 @@ window.enableViewOnceProtection = function(viewer){
         document.removeEventListener("keydown", onKey, true);
         document.removeEventListener("visibilitychange", onVisibility, true);
         window.removeEventListener("blur", onWindowBlur, true);
+        window.removeEventListener("pagehide", onPageHide, true);
+        document.removeEventListener("freeze", onFreeze, true);
         window.__viewOnceSecurityCleanup = null;
     };
 };
