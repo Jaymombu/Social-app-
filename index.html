@@ -44803,6 +44803,12 @@ window.openInbox = async function (addHistory = true) {
   window.__inboxLoadToken = (window.__inboxLoadToken || 0) + 1;
   const inboxLoadToken = window.__inboxLoadToken;
 
+  // A silent refresh while the inbox is already visible should update its
+  // data only. Re-running screen navigation/hide/show operations can cause
+  // avoidable flicker even when the inbox rows themselves are kept mounted.
+  const keepInboxMounted = !addHistory &&
+    document.getElementById("inboxScreen")?.style.display === "flex";
+
   console.log("📥 OPEN INBOX:", {
     addHistory,
     restoring: window.appNavigation?.restoring
@@ -44820,7 +44826,7 @@ window.openInbox = async function (addHistory = true) {
   // CENTRAL NAVIGATION
   // =========================================
 
-  if (typeof window.navigateToScreen === "function") {
+  if (!keepInboxMounted && typeof window.navigateToScreen === "function") {
 
     window.navigateToScreen(
       "inboxScreen",
@@ -44836,34 +44842,24 @@ window.openInbox = async function (addHistory = true) {
   console.log("OPENING INBOX");
 
   // =========================================
-  // STOP TYPING
+  // STOP TYPING (BACKGROUND)
   // =========================================
 
-  if (
-    session?.user &&
-    currentChatUser
-  ) {
-
-    try {
-
-      await supabase
-        .from("typing_status")
-        .upsert({
-          user_id: session.user.id,
-          receiver_id: currentChatUser,
-          typing: false,
-          updated_at: new Date()
-        });
-
-    } catch (err) {
-
-      console.log(
-        "Typing cleanup error:",
-        err
-      );
-
-    }
-
+  if (session?.user && currentChatUser) {
+    // Typing cleanup is nonessential navigation housekeeping. Do not wait for
+    // its network round-trip before displaying the inbox.
+    supabase
+      .from("typing_status")
+      .upsert({
+        user_id: session.user.id,
+        receiver_id: currentChatUser,
+        typing: false,
+        updated_at: new Date()
+      })
+      .then(({ error }) => {
+        if (error) console.log("Typing cleanup error:", error);
+      })
+      .catch(err => console.log("Typing cleanup error:", err));
   }
 
   // =========================================
@@ -44906,27 +44902,29 @@ window.openInbox = async function (addHistory = true) {
   // CLOSE COMPETING SCREENS
   // =========================================
 
-  [
-    "chatScreen",
-    "searchScreen",
-    "notificationsScreen",
-    "storyViewer",
-    "mediaViewer",
-    "commentsScreen",
-    "profileScreen",
-    "profileSettingsScreen",
-    "editProfileScreen",
-    "languageSettingsScreen",
-    "privacySettingsScreen",
-    "followRequestsScreen",
-    "savedPostsScreen"
-  ].forEach(id => {
+  if (!keepInboxMounted) {
+    [
+      "chatScreen",
+      "searchScreen",
+      "notificationsScreen",
+      "storyViewer",
+      "mediaViewer",
+      "commentsScreen",
+      "profileScreen",
+      "profileSettingsScreen",
+      "editProfileScreen",
+      "languageSettingsScreen",
+      "privacySettingsScreen",
+      "followRequestsScreen",
+      "savedPostsScreen"
+    ].forEach(id => {
 
-    if (document.getElementById(id)) {
-      hideScreen(id);
-    }
+      if (document.getElementById(id)) {
+        hideScreen(id);
+      }
 
-  });
+    });
+  }
 
   // =========================================
   // KEEP MAIN APP HIDDEN
@@ -44935,7 +44933,7 @@ window.openInbox = async function (addHistory = true) {
   const app =
     document.getElementById("app");
 
-  if (app) {
+  if (app && !keepInboxMounted) {
 
     app.style.display = "none";
     app.style.visibility = "hidden";
@@ -44961,7 +44959,7 @@ window.openInbox = async function (addHistory = true) {
 
   }
 
-  if (!showScreen("inboxScreen")) {
+  if (!keepInboxMounted && !showScreen("inboxScreen")) {
 
     console.error(
       "❌ Could not open inboxScreen"
@@ -45154,7 +45152,11 @@ window.openInbox = async function (addHistory = true) {
 
   if (inboxLoadToken !== window.__inboxLoadToken) return;
 
-  inbox.innerHTML = "";
+  // Build the refreshed rows off-screen while the current inbox remains
+  // visible. A single atomic swap avoids the blank/progressive redraw that
+  // happened when inbox.innerHTML was cleared before profile lookups.
+  const inboxScrollTop = inbox.scrollTop;
+  const inboxFragment = document.createDocumentFragment();
 
   // =========================================
   // BUILD CHAT LIST
@@ -45225,10 +45227,12 @@ window.openInbox = async function (addHistory = true) {
             });
           }
 
-          // REFRESH WITHOUT NEW HISTORY
-          openInbox(
-            false
-          );
+          // Remove only this conversation row. Reopening the inbox here
+          // rebuilds every chat row and causes an unnecessary visual reload.
+          div.remove();
+          if (inbox && inbox.children.length === 0) {
+            inbox.textContent = "No chats yet";
+          }
 
         }, 700);
 
@@ -45301,10 +45305,9 @@ window.openInbox = async function (addHistory = true) {
           "Messages forwarded"
         );
 
-        openInbox(
-          false
-        );
-
+        // Keep the current inbox mounted after forwarding. Reopening it here
+        // rebuilds the inbox DOM and can cause a visible flash; the next normal
+        // inbox refresh will reconcile the updated conversation preview.
         return;
 
       }
@@ -45347,10 +45350,8 @@ window.openInbox = async function (addHistory = true) {
           "Message forwarded"
         );
 
-        openInbox(
-          false
-        );
-
+        // Keep the current inbox mounted after forwarding instead of
+        // reopening and rebuilding the whole inbox list.
         return;
 
       }
@@ -45488,9 +45489,14 @@ openChat(
 
     `;
 
-    inbox.appendChild(div);
+    inboxFragment.appendChild(div);
 
   }
+
+  // Do not commit a stale refresh if another navigation/load has started.
+  if (inboxLoadToken !== window.__inboxLoadToken) return;
+  inbox.replaceChildren(inboxFragment);
+  inbox.scrollTop = inboxScrollTop;
 
   console.log("✅ INBOX OPENED");
 
@@ -46411,7 +46417,21 @@ window.editMessage = async function(messageId) {
     return;
   }
 
-  loadMessages();
+  // Update only this message bubble; keep the rest of the chat untouched.
+  const editedBubble = document.getElementById(String(messageId));
+  const editedContent = document.getElementById(`messageContent-${messageId}`);
+  if (editedContent) editedContent.textContent = newText.trim();
+  if (editedBubble) {
+    editedBubble.dataset.message = newText.trim().toLowerCase();
+    const editedLabel = editedBubble.querySelector(".message-edited-label");
+    if (!editedLabel && editedContent) {
+      const label = document.createElement("span");
+      label.className = "message-edited-label";
+      label.textContent = "(edited)";
+      label.style.cssText = "font-size:11px;opacity:.7;";
+      editedContent.parentElement?.appendChild(label);
+    }
+  }
 
   document.getElementById("messageMenu")?.remove();
 
@@ -46446,7 +46466,19 @@ window.deleteForEveryone = async function(messageId) {
     return;
   }
 
-  loadMessages();
+  // Mark this bubble as deleted in place without rebuilding the conversation.
+  const deletedBubble = document.getElementById(String(messageId));
+  if (deletedBubble) {
+    document.getElementById(`messageContent-${messageId}`)?.remove();
+    deletedBubble.querySelectorAll(
+      'img[data-message-id], video[data-message-id], .chat-view-once-bubble, .chat-reply-media-preview, .messageReactions'
+    ).forEach(node => node.remove());
+    const deletedNotice = document.createElement("div");
+    deletedNotice.textContent = "🚫 This message was deleted";
+    deletedNotice.style.cssText = "margin-top:4px;font-style:italic;opacity:.7;";
+    deletedBubble.appendChild(deletedNotice);
+    deletedBubble.dataset.message = "";
+  }
 
   document.getElementById("messageMenu")?.remove();
 
@@ -46512,6 +46544,19 @@ window.clearChatMedia = function(){
   document.getElementById("chatViewOnceClear")?.addEventListener("click", window.clearChatMedia);
 })();
 
+function markChatViewOnceBubbleUsed(messageId, target){
+  const bubble = target?.closest?.('.chat-view-once-bubble') ||
+    Array.from(document.querySelectorAll('.chat-view-once-bubble'))
+      .find(el => String(el.dataset.messageId || "") === String(messageId));
+  if (!bubble) return;
+  bubble.dataset.chatViewOnceUsed = "true";
+  bubble.removeAttribute("data-chat-media-url");
+  bubble.style.cursor = "default";
+  bubble.setAttribute("aria-disabled", "true");
+  const subtitle = bubble.querySelector('.vo-sub');
+  if (subtitle) subtitle.textContent = "Opened";
+}
+
 async function consumeChatViewOnce(messageId, type, target){
   if (!messageId) return false;
   const { data: { session: authSession }, error: sessionError } = await supabase.auth.getSession();
@@ -46543,8 +46588,7 @@ async function consumeChatViewOnce(messageId, type, target){
       } catch (_) {}
       alert(message);
       if (response.status === 401 || response.status === 403 || response.status === 404 || response.status === 409) {
-        if (target) target.dataset.chatViewOnceUsed = "true";
-        setTimeout(() => loadMessages(currentChatUser, window.__chatOpenToken), 100);
+        markChatViewOnceBubbleUsed(messageId, target);
       }
       return false;
     }
@@ -46575,8 +46619,9 @@ async function consumeChatViewOnce(messageId, type, target){
       return false;
     }
 
-    if (target) target.dataset.chatViewOnceUsed = "true";
-    setTimeout(() => loadMessages(currentChatUser, window.__chatOpenToken), 100);
+    // The server has consumed the media. Update only this message bubble;
+    // rebuilding the chat here would flash the conversation behind the viewer.
+    markChatViewOnceBubbleUsed(messageId, target);
     return true;
   } catch (error) {
     console.error("View Once secure consume failed:", error);
@@ -46701,16 +46746,9 @@ await supabase
 // in its schema, so translation metadata must not be written to messages.
 // The message itself has already been saved successfully above.
 
-  // Paint locally immediately. The server/realtime reconciliation below may
-  // replace it later, but the message is visible with no extra refresh wait.
-  window.appendInstantChatMessage?.(insertedMessage);
-
-  // Reconcile in the background; the local bubble is already visible.
-  setTimeout(() => {
-    if (currentChatUser && isChatScreenVisible()) {
-      loadMessages(currentChatUser, window.__chatOpenToken);
-    }
-  }, 250);
+  // Render the confirmed message in place. Do not reload the whole chat:
+  // realtime/status sync will reconcile delivery state without replacing bubbles.
+  await window.appendInstantChatMessage?.(insertedMessage);
 
   // Clear the composer immediately after the database confirms the send.
   input.value = "";
@@ -46743,7 +46781,7 @@ if (currentChatUser === session.user.id) {
   document.getElementById("chatViewOnceBar")?.classList.remove("active");
   const resetViewOnceBtn2 = document.getElementById("chatViewOnceToggle");
   if (resetViewOnceBtn2) resetViewOnceBtn2.textContent = "OFF";
-  loadMessages();
+  // Self-chat also uses the in-place message renderer; avoid a full chat rebuild.
   return;
 }
 
@@ -46819,25 +46857,51 @@ if (replyPreview) {
 }
   fileInput.value = "";
 
-  // Reconcile in the background; do not make the sender wait for a second
-  // messages query after the message is already on screen.
-  loadMessages();
+  // The confirmed message was already appended above. Do not run loadMessages()
+  // here: it clears and rebuilds #chatMessages, causing visible flicker after
+  // text, photo, or video sends. Realtime and incremental background sync
+  // reconcile delivery state and any missed messages without replacing bubbles.
 }
 
-  chatInput?.addEventListener("input", async () => {
+  // Typing is a boolean state, not a keystroke stream. Debounce updates and
+  // write only when the state changes (first character / input cleared).
+  // This avoids a database write for every character typed.
+  chatInput?.addEventListener("input", () => {
+    if (!session?.user || !currentChatUser) return;
 
-  if (!session?.user || !currentChatUser) return;
+    const typingUserId = session.user.id;
+    const typingReceiverId = currentChatUser;
+    const typingNow = chatInput.value.trim().length > 0;
+    const typingKey = `${typingUserId}:${typingReceiverId}`;
 
-  await supabase
-    .from("typing_status")
-    .upsert({
-      user_id: session.user.id,
-      receiver_id: currentChatUser,
-      typing: chatInput.value.trim().length > 0,
-      updated_at: new Date()
-    });
+    clearTimeout(window.__typingStatusWriteTimer);
+    window.__typingStatusWriteTimer = setTimeout(async () => {
+      if (
+        !session?.user ||
+        String(session.user.id) !== String(typingUserId) ||
+        String(currentChatUser) !== String(typingReceiverId)
+      ) return;
 
-});
+      window.__typingStatusLastSent ||= Object.create(null);
+      if (window.__typingStatusLastSent[typingKey] === typingNow) return;
+
+      window.__typingStatusLastSent[typingKey] = typingNow;
+      const { error } = await supabase
+        .from("typing_status")
+        .upsert({
+          user_id: typingUserId,
+          receiver_id: typingReceiverId,
+          typing: typingNow,
+          updated_at: new Date()
+        });
+
+      if (error) {
+        // Permit a later input event to retry if this write failed.
+        delete window.__typingStatusLastSent[typingKey];
+        console.log("Typing status update error:", error);
+      }
+    }, 250);
+  });
 
 function listenTyping(userId) {
 
@@ -46858,11 +46922,17 @@ function listenTyping(userId) {
       (payload) => {
 
         const row = payload.new;
-
         if (!row) return;
 
-        document.getElementById("typingIndicator").style.display =
-          row.typing ? "block" : "none";
+        const indicator = document.getElementById("typingIndicator");
+        if (!indicator) return;
+
+        const nextDisplay = row.typing ? "block" : "none";
+        // Realtime may deliver repeated UPDATE events with the same value.
+        // Avoid touching the DOM unless the visible state actually changes.
+        if (indicator.style.display !== nextDisplay) {
+          indicator.style.display = nextDisplay;
+        }
 
       }
     )
@@ -46913,7 +46983,10 @@ async function refreshOpenChatStatuses(userId) {
   const { data, error } = await supabase
     .from("messages")
     .select("id,sender_id,receiver_id,delivered,seen")
-    .or(`and(sender_id.eq.${session.user.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${session.user.id})`)
+    // Only our outgoing messages have delivery/read indicators in this chat.
+    // Avoid fetching the other participant's messages on every status poll.
+    .eq("sender_id", session.user.id)
+    .eq("receiver_id", userId)
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -46928,28 +47001,71 @@ async function refreshOpenChatStatuses(userId) {
 }
 
 async function refreshOpenChatMessages(userId) {
-  if (!session?.user || !userId || currentChatUser !== userId) return;
+  if (!session?.user || !userId || String(currentChatUser) !== String(userId)) return;
   if (!isChatScreenVisible()) return;
+
   const token = window.__chatOpenToken;
-  await loadMessages(userId, token);
+  const myId = session.user.id;
+  const chat = document.getElementById("chatMessages");
+  if (!chat || String(chat.dataset.chatUserId || "") !== String(userId)) return;
+
+  // Refresh/resume is incremental: never clear and rebuild the open chat.
+  const wasNearBottom = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 160;
+  const previousScrollTop = chat.scrollTop;
+
+  // Share one lock with the background sync timer so overlapping full-history
+  // queries cannot compete or append the same message at the same time.
+  if (window.__chatIncrementalRefreshInProgress) return;
+  window.__chatIncrementalRefreshInProgress = true;
+
+  try {
+    const { data, error } = await supabase
+      .from("messages")
+      .select(`
+        *,
+        replied:reply_to(id,content,media_url,media_type),
+        reactions:message_reactions(user_id,reaction)
+      `)
+      .or(`and(sender_id.eq.${myId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${myId})`)
+      .order("created_at", { ascending: true });
+
+    if (error || !Array.isArray(data)) {
+      if (error) console.warn("Open chat incremental refresh failed:", error);
+      return;
+    }
+    if (
+      token !== window.__chatOpenToken ||
+      String(currentChatUser) !== String(userId) ||
+      !isChatScreenVisible() ||
+      !chat.isConnected
+    ) return;
+
+    let added = false;
+    for (const msg of data) {
+      if (msg.sender_id !== myId && msg.deleted_for_receiver === true) continue;
+      if (msg.sender_id === myId && msg.deleted_for_sender === true) continue;
+      if (document.getElementById(String(msg.id))) continue;
+      if (await window.appendInstantChatMessage?.(msg) === true) added = true;
+    }
+
+    if (added && chat.isConnected) {
+      chat.scrollTop = wasNearBottom ? chat.scrollHeight : previousScrollTop;
+    }
+  } catch (error) {
+    console.warn("Open chat incremental refresh failed:", error);
+  } finally {
+    window.__chatIncrementalRefreshInProgress = false;
+  }
 }
 
 function startChatStatusPolling(userId) {
+  // Do one immediate status refresh when a chat opens. The app-wide
+  // reconcileMessageState timer already refreshes delivery/read indicators
+  // and the unread badge every 2 seconds, so a second per-chat polling timer
+  // would duplicate the same database requests while the chat is open.
   clearInterval(window.__chatStatusPollTimer);
+  window.__chatStatusPollTimer = null;
   window.__chatStatusPollUser = userId;
-
-  // Realtime is the fast path. Polling is the reliable fallback when a
-  // browser/device/Supabase realtime connection misses an event.
-  window.__chatStatusPollTimer = setInterval(async () => {
-    if (currentChatUser !== userId || !isChatScreenVisible()) {
-      clearInterval(window.__chatStatusPollTimer);
-      window.__chatStatusPollTimer = null;
-      return;
-    }
-    await refreshOpenChatStatuses(userId);
-    await loadUnreadMessages();
-  }, 1500);
-
   refreshOpenChatStatuses(userId);
 }
 
@@ -46963,8 +47079,16 @@ function startChatStatusPolling(userId) {
 function startOpenChatMessageSync(userId) {
   clearInterval(window.__chatMessageSyncTimer);
   window.__chatMessageSyncUser = String(userId);
+
+  let syncInProgress = false;
+  const chatToken = window.__chatOpenToken;
+
   window.__chatMessageSyncTimer = setInterval(async () => {
-    if (String(currentChatUser || "") !== String(userId) || !isChatScreenVisible()) {
+    if (
+      String(currentChatUser || "") !== String(userId) ||
+      chatToken !== window.__chatOpenToken ||
+      !isChatScreenVisible()
+    ) {
       clearInterval(window.__chatMessageSyncTimer);
       window.__chatMessageSyncTimer = null;
       return;
@@ -46974,32 +47098,56 @@ function startOpenChatMessageSync(userId) {
     if (!chat || String(chat.dataset.chatUserId || "") !== String(userId)) return;
 
     const myId = session?.user?.id || currentUser?.id || window.currentUser?.id;
-    if (!myId) return;
+    if (!myId || syncInProgress || window.__chatIncrementalRefreshInProgress) return;
 
-    const { data, error } = await supabase
-      .from("messages")
-      .select(`
-        *,
-        replied:reply_to(id,content,media_url,media_type),
-        reactions:message_reactions(user_id,reaction)
-      `)
-      .or(`and(sender_id.eq.${myId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${myId})`)
-      .order("created_at", { ascending: true });
+    syncInProgress = true;
+    window.__chatIncrementalRefreshInProgress = true;
 
-    if (error || !Array.isArray(data)) return;
-    if (String(currentChatUser || "") !== String(userId) || !isChatScreenVisible()) return;
+    try {
+      const wasNearBottom =
+        chat.scrollHeight - chat.scrollTop - chat.clientHeight < 160;
+      const previousScrollTop = chat.scrollTop;
 
-    // Only append rows that are genuinely missing. This avoids rebuilding the
-    // whole chat and therefore preserves the user's current scroll position.
-    let added = false;
-    for (const msg of data) {
-      if (msg.sender_id !== myId && msg.deleted_for_receiver === true) continue;
-      if (msg.sender_id === myId && msg.deleted_for_sender === true) continue;
-      if (document.getElementById(String(msg.id))) continue;
-      if (window.appendInstantChatMessage?.(msg)) added = true;
+      const { data, error } = await supabase
+        .from("messages")
+        .select(`
+          *,
+          replied:reply_to(id,content,media_url,media_type),
+          reactions:message_reactions(user_id,reaction)
+        `)
+        .or(`and(sender_id.eq.${myId},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${myId})`)
+        .order("created_at", { ascending: true });
+
+      if (error || !Array.isArray(data)) return;
+      if (
+        String(currentChatUser || "") !== String(userId) ||
+        chatToken !== window.__chatOpenToken ||
+        !isChatScreenVisible() ||
+        !chat.isConnected
+      ) return;
+
+      let added = false;
+
+      for (const msg of data) {
+        if (msg.sender_id !== myId && msg.deleted_for_receiver === true) continue;
+        if (msg.sender_id === myId && msg.deleted_for_sender === true) continue;
+        if (document.getElementById(String(msg.id))) continue;
+
+        const appended = await window.appendInstantChatMessage?.(msg);
+        if (appended === true) added = true;
+      }
+
+      // Instant rendering may move the scroller. Restore the reader's exact
+      // position unless they were already following the newest messages.
+      if (added) {
+        chat.scrollTop = wasNearBottom ? chat.scrollHeight : previousScrollTop;
+      }
+    } catch (error) {
+      console.warn("Background chat sync failed:", error);
+    } finally {
+      syncInProgress = false;
+      window.__chatIncrementalRefreshInProgress = false;
     }
-
-    if (added) chat.scrollTop = chat.scrollHeight;
   }, 900);
 }
 
@@ -47347,106 +47495,125 @@ window.showEmojiCategory = function(id) {
 };
 
 window.reactMessage = async function(messageId, emoji) {
-
   if (!session?.user) return;
 
-  // Check if the user already reacted
-  const { data: existing } = await supabase
-    .from("message_reactions")
-    .select("id, reaction")
-    .eq("message_id", messageId)
-    .eq("user_id", session.user.id)
-    .maybeSingle();
-
-  // If it's the same emoji, remove the reaction
-  if (existing && existing.reaction === emoji) {
-
-    await supabase
+  try {
+    const { data: existing, error: existingError } = await supabase
       .from("message_reactions")
-      .delete()
-      .eq("id", existing.id);
+      .select("id, reaction, user_id")
+      .eq("message_id", messageId)
+      .eq("user_id", session.user.id)
+      .maybeSingle();
 
-  } else {
+    if (existingError) throw existingError;
 
-    // Otherwise add or change the reaction
-    await supabase
-      .from("message_reactions")
-      .upsert({
-        message_id: messageId,
-        user_id: session.user.id,
-        reaction: emoji
-      });
-      
-      // Get the message owner
-const { data: message } = await supabase
-  .from("messages")
-  .select("sender_id")
-  .eq("id", messageId)
-  .single();
+    if (existing && existing.reaction === emoji) {
+      const { error } = await supabase
+        .from("message_reactions")
+        .delete()
+        .eq("id", existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from("message_reactions")
+        .upsert({
+          message_id: messageId,
+          user_id: session.user.id,
+          reaction: emoji
+        });
+      if (error) throw error;
 
-// Don't notify yourself
-if (message && message.sender_id !== session.user.id) {
+      // Notify the message owner, without rebuilding the open conversation.
+      const { data: message } = await supabase
+        .from("messages")
+        .select("sender_id")
+        .eq("id", messageId)
+        .single();
 
-  // Get your profile
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("name, avatar_url")
-    .eq("id", session.user.id)
-    .single();
+      if (message && message.sender_id !== session.user.id) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("name, avatar_url")
+          .eq("id", session.user.id)
+          .single();
 
-  // Check if a notification already exists
-  const { data: existing } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("user_id", message.sender_id)
-    .eq("sender_id", session.user.id)
-    .eq("type", "message_reaction")
-    .maybeSingle();
+        const { data: existingNotification } = await supabase
+          .from("notifications")
+          .select("*")
+          .eq("user_id", message.sender_id)
+          .eq("sender_id", session.user.id)
+          .eq("type", "message_reaction")
+          .maybeSingle();
 
-  if (existing) {
-
-    await supabase
-  .from("notifications")
-  .update({
-    count: (existing.count || 1) + 1,
-    username: profile.name,
-    avatar_url: profile.avatar_url,
-    message: `reacted ${emoji} to your message`,
-    message_id: messageId,
-    last_time: new Date(),
-    read: false
-  })
-      .eq("id", existing.id);
-
-  } else {
-
-    await supabase
-  .from("notifications")
-  .insert({
-    user_id: message.sender_id,
-    sender_id: session.user.id,
-    username: profile.name,
-    avatar_url: profile.avatar_url,
-    type: "message_reaction",
-    message: `reacted ${emoji} to your message`,
-    message_id: messageId,
-    count: 1,
-    created_at: new Date(),
-    last_time: new Date(),
-    read: false
-  });
-
+        if (existingNotification) {
+          await supabase
+            .from("notifications")
+            .update({
+              count: (existingNotification.count || 1) + 1,
+              username: profile?.name,
+              avatar_url: profile?.avatar_url,
+              message: `reacted ${emoji} to your message`,
+              message_id: messageId,
+              last_time: new Date(),
+              read: false
+            })
+            .eq("id", existingNotification.id);
+        } else {
+          await supabase
+            .from("notifications")
+            .insert({
+              user_id: message.sender_id,
+              sender_id: session.user.id,
+              username: profile?.name,
+              avatar_url: profile?.avatar_url,
+              type: "message_reaction",
+              message: `reacted ${emoji} to your message`,
+              message_id: messageId,
+              count: 1,
+              created_at: new Date(),
+              last_time: new Date(),
+              read: false
+            });
+        }
+      }
     }
 
-  }
-}
+    // Refresh only this message's reaction chip in the existing DOM.
+    const { data: reactions, error: reactionsError } = await supabase
+      .from("message_reactions")
+      .select("id, user_id, reaction")
+      .eq("message_id", messageId);
+    if (reactionsError) throw reactionsError;
 
-  loadMessages();
+    const bubble = document.getElementById(String(messageId));
+    if (bubble) {
+      let reactionRow = bubble.querySelector(".messageReactions");
+      const rows = Array.isArray(reactions) ? reactions : [];
+      const myReaction = rows.find(r => String(r.user_id) === String(session.user.id));
+      const shownReaction = myReaction || rows[rows.length - 1];
+
+      if (!rows.length || !shownReaction?.reaction) {
+        reactionRow?.remove();
+      } else {
+        if (!reactionRow) {
+          reactionRow = document.createElement("div");
+          reactionRow.className = "messageReactions";
+          reactionRow.style.cssText = "display:flex;align-items:center;gap:3px;margin-top:4px;margin-bottom:-2px;padding-left:4px;white-space:nowrap;";
+          const time = bubble.querySelector(".messageTime");
+          bubble.insertBefore(reactionRow, time || null);
+        }
+        reactionRow.innerHTML = `<div style="font-size:14px;cursor:pointer;" onclick="event.stopPropagation();showReactionDetails('${String(messageId)}','${escapeHtml(String(shownReaction.reaction))}')">${escapeHtml(String(shownReaction.reaction))} ${rows.length}</div>`;
+      }
+    }
+  } catch (error) {
+    console.error("Message reaction failed:", error);
+    alert(error?.message || "Could not update reaction. Please try again.");
+  }
 
   document.getElementById("emojiPicker")?.remove();
   document.getElementById("messageMenu")?.remove();
+  document.getElementById("messageMenu108")?.remove();
   document.getElementById("reactionPopup")?.remove();
-
 };
 
 window.showReactionDetails = function(messageId, emoji) {
@@ -47748,17 +47915,42 @@ window.restoreMessageReactionPopup = function() {
 };
 
 window.pinMessage = async function(messageId) {
+  try {
+    const { data: changed, error } = await supabase.rpc("pin_message", {
+      p_message_id: messageId
+    });
+    if (error) throw error;
+    if (changed !== true) throw new Error("This message could not be pinned or unpinned.");
 
-  const { error } = await supabase.rpc("pin_message", {
-    p_message_id: messageId
-  });
+    const { data: state, error: stateError } = await supabase
+      .from("messages")
+      .select("pinned")
+      .eq("id", messageId)
+      .maybeSingle();
+    if (stateError) throw stateError;
 
-  if (!error) {
-    loadMessages();
+    const bubble = document.getElementById(String(messageId));
+    if (bubble) {
+      let pinBadge = bubble.querySelector(".chat-message-pinned-badge");
+      if (state?.pinned) {
+        if (!pinBadge) {
+          pinBadge = document.createElement("div");
+          pinBadge.className = "chat-message-pinned-badge";
+          pinBadge.textContent = "📌 Pinned";
+          pinBadge.style.cssText = "font-size:11px;opacity:.82;margin-bottom:5px;";
+          bubble.insertBefore(pinBadge, bubble.firstChild);
+        }
+      } else {
+        pinBadge?.remove();
+      }
+    }
+  } catch (error) {
+    console.error("Pin message failed:", error);
+    alert(error?.message || "Could not update pinned message.");
   }
 
   document.getElementById("messageMenu")?.remove();
-
+  document.getElementById("messageMenu108")?.remove();
 };
 
 window.copyMessage = function(messageId) {
@@ -47864,7 +48056,12 @@ window.deleteMessage = async function(messageId) {
 
   }
 
-  loadMessages();
+  // Delete only the selected message from this device's current chat view.
+  const deletedBubble = document.getElementById(String(messageId));
+  if (deletedBubble) {
+    const messageRow = deletedBubble.parentElement;
+    (messageRow || deletedBubble).remove();
+  }
 
 };
 
@@ -48446,14 +48643,20 @@ window.deleteSelectedMessages = async function(){
         p_message_id:id,
         p_delete_for_everyone:false
       });
-      if(error) failed.push(error.message || "Delete failed");
+      if(error) {
+        failed.push(error.message || "Delete failed");
+      } else {
+        // Remove only the successfully deleted bubble; keep the rest of the
+        // open conversation mounted instead of rebuilding the whole chat.
+        document.getElementById(String(id))?.remove();
+      }
     }catch(err){
       failed.push(err?.message || "Delete failed");
     }
   }
 
   window.cancelSelection();
-  await loadMessages();
+  updateSelectionAllBox108();
   if(failed.length) alert(failed[0]);
 };
 
